@@ -509,6 +509,16 @@ public class AttributionService {
             throw new BusinessRuleException("D'autres lots sont déjà attribués : l'évaluation, commune aux lots, ne se rouvre plus.",
                     "AUTRES_LOTS_ATTRIBUES", null, Map.of("lots", engages));
         }
+        // ⚠️ R9c (question du front du 14/10, procédure allotie ; arbitrage : garde + levée tracée) — un autre lot dont le dossier de marché
+        // est soumis à la Commission repose sur l'évaluation commune : elle ne se rouvre pas sous lui.
+        List<Integer> soumis = attributions.findByIdDmcOrderByLotAsc(idDmc).stream()
+                .filter(x -> !Objects.equals(x.getLot(), lot) && x.getIdDossier() != null)
+                .filter(x -> dossierRepository.findById(x.getIdDossier()).filter(EtapesCloses::soumis).isPresent())
+                .map(Attribution::getLot).toList();
+        if (!soumis.isEmpty()) {
+            throw new BusinessRuleException("D'autres lots ont leur dossier de marché soumis à la Commission : l'évaluation, commune aux lots, ne "
+                    + "se rouvre pas sous eux.", "AUTRES_LOTS_SOUMIS", null, Map.of("lots", soumis));
+        }
         String motif = r == null ? null : nettoyer(r.motif());
         if (motif == null) {
             throw new BadRequestException("La reprise de l'évaluation se motive.", "MOTIF_OBLIGATOIRE");

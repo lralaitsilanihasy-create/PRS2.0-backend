@@ -515,6 +515,21 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/seance/pv/signer").header("Authorization", pi.m1()).contentType(JSON).content("{}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_CLOSE"));
         mvc.perform(get(ev).header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        // ⚠️ R9c (question du front du 14/10) — un autre lot dont le DDM est soumis repose sur l'évaluation commune : pas de reprise sous lui.
+        cnm.prs.entity.Attribution autre = new cnm.prs.entity.Attribution();
+        autre.setIdDmc(idDmc);
+        autre.setLot(2);
+        autre.setEtat(cnm.prs.entity.Attribution.ATTRIBUE);
+        Dossier ddmLot2 = dossierLoc(9931, "EXAMINE", "ANT", "PRMP001");
+        ddmLot2.setDateSoumission(java.time.LocalDateTime.now());
+        dossierRepository.saveAndFlush(ddmLot2);
+        autre.setIdDossier(9931);
+        attributionRepository.saveAndFlush(autre);
+        mvc.perform(post(att + "/lots/1/reprendre").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AUTRES_LOTS_SOUMIS"))
+                .andExpect(jsonPath("$.details.lots[0]").value(2));
+        attributionRepository.delete(autre);
+        attributionRepository.flush();
         mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].dossierMarche.avis").value("DEF"));
         mvc.perform(post(att + "/lots/1/reprendre").header("Authorization", tokenUgpm).contentType(JSON).content("{\"motif\":\"x\"}"))
                 .andExpect(status().isForbidden());

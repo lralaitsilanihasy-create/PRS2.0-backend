@@ -8485,6 +8485,13 @@ sur la séance, l'évaluation et l'AMI). Aucune migration, aucune route nouvelle
 - **Hors verrou** : la **reprise** après avis défavorable (`POST …/attribution/lots/{lot}/reprendre`) et la **réattribution** après
   retrait (`…/reattribuer`), tracées dans `t_attribution_reprise` : elles retirent l'attribution qui portait le DDM, ce qui lève le verrou
   pour la nouvelle évaluation ; le DDM soumis reste au journal et dans la reprise.
+- ⚠️ **2026-10-14 (question du front, procédure allotie ; arbitrage : garde + levée tracée)** :
+  - **Levée tracée** : quand un **autre** lot garde son DDM soumis, le verrou **ne joue pas** tant qu'une reprise ou une réattribution
+    (`t_attribution_reprise`) **postérieure à la soumission** de ce DDM a rouvert l'évaluation et que celle-ci n'est pas close ; il revient à
+    la clôture de l'évaluation. La réattribution d'un lot retiré reste donc possible à côté d'un lot au contrôle.
+  - **Garde de la reprise** : `POST …/attribution/lots/{lot}/reprendre` → **409 `AUTRES_LOTS_SOUMIS`** `details { lots }` si un autre lot
+    a son dossier de marché soumis (statut hors `BROUILLON`) — même logique que `AUTRES_LOTS_ATTRIBUES` : l'évaluation est commune aux
+    lots et ne se rouvre pas sous un dossier que la Commission examine. Testé avant `MOTIF_OBLIGATOIRE`.
 - Un DDM encore brouillon ne verrouille rien ; l'instantané figé à la soumission (lot 1, R4) reste la preuve de ce que la Commission a reçu.
 - ⚠️ Écarts : le verrou est posé sur les routes (intercepteur), avant le contrôle des droits du geste — un profil non habilité reçoit 409
   au lieu de 403 sur une procédure verrouillée ; les réponses des candidats aux demandes de précision / justification (espace candidat)

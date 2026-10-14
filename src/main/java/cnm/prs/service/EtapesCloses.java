@@ -29,10 +29,15 @@ public class EtapesCloses {
 
     private final AttributionRepository attributions;
     private final DossierRepository dossiers;
+    private final cnm.prs.repository.AttributionRepriseRepository reprises;
+    private final cnm.prs.repository.EvaluationRepository evaluations;
 
-    public EtapesCloses(AttributionRepository attributions, DossierRepository dossiers) {
+    public EtapesCloses(AttributionRepository attributions, DossierRepository dossiers, cnm.prs.repository.AttributionRepriseRepository reprises,
+            cnm.prs.repository.EvaluationRepository evaluations) {
         this.attributions = attributions;
         this.dossiers = dossiers;
+        this.reprises = reprises;
+        this.evaluations = evaluations;
     }
 
     /** Le premier dossier de marché soumis de la procédure (avec son lot), s'il en existe. */
@@ -50,10 +55,15 @@ public class EtapesCloses {
         return Optional.empty();
     }
 
-    /** 409 {@code ETAPE_CLOSE} {@code details { idDossierMarche, lot }} si un dossier de marché de la procédure est soumis. */
+    /**
+     * 409 {@code ETAPE_CLOSE} {@code details { idDossierMarche, lot }} si un dossier de marché de la procédure est soumis — ⚠️ hors
+     * <strong>reprise tracée</strong> (question du front du 14/10, procédure allotie ; arbitrage : garde + levée tracée) : tant qu'une
+     * reprise ou une réattribution ({@code t_attribution_reprise}) postérieure à la soumission de ce dossier a rouvert l'évaluation, et
+     * que celle-ci n'est pas close, le verrou ne joue pas ; il revient à la clôture de l'évaluation.
+     */
     @Transactional(readOnly = true)
     public void exigerOuvertes(Long idDmc) {
-        dossierSoumis(idDmc).ifPresent(e -> {
+        dossierSoumis(idDmc).filter(e -> !repriseOuverte(idDmc, e.getValue())).ifPresent(e -> {
             Map<String, Object> details = new LinkedHashMap<>();
             details.put("idDossierMarche", e.getValue().getIdDossier());
             details.put("lot", e.getKey());
@@ -61,6 +71,14 @@ public class EtapesCloses {
                     + "la Commission : la séance, l'évaluation et l'AMI de la procédure ne se modifient plus. Seule une reprise de l'évaluation "
                     + "après avis défavorable, ou une réattribution, les rouvre.", CODE, e.getValue().getIdDossier(), details);
         });
+    }
+
+    /** Une reprise ou réattribution postérieure à la soumission du dossier a rouvert l'évaluation, qui n'est pas close. */
+    boolean repriseOuverte(Long idDmc, Dossier d) {
+        if (!reprises.existsByIdDmcAndLeAfter(idDmc, d.getDateSoumission())) {
+            return false;
+        }
+        return evaluations.findById(idDmc).map(ev -> !cnm.prs.entity.Evaluation.CLOSE.equals(ev.getEtat())).orElse(false);
     }
 
     static boolean soumis(Dossier d) {
