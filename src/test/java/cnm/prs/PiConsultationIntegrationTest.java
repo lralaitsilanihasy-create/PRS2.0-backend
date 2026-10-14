@@ -503,6 +503,18 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         cnm.prs.entity.PvExamen pvDef = pvExamenRepository.findById(idDossier).orElseThrow();
         pvDef.setIdAvis("DEF");
         pvExamenRepository.save(pvDef);
+        // ⚠️ R9c (§B4 n° 15) — le dossier de marché soumis ferme la séance, l'évaluation et l'AMI à l'écriture ; les lectures restent ;
+        // la reprise (plus bas) retire l'attribution qui le porte et rouvre l'évaluation (nouveau rapport accepté).
+        Dossier ddm = dossierRepository.findById(idDossier).orElseThrow();
+        ddm.setDateSoumission(java.time.LocalDateTime.now());
+        ddm.setStatut("EXAMINE");
+        dossierRepository.saveAndFlush(ddm);
+        mvc.perform(post(ev + "/rapport").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ETAPE_CLOSE")).andExpect(jsonPath("$.details.idDossierMarche").value(idDossier))
+                .andExpect(jsonPath("$.details.lot").value(1));
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/seance/pv/signer").header("Authorization", pi.m1()).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_CLOSE"));
+        mvc.perform(get(ev).header("Authorization", tokenPrmp)).andExpect(status().isOk());
         mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].dossierMarche.avis").value("DEF"));
         mvc.perform(post(att + "/lots/1/reprendre").header("Authorization", tokenUgpm).contentType(JSON).content("{\"motif\":\"x\"}"))
                 .andExpect(status().isForbidden());
