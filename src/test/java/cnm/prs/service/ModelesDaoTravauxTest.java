@@ -47,6 +47,8 @@ class ModelesDaoTravauxTest {
         assertThat(ccap).contains("Aucune garantie d'exécution n'est requise.", BORDEREAU)
                 .doesNotContain("Les travaux sont décomposés en tranches", GBE_BANCAIRE, GBE_CAUTION, AVANCE_BANCAIRE, AVANCE_CAUTION,
                         REVISION, "{{");
+        // ⚠️ 15/10 (articles vides, §B1) — l'article des tranches, tout conditionnel, ne s'imprime plus vide.
+        assertThat(ccap).contains("Article 5 - Marchés à tranches conditionnelles (CCAG Article 2.6)\nSans objet.\n");
         assertThat(rendre("DPAO", "DPAO-T", f)).doesNotContain("{{");
     }
 
@@ -55,6 +57,7 @@ class ModelesDaoTravauxTest {
             + "deux délais d'affermissement (B02-LT-06, B02-LT-07)")
     void forfaitaireDeuxTranches() {
         FicheMarcheDto f = fiche(Map.of("typePrix", "FORFAITAIRE", "tranches", "OUI", "prixRevisable", "NON", "avance", "NON"));
+        assertThat(rendre("CCAP", "CCAP-T", f)).doesNotContain("Article 5 - Marchés à tranches conditionnelles (CCAG Article 2.6)\nSans objet.");
         f.getValeurs().putAll(Map.of("B02-LT-03", "Gros œuvre — 400 000 000 Ariary", "B02-LT-04", "Second œuvre — 150 000 000 Ariary",
                 "B02-LT-05", "Voirie — 90 000 000 Ariary", "B02-LT-06", "six mois après la notification",
                 "B02-LT-07", "douze mois après la notification"));

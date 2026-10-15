@@ -520,6 +520,22 @@ remplit après le DAO — par le candidat, ou à la notification — reste entre
   départ, le préavis et les fautes ouvrant la résiliation — facultatifs, puisque le modèle les laisse vides si l'acheteur
   ne les précise pas.
 
+#### Un article du DAO ne s'imprime jamais vide (demande front du 2026-10-15, arbitrage du 15/10)
+
+⚠️ **Un article dont aucune rédaction n'est retenue s'imprime avec « Sans objet. » sous son titre**, comme les articles
+que le document type prévoit déjà ainsi (par exemple l'assurance du contrat-cadre). C'est une règle de tous les
+documents produits depuis les documents types, DAO complet compris, et non un ajout article par article. Les documents
+déjà produits ne changent pas : une nouvelle version validée de la fiche les reproduit. Contrat : `docs/api-endpoints.md`,
+§ *Le DAO complet sur les documents types officiels — lot D*.
+
+- **Contrat-cadre : l'avance est de droit** (option (b) du 15/10). L'article 10 du contrat-cadre valant acte
+  d'engagement et CCAP reproduit toujours le document type, conformément à l'article 72 du code. L'avance y est accordée
+  sauf renonciation expresse, et **c'est le titulaire qui coche** s'il souhaite la percevoir ou s'il y renonce.
+  - Suivent le délai de versement, le montant (au plus 20 % du TTC du marché subséquent), le remboursement et l'avance
+    au sous-traitant.
+  - La réponse « avance » du cadrage n'efface plus cet article. Elle garde son effet dans les documents dont le modèle
+    fait choisir l'acheteur (fournitures, travaux et prestations intellectuelles hors contrat-cadre).
+
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 
 ⚠️ **Un marché de fournitures, à quantité fixe ou à commande, produit à son tour les documents types de l'ARMP

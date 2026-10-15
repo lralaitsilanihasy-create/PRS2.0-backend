@@ -5197,6 +5197,28 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
 - **Sections** `{{SI:NOM}}` … `{{FINSI:NOM}}` : une **pile** — une section fausse omet tout jusqu'à son `FINSI`, sections
   internes comprises (paragraphes et tableaux). Une condition déclarée l'emporte ; les trois noms historiques des
   formulaires du candidat (`A1B`, `B04-SE`, `A3B-NATURES`) restent reconnus sans déclaration.
+- ⚠️ **Un article ne s'imprime jamais vide** (demande front du 2026-10-15 « articles-vides-dao », §B1 ;
+  `FormulairesCandidat.articlesSansObjet`). Il s'agit d'un titre d'article, c'est-à-dire d'un `SOUS_TITRE` qui commence
+  par « ARTICLE » ou « Article ». S'il ne lui reste aucun contenu avant le titre d'article suivant, avant un `TITRE` ou en
+  fin de document, il reçoit un paragraphe « Sans objet. ». Ne comptent pas comme contenu : un sous-titre interne
+  (« 10.1 – … »), un paragraphe vide, un tableau sans rangée.
+  - La règle vaut pour **tous les documents rendus depuis un modèle de `modeles/dao/`**, donc aussi pour le DAO complet,
+    qui les assemble. Les formulaires du candidat ne sont pas concernés.
+  - Les documents déjà produits ne sont pas réécrits : seule une nouvelle version validée de la fiche les reproduit.
+  - La lecture du DAO importé (`LectureDao`) est inchangée.
+  - Au balayage d'une fiche vide, elle touche notamment AE-CC art. 4 et 14, CCAP-F art. 15 et 23, CCAP-T art. 3 et 5,
+    CPS-PI art. 10, 14, 15 et 19.
+- ⚠️ **AE-CC, article 10 : l'avance est de droit** (même demande, §B2, option (b) retenue le 2026-10-15). L'article
+  s'imprime **sans condition**, comme dans le document type ARMP de 2019 (article 72 du code) :
+  - 10.1, avec les deux cases que coche le titulaire (« Souhaite percevoir » / « Renoncer à percevoir ») ;
+  - 10.2 à 10.4 : délai `B08-FI-02`, taux `B08-AV-02` et remboursement (art. 72.III) ;
+  - 10.5 : l'avance au sous-traitant.
+
+  Les conditions `AVANCE` (`avance = OUI`) et `AVANCE-SOUS-TRAITANT` (`B08-FI-05 = OUI`) sont retirées du modèle, qui
+  déclare désormais **53** conditions. Avec « avance : non », le délai et le taux ne se saisissent pas (ils ne sont
+  proposés que si `avance = OUI`) et s'impriment donc en pointillés. Le
+  cadrage `avance` reste lu par les autres modèles (AE-F, CCAP-F, AE-T, CCAP-T, AE-PI, CPS-PI) et par le contrôle
+  `AVANCE_MAX_20`.
 - **Refus au démarrage**, fichier nommé (`ModelesDao`, et désormais `ModelesCandidat`) : condition illisible ou déclarée
   deux fois, section utilisée sans être déclarée (hors noms historiques pour le candidat), `FINSI` qui ne ferme pas la
   dernière section ouverte, section non refermée, jeton `{{INT-…}}`.

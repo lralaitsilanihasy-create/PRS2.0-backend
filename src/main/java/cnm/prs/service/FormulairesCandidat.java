@@ -122,7 +122,49 @@ public final class FormulairesCandidat {
     public static DocumentLibre rendreModele(String type, Integer lot, FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs,
             FichierCommande.Modele modele, LocalDateTime validation, Map<String, String> publication) {
         Contexte ctx = new Contexte(fiche, champs, modele.conditions(), publication == null ? Map.of() : publication, validation);
-        return new DocumentLibre(type, lot, finaliser(ctx.rendre(modele.elements(), lot)), pied(fiche, validation));
+        return new DocumentLibre(type, lot, articlesSansObjet(finaliser(ctx.rendre(modele.elements(), lot))),
+                pied(fiche, validation));
+    }
+
+    /** ⚠️ 2026-10-15 (articles vides, §B1) — le titre d'un article : un sous-titre « ARTICLE … » ou « Article … ». */
+    private static final Pattern TITRE_ARTICLE = Pattern.compile("^(ARTICLE|Article)\\b.*");
+    /** ⚠️ §B1 — ce que reçoit un article dont rien n'est retenu, comme les articles du type qui le prévoient déjà. */
+    static final String SANS_OBJET = "Sans objet.";
+
+    /**
+     * ⚠️ Demande front du 2026-10-15 « articles-vides-dao », §B1 — un article ne s'imprime jamais vide : un titre d'article
+     * (sous-titre {@link #TITRE_ARTICLE}) sous lequel rien n'est retenu jusqu'au titre d'article suivant, à un titre ou à la
+     * fin du document reçoit « Sans objet. ». Les sous-titres internes (« 10.1 – … ») ne comptent pas comme contenu ; un
+     * tableau sans rangée non plus. Règle du moteur, pour tous les modèles : aucun modèle n'a à la prévoir.
+     */
+    static List<DocumentLibre.Element> articlesSansObjet(List<DocumentLibre.Element> elements) {
+        List<DocumentLibre.Element> out = new ArrayList<>();
+        boolean articleOuvert = false;
+        boolean contenu = false;
+        for (DocumentLibre.Element e : elements) {
+            boolean article = e instanceof DocumentLibre.Paragraphe p && p.style() == DocumentLibre.Style.SOUS_TITRE
+                    && TITRE_ARTICLE.matcher(p.texte().trim()).matches();
+            boolean titre = e instanceof DocumentLibre.Paragraphe p && p.style() == DocumentLibre.Style.TITRE;
+            if (article || titre) {
+                if (articleOuvert && !contenu) {
+                    out.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, SANS_OBJET));
+                }
+                articleOuvert = article;
+                contenu = false;
+            } else if (e instanceof DocumentLibre.Paragraphe p) {
+                contenu |= p.style() != DocumentLibre.Style.SOUS_TITRE && p.style() != DocumentLibre.Style.VIDE
+                        && !p.texte().isBlank();
+            } else if (e instanceof DocumentLibre.Tableau t) {
+                contenu |= !t.lignes().isEmpty();
+            } else {
+                contenu = true;
+            }
+            out.add(e);
+        }
+        if (articleOuvert && !contenu) {
+            out.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, SANS_OBJET));
+        }
+        return out;
     }
 
     /** ⚠️ 2026-10-01 (avis spécifique, §B7.2) — le repère de numérotation des paragraphes principaux. */

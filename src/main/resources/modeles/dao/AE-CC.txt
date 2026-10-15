@@ -41,8 +41,6 @@ CONDITION	MULTI-REFERENCEMENT-BORDEREAUattributaires = MULTI et B05-PM-02 = NON
 CONDITION	MULTI-REFERENCEMENT-CATALOGUEattributaires = MULTI et B05-PM-02 = NON et B05-PM-05 = OUI
 CONDITION	MULTI-PRIX-BORDEREAUattributaires = MULTI et B05-PM-02 = OUI et B05-PM-05 != OUI
 CONDITION	MULTI-PRIX-CATALOGUEattributaires = MULTI et B05-PM-02 = OUI et B05-PM-05 = OUI
-CONDITION	AVANCEavance = OUI
-CONDITION	AVANCE-SOUS-TRAITANTB08-FI-05 = OUI
 CONDITION	EXECUTION-COMMUNEB09-EA-01 = OUI
 CONDITION	EXECUTION-SANSB09-EA-01 = NON
 CONDITION	VERIFICATION-CCAGB09-VA-01 = Dispositions du CCAG applicables
@@ -294,7 +292,6 @@ PARA	Indice n P n = Po () Indice o
 PARA	Où Pn est le prix actualisé,
 PARA	Po est le prix des prestations au moment de la remise de l’offre, Indice n est le dernier indice connu au moment de l’actualisation, Indice o est le dernier indice connu au moment de la remise de l’offre.
 SOUS_TITRE	ARTICLE 10 – Clauses de financement et de sureté des marchés subséquents conclus sur la base du présent contrat-cadre
-PARA	{{SI:AVANCE}}
 SOUS_TITRE	10.1 – Versement d’une avance au(x) titulaire(s) des marchés conclus sur la base du présent accord
 PARA	Une avance sera accordée au(x) titulaire(s) des marchés conclus sur la base du contrat-cadre dans les conditions prévues à l’article 72 du code des marchés publics, sauf renonciation expresse de sa part figurant ci-dessous :
 PARA	L’ (es) entreprise(s) déclare (nt) (8) :
@@ -306,11 +303,8 @@ SOUS_TITRE	10.3 – Montant de l’avance
 PARA	Le montant de l’avance des marchés conclus sur la base du contrat-cadre est fixé à {{B08-AV-02.chiffres}} % du montant TTC du marché subséquent.
 SOUS_TITRE	10.4 – Remboursement de l’avance
 PARA	Les modalités de remboursement de l’avance s’effectueront conformément aux dispositions de l’article 72.III du Code des Marchés Publics.
-PARA	{{FINSI:AVANCE}}
-PARA	{{SI:AVANCE-SOUS-TRAITANT}}
 SOUS_TITRE	10.5 – Versement d’une avance au sous-traitant du titulaire du présent accord
 PARA	Une avance sera accordée au sous-traitant dans les conditions fixées par le code des marchés publics, sauf renonciation expresse par ce dernier dans l’acte spécial de sous-traitance. Dans le cas où le titulaire sous-traite une part du marché postérieurement à la notification de celui-ci, il doit rembourser la partie de l’avance correspondant au montant des prestations sous-traitées, même si le sous-traitant ne souhaite pas bénéficier de l’avance.
-PARA	{{FINSI:AVANCE-SOUS-TRAITANT}}
 SOUS_TITRE	ARTICLE 11 – Sous-traitance des marchés conclus sur la base du présent contrat-cadre
 SOUS_TITRE	11.1 – Désignation des sous-traitants
 PARA	{{SI:CCAG-FOURNITURES}}

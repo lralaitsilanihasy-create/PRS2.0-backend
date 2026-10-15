@@ -69,7 +69,7 @@ class ModelesDaoTest {
     void chargement() {
         ModelesDao dao = new ModelesDao();
         assertThat(dao.modele("DPAC-CC").conditions()).hasSize(18);   // D4 : + CCAG-FOURNITURES, CCAG-TRAVAUX ; 01/10 : + MONTANT-LOTS/-UNIQUE
-        assertThat(dao.modele("AE-CC").conditions()).hasSize(55);
+        assertThat(dao.modele("AE-CC").conditions()).hasSize(53);   // 15/10 (articles vides, §B2) : - AVANCE, AVANCE-SOUS-TRAITANT
         // ⚠️ Lot D2 (2026-09-29) — les trois documents des fournitures, un modèle pour la quantité fixe et à commande.
         assertThat(dao.modele("DPAO-F").conditions()).hasSize(47);   // 03/10 (V62, pièces des fournitures) : + PIECES-OFFRE-LISTE/-TEXTE, PIECES-ADM, -ADM-LISTE/-TEXTE
         assertThat(dao.modele("AE-F").conditions()).hasSize(22);
@@ -187,7 +187,34 @@ class ModelesDaoTest {
                 "Les pénalités de retard seront fixées dans les marchés conclus sur la base du contrat-cadre.",
                 "détaillé dans le bordereau de prix unitaires joint au présent contrat-cadre",
                 "notifiée dans un délai de 90 jours calendaires", "jusqu'au 09/07/2026")   // 10/04 + 90 jours
-                .doesNotContain("LOT n°", "multi-attributaire.", "Appel d’offres restreint", "OU\n", "{{", "10.1 – Versement");
+                .doesNotContain("LOT n°", "multi-attributaire.", "Appel d’offres restreint", "OU\n", "{{");
+        // ⚠️ 15/10 (articles vides, §B2, option b) — « avance : non » n'efface plus l'article 10 : l'avance est de droit
+        // (article 72), le titulaire y renonce ou non ; délai et taux non saisis : pointillés.
+        assertThat(ae).contains("ARTICLE 10 – Clauses de financement", "10.1 – Versement d’une avance",
+                "❏ Souhaite percevoir une avance pour chacun des marchés subséquents",
+                "❏ Renoncer à percevoir une avance pour chacun des marchés subséquents.",
+                "interviendra dans les " + FormulairesCandidat.POINTILLES + " jours calendaires", "10.4 – Remboursement de l’avance",
+                "10.5 – Versement d’une avance au sous-traitant");
+    }
+
+    @Test
+    @DisplayName("Articles vides (15/10, §B1) : un titre d'article sans rien de retenu reçoit « Sans objet. » — avant l'article "
+            + "suivant, avant un titre, en fin de document ; un sous-titre interne ou un tableau vide n'est pas un contenu")
+    void articlesSansObjet() {
+        FichierCommande.Modele m = FichierCommande.lireModele("CONDITION\tX\u001Fattributaires = MONO\n"
+                + "TITRE\tDOCUMENT\n"
+                + "SOUS_TITRE\tARTICLE 1 – Plein\nPARA\ttexte 1\n"
+                + "SOUS_TITRE\tARTICLE 2 – Vide\nPARA\t{{SI:X}}\nPARA\tsous condition\nPARA\t{{FINSI:X}}\n"
+                + "SOUS_TITRE\tArticle 3 – Sous-titre seul\nPARA\t{{SI:X}}\nPARA\tcondition\nPARA\t{{FINSI:X}}\nSOUS_TITRE\t3.1 – Interne\n"
+                + "TITRE\tCHAPITRE II\n"
+                + "SOUS_TITRE\t4.2 – Pas un article\n"
+                + "SOUS_TITRE\tARTICLE 5 – Dernier\nPARA\t{{SI:X}}\nPARA\tfin\nPARA\t{{FINSI:X}}");
+        FicheMarcheDto fiche = fiche(Map.of("attributaires", "MULTI"));
+        assertThat(FormulairesCandidat.rendreModele("X", null, fiche, Map.of(), m, null).texte()).isEqualTo(
+                "DOCUMENT\nARTICLE 1 – Plein\ntexte 1\nARTICLE 2 – Vide\nSans objet.\nArticle 3 – Sous-titre seul\n3.1 – Interne\n"
+                        + "Sans objet.\nCHAPITRE II\n4.2 – Pas un article\nARTICLE 5 – Dernier\nSans objet.");
+        fiche.getCadrage().put("attributaires", "MONO");
+        assertThat(FormulairesCandidat.rendreModele("X", null, fiche, Map.of(), m, null).texte()).doesNotContain("Sans objet.");
     }
 
     @Test
