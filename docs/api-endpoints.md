@@ -5274,7 +5274,9 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
 - ⚠️ **Multi-attributaire signalé** (même demande, arbitrage du pilote du 15/10 sur B0 n° 3-4). L'avertissement
   **`MULTI_ATTRIBUTAIRE_NON_OUTILLE`** apparaît au bilan dès que le cadrage porte `attributaires = MULTI`. Il est rangé en
   bloc `B07`, sans champ, et **ne bloque jamais**. Son message : l'évaluation et l'attribution de l'application ne désignent
-  encore qu'un titulaire par lot. Il disparaîtra avec la tranche **MT** (plusieurs titulaires), qui précède MS-1.
+  encore qu'un titulaire par lot. Il disparaîtra avec la tranche **MT** (plusieurs titulaires), qui précède MS-1. ⚠️ MT-a
+  (15/10) : le message dit désormais que l'évaluation propose tous les titulaires qualifiés, et que seule l'attribution n'en
+  désigne encore qu'un.
 - **Refus au démarrage**, fichier nommé (`ModelesDao`, et désormais `ModelesCandidat`) : condition illisible ou déclarée
   deux fois, section utilisée sans être déclarée (hors noms historiques pour le candidat), `FINSI` qui ne ferme pas la
   dernière section ouverte, section non refermée, jeton `{{INT-…}}`.
@@ -7248,6 +7250,26 @@ Mêmes gardes que les tranches 1a et 1b : membre déclaré sans conflit pour dé
   Le lot passe à l'étape `RAPPORT` et porte **`proposition`** = `{ idOffre, numero, candidat, montant (prix corrigé − rabais, HT),
   montantTtc (TTC lu), delai (celui de l'acte d'engagement), infructueux }` — `infructueux = true` et le reste nul si aucune offre
   n'est qualifiée.
+- ⚠️ **2026-10-15 — tranche MT-a, contrat-cadre multi-attributaire** (demande front « marches-subsequents », arbitrage du pilote du
+  15/10 ; décret n° 2019-1064, art. 14-17). Le mode s'applique quand la dernière version validée de la fiche répond
+  `attributaires = MULTI` au cadrage, question posée au seul contrat-cadre.
+  - **La post-qualification ne s'arrête plus à la première offre qualifiée.** Chaque offre classée se décide, dans l'ordre du
+    classement. Le tour (`GET …/lots/{lot}/qualification`) est la première offre sans décision ; `idOffre` est nul quand toutes
+    sont décidées. Arrêter `QUALIFICATION` rend 409 `ETAPE_INCOMPLETE` tant qu'une offre classée attend, `details.offres` = son
+    numéro. La garde `PAS_LE_TOUR_DE_CETTE_OFFRE` reste inchangée.
+  - **`proposition`** porte deux champs de plus :
+    - **`titulaires`** : `[{ idOffre, numero, candidat, montant, montantTtc, delai, rang }]`, toutes les offres qualifiées dans
+      l'ordre du classement ;
+    - **`seulTitulaireQualifie`** : vrai quand l'évaluation ne dégage qu'un titulaire. C'est le constat de l'art. 17 du décret :
+      l'acheteur peut déclarer la procédure infructueuse.
+
+    Les champs de tête (`idOffre`, `candidat`, `montant`…) restent ceux du premier titulaire. Sans offre qualifiée :
+    `infructueux = true`. Hors multi-attributaire, `titulaires` est vide et `seulTitulaireQualifie` faux.
+  - **Rapport, section 8** : « La commission propose de retenir comme titulaires du contrat-cadre les n candidat(s) qualifié(s)
+    suivant(s) », puis une ligne par rang. Si un seul titulaire est qualifié, une phrase rappelle la faculté d'infructuosité
+    (art. 56 de la loi, art. 17 du décret).
+  - **Attribution** : inchangée pour l'instant (tranche MT-b). La PRMP n'attribue encore que le premier titulaire, et
+    l'avertissement `MULTI_ATTRIBUTAIRE_NON_OUTILLE` le dit au bilan de la fiche.
 - **Tableau** : `qualifie` vrai, faux ou nul. **Notifications** : `JUSTIFICATION_DEMANDEE` (candidat, et courriel),
   `JUSTIFICATION_RECUE` (PRMP, membres). **Journal** : `ANORMALE`, `JUSTIFICATION_DEMANDEE`, `JUSTIFICATION_RECUE`, `QUALIFICATION`.
 
@@ -7834,7 +7856,8 @@ circuit de la Commission (Q10). Migration **V91**. Aucune dépendance ajoutée.
 | GET | …/attribution/reprises/{id}/rapport[?format=docx] | → le rapport archivé | 404 | CAO, responsable, PRMP, UGPM |
 
 - **L'infructuosité** se déclare pour un lot que le rapport propose infructueux (`proposition.infructueux`), ou dont le dossier de
-  marché a reçu l'avis **défavorable** (`DEF`) ; jamais une fois le lot attribué. `suite` ∈ `RELANCE`, `RESTREINTE`, `NEGOCIEE`
+  marché a reçu l'avis **défavorable** (`DEF`) ; jamais une fois le lot attribué. ⚠️ MT-a (15/10) : aussi pour un contrat-cadre
+  multi-attributaire qui ne dégage qu'un titulaire (`proposition.seulTitulaireQualifie`, décret n° 2019-1064, art. 17). `suite` ∈ `RELANCE`, `RESTREINTE`, `NEGOCIEE`
   (déclarée, pas conduite ici). Le lot passe **`INFRUCTUEUX`** ; `lots[].infructuosite` = `{ le, par, motif, decisionReference,
   decisionDate, suite }`. Chaque candidat du lot (offre déposée, non retirée) reçoit `PROCEDURE_INFRUCTUEUSE` ; la page publique des
   résultats (`GET /api/procedures-en-ligne/{idDmc}/resultats`) affiche le lot avec `infructueux`, `motifInfructuosite`,

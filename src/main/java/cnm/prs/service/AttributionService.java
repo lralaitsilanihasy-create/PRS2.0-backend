@@ -425,7 +425,9 @@ public class AttributionService {
             throw new BusinessRuleException("Le lot est attribué : l'infructuosité ne peut en aucun cas intervenir après la décision d'attribution "
                     + "(art. 56-VI).", "DEJA_ATTRIBUE");
         }
-        boolean propose = l.proposition() != null && l.proposition().infructueux();
+        // ⚠️ 2026-10-15 (tranche MT) — un contrat-cadre multi-attributaire qui ne dégage qu'un titulaire : la PRMP peut aussi le déclarer
+        // infructueux (décret n° 2019-1064, art. 17).
+        boolean propose = l.proposition() != null && (l.proposition().infructueux() || l.proposition().seulTitulaireQualifie());
         AttributionDto.DossierMarche dm = a == null || a.getIdDossier() == null ? null : dossierMarche(a);
         boolean defavorable = dm != null && AVIS_DEFAVORABLE.equals(dm.avis());
         if (!propose && !defavorable) {

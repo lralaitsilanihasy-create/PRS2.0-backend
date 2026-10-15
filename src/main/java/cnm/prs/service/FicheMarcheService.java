@@ -344,6 +344,17 @@ public class FicheMarcheService {
         return derniereValidee(idDmc).map(FicheMarche::getNumeroVersion).orElse(null);
     }
 
+    /**
+     * ⚠️ 2026-10-15 (tranche MT, contrat-cadre multi-attributaire) — la dernière version validée répond-elle {@code attributaires = MULTI}
+     * ? Lecture légère (le cadrage seul, sans l'état de la fiche) : l'évaluation la consulte à chaque tour de post-qualification. La
+     * question n'est posée qu'au contrat-cadre (§ lot 4).
+     */
+    @Transactional(readOnly = true)
+    public boolean plusieursTitulaires(Long idDmc) {
+        return derniereValidee(idDmc).map(f -> "MULTI".equalsIgnoreCase(String.valueOf(lireJson(f.getCadrage()).get("attributaires"))))
+                .orElse(false);
+    }
+
     private java.util.Optional<FicheMarche> derniereValidee(Long idDmc) {
         return ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
                 .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((a, b) -> b);

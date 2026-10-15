@@ -1259,9 +1259,10 @@ public final class ControlesFicheMarche {
         if (cadrage == null || !"MULTI".equalsIgnoreCase(String.valueOf(cadrage.get("attributaires")))) {
             return;
         }
+        // ⚠️ MT-a (15/10) — l'évaluation retient désormais tous les titulaires qualifiés ; l'attribution, pas encore.
         avertissements.add(new Controle(MULTI_ATTRIBUTAIRE_NON_OUTILLE, List.of(), "B07", "Contrat-cadre multi-attributaire : "
-                + "l'évaluation et l'attribution de l'application ne désignent encore qu'un titulaire par lot. La désignation de "
-                + "plusieurs titulaires viendra avec la tranche « plusieurs titulaires » ; d'ici là, elle se fait hors de l'application."));
+                + "l'évaluation propose tous les titulaires qualifiés, mais l'attribution de l'application ne désigne encore qu'un titulaire "
+                + "par lot. L'attribution à plusieurs titulaires viendra avec la suite de la tranche « plusieurs titulaires »."));
     }
     // ------------------------------------------------------------------ lectures
 

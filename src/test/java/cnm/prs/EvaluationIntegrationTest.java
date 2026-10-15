@@ -1221,6 +1221,78 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
 
     // ------------------------------------------------------------------ outils
 
+    @Autowired private cnm.prs.repository.FicheMarcheRepository ficheMarcheRepository;
+
+    @Test
+    @DisplayName("Tranche MT (15/10, contrat-cadre multi-attributaire, décret 2019-1064 art. 14-17) : la post-qualification décide chaque "
+            + "offre classée sans s'arrêter à la première qualifiée ; un seul titulaire qualifié est proposé avec le constat de l'art. 17 ; "
+            + "après réouverture, la proposition retient tous les qualifiés dans l'ordre du classement")
+    void plusieursTitulaires() throws Exception {
+        String a = offre("C900000051", "1111222333", "BTP Alpha", 1, "INTACTE", null, "12500000");
+        String b = offre("C900000052", "4444555666", "BTP Beta", 2, "INTACTE", null, "11900000");
+        String c = offre("C900000053", "7777888999", "BTP Gamma", 3, "INTACTE", null, "9000000");
+        seanceClose();
+        mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isCreated());
+        mvc.perform(post(base + "/declaration").header("Authorization", jetonM1).contentType(JSON).content("{\"conflit\":false}"))
+                .andExpect(status().isOk());
+        for (String o : List.of(a, b, c)) {
+            conformite(jetonM1, o, "{\"decision\":\"CONFORME\"}").andExpect(status().isOk());
+        }
+        arreter("CONFORMITE").andExpect(status().isOk());
+        for (String o : List.of(a, b, c)) {
+            montant(jetonM1, o, "{\"preference\":{\"eligible\":true,\"motif\":\"Entreprise nationale\"}}").andExpect(status().isOk());
+        }
+        arreter("EVALUATION").andExpect(status().isOk());
+        for (String o : List.of(a, b, c)) {
+            anormale(o, "{\"suspectee\":false}").andExpect(status().isOk());
+        }
+        arreter("ANORMALES").andExpect(status().isOk());
+        // La fiche validée devient un contrat-cadre multi-attributaire (seul le cadrage est lu par l'évaluation).
+        cnm.prs.entity.FicheMarche validee = ficheMarcheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
+                .filter(f -> "VALIDEE".equals(f.getStatut())).reduce((x, y) -> y).orElseThrow();
+        String cadrage = validee.getCadrage() == null || validee.getCadrage().isBlank() ? "{}" : validee.getCadrage().trim();
+        validee.setCadrage("{\"attributaires\":\"MULTI\"" + (cadrage.equals("{}") ? "}" : "," + cadrage.substring(1)));
+        ficheMarcheRepository.saveAndFlush(validee);
+
+        // Classement : C (9 M), B (11,9 M), A (12,5 M). C qualifiée : l'étape ne s'arrête pas, B attend sa décision.
+        String q = mvc.perform(get(base + "/lots/1/qualification").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(q, "$.idOffre")).isEqualTo(c);
+        List<String> codes = JsonPath.read(q, "$.criteres[*].code");
+        String echec = criteres(codes, "JURIDIQUE").replace("\"NON_SATISFAIT\"}", "\"NON_SATISFAIT\",\"motif\":\"Attestation fiscale périmée\"}")
+                + ",\"decision\":\"NON_QUALIFIE\",\"motif\":\"Situation fiscale non régulière\",\"clause\":\"IC 6.3\"}";
+        qualifier(c, criteres(codes, null) + ",\"decision\":\"QUALIFIE\"}").andExpect(status().isOk());
+        arreter("QUALIFICATION").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_INCOMPLETE"))
+                .andExpect(jsonPath("$.details.offres[0]").value(2));
+        mvc.perform(get(base + "/lots/1/qualification").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.idOffre").value(b));
+        qualifier(b, echec).andExpect(status().isOk());
+        qualifier(a, echec).andExpect(status().isOk());
+        String seul = arreter("QUALIFICATION").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(seul, "$.lots[0].proposition.idOffre")).isEqualTo(c);
+        assertThat(JsonPath.<Boolean>read(seul, "$.lots[0].proposition.infructueux")).isFalse();
+        assertThat(JsonPath.<Boolean>read(seul, "$.lots[0].proposition.seulTitulaireQualifie")).isTrue();   // décret, art. 17
+        assertThat(JsonPath.<List<String>>read(seul, "$.lots[0].proposition.titulaires[*].idOffre")).containsExactly(c);
+
+        // Réouverture : A finalement qualifiée — deux titulaires, dans l'ordre du classement.
+        mvc.perform(post(base + "/lots/1/etapes/QUALIFICATION/rouvrir").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"motif\":\"Attestation fiscale régularisée\"}")).andExpect(status().isOk());
+        qualifier(a, criteres(codes, null) + ",\"decision\":\"QUALIFIE\"}").andExpect(status().isOk());
+        String deux = arreter("QUALIFICATION").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(deux, "$.lots[0].proposition.titulaires[*].idOffre")).containsExactly(c, a);
+        assertThat(JsonPath.<List<Integer>>read(deux, "$.lots[0].proposition.titulaires[*].rang")).containsExactly(1, 3);
+        assertThat(JsonPath.<List<String>>read(deux, "$.lots[0].proposition.titulaires[*].candidat")).containsExactly("BTP Gamma", "BTP Alpha");
+        assertThat(JsonPath.<Boolean>read(deux, "$.lots[0].proposition.seulTitulaireQualifie")).isFalse();
+        assertThat(JsonPath.<String>read(deux, "$.lots[0].proposition.idOffre")).isEqualTo(c);   // la tête reste le premier classé
+        // Le rapport propose les titulaires, rang par rang.
+        mvc.perform(post(base + "/rapport").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isOk());
+        String pdf = texteDuPdf(mvc.perform(get(base + "/rapport").header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(pdf).contains("La commission propose de retenir comme titulaires du contrat-cadre les 2 candidat(s) qualifié(s)",
+                "– rang 1 : BTP Gamma (offre n° 3)", "– rang 3 : BTP Alpha (offre n° 1)")
+                .doesNotContain("La commission propose d'attribuer le marché à", "qu'un seul titulaire");
+    }
+
     private ResultActions arreter(String etape) throws Exception {
         return mvc.perform(post(base + "/lots/1/etapes/" + etape + "/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"));
     }

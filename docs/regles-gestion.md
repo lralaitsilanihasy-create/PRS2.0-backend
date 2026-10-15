@@ -579,6 +579,12 @@ lot D*.
   qu'un (art. 17) attendent l'évaluation propre au contrat-cadre multi-attributaire. C'est la tranche « plusieurs
   titulaires », placée par le pilote avant les marchés subséquents. D'ici là, une fiche multi-attributaire se valide avec
   un **avertissement** : l'application ne désignera qu'un titulaire par lot.
+- ⚠️ **Plusieurs titulaires, première partie : l'évaluation (2026-10-15).** Pour un contrat-cadre multi-attributaire, la
+  commission vérifie la qualification de **chaque** offre classée, sans s'arrêter à la première qualifiée.
+  - Elle propose comme titulaires toutes les offres qualifiées, dans l'ordre du classement, et le rapport les énumère.
+  - Si un seul titulaire se dégage, le rapport le constate, et la PRMP peut déclarer la procédure infructueuse (art. 17 du
+    décret, art. 56 de la loi).
+  - L'attribution à plusieurs titulaires (lettres, signature, notification, avis) est la seconde partie.
 
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 

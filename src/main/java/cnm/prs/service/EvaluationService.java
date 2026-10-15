@@ -1402,19 +1402,33 @@ public class EvaluationService {
     record Tour(String courante, String decision, int position, List<String> ordre) {
     }
 
-    /** Le tour de post-qualification : la première offre classée qui n'est pas « non qualifiée ». */
+    /**
+     * Le tour de post-qualification : la première offre classée qui n'est pas « non qualifiée ». ⚠️ 2026-10-15 (tranche MT) — pour un
+     * contrat-cadre multi-attributaire, la post-qualification ne s'arrête plus à la première offre qualifiée : chaque offre classée se
+     * décide, dans l'ordre ; le tour est la première sans décision, nul quand toutes sont décidées.
+     */
     Tour tour(Long idDmc, Integer lot, List<SeanceDto.OffreLue> liste) {
         Map<String, Classe> classement = classer(idDmc, lot, liste);
         List<String> ordre = classement.entrySet().stream().sorted(java.util.Comparator.comparingInt(x -> x.getValue().rang()))
                 .map(Map.Entry::getKey).toList();
         Map<String, EvaluationDecision> qualifications = enVigueur(idDmc, EvaluationEtape.QUALIFICATION);
+        boolean multi = plusieursTitulaires(idDmc);
         for (int i = 0; i < ordre.size(); i++) {
             EvaluationDecision d = qualifications.get(ordre.get(i));
-            if (d == null || !NON_QUALIFIE.equals(d.getDecision())) {
+            if (multi ? d == null : d == null || !NON_QUALIFIE.equals(d.getDecision())) {
                 return new Tour(ordre.get(i), d == null ? null : d.getDecision(), i + 1, ordre);
             }
         }
         return new Tour(null, null, ordre.size() + 1, ordre);
+    }
+
+    /**
+     * ⚠️ 2026-10-15 (demande front « marchés subséquents », tranche MT ; décret n° 2019-1064, art. 14-17) — la fiche validée est un
+     * contrat-cadre multi-attributaire (cadrage {@code attributaires = MULTI}, question du seul contrat-cadre) : l'évaluation retient toutes
+     * les offres qualifiées du lot.
+     */
+    boolean plusieursTitulaires(Long idDmc) {
+        return fiches.plusieursTitulaires(idDmc);
     }
 
     /**
@@ -1604,6 +1618,9 @@ public class EvaluationService {
 
     /** La proposition du lot, la post-qualification arrêtée : l'offre qualifiée, ou l'infructuosité. */
     private EvaluationDto.Proposition proposition(Long idDmc, Integer lot, List<SeanceDto.OffreLue> liste) {
+        if (plusieursTitulaires(idDmc)) {
+            return propositionTitulaires(idDmc, lot, liste);
+        }
         Tour t = tour(idDmc, lot, liste);
         if (t.courante() == null || !QUALIFIE.equals(t.decision())) {
             return new EvaluationDto.Proposition(null, null, null, null, null, null, true, null, null);
@@ -1612,6 +1629,32 @@ public class EvaluationService {
         EvaluationDto.Montant m = montantDto(enVigueur(idDmc, EvaluationEtape.EVALUATION).get(o.idOffre()));
         return new EvaluationDto.Proposition(o.idOffre(), o.numero(), o.entreprise().raisonSociale(), montantDuMarche(m),
                 m == null ? null : m.prixLuTtc(), delaiLu(o.acteEngagement()), false, null, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-15 (tranche MT) — la proposition d'un contrat-cadre multi-attributaire : <strong>toutes</strong> les offres qualifiées,
+     * dans l'ordre du classement (la première porte aussi les champs de tête). Aucune : infructueux. Une seule : proposée, avec le
+     * constat {@code seulTitulaireQualifie} — l'acheteur peut déclarer la procédure infructueuse (décret n° 2019-1064, art. 17).
+     */
+    private EvaluationDto.Proposition propositionTitulaires(Long idDmc, Integer lot, List<SeanceDto.OffreLue> liste) {
+        Map<String, Classe> classement = classer(idDmc, lot, liste);
+        Map<String, EvaluationDecision> qualifications = enVigueur(idDmc, EvaluationEtape.QUALIFICATION);
+        Map<String, EvaluationDecision> montants = enVigueur(idDmc, EvaluationEtape.EVALUATION);
+        List<EvaluationDto.Titulaire> titulaires = classement.entrySet().stream()
+                .sorted(java.util.Comparator.comparingInt(x -> x.getValue().rang()))
+                .filter(x -> qualifications.get(x.getKey()) != null && QUALIFIE.equals(qualifications.get(x.getKey()).getDecision()))
+                .map(x -> {
+                    SeanceDto.OffreLue o = liste.stream().filter(y -> y.idOffre().equals(x.getKey())).findFirst().orElseThrow();
+                    EvaluationDto.Montant m = montantDto(montants.get(o.idOffre()));
+                    return new EvaluationDto.Titulaire(o.idOffre(), o.numero(), o.entreprise().raisonSociale(), montantDuMarche(m),
+                            m == null ? null : m.prixLuTtc(), delaiLu(o.acteEngagement()), x.getValue().rang());
+                }).toList();
+        if (titulaires.isEmpty()) {
+            return new EvaluationDto.Proposition(null, null, null, null, null, null, true, null, null);
+        }
+        EvaluationDto.Titulaire t = titulaires.get(0);
+        return new EvaluationDto.Proposition(t.idOffre(), t.numero(), t.candidat(), t.montant(), t.montantTtc(), t.delai(), false, null, null,
+                titulaires, titulaires.size() == 1);
     }
 
     /**
@@ -2151,9 +2194,23 @@ public class EvaluationService {
             }
             sous(el, "8. Proposition d'attribution" + p);
             EvaluationDto.Proposition pr = l.proposition();
-            para(el, pr == null || pr.infructueux() ? "Aucune offre n'est qualifiée : la commission propose de déclarer le lot infructueux."
-                    : "La commission propose d'attribuer le marché à " + pr.candidat() + " (offre n° " + pr.numero() + "), pour un montant de "
-                            + lisible(pr.montant()) + " Ariary hors taxes" + (pr.delai() == null ? "" : ", délai : " + pr.delai()) + ".");
+            if (pr != null && !pr.infructueux() && pr.titulaires() != null && !pr.titulaires().isEmpty()) {
+                // ⚠️ 2026-10-15 (tranche MT) — contrat-cadre multi-attributaire : les titulaires proposés, dans l'ordre du classement.
+                para(el, "La commission propose de retenir comme titulaires du contrat-cadre les " + pr.titulaires().size()
+                        + " candidat(s) qualifié(s) suivant(s), dans l'ordre du classement :");
+                for (EvaluationDto.Titulaire t : pr.titulaires()) {
+                    para(el, "– rang " + t.rang() + " : " + t.candidat() + " (offre n° " + t.numero() + "), montant de l'offre indicative "
+                            + lisible(t.montant()) + " Ariary hors taxes" + (t.delai() == null ? "" : ", délai : " + t.delai()) + ".");
+                }
+                if (pr.seulTitulaireQualifie()) {
+                    para(el, "L'évaluation n'a permis de dégager qu'un seul titulaire : l'acheteur public peut déclarer la procédure "
+                            + "infructueuse dans les conditions de l'article 56 du code des marchés publics (décret n° 2019-1064, article 17).");
+                }
+            } else {
+                para(el, pr == null || pr.infructueux() ? "Aucune offre n'est qualifiée : la commission propose de déclarer le lot infructueux."
+                        : "La commission propose d'attribuer le marché à " + pr.candidat() + " (offre n° " + pr.numero() + "), pour un montant de "
+                                + lisible(pr.montant()) + " Ariary hors taxes" + (pr.delai() == null ? "" : ", délai : " + pr.delai()) + ".");
+            }
         }
         if (r.getObservations() != null) {
             sous(el, "Observations");

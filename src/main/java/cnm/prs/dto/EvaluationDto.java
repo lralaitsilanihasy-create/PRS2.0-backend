@@ -264,9 +264,25 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
      * La proposition d'un lot, une fois la post-qualification arrêtée : l'offre proposée à l'attribution, ou {@code infructueux}
      * quand aucune offre n'est qualifiée ; {@code montant} = prix corrigé − rabais, hors taxes. ⚠️ PI-d2b : {@code idOffreFinanciere}
      * (l'enveloppe financière de la proposition, PI seulement) et {@code motifInfructuosite} (PI : art. 56-II, échec des négociations).
+     *
+     * @param titulaires            ⚠️ 2026-10-15 (tranche MT, contrat-cadre multi-attributaire) — toutes les offres qualifiées du lot,
+     *                              dans l'ordre du classement ; la première est aussi celle des champs de tête. Vide hors multi-attributaire.
+     * @param seulTitulaireQualifie ⚠️ MT — un contrat-cadre multi-attributaire dont l'évaluation ne dégage qu'un titulaire : l'acheteur
+     *                              peut déclarer la procédure infructueuse (décret n° 2019-1064, art. 17 ; loi, art. 56)
      */
     public record Proposition(String idOffre, Integer numero, String candidat, BigDecimal montant, BigDecimal montantTtc, String delai,
-            boolean infructueux, String idOffreFinanciere, String motifInfructuosite) {
+            boolean infructueux, String idOffreFinanciere, String motifInfructuosite, List<Titulaire> titulaires,
+            boolean seulTitulaireQualifie) {
+
+        public Proposition(String idOffre, Integer numero, String candidat, BigDecimal montant, BigDecimal montantTtc, String delai,
+                boolean infructueux, String idOffreFinanciere, String motifInfructuosite) {
+            this(idOffre, numero, candidat, montant, montantTtc, delai, infructueux, idOffreFinanciere, motifInfructuosite, List.of(), false);
+        }
+    }
+
+    /** ⚠️ 2026-10-15 (tranche MT) — un titulaire proposé d'un contrat-cadre multi-attributaire : une offre qualifiée et son rang. */
+    public record Titulaire(String idOffre, Integer numero, String candidat, BigDecimal montant, BigDecimal montantTtc, String delai,
+            Integer rang) {
     }
 
     // ------------------------------------------------------------------ ⚠️ tranche 1d (§B6) : le rapport d'évaluation
