@@ -68,6 +68,12 @@ public class EvaluationController {
         return service.conformite(idDmc, idOffre, corps);
     }
 
+    /** ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.2) — le tableau de conformité technique de l'offre et ses cotes ; CAO et responsable. */
+    @GetMapping("/offres/{idOffre}/specifications")
+    public java.util.List<EvaluationDto.Specification> specifications(@PathVariable Long idDmc, @PathVariable String idOffre) {
+        return service.specifications(idDmc, idOffre);
+    }
+
     /** ⚠️ Tranche 1b (§B3.1) — les corrections arithmétiques proposées depuis le bordereau scellé ; 409 {@code OFFRE_ECARTEE}. */
     @GetMapping("/offres/{idOffre}/corrections-proposees")
     public List<EvaluationDto.CorrectionProposee> correctionsProposees(@PathVariable Long idDmc, @PathVariable String idOffre) {

@@ -64,7 +64,22 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
      * Une vérification : {@code proposee} (vrai, faux, ou nul : sans objet ou à examiner) et {@code constat} viennent de la lecture ;
      * {@code satisfaite} est la valeur retenue — celle de la CAO si elle a décidé, la proposée sinon.
      */
-    public record Verification(String code, String libelle, Boolean proposee, String constat, Boolean satisfaite, String observation) {
+    public record Verification(String code, String libelle, Boolean proposee, String constat, Boolean satisfaite, String observation,
+            /**
+             * ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.1 ; guide de la CAO, I.1) — la cote du guide : {@code C} (conforme), {@code SC}
+             * (substantiellement conforme), {@code NC} (non conforme), {@code SO} (sans objet) ; {@code coteProposee} vient de la lecture
+             * (nulle : à examiner), {@code cote} est la retenue (celle de la CAO, à défaut la proposée).
+             */
+            String coteProposee, String cote) {
+    }
+
+    /**
+     * ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.2 ; guide de la CAO, I.2) — une caractéristique du tableau de conformité technique d'une
+     * offre (fournitures) : l'exigée (le besoin de la fiche), la proposée et la déclaration du candidat (formulaire en ligne), la cote
+     * proposée (déclaration conforme → {@code C}, non conforme → {@code NC}, sans déclaration : nulle) et la cote retenue par la CAO.
+     */
+    public record Specification(Integer idArticle, String article, String marque, String modele, Integer idCaracteristique, String caracteristique,
+            String exigee, String proposee, Boolean declareeConforme, String coteProposee, String cote, String observation) {
     }
 
     public record Ecartement(String etape, String qualification, String motif, String clause, String par, String nom, LocalDateTime le) {
@@ -85,10 +100,17 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
     }
 
     /** {@code PUT …/offres/{idOffre}/conformite}. */
-    public record ConformiteRequest(List<VerificationSaisie> verifications, String decision, String qualification, String motif, String clause) {
+    public record ConformiteRequest(List<VerificationSaisie> verifications, String decision, String qualification, String motif, String clause,
+            /** ⚠️ §B3.2 — les cotes des caractéristiques techniques (fournitures) ; absentes : les proposées. */
+            List<SpecificationSaisie> specifications) {
     }
 
-    public record VerificationSaisie(String code, Boolean satisfaite, String observation) {
+    /** ⚠️ §B3.1 — {@code cote} ∈ {@code C}, {@code SC}, {@code NC}, {@code SO} ; elle fixe {@code satisfaite} (NC : faux ; SO : nul). */
+    public record VerificationSaisie(String code, Boolean satisfaite, String observation, String cote) {
+    }
+
+    /** ⚠️ §B3.2 — la cote d'une caractéristique : {@code C}, {@code SC} ou {@code NC}. */
+    public record SpecificationSaisie(Integer idArticle, Integer idCaracteristique, String cote, String observation) {
     }
 
     // ------------------------------------------------------------------ demandes de précisions (art. 35-VI)

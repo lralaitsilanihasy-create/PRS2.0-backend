@@ -3361,6 +3361,32 @@ du pilote : le rapport d'évaluation reste sur le plan du guide.
 - Règle commune (H2) : les documents déjà produits ne sont pas réécrits ; un PV ou un rapport se régénère à chaque signature, il
   prend alors la nouvelle forme.
 
+⚠️ **2026-10-15 — PV et rapports de la commission sur le guide de la CAO, tranche 2** (même demande, §B3 ; arbitrages du 15/10 : la
+saisie s'étend, la commission cote ; pas de migration — tout tient dans la grille de la décision de conformité).
+- **§B3.1 — grille de conformité du guide (C / SC / NC)** : `EvaluationService.VERIFICATIONS` gagne, **à la suite** des 9 vérifications
+  (ordre gardé), `AE_DATE_SIGNE`, `VALIDITE_OFFRE`, `DELAI`, `BORDEREAU`, `SOMMES_TIERS`, `GARANTIE_VALIDITE`, `VISITE_LIEUX`,
+  `AUTRES_CONDITIONS`. Chaque `verifications[]` du DTO porte en plus **`coteProposee`** et **`cote`** ∈ `C` · `SC` · `NC` · `SO` (sans
+  objet), nulle = à examiner. Propositions du serveur : validité déclarée à l'acte d'engagement comparée à `B04-VO-01` ; délai déclaré
+  (NC si `LIVRAISON_HORS_DELAI`) ; bordereau / DQE rempli en ligne (C), sinon la pièce attendue ; sommes versées aux tiers par la pièce
+  attendue ; validité de la garantie à examiner (SO si non exigée) ; visite des lieux **SO** hors travaux ou sans `B04-VL-02` = OUI, sinon
+  la pièce « visite » ; garantie non exigée et retrait sans frais deviennent **SO** ; PI : délai et bordereau SO. Une décision
+  antérieure se lit sur sa vérification (vrai → C, faux → NC).
+- **Saisie** (`PUT …/offres/{idOffre}/conformite`) : `verifications[{ code, satisfaite?, observation?, cote? }]` — la cote **fixe** la
+  vérification (C, SC → satisfaite ; NC → non ; SO → nulle) ; 400 `COTE_INVALIDE` (hors C/SC/NC/SO), `COTE_INCOHERENTE` (cote et
+  `satisfaite` contradictoires). La décision globale (`CONFORME` / `ECARTEE`) reste celle de la commission : la grille n'en décide pas.
+- **§B3.2 — spécifications techniques** (fournitures, formulaire en ligne) : `GET …/evaluation/offres/{idOffre}/specifications` →
+  `[{ idArticle, article, marque, modele, idCaracteristique, caracteristique, exigee, proposee, declareeConforme, coteProposee, cote,
+  observation }]` (CAO et responsable ; 403 sinon ; vide pour une offre déposée par pièces) ; cote proposée = déclaration du candidat
+  (conforme → C, non conforme → NC, sans déclaration : nulle). Saisie avec la conformité : `specifications[{ idArticle,
+  idCaracteristique, cote, observation? }]`, cote **C, SC ou NC** (400 `COTE_INVALIDE`) ; 400 `SPECIFICATION_INCONNUE` hors du tableau de
+  l'offre. Stockées dans la grille sous `SPEC:<idArticle>:<idCaracteristique>`.
+- **Le rapport** (fournitures, travaux ; PI pour la grille) : section 3, une **grille de conformité** par offre (rubrique, valeur
+  relevée, cote, observation), puis, en fournitures, le **tableau de conformité technique** coté ; section 5, la **comparaison** (prix lu,
+  prix corrigé, rabais, marge de préférence, critères additionnels, montant évalué, rang), variantes et conversion en monnaie unique
+  dites sans objet ; section 7, la **qualification complète** de chaque candidat examiné, dans l'ordre du classement (critère, exigence
+  du DAO, constat, satisfait ou non, motif). Les critères de qualification sont ceux de la fiche (`B03-QT-*`, `B03-CQ-*`) : NIF,
+  non-faillite, attestations… ne sont des critères que si le DAO les porte ; sinon ce sont des **pièces** (rubrique `PIECES` de la grille).
+
 ⚠️ **2026-10-15 — CCAG et descriptif des travaux** (demande front `demande-backend-2026-10-15-ccag-descriptif-travaux.md` ; **V119** ;
 décisions du pilote du 15/10 ; arbitrage de l'utilisateur au backend : pièce du dossier, servie aux candidats).
 - **§B1** : la pièce `CCAG` n'est plus exigée (`OBLIGATOIRE = false` à la liste de la famille DMC ; aucun sous-type ne l'associait).
@@ -6985,7 +7011,7 @@ la vérification est pré-remplie « non satisfaite » (Q6, Q7). Migration **V76
 | POST | /api/fiches-marche/{idDmc}/evaluation/declaration | `{ conflit, precision? }` | `EvaluationDto` | 200, 403 (pas membre), 404, 409 `DEJA_DECLARE` |
 | POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/etapes/{etape}/arreter | `{ observation? }` | `EvaluationDto` | 200, 400 `ETAPE_INCONNUE`, 403, 404 (lot), 409 `EVALUATION_CLOSE` / `ETAPE_ARRETEE` / `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_INCOMPLETE` (`details.offres` : numéros des offres sans décision) / `ETAPE_NON_DISPONIBLE` (⚠️ plus servi depuis la tranche 1c) |
 | POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/etapes/{etape}/rouvrir | `{ motif }` | `EvaluationDto` | 200, 400 `MOTIF_OBLIGATOIRE` / `ETAPE_INCONNUE`, 403, 409 `RAPPORT_SIGNE` / `ETAPE_NON_ARRETEE` |
-| PUT | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/conformite | `{ verifications[{code, satisfaite, observation?}], decision, qualification?, motif?, clause? }` | `EvaluationDto` | 200, 400 `DECISION_INVALIDE` / `VERIFICATION_INCONNUE` / `MOTIF_OBLIGATOIRE` / `CLAUSE_OBLIGATOIRE` / `QUALIFICATION_OBLIGATOIRE`, 403 / 403 `MEMBRE_EN_CONFLIT`, 404, 409 `DECLARATION_MANQUANTE` / `ETAPE_ARRETEE` / `EVALUATION_CLOSE` |
+| PUT | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/conformite | `{ verifications[{code, satisfaite?, observation?, cote?}], specifications?[{idArticle, idCaracteristique, cote, observation?}], decision, qualification?, motif?, clause? }` ⚠️ 15/10 cotes du guide | `EvaluationDto` | 200, 400 `DECISION_INVALIDE` / `VERIFICATION_INCONNUE` / `COTE_INVALIDE` / `COTE_INCOHERENTE` / `SPECIFICATION_INCONNUE` / `MOTIF_OBLIGATOIRE` / `CLAUSE_OBLIGATOIRE` / `QUALIFICATION_OBLIGATOIRE`, 403 / 403 `MEMBRE_EN_CONFLIT`, 404, 409 `DECLARATION_MANQUANTE` / `ETAPE_ARRETEE` / `EVALUATION_CLOSE` |
 | POST | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/precisions | `{ question, delaiJours? }` | `Demande` | 201, 400 `QUESTION_OBLIGATOIRE` / `DELAI_OBLIGATOIRE`, 403 (pas la PRMP), 404, 409 `EVALUATION_CLOSE` |
 | GET | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/precisions | — | `Demande[]` | 200, 403, 404 |
 | GET | /api/fiches-marche/{idDmc}/evaluation/demandes/{idDemande}/fichier | — | le fichier joint à la réponse | 200, 403, 404 |

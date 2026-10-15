@@ -942,7 +942,15 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
     restreinte ; tableaux de notation et de la méthode de sélection au rapport PI. Restent les choix du travail en ligne : rapport
     signé valant PV de validation, pas de sous-comité technique, pas de signature des représentants des candidats, signature
     électronique et journal ; la conversion en monnaie unique est sans objet tant que le DAO impose l'ariary. La validité de la
-    garantie se vérifie à l'examen de conformité. Les grilles du rapport des fournitures et travaux (conformité C/SC/NC) suivent.
+    garantie se vérifie à l'examen de conformité.
+  - ⚠️ **2026-10-15 — la grille de conformité du guide** : à l'examen préliminaire, la commission cote chaque rubrique **C**
+    (conforme), **SC** (substantiellement conforme), **NC** (non conforme) ou **SO** (sans objet) — acte d'engagement daté et signé,
+    validité de l'offre, délai, bordereau ou détail quantitatif et estimatif, sommes versées aux tiers, garantie (forme, validité,
+    montant), visite des lieux quand le DAO l'exige, autres conditions, en plus des vérifications existantes ; l'application propose
+    la cote quand la lecture de l'offre l'établit. En fournitures, elle cote aussi chaque **spécification technique** proposée.
+    La décision de l'offre (conforme ou écartée) reste celle de la commission. Le rapport imprime ces grilles, la comparaison des
+    offres par ajustement (rabais, marge de préférence, critères additionnels) et la qualification complète de chaque candidat
+    examiné, dans l'ordre du classement.
 - ⚠️ **De la proposition à l'attribution : le contrôle de la Commission** (lot 2, demande front du 2026-10-07, arbitrages du pilote
   du 07/10) :
   - **chaque marché** issu d'une procédure en ligne passe au contrôle a priori de la Commission, sans seuil ;

@@ -209,8 +209,27 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("QUALIFICATION_OBLIGATOIRE"));
         conformite(jetonM1, b, "{\"decision\":\"CONFORME\",\"verifications\":[{\"code\":\"INCONNU\",\"satisfaite\":true}]}")
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VERIFICATION_INCONNUE"));
-        conformite(jetonM1, a, "{\"decision\":\"CONFORME\",\"verifications\":[{\"code\":\"OFFRE_UNIQUE\",\"satisfaite\":true,"
-                + "\"observation\":\"Le groupement de BTP Gamma ne compte pas BTP Alpha : NIF saisi par erreur\"}]}").andExpect(status().isOk());
+        // ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.1, §B3.2) — la cote du guide : C, SC, NC, SO ; elle fixe la vérification.
+        conformite(jetonM1, a, "{\"decision\":\"CONFORME\",\"verifications\":[{\"code\":\"AUTRES_CONDITIONS\",\"cote\":\"X\"}]}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("COTE_INVALIDE"));
+        conformite(jetonM1, a, "{\"decision\":\"CONFORME\",\"verifications\":[{\"code\":\"AUTRES_CONDITIONS\",\"cote\":\"NC\",\"satisfaite\":true}]}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("COTE_INCOHERENTE"));
+        conformite(jetonM1, a, "{\"decision\":\"CONFORME\",\"specifications\":[{\"idArticle\":1,\"idCaracteristique\":1,\"cote\":\"C\"}]}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("SPECIFICATION_INCONNUE"));
+        mvc.perform(get(base + "/offres/" + a + "/specifications").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));   // offre déposée par pièces : pas de tableau en ligne
+        mvc.perform(get(base + "/offres/" + a + "/specifications").header("Authorization", tokenUgpm)).andExpect(status().isForbidden());
+        String cotee = conformite(jetonM1, a, "{\"decision\":\"CONFORME\",\"verifications\":[{\"code\":\"OFFRE_UNIQUE\",\"satisfaite\":true,"
+                + "\"observation\":\"Le groupement de BTP Gamma ne compte pas BTP Alpha : NIF saisi par erreur\"},{\"code\":\"AUTRES_CONDITIONS\","
+                + "\"cote\":\"sc\",\"observation\":\"Calendrier joint incomplet, sans incidence\"}]}").andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(verif(cotee, a, "AUTRES_CONDITIONS", "cote")).isEqualTo("SC");
+        assertThat(verif(cotee, a, "AUTRES_CONDITIONS", "satisfaite")).isEqualTo(true);
+        assertThat(verif(cotee, a, "AUTRES_CONDITIONS", "coteProposee")).isNull();
+        assertThat(verif(cotee, a, "OFFRE_UNIQUE", "cote")).isEqualTo("C");
+        assertThat(verif(cotee, a, "FRAIS_DOSSIER", "cote")).isEqualTo("SO");
+        assertThat(verif(cotee, a, "AE_DATE_SIGNE", "cote")).isNull();
+        assertThat(verif(cotee, b, "INTEGRITE", "cote")).isEqualTo("NC");
 
         // Arrêter : le président, une fois chaque offre décidée.
         mvc.perform(post(base + "/lots/1/etapes/CONFORMITE/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
@@ -604,7 +623,10 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(pdf.replaceAll("\\s+", " ")).contains("RAPPORT D'ÉVALUATION DES OFFRES", "3. Examen préliminaire", "Rang 1 — offre n° 2",
                 "Justification du prix", "Stock acquis l'an dernier.", "non qualifiée — Situation fiscale non régulière (IC 6.3)",
                 "La commission propose d'attribuer le marché à BTP Alpha (offre n° 1), pour un montant de 12 500 000 Ariary hors taxes",
-                "Évaluation conduite sans incident.", "signature attendue", "absence de conflit d'intérêts");
+                "Évaluation conduite sans incident.", "signature attendue", "absence de conflit d'intérêts",
+                // ⚠️ 2026-10-15 (« modeles-guide-cao », §B3) — grilles cotées, comparaison par ajustement, qualification complète.
+                "Grille de conformité — Offre n° 1 (BTP Alpha)", "Valeur relevée", "Acte d'engagement daté et signé", "Marge de préférence",
+                "Critères additionnels", "Conversion en monnaie unique : sans objet", "Qualification — Offre n° 1 (BTP Alpha)", "Exigence du DAO");
         byte[] docx = mvc.perform(get(base + "/rapport").param("format", "docx").header("Authorization", jetonM2)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(docx, 0, 2, StandardCharsets.ISO_8859_1)).isEqualTo("PK");

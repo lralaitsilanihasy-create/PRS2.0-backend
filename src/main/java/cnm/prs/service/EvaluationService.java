@@ -94,7 +94,18 @@ public class EvaluationService {
             "PIECES", "Pièces exigées par le DAO",
             "CONFORMITE_TECHNIQUE", "Conformité pour l'essentiel aux spécifications",
             "INTEGRITE", "Intégrité de l'offre",
-            "FRAIS_DOSSIER", "Frais de dossier réglés");
+            "FRAIS_DOSSIER", "Frais de dossier réglés",
+            // ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.1 ; guide de la CAO, I.1) — les rubriques du guide, à la suite (ordre de la grille gardé).
+            "AE_DATE_SIGNE", "Acte d'engagement daté et signé",
+            "VALIDITE_OFFRE", "Validité de l'offre",
+            "DELAI", "Délai de livraison (fournitures) ou d'exécution (travaux)",
+            "BORDEREAU", "Bordereau des prix (fournitures) ; bordereau des prix unitaires et détail quantitatif et estimatif (travaux)",
+            "SOMMES_TIERS", "État des sommes versées aux tiers",
+            "GARANTIE_VALIDITE", "Garantie : forme et validité",
+            "VISITE_LIEUX", "Certificat de visite des lieux (travaux, si le DAO la rend obligatoire)",
+            "AUTRES_CONDITIONS", "Autres conditions du DAO");
+    /** ⚠️ §B3.1 — les cotes du guide : conforme, substantiellement conforme, non conforme, et sans objet. */
+    public static final List<String> COTES = List.of("C", "SC", "NC", "SO");
     /** Les qualifications d'une offre écartée (article 1 de la loi, repris par le guide, §2.3). */
     public static final Set<String> QUALIFICATIONS = Set.of("IRRECEVABLE", "NON_CONFORME", "INAPPROPRIEE", "INACCEPTABLE");
     /** Délai de réponse aux demandes de la PRMP : fournitures, puis travaux. */
@@ -374,6 +385,12 @@ public class EvaluationService {
             if (v == null || v.code() == null || !VERIFICATIONS.containsKey(v.code())) {
                 throw new BadRequestException("Vérification inconnue : " + (v == null ? null : v.code()) + ".", "VERIFICATION_INCONNUE");
             }
+            String cote = cote(v.cote());
+            // ⚠️ §B3.1 — la cote fixe la vérification : C et SC la satisfont, NC non, SO la laisse sans objet ; contredite, 400.
+            if (cote != null && v.satisfaite() != null && !Objects.equals(v.satisfaite(), satisfaiteDe(cote))) {
+                throw new BadRequestException("La vérification " + v.code() + " est cotée " + cote + " mais déclarée "
+                        + (v.satisfaite() ? "satisfaite" : "non satisfaite") + ".", "COTE_INCOHERENTE");
+            }
             saisies.put(v.code(), v);
         }
         // La grille retenue : la saisie de la CAO, à défaut la proposition du serveur.
@@ -381,11 +398,38 @@ public class EvaluationService {
         List<Map<String, Object>> grille = new ArrayList<>();
         for (String code : VERIFICATIONS.keySet()) {
             EvaluationDto.VerificationSaisie s = saisies.get(code);
+            Proposition pr = proposees.get(code);
+            String cote = s == null ? null : cote(s.cote());
+            if (cote == null && s != null && s.satisfaite() != null) {
+                cote = s.satisfaite() ? "C" : "NC";
+            }
             Map<String, Object> ligne = new LinkedHashMap<>();
             ligne.put("code", code);
-            ligne.put("satisfaite", s != null && s.satisfaite() != null ? s.satisfaite() : proposees.get(code).valeur());
+            ligne.put("satisfaite", cote != null ? satisfaiteDe(cote) : pr.valeur());
             ligne.put("observation", s == null ? null : nettoyer(s.observation()));
+            ligne.put("cote", cote != null ? cote : pr.cote());
             grille.add(ligne);
+        }
+        // ⚠️ §B3.2 — les cotes des caractéristiques techniques, lignes « SPEC:<article>:<caractéristique> » de la même grille.
+        if (c.specifications() != null && !c.specifications().isEmpty()) {
+            Set<String> connues = seance.specificationsLues(idDmc, o.idOffre()).stream()
+                    .map(x -> cleSpecification(x.idArticle(), x.idCaracteristique())).collect(Collectors.toSet());
+            for (EvaluationDto.SpecificationSaisie x : c.specifications()) {
+                String cle = x == null ? null : cleSpecification(x.idArticle(), x.idCaracteristique());
+                if (cle == null || !connues.contains(cle)) {
+                    throw new BadRequestException("Caractéristique inconnue du tableau de conformité de l'offre : " + cle + ".",
+                            "SPECIFICATION_INCONNUE");
+                }
+                String cote = cote(x.cote());
+                if (cote == null || "SO".equals(cote)) {
+                    throw new BadRequestException("Une caractéristique se cote C, SC ou NC (" + cle + ").", "COTE_INVALIDE");
+                }
+                Map<String, Object> ligne = new LinkedHashMap<>();
+                ligne.put("code", cle);
+                ligne.put("cote", cote);
+                ligne.put("observation", nettoyer(x.observation()));
+                grille.add(ligne);
+            }
         }
         LocalDateTime maintenant = maintenant();
         EvaluationDecision avant = remplacer(o.idOffre(), EvaluationEtape.CONFORMITE, maintenant);
@@ -398,17 +442,133 @@ public class EvaluationService {
         return dto(idDmc, e);
     }
 
-    /** Une proposition du serveur : vrai, faux, ou nul (sans objet, ou à examiner par la CAO), et le constat qui la fonde. */
-    record Proposition(Boolean valeur, String constat) {
+    /**
+     * Une proposition du serveur : vrai, faux, ou nul (sans objet, ou à examiner par la CAO), et le constat qui la fonde. ⚠️ §B3.1 :
+     * {@code sansObjet} distingue le sans objet (cote {@code SO}) du « à examiner » (pas de cote proposée).
+     */
+    record Proposition(Boolean valeur, String constat, boolean sansObjet) {
+        Proposition(Boolean valeur, String constat) {
+            this(valeur, constat, false);
+        }
+
+        static Proposition sansObjet(String constat) {
+            return new Proposition(null, constat, true);
+        }
+
+        /** La cote proposée : {@code C} si vrai, {@code NC} si faux, {@code SO} sans objet, nulle à examiner. */
+        String cote() {
+            return sansObjet ? "SO" : valeur == null ? null : valeur ? "C" : "NC";
+        }
+    }
+
+    /** ⚠️ §B3.1 — une cote saisie, normalisée ({@code C}, {@code SC}, {@code NC}, {@code SO}) ; nulle si absente ; 400 {@code COTE_INVALIDE}. */
+    private static String cote(String saisie) {
+        String c = saisie == null || saisie.isBlank() ? null : saisie.trim().toUpperCase(Locale.ROOT);
+        if (c != null && !COTES.contains(c)) {
+            throw new BadRequestException("Une cote vaut C, SC, NC ou SO (« " + saisie + " »).", "COTE_INVALIDE");
+        }
+        return c;
+    }
+
+    /** La vérification qu'une cote fixe : C et SC satisfaite, NC non satisfaite, SO sans objet (nulle). */
+    private static Boolean satisfaiteDe(String cote) {
+        return "SO".equals(cote) ? null : !"NC".equals(cote);
+    }
+
+    /** La clé d'une caractéristique dans la grille : {@code SPEC:<idArticle>:<idCaracteristique>}. */
+    static String cleSpecification(Integer idArticle, Integer idCaracteristique) {
+        return idArticle == null || idCaracteristique == null ? null : "SPEC:" + idArticle + ":" + idCaracteristique;
+    }
+
+    /**
+     * ⚠️ §B3.2 — le tableau de conformité technique d'une offre (fournitures, formulaire en ligne), avec les cotes retenues par la CAO à
+     * son examen préliminaire : les membres de la CAO et le responsable ; vide pour une offre sans formulaire de conformité.
+     */
+    @Transactional(readOnly = true)
+    public List<EvaluationDto.Specification> specifications(Long idDmc, String idOffre) {
+        exigerEvaluation(idDmc);
+        if (membreAppelant(idDmc) == null && !internes.estTitulaire(idDmc)) {
+            throw new AccessDeniedException("Le tableau de conformité d'une offre se lit par la commission et le responsable de la procédure.");
+        }
+        SeanceDto.OffreLue o = offreEvaluee(idDmc, idOffre);
+        return specificationsCotees(idDmc, o.idOffre());
+    }
+
+    private List<EvaluationDto.Specification> specificationsCotees(Long idDmc, String idOffre) {
+        Map<String, Map<String, Object>> retenues = lignesConformite(enVigueur(idDmc, EvaluationEtape.CONFORMITE).get(idOffre));
+        return seance.specificationsLues(idDmc, idOffre).stream().map(x -> {
+            Map<String, Object> r = retenues.get(cleSpecification(x.idArticle(), x.idCaracteristique()));
+            return r == null ? x : new EvaluationDto.Specification(x.idArticle(), x.article(), x.marque(), x.modele(), x.idCaracteristique(),
+                    x.caracteristique(), x.exigee(), x.proposee(), x.declareeConforme(), x.coteProposee(), (String) r.get("cote"),
+                    (String) r.get("observation"));
+        }).toList();
+    }
+
+    /** Les lignes de la grille d'une décision de conformité, par code (vérifications et caractéristiques). */
+    private Map<String, Map<String, Object>> lignesConformite(EvaluationDecision d) {
+        Map<String, Map<String, Object>> out = new HashMap<>();
+        if (d != null && d.getContenu() != null) {
+            for (Map<String, Object> ligne : mapper.readValue(d.getContenu(), new TypeReference<List<Map<String, Object>>>() {
+            })) {
+                out.put(String.valueOf(ligne.get("code")), ligne);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * ⚠️ §B3.1 — ce que le DAO exige, pour proposer les rubriques du guide : la validité des offres (jours, {@code B04-VO-01}), la
+     * visite des lieux obligatoire ({@code B04-VL-02} = OUI), la catégorie (travaux, prestations intellectuelles).
+     */
+    record ExigencesDao(Integer validiteJours, boolean visiteExigee, boolean travaux, boolean pi) {
+        static final ExigencesDao AUCUNE = new ExigencesDao(null, false, false, false);
     }
 
     /** La grille pré-remplie depuis la lecture de la séance (P2 : des constats ; la CAO décide). */
     Map<String, Proposition> proposer(Long idDmc, SeanceDto.OffreLue o) {
-        return proposer(idDmc, o, parLot(idDmc).getOrDefault(lotDe(o), List.of()), nifsParOffre(idDmc), attendues(idDmc), garantieExigee(idDmc));
+        return proposer(idDmc, o, parLot(idDmc).getOrDefault(lotDe(o), List.of()), nifsParOffre(idDmc), attendues(idDmc), garantieExigee(idDmc),
+                exigences(idDmc));
     }
 
     static Map<String, Proposition> proposer(Long idDmc, SeanceDto.OffreLue o, List<SeanceDto.OffreLue> memeLot,
             Map<String, Set<String>> nifsParOffre, List<OffreDto.PieceAttendue> attendues, boolean garantieExigee) {
+        return proposer(idDmc, o, memeLot, nifsParOffre, attendues, garantieExigee, ExigencesDao.AUCUNE);
+    }
+
+    private ExigencesDao exigences(Long idDmc) {
+        FicheMarcheService.EtatVersion v = fiches.etatValide(idDmc).orElse(null);
+        if (v == null) {
+            return ExigencesDao.AUCUNE;
+        }
+        Map<String, String> valeurs = v.etat().getValeurs() == null ? Map.of() : v.etat().getValeurs();
+        Integer validite = null;
+        for (String code : AttributionService.VALIDITE) {
+            String x = nettoyer(valeurs.get(code));
+            if (x != null && validite == null) {
+                try {
+                    validite = new java.math.BigDecimal(x.replace(',', '.')).intValue();
+                } catch (NumberFormatException ignore) {
+                    // une valeur illisible : la validité reste à examiner
+                }
+            }
+        }
+        return new ExigencesDao(validite, "OUI".equalsIgnoreCase(nettoyer(valeurs.get("B04-VL-02"))),
+                cnm.prs.enums.CategorieDao.TRAVAUX.name().equals(v.categorie()), ModelesDao.sigleLettre(v.categorie()) != null);
+    }
+
+    /** Une pièce attendue dont le libellé contient l'un des mots : sa présence dans l'offre (vrai, faux), ou nul si le DAO ne l'exige pas. */
+    private static Proposition piece(SeanceDto.OffreLue o, List<OffreDto.PieceAttendue> attendues, String nonExigee, String... mots) {
+        OffreDto.PieceAttendue a = attendues.stream().filter(x -> x.libelle() != null && java.util.Arrays.stream(mots)
+                .anyMatch(m -> x.libelle().toLowerCase(Locale.FRENCH).contains(m))).findFirst().orElse(null);
+        if (a == null) {
+            return new Proposition(null, nonExigee);
+        }
+        boolean manque = o.piecesManquantes() != null && o.piecesManquantes().contains(a.libelle());
+        return new Proposition(!manque, (manque ? "Manquante : " : "Jointe : ") + a.libelle() + ".");
+    }
+
+    static Map<String, Proposition> proposer(Long idDmc, SeanceDto.OffreLue o, List<SeanceDto.OffreLue> memeLot,
+            Map<String, Set<String>> nifsParOffre, List<OffreDto.PieceAttendue> attendues, boolean garantieExigee, ExigencesDao ex) {
         Map<String, Proposition> p = new LinkedHashMap<>();
         List<String> types = o.alertes() == null ? List.of() : o.alertes().stream().map(SeanceDto.Alerte::type).toList();
         Map<String, Object> ae = o.acteEngagement();
@@ -419,7 +579,7 @@ public class EvaluationService {
                 : prix ? "Montant lu : " + (ht == null ? "" : "HT " + ht) + (ttc == null ? "" : (ht == null ? "" : ", ") + "TTC " + ttc) + "."
                         : "Acte d'engagement sans montant."));
         if (!garantieExigee) {
-            p.put("GARANTIE", new Proposition(null, "Non exigée par le DAO."));
+            p.put("GARANTIE", Proposition.sansObjet("Non exigée par le DAO."));
         } else if (o.garantie() == null || !o.garantie().presente()) {
             p.put("GARANTIE", new Proposition(false, "Garantie de soumission absente."));
         } else if (types.contains("GARANTIE_INSUFFISANTE")) {
@@ -461,12 +621,55 @@ public class EvaluationService {
         p.put("INTEGRITE", new Proposition(intacte, intacte ? "Offre intacte (empreintes conformes)."
                 : "Offre " + o.integrite() + (o.motif() == null ? "" : " : " + o.motif()) + "."));
         if (o.fraisDossier() == null) {
-            p.put("FRAIS_DOSSIER", new Proposition(null, "Retrait du dossier sans frais."));
+            p.put("FRAIS_DOSSIER", Proposition.sansObjet("Retrait du dossier sans frais."));
         } else {
             p.put("FRAIS_DOSSIER", new Proposition(o.fraisDossier().regle(), o.fraisDossier().regle()
                     ? "Reçu validé" + (o.fraisDossier().referencePaiement() == null ? "." : " : " + o.fraisDossier().referencePaiement() + ".")
                     : "Aucun reçu de frais de dossier validé pour l'entreprise."));
         }
+        // ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.1) — les rubriques du guide : ce que la lecture établit, le reste à examiner.
+        p.put("AE_DATE_SIGNE", ae == null ? new Proposition(false, "Acte d'engagement absent du manifeste.")
+                : new Proposition(null, "Date et signature à vérifier sur l'acte d'engagement joint."));
+        Object validite = ae == null ? null : ae.get("validiteJours");
+        Integer jours = null;
+        try {
+            jours = validite == null || String.valueOf(validite).isBlank() ? null : new java.math.BigDecimal(String.valueOf(validite).trim()).intValue();
+        } catch (NumberFormatException ignore) {
+            // illisible : à examiner
+        }
+        p.put("VALIDITE_OFFRE", jours == null ? new Proposition(null, "Validité non déclarée à l'acte d'engagement : à vérifier.")
+                : ex.validiteJours() == null ? new Proposition(null, "Validité déclarée : " + jours + " jours (le DAO n'en fixe pas).")
+                : new Proposition(jours >= ex.validiteJours(), "Validité déclarée : " + jours + " jours ; exigée : " + ex.validiteJours() + " jours."));
+        Object delai = ae == null ? null : ae.get("delai");
+        String delaiLu = delai == null || String.valueOf(delai).isBlank() ? null
+                : delai + (ae.get("delaiUnite") == null ? "" : " " + ae.get("delaiUnite"));
+        p.put("DELAI", types.contains("LIVRAISON_HORS_DELAI") ? new Proposition(false, message(o, "LIVRAISON_HORS_DELAI"))
+                : ex.pi() ? Proposition.sansObjet("Prestations intellectuelles : délai apprécié à l'évaluation technique.")
+                : new Proposition(null, delaiLu == null ? "Délai non déclaré à l'acte d'engagement : à vérifier." : "Délai déclaré : " + delaiLu + "."));
+        if (ex.pi()) {
+            p.put("BORDEREAU", Proposition.sansObjet("Prestations intellectuelles : la proposition financière s'ouvre en seconde séance."));
+        } else if (o.formulaires() && o.partiesFormulaires() != null && o.partiesFormulaires().contains(FormulairesEnLigne.BORDEREAU)) {
+            p.put("BORDEREAU", new Proposition(true, (ex.travaux() ? "Détail quantitatif et estimatif" : "Bordereau des prix")
+                    + " rempli en ligne (totaux recalculés à l'ouverture)."));
+        } else {
+            p.put("BORDEREAU", piece(o, attendues, "Pièce non nommée par le DAO : à vérifier dans l'offre.", "bordereau", "detail quantitatif",
+                    "détail quantitatif", "dqe"));
+        }
+        p.put("SOMMES_TIERS", piece(o, attendues, "Pièce non exigée par le DAO : à vérifier si l'offre en fait état.", "sommes vers", "tiers"));
+        if (!garantieExigee) {
+            p.put("GARANTIE_VALIDITE", Proposition.sansObjet("Garantie non exigée par le DAO."));
+        } else if (o.garantie() == null || !o.garantie().presente()) {
+            p.put("GARANTIE_VALIDITE", new Proposition(false, "Garantie de soumission absente."));
+        } else {
+            p.put("GARANTIE_VALIDITE", new Proposition(null, "Forme et validité à vérifier sur l'acte de garantie (validité non relevée au dépôt)."));
+        }
+        if (!ex.travaux() || !ex.visiteExigee()) {
+            p.put("VISITE_LIEUX", Proposition.sansObjet("Visite des lieux non exigée par le DAO."));
+        } else {
+            Proposition v = piece(o, attendues, "Certificat à vérifier dans l'offre.", "visite");
+            p.put("VISITE_LIEUX", v);
+        }
+        p.put("AUTRES_CONDITIONS", new Proposition(null, "Autres conditions du DAO à examiner par la commission."));
         return p;
     }
 
@@ -1764,6 +1967,7 @@ public class EvaluationService {
     private DocumentLibre document(Long idDmc, Evaluation e, cnm.prs.entity.EvaluationRapport r) {
         EvaluationDto ev = dto(idDmc, e);
         boolean pi = estPi(idDmc);
+        ExigencesDao exigences = exigences(idDmc);
         List<DocumentLibre.Element> el = new ArrayList<>();
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, pi ? "RAPPORT D'ÉVALUATION DES PROPOSITIONS" : "RAPPORT D'ÉVALUATION DES OFFRES"));
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, pi ? "(propositions remises en ligne)" : "(offres remises en ligne)"));
@@ -1805,6 +2009,34 @@ public class EvaluationService {
                         : "écartée, " + Objects.toString(c.qualification(), "").toLowerCase(Locale.FRENCH).replace('_', ' ') + " — " + c.motif()
                                 + " (" + c.clause() + ")"));
             }
+            // ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.1, §B3.2 ; guide de la CAO, I.1 et I.2) — la grille de conformité de chaque offre,
+            // cotée C / SC / NC (SO : sans objet), puis le tableau de conformité technique (fournitures).
+            for (EvaluationDto.OffreEvaluee o : l.offres()) {
+                el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Grille de conformité — " + nom(o), true));
+                List<List<List<String>>> lignes = new ArrayList<>();
+                lignes.add(List.of(List.of("Rubrique"), List.of("Valeur relevée"), List.of("Cote"), List.of("Observation")));
+                for (EvaluationDto.Verification x : o.conformite().verifications()) {
+                    lignes.add(List.of(List.of(x.libelle()), List.of(Objects.toString(x.constat(), "")), List.of(Objects.toString(x.cote(), "à examiner")),
+                            List.of(Objects.toString(x.observation(), ""))));
+                }
+                el.add(new DocumentLibre.Tableau(4, lignes));
+                if (!exigences.travaux() && !pi) {
+                    List<EvaluationDto.Specification> specs = specificationsCotees(idDmc, o.idOffre());
+                    if (!specs.isEmpty()) {
+                        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Conformité des spécifications techniques — " + nom(o), true));
+                        List<List<List<String>>> t = new ArrayList<>();
+                        t.add(List.of(List.of("Article — caractéristique"), List.of("Spécification demandée"), List.of("Spécification proposée"),
+                                List.of("Déclaration du candidat"), List.of("Cote")));
+                        for (EvaluationDto.Specification s : specs) {
+                            t.add(List.of(List.of(s.article() + (s.marque() == null ? "" : " (" + s.marque() + (s.modele() == null ? "" : ", " + s.modele())
+                                    + ")") + " — " + s.caracteristique()), List.of(Objects.toString(s.exigee(), "")), List.of(Objects.toString(s.proposee(), "")),
+                                    List.of(s.declareeConforme() == null ? "—" : s.declareeConforme() ? "conforme" : "non conforme"),
+                                    List.of(Objects.toString(s.cote(), "à examiner") + (s.observation() == null ? "" : " — " + s.observation()))));
+                        }
+                        el.add(new DocumentLibre.Tableau(5, t));
+                    }
+                }
+            }
             // ⚠️ PI-d2b — un lot PI : évaluation technique, évaluation financière, classement, négociation (à la place des étapes 3 à 5).
             if (pi) {
                 el.addAll(resultatsPi.getObject().sections(idDmc, l.lot(), p));
@@ -1839,7 +2071,26 @@ public class EvaluationService {
                 para(el, "Aucune correction retenue.");
             }
             sous(el, "5. Montant évalué et classement (hors taxes)" + p);
-            for (EvaluationDto.LigneTableau t : tableauSansGarde(idDmc, l.lot())) {
+            List<EvaluationDto.LigneTableau> tableauLot = tableauSansGarde(idDmc, l.lot());
+            // ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.3 ; guide de la CAO, III) — la comparaison, une colonne par ajustement.
+            Map<String, EvaluationDto.OffreEvaluee> parOffre = new HashMap<>();
+            l.offres().forEach(o -> parOffre.put(o.idOffre(), o));
+            List<List<List<String>>> comparaison = new ArrayList<>();
+            comparaison.add(List.of(List.of("N°"), List.of("Candidat"), List.of("Prix lu"), List.of("Prix corrigé"), List.of("Rabais"),
+                    List.of("Marge de préférence"), List.of("Critères additionnels"), List.of("Montant évalué"), List.of("Rang")));
+            for (EvaluationDto.LigneTableau t : tableauLot) {
+                EvaluationDto.Montant m = parOffre.containsKey(t.idOffre()) ? parOffre.get(t.idOffre()).evaluation() : null;
+                java.math.BigDecimal preference = m == null || m.preference() == null ? null : m.preference().ajustement();
+                java.math.BigDecimal criteres = m == null || m.criteres() == null || m.criteres().isEmpty() ? null : m.criteres().stream()
+                        .map(EvaluationDto.Critere::montant).filter(Objects::nonNull).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+                comparaison.add(List.of(List.of(String.valueOf(t.numero())), List.of(t.candidat()), List.of(lisible(t.prixLu())), List.of(lisible(t.prixCorrige())),
+                        List.of(lisible(t.rabais())), List.of(lisible(preference)), List.of(lisible(criteres)), List.of(lisible(t.montantEvalue())),
+                        List.of(t.rang() == null ? (t.motifRejet() == null ? "non classée" : "écartée") : String.valueOf(t.rang()))));
+            }
+            el.add(new DocumentLibre.Tableau(9, comparaison));
+            para(el, "Variantes techniques : aucune n'est évaluée. Conversion en monnaie unique : sans objet, le dossier d'appel d'offres imposant "
+                    + "l'ariary.");
+            for (EvaluationDto.LigneTableau t : tableauLot) {
                 para(el, (t.rang() == null ? "Non classée" : "Rang " + t.rang()) + " — offre n° " + t.numero() + " (" + t.candidat() + ") : prix lu "
                         + lisible(t.prixLu()) + (t.prixCorrige() == null ? "" : ", corrigé " + lisible(t.prixCorrige()) + ", rabais " + lisible(t.rabais())
                                 + ", ajustements " + lisible(t.ajustements()) + ", montant évalué " + lisible(t.montantEvalue()))
@@ -1881,6 +2132,22 @@ public class EvaluationService {
                         .map(c -> c.libelle() + " : " + c.motif()).toList();
                 para(el, nom(o) + " : " + (QUALIFIE.equals(q.decision()) ? "qualifiée" : "non qualifiée — " + q.motif() + " (" + q.clause() + ")")
                         + (echecs.isEmpty() ? "" : " ; critères non satisfaits : " + String.join(" ; ", echecs)));
+            }
+            // ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.4 ; guide de la CAO, IV) — la grille complète, candidat par candidat dans l'ordre du
+            // classement : chaque critère du DAO, satisfait ou non.
+            List<EvaluationDto.OffreEvaluee> examinees = l.offres().stream().filter(o -> o.qualification() != null && o.qualification().decision() != null)
+                    .sorted(java.util.Comparator.comparing(o -> o.rang() == null ? Integer.MAX_VALUE : o.rang())).toList();
+            for (EvaluationDto.OffreEvaluee o : examinees) {
+                el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Qualification — " + nom(o)
+                        + (o.rang() == null ? "" : ", rang " + o.rang()), true));
+                List<List<List<String>>> lignes = new ArrayList<>();
+                lignes.add(List.of(List.of("Critère"), List.of("Exigence du DAO"), List.of("Constat"), List.of("Décision")));
+                for (EvaluationDto.CritereQualification c : o.qualification().criteres()) {
+                    lignes.add(List.of(List.of((c.groupe() == null ? "" : c.groupe() + " — ") + c.libelle()), List.of(Objects.toString(c.exigence(), "")),
+                            List.of(Objects.toString(c.constat(), "")), List.of((NON_SATISFAIT.equals(c.decision()) ? "non satisfait" : c.decision() == null
+                                    ? "non décidé" : "satisfait") + (c.motif() == null ? "" : " — " + c.motif()))));
+                }
+                el.add(new DocumentLibre.Tableau(4, lignes));
             }
             sous(el, "8. Proposition d'attribution" + p);
             EvaluationDto.Proposition pr = l.proposition();
@@ -2153,6 +2420,7 @@ public class EvaluationService {
         Map<String, EvaluationDecision> qualifications = enVigueur(idDmc, EvaluationEtape.QUALIFICATION);
         List<OffreDto.PieceAttendue> attendues = attendues(idDmc);
         boolean garantie = garantieExigee(idDmc);
+        ExigencesDao exigences = exigences(idDmc);
         Map<String, Set<String>> nifs = nifsParOffre(idDmc);
         Map<String, Long> enAttente = demandes.findByIdDmcOrderByDemandeeLeAscIdAsc(idDmc).stream()
                 .filter(x -> x.getReponduLe() == null && !maintenant().isAfter(x.getEcheance()))
@@ -2170,7 +2438,7 @@ public class EvaluationService {
                             a.getObservation())).toList();
             List<EvaluationDto.OffreEvaluee> evaluees = new ArrayList<>();
             for (SeanceDto.OffreLue o : liste) {
-                Map<String, Proposition> proposees = proposer(idDmc, o, liste, nifs, attendues, garantie);
+                Map<String, Proposition> proposees = proposer(idDmc, o, liste, nifs, attendues, garantie, exigences);
                 EvaluationDecision d = conformites.get(o.idOffre());
                 Map<String, Map<String, Object>> retenues = new HashMap<>();
                 if (d != null && d.getContenu() != null) {
@@ -2184,8 +2452,11 @@ public class EvaluationService {
                     Proposition p = proposees.get(code);
                     Map<String, Object> r = retenues.get(code);
                     Boolean satisfaite = r != null && r.containsKey("satisfaite") ? (Boolean) r.get("satisfaite") : p.valeur();
+                    // ⚠️ §B3.1 — la cote retenue ; une décision d'avant la cote se lit sur sa vérification (vrai C, faux NC).
+                    String cote = r == null ? p.cote() : r.get("cote") != null ? (String) r.get("cote")
+                            : satisfaite == null ? p.cote() : satisfaite ? "C" : "NC";
                     verifs.add(new EvaluationDto.Verification(code, libelle, p.valeur(), p.constat(), satisfaite,
-                            r == null ? null : (String) r.get("observation")));
+                            r == null ? null : (String) r.get("observation"), p.cote(), cote));
                 });
                 EvaluationDto.Conformite conf = new EvaluationDto.Conformite(verifs, d == null ? null : d.getDecision(),
                         d == null ? null : d.getQualification(), d == null ? null : d.getMotif(), d == null ? null : d.getClause(),

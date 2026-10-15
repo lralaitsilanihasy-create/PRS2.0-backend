@@ -701,6 +701,43 @@ public class FormulairesEnLigne {
         return n.isNumber() ? n.decimalValue() : n.asString();
     }
 
+    /**
+     * ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.2) — le tableau de conformité technique rempli d'une offre, ligne par caractéristique :
+     * l'exigée (le besoin du lot), la proposée et la déclaration du candidat ; cote proposée = cote retenue tant que la CAO n'a rien
+     * coté (déclarée conforme → {@code C}, non conforme → {@code NC}, sans déclaration : nulle). Vide sans partie {@code conformite}.
+     */
+    public static List<cnm.prs.dto.EvaluationDto.Specification> specifications(BesoinEnLigneDto.Lot l, JsonNode f) {
+        List<cnm.prs.dto.EvaluationDto.Specification> out = new ArrayList<>();
+        if (f == null || !f.path("conformite").isArray()) {
+            return out;
+        }
+        Map<Integer, BesoinEnLigneDto.Article> parId = new HashMap<>();
+        if (l != null) {
+            l.articles().forEach(a -> parId.put(a.idArticle(), a));
+        }
+        for (JsonNode x : f.path("conformite")) {
+            int idArticle = x.path("idArticle").asInt(-1);
+            BesoinEnLigneDto.Article a = parId.get(idArticle);
+            String article = a == null ? "Article " + idArticle : a.ordre() + ". " + a.designation();
+            for (JsonNode k : x.path("caracteristiques")) {
+                int id = k.path("idCaracteristique").asInt(-1);
+                BesoinEnLigneDto.Caracteristique c = a == null ? null : a.caracteristiques().stream()
+                        .filter(y -> y.idCaracteristique() != null && y.idCaracteristique() == id).findFirst().orElse(null);
+                Boolean declaree = k.has("conforme") ? k.path("conforme").asBoolean() : null;
+                String cote = declaree == null ? null : declaree ? "C" : "NC";
+                out.add(new cnm.prs.dto.EvaluationDto.Specification(idArticle, article, texte(x.path("marque")), texte(x.path("modele")), id,
+                        c == null ? "caractéristique " + id : c.libelle(), c == null ? null : c.exigence(), texte(k.path("proposee")), declaree,
+                        cote, cote, null));
+            }
+        }
+        return out;
+    }
+
+    private static String texte(JsonNode n) {
+        String s = n == null || n.isMissingNode() || n.isNull() ? null : n.asString("").trim();
+        return s == null || s.isEmpty() ? null : s;
+    }
+
     private static String nom(BesoinEnLigneDto.Article a) {
         return (a.numeroPrix() != null ? "prix n° " + a.numeroPrix() : "article " + a.ordre()) + " « " + a.designation() + " »";
     }

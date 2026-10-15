@@ -795,6 +795,29 @@ public class SeanceService {
         return formulaires.pdf(type, formulaires.lot(idDmc, o.getLot()).orElse(null), f, entete, idDmc);
     }
 
+    /**
+     * ⚠️ 2026-10-15 (« modeles-guide-cao », §B3.2) — le tableau de conformité technique d'une offre, pour l'évaluation et son rapport :
+     * sans garde (l'appelant a les siennes) et <strong>sans exception</strong> — vide pour une offre inconnue, purgée, illisible ou
+     * déposée par pièces (appelée sous la transaction de l'évaluation).
+     */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.EvaluationDto.Specification> specificationsLues(Long idDmc, String idOffre) {
+        Offre o = offres.findById(idOffre).filter(x -> idDmc.equals(x.getIdDmc())).orElse(null);
+        JsonNode f;
+        // Seuls la lecture du fichier et le décodage (hors proxy transactionnel) sont rattrapés : rien ne marque la transaction.
+        try {
+            byte[] clair = o == null ? null : stockage.lireClair(o.getIdOffre());
+            byte[] manifeste = clair == null ? null : dezipper(clair).get(MANIFESTE);
+            f = manifeste == null ? null : mapper.readTree(manifeste).path("formulaires");
+        } catch (IOException | java.io.UncheckedIOException | tools.jackson.core.JacksonException e) {
+            return List.of();
+        }
+        if (f == null || !f.isObject() || !f.path("conformite").isArray()) {
+            return List.of();
+        }
+        return FormulairesEnLigne.specifications(formulaires.lot(idDmc, o.getLot()).orElse(null), f);
+    }
+
     private Offre offreOuverte(Long idDmc, String idOffre) {
         exigerMembreCao(idDmc);
         exigerDechiffree(idDmc);
