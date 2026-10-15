@@ -45,10 +45,7 @@ class PiecesParSousTypeIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<Integer>>read(ref, "$[*].idTypePiece")).containsExactly(fiche, canevas, bordereau, dqe);
         assertThat(JsonPath.<List<String>>read(ref, "$[?(@.idTypePiece==" + dqe + ")].categorie")).containsExactly("TRAVAUX");
 
-        String cree = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idSousType\":\"DAOO\",\"idEntiteContract\":1}")).andExpect(status().isCreated()).andReturn().getResponse()
-                .getContentAsString();
-        int id = JsonPath.read(cree, "$.idDossier");
+        int id = dossierSaisiHorsFiche("DMC", "DAOO", tokenPrmp);   // ⚠️ 2026-10-15 : saisi hors fiche avant la règle (H1)
         String exigees = mvc.perform(get("/api/dossiers/" + id + "/pieces-exigees").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         // Sans fiche : la fiche de présentation reste exigée ; les pièces conditionnées sont servies sans obligation.
@@ -87,10 +84,7 @@ class PiecesParSousTypeIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(ref, "$[?(@.idTypePiece==" + sigmp + ")].condition")).containsExactly("FACULTATIVE_EN_LIGNE");
 
         // Hors ligne (dossier saisi, sans fiche) : les trois pièces, toutes obligatoires.
-        String cree = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idSousType\":\"DAOO\",\"idEntiteContract\":1}")).andExpect(status().isCreated()).andReturn().getResponse()
-                .getContentAsString();
-        int id = JsonPath.read(cree, "$.idDossier");
+        int id = dossierSaisiHorsFiche("DMC", "DAOO", tokenPrmp);   // ⚠️ 2026-10-15 : saisi hors fiche avant la règle (H1)
         String horsLigne = mvc.perform(get("/api/dossiers/" + id + "/pieces-exigees").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Integer>>read(horsLigne, "$[?(@.obligatoire==true)].idTypePiece")).containsExactly(toujours, papier, sigmp);
@@ -133,12 +127,10 @@ class PiecesParSousTypeIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Integer>>read(pendant, "$[*].idTypePiece")).containsExactly(toujours, sigmp);
         // Hors ligne (dossier saisi), la fin de la transition ne change rien : la pièce reste exigée.
-        String saisi = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idSousType\":\"DAOO\",\"idEntiteContract\":1}")).andExpect(status().isCreated()).andReturn().getResponse()
-                .getContentAsString();
+        int saisi = dossierSaisiHorsFiche("DMC", "DAOO", tokenPrmp);   // ⚠️ 2026-10-15 (H1)
         mvc.perform(put("/api/parametres/sigmp-transition").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"finTransition\":\"" + java.time.LocalDate.now() + "\"}")).andExpect(status().isOk());
-        String horsLigneApres = mvc.perform(get("/api/dossiers/" + JsonPath.read(saisi, "$.idDossier") + "/pieces-exigees")
+        String horsLigneApres = mvc.perform(get("/api/dossiers/" + saisi + "/pieces-exigees")
                 .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Integer>>read(horsLigneApres, "$[?(@.obligatoire==true)].idTypePiece")).containsExactly(toujours, papier, sigmp);
     }

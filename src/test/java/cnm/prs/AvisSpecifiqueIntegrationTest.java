@@ -68,6 +68,7 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
         dispatchRepository.save(dispatch(9900, 9900, "CTRCC1", "CTRMEM", "CTRPRE"));
         examenRepository.save(examen(9900, 9900, "CTRMEM"));
         seedPvSigne(9900, 9900);
+        publicationAgpmDeTest(9900);   // ⚠️ V118 (H1) : l'avis lit le journal de l'avis général sur le plan
 
         Marche l = marcheDao(9901, 9900, 9900);
         l.setIdMode(92);
@@ -118,6 +119,11 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
 
         avis(idDossier, "FAV");
         disponibilite(idDmc).andExpect(jsonPath("$.disponible").value(true));   // FAV : dès le PV signé
+        // ⚠️ V118 (2026-10-15, §B2, H1) — sans publication de l'AGPM sur le plan, l'avis ne s'imprime pas : 409 nommé.
+        publicationAgpmRepository.deleteAll();
+        disponibilite(idDmc).andExpect(jsonPath("$.raison").value("PUBLICATION_AGPM_ABSENTE"));
+        imprimer(idDmc).andExpect(status().isConflict()).andExpect(jsonPath("$.details.raison").value("PUBLICATION_AGPM_ABSENTE"));
+        publicationAgpmDeTest(9900);
         avis(idDossier, "DEF");
         disponibilite(idDmc).andExpect(jsonPath("$.raison").value("AVIS_NON_FAVORABLE"));
 
@@ -372,6 +378,10 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
     void publicationMinimaleEtCompte() throws Exception {
         int idDossier = creerDossier();
         pvSigne(idDossier, "FAV", "PV_SIGNE");
+        // ⚠️ V118 (H1) — le numéro du journal se lit sur la publication du plan : sans numéro, des pointillés (celui du corps est ignoré).
+        cnm.prs.entity.PublicationAgpm agpm = publicationAgpmRepository.findFirstByIdDossierAndRemplaceeLeIsNull(9900).orElseThrow();
+        agpm.setNumero(null);
+        publicationAgpmRepository.save(agpm);
         String minimal = "{\"datePublication\":\"2026-10-05\",\"jmpDate\":\"2026-01-15\"}";
         String r = mvc.perform(post("/api/fiches-marche/" + idDmc + "/avis-specifique").header("Authorization", tokenPrmp)
                 .contentType(JSON).content(minimal)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();

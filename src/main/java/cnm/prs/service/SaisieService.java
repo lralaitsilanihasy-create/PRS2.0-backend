@@ -888,6 +888,7 @@ public class SaisieService {
             throw new BadRequestException("Un acte de gestion contractuelle se dépose depuis le marché qu'il concerne "
                     + "(POST /api/dossiers/{idMarche}/actes-gestion).", "ACTE_DEPUIS_LE_MARCHE");
         }
+        SousTypesDossier.exigerHorsFiche(sousType.getIdSousType());   // ⚠️ 2026-10-15 (dossier-par-fiche, §B1)
         String idPrmp = prmpCourante();
         String localite = dossierIntegrite.localiteDeLEntiteDeLaPrmp(req.idEntiteContract(), idPrmp);
         Dossier d = creerDossier(sousType.getIdTypeDossier(), sousType.getIdSousType(),

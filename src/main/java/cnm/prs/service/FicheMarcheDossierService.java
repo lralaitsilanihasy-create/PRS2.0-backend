@@ -60,13 +60,16 @@ public class FicheMarcheDossierService {
     private final DocumentsFicheMarcheService documents;
     /** ⚠️ 2026-10-07 (AMI en ligne, AMI-b, Q4) — la liste restreinte et le rapport de présélection, joints d'office. */
     private final AmiPreselectionService preselection;
+    /** ⚠️ V118 (2026-10-15, §B2) — la publication de l'AGPM du plan, reprise d'office. */
+    private final PublicationAgpmService publicationAgpm;
 
     public FicheMarcheDossierService(DossierMecRepository dmcRepository, TypeDmcRepository typeDmcRepository,
             MarcheRepository marcheRepository, DossierRepository dossierRepository,
             FicheMarcheRepository ficheRepository, PerimetreDossier perimetre,
             DossierIntegriteService dossierIntegrite, SaisieService saisieService, DossierService dossierService,
             ValeursPpmService valeursPpm, FicheMarcheService ficheMarcheService, JournalDossierService journal,
-            DocumentsFicheMarcheService documents, AmiPreselectionService preselection) {
+            DocumentsFicheMarcheService documents, AmiPreselectionService preselection, PublicationAgpmService publicationAgpm) {
+        this.publicationAgpm = publicationAgpm;
         this.preselection = preselection;
         this.documents = documents;
         this.dmcRepository = dmcRepository;
@@ -110,6 +113,7 @@ public class FicheMarcheDossierService {
         ficheMarcheService.etatValide(idDmc).ifPresent(v -> documents.assurerProjet(fiche, v.etat()));
         documents.joindre(dossier.getIdDossier(), idDmc);   // lot 2a : sans geste humain
         preselection.joindre(dossier.getIdDossier(), idDmc);   // ⚠️ AMI-b (Q4) : le rapport de présélection signé
+        publicationAgpm.joindreSiAbsente(dossierRepository.findById(dossier.getIdDossier()).orElseThrow());   // ⚠️ V118 (§B2)
         return dossierService.findById(dossier.getIdDossier());
     }
 
@@ -146,6 +150,7 @@ public class FicheMarcheDossierService {
         ficheMarcheService.etatValide(idDmc).ifPresent(v -> documents.assurerProjet(fiche, v.etat()));   // ⚠️ R3b
         documents.joindre(idDossier, idDmc);   // lot 2a
         preselection.joindre(idDossier, idDmc);   // ⚠️ AMI-b (Q4)
+        publicationAgpm.joindreSiAbsente(dossier);   // ⚠️ V118 (§B2)
         return dossierService.findById(idDossier);
     }
 

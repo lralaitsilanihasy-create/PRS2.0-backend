@@ -742,11 +742,7 @@ class UgpmIntegrationTest extends CnmIntegrationTestSupport {
     void prmp_voit_brouillons_de_ses_ugpm() throws Exception {
         // UGPM (ref = PRMP001) crée un dossier BROUILLON → stampé PRMP001.
         String tokenUgpm = bearer("UGPM1", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", null);
-        String resp = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenUgpm)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idTypeDossier\":\"DAO\",\"idEntiteContract\":1}"))
-                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+        int idDoss = dossierSaisiHorsFiche("DMC", "DAOO", tokenUgpm);   // ⚠️ 2026-10-15 : saisi hors fiche avant la règle (H1)
         org.junit.jupiter.api.Assertions.assertEquals("UGPM1",
                 dossierRepository.findById(idDoss).orElseThrow().getCreePar());
 

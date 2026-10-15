@@ -168,6 +168,7 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
         dispatchRepository.save(dispatch(9900, 9900, "CTRCC1", "CTRMEM", "CTRPRE"));
         examenRepository.save(examen(9900, 9900, "CTRMEM"));
         seedPvSigne(9900, 9900);
+        publicationAgpmDeTest(9900);   // ⚠️ V118 (H1) : l'avis lit le journal de l'avis général sur le plan
         Marche l = marche(9901, 9900, 9900);
         l.setIdMode(92);
         l.setIdNature(natureFournitures());

@@ -16,4 +16,7 @@ public interface AmiExpressionRepository extends JpaRepository<AmiExpression, St
     long countByIdDmcAndEtat(Long idDmc, String etat);
 
     long countByIdDmc(Long idDmc);
+
+    /** ⚠️ 2026-10-15 (pièces de l'AMI, §B1) — toutes les expressions de la procédure, quel que soit leur état, par numéro. */
+    List<AmiExpression> findByIdDmcOrderByNumeroAscDeposeeLeAsc(Long idDmc);
 }

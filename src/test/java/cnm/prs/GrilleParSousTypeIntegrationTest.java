@@ -64,10 +64,7 @@ class GrilleParSousTypeIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Integer>>read(grilleDc, "$[*].idPointCtrl")).containsExactly(propreDc);
 
-        String cree = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idSousType\":\"DAOR\",\"idEntiteContract\":1}")).andExpect(status().isCreated()).andReturn().getResponse()
-                .getContentAsString();
-        int id = JsonPath.read(cree, "$.idDossier");
+        int id = dossierSaisiHorsFiche("DMC", "DAOR", tokenPrmp);   // ⚠️ 2026-10-15 : saisi hors fiche avant la règle (H1)
         String grilleDossier = mvc.perform(get("/api/dossiers/" + id + "/grille").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         // Sans fiche, le point conditionné par la catégorie reste à examiner.

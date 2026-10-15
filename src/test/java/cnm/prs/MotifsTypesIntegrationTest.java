@@ -90,10 +90,7 @@ class MotifsTypesIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<Integer>>read(famille, "$[*].idMotif")).contains(objet);
 
         // Motifs d'un dossier DAOR sans fiche : le motif conditionné par la catégorie reste servi ; l'inactif est écarté.
-        String cree = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idSousType\":\"DAOR\",\"idEntiteContract\":1}")).andExpect(status().isCreated()).andReturn().getResponse()
-                .getContentAsString();
-        int id = JsonPath.read(cree, "$.idDossier");
+        int id = dossierSaisiHorsFiche("DMC", "DAOR", tokenPrmp);   // ⚠️ 2026-10-15 : saisi hors fiche avant la règle (H1)
         String duDossier = mvc.perform(get("/api/dossiers/" + id + "/motifs-types").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Integer>>read(duDossier, "$[*].idMotif")).containsExactly(commun, travaux, defav);

@@ -2810,6 +2810,16 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 | GET | /api/dossiers/{idDossier}/versions | — | `DossierDto[]` (plus récente d'abord) | 200, 404 | PRMP / PRESIDENT / CHEF_COMMISSION / MEMBRE / VERIFICATEUR / ADMINISTRATEUR |
 | GET | /api/dossiers/{idDossier}/versions-archivees | — | `VersionArchiveeDto[]` (plus ancienne d'abord ; **vide** si jamais rectifié) | 200, 403, 404 | **PRMP propriétaire OU contrôleur de la localité** (⚠️ nouveau 2026-09-06) |
 | GET | /api/dossiers/{idDossier}/versions-archivees/{numero} | — | `VersionArchiveeDetailDto` (lecture seule) | 200, 403, 404 (toute autre méthode : 405) | **PRMP propriétaire OU contrôleur de la localité** (⚠️ nouveau 2026-09-06) |
+
+> ⚠️ **2026-10-15 — un dossier d'appel d'offres se prépare dans sa fiche DAO** (demande front `demande-backend-2026-10-15-dossier-par-fiche.md`,
+> §B1 ; décision du pilote du 15/10). `POST /api/saisies/dossier` refuse un sous-type que produit une fiche marché
+> (`SousTypesDossier.PRODUITS_PAR_FICHE` : `DAOO`, `DAOR`, `DAOOI`, `DAORI`, `DAOOPREQUAL`, `DC` ; l'ancien code `DAO`, lu `DAOO`, aussi) :
+> **409 `DOSSIER_PAR_FICHE`** (« … se prépare dans sa fiche DAO : choisissez la ligne du plan de passation, la validation de la fiche
+> produit le dossier. »). Même refus pour la création brute de l'Administrateur (`POST /api/dossiers`, H2 : pas d'exception). Seule
+> `POST /api/fiches-marche/{idDmc}/dossier` crée ces dossiers. Les autres sous-types de la famille (`DPREQUAL`, `DP`, `RJ`) et ceux du
+> dossier de marché restent saisissables. **H1** : les dossiers de ces sous-types déjà créés hors fiche gardent leur cycle (complétés,
+> soumis, rectifiés) ; seule la création est fermée. **H3** : les pièces `PAPIER` restent au référentiel (dossiers anciens, autres
+> sous-types).
 | PATCH | /api/marches/{idDetail}/supprimer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
 | PATCH | /api/marches/{idDetail}/restaurer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
 
@@ -3319,6 +3329,29 @@ motif, ou **« non daté »** (plan soumis avant la règle du calendrier complet
 (« Canevas de rapport d'évaluation », 6 sous-types, §B3) passent en `CONDITION = 'PAPIER'` : non servies au dossier conduit en
 ligne (`GET …/pieces-exigees`), gardées au dossier saisi hors application (H4). Le **canevas par sous-type** (§B3) attend les modèles
 du pilote : le rapport d'évaluation reste sur le plan du guide.
+
+⚠️ **2026-10-15 — publication de l'AGPM déposée sur le plan** (demande front `demande-backend-2026-10-15-pieces-ami-agpm.md`, §B2 ; **V118** ;
+propositions du front validées par le pilote le 15/10 ; arbitrages de l'utilisateur au backend : H1 numéro et date figés, H2 filiation).
+
+| Méthode | URL | Corps | Réponse | Statuts |
+|---|---|---|---|---|
+| POST | /api/dossiers/{idDossier}/publication-agpm | multipart : `fichier` (PDF), `journal`, `numero` (facultatif), `dateParution` (AAAA-MM-JJ, pas dans le futur), `referenceAgpm` | `PublicationAgpmDto` | 201, 400 nominatif, 403 (hors PRMP propriétaire et son UGPM), 409 `PAS_UN_PLAN` / `PLAN_NON_CONTROLE` (avant le PV signé favorable ; un plan `REMPLACE` est admis) |
+| GET | /api/dossiers/{idDossier}/publication-agpm | — | `PublicationAgpmDto` en vigueur | 200, 403, 404 (aucune publication) |
+| GET | /api/dossiers/{idDossier}/publication-agpm/contenu | — | le scan (PDF) | 200, 403, 404 |
+
+- `PublicationAgpmDto` = `{ idPublication, idDossierPlan, journal, numero, dateParution, referenceAgpm, nomFichier, taille, deposePar,
+  deposeLe, remplaceeLe, enVigueur, heritee }`. Un nouveau dépôt **remplace** la publication en vigueur du plan (`remplaceeLe` posé,
+  rien n'est effacé). Journal du plan : `PUBLICATION_AGPM_DEPOSEE`.
+- **Lecture** depuis le plan **ou depuis tout dossier dont la ligne relève du plan** (dossier produit par une fiche : plan de la ligne
+  en vigueur ; dossier de marché : celui de la fiche de son attribution). **H2** : la publication en vigueur d'un plan est la sienne, à
+  défaut celle de sa version précédente, et ainsi de suite (`heritee: true`).
+- **Reprise d'office** : à la création (ou au rattachement) d'un dossier par sa fiche, et à **toute soumission**, un dossier dont le
+  sous-type exige `PUBLICATION_AGPM` et qui ne la porte pas la reçoit (`PUBLICATION_AGPM_<référence>.pdf`, journal
+  `PUBLICATION_AGPM_REPRISE`). Sans publication sur le plan, la pièce reste à joindre, et le refus de soumission le dit : « … est
+  obligatoire. Elle se dépose une fois sur le plan de passation contrôlé, et chaque dossier du plan la reprend d'office. »
+- **H1** : l'avis spécifique lit sur elle le numéro et la date du journal (voir `POST …/avis-specifique`). **H3** : `PUBLICATION_AMI`
+  (journal de l'AMI) reste à joindre au dossier de consultation. **H4** : les dossiers déjà soumis ne changent pas (la reprise ne joue
+  qu'à la création et à la soumission).
 
 **`SaisieDossierRequest`** (familles DMC/DDM, sans contenu) : **`idSousType`** (sous-type choisi, ex. `DAO`,
 `DAOR`, `MAOO`, `MAOR` — la **famille s'en déduit** ; inconnu → **400** `{champ:"idSousType"}` ; sous-type de la
@@ -5227,6 +5260,11 @@ PRMP et UGPM. Corps :
 - **409** `AVIS_INDISPONIBLE` : la raison est dans **`details.raison`** (mêmes valeurs que ci-dessus).
 - **201** : la paire produite, `.docx` puis `.pdf`, de type `AVIS` et de libellé « Avis spécifique d'appel d'offres ».
   Les deux documents portent la version rendue et `publication` (les quatre informations telles que saisies).
+- ⚠️ **2026-10-15 (V118, §B2, H1 : figés)** — `jmpNumero` et `jmpDate` du corps sont **ignorés** : le numéro et la date du journal de
+  l'avis général se lisent sur la **publication de l'AGPM déposée sur le plan** (`GET /api/dossiers/{idPlan}/publication-agpm`), dont
+  `publication` garde aussi `journal` et `referenceAgpm`. Sans publication sur le plan (ni sur une version précédente, H2) : 409
+  `AVIS_INDISPONIBLE`, `details.raison` = **`PUBLICATION_AGPM_ABSENTE`** (servie aussi par `…/disponibilite`). Seule `datePublication`
+  reste exigée.
 
 Rendu :
 - l'avis se rend sur la **dernière version validée** de la fiche ;
@@ -7365,6 +7403,12 @@ dossier de la demande de propositions ; **Q5** liste publiée et notifiée. Migr
   409 **`LISTE_NON_ARRETEE`** tant qu'un AMI publié n'a pas sa liste définitive ; à la création, le **rapport de présélection signé** est
   joint d'office (type de pièce de code `RAPPORT_PRESELECTION`, facultatif, posé par V83) ; il part avec la fiche au détachement. Sans
   AMI, ou dispensé, rien ne change.
+  ⚠️ **2026-10-15 (demande front « pièces de l'AMI et AGPM », §B1 ; arbitrage du 15/10)** : avec lui, le **relevé d'ouverture des
+  expressions** (PDF : chaque expression reçue, candidat, NIF, date de dépôt, empreinte SHA-256, état déposée / retirée / remplacée)
+  est joint d'office sous la pièce **`PV_AMI`** (`releve-ouverture-ami_<idDmc>.pdf`) ; il est validé par les signatures du rapport
+  (aucun geste de plus) et part avec lui au détachement. Le rapport signé vaut PV de validation (Q4). Les deux pièces sont donc
+  satisfaites d'office pour une consultation dont l'AMI est conduit dans l'application ; sans AMI conduit (dispense, liste saisie), elles
+  restent à joindre. Aucun changement de condition au référentiel.
 - **§B4 — les lettres d'invitation** (`POST …/lettres-invitation`) : avec une liste définitive, les candidats sont **ceux de la liste**
   (raison sociale et adresse déclarée de leur entreprise) et la saisie de `candidats` est ignorée ; chaque invité reçoit la notification
   **`LETTRE_INVITATION`** (avec courriel). Sans liste, la saisie reste exigée comme avant.

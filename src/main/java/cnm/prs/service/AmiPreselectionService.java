@@ -80,6 +80,12 @@ public class AmiPreselectionService {
     public static final String LISTE_ARRETEE = "LISTE_ARRETEE";
     public static final String DEFINITIVE = "DEFINITIVE";
     public static final String CODE_PIECE = "RAPPORT_PRESELECTION";
+    /**
+     * ⚠️ 2026-10-15 (demande front « pièces de l'AMI et AGPM », §B1 ; arbitrage du 15/10) — la pièce « PV d'ouverture et PV de
+     * validation de l'AMI » : le PV de validation est le rapport signé (Q4) ; le PV d'ouverture, le <strong>relevé d'ouverture des
+     * expressions</strong> produit avec lui, joint d'office sous ce code. Les signatures du rapport le valident : aucun geste de plus.
+     */
+    public static final String CODE_PIECE_PV = "PV_AMI";
     private static final DateTimeFormatter HORODATAGE = DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm");
     /** ⚠️ R1 (manuel révisé, lot 1, §B1-B2) — quorum de l'arrêt de la liste et section « Séance de validation ». */
     private final QuorumCao quorumCao;
@@ -436,12 +442,30 @@ public class AmiPreselectionService {
         p.setApresLettreRenvoi(false);
         pieces.save(p);
         tracer(idDmc, "AMI_RAPPORT_JOINT", "Rapport de présélection joint au dossier " + idDossier);
+        // ⚠️ 2026-10-15 (§B1) — le relevé d'ouverture des expressions, joint sous la pièce PV_AMI.
+        typesPiece.findFirstByCode(CODE_PIECE_PV).ifPresent(t -> {
+            byte[] releve = generateur.generer(releve(a)).stream().filter(x -> "pdf".equals(x.extension())).findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Le relevé d'ouverture n'a pas été rendu en pdf.")).contenu();
+            PieceJointeDossier r = new PieceJointeDossier();
+            r.setIdDossier(idDossier);
+            r.setIdTypePiece(t.getIdTypePiece());
+            r.setNomFichier("releve-ouverture-ami_" + idDmc + ".pdf");
+            r.setContenu(releve);
+            r.setFormat("PDF");
+            r.setTaille((long) releve.length);
+            r.setDateUpload(LocalDateTime.now(horloge));
+            r.setApresLettreRenvoi(false);
+            pieces.save(r);
+            tracer(idDmc, "AMI_RELEVE_JOINT", "Relevé d'ouverture des expressions joint au dossier " + idDossier);
+        });
     }
 
     /** Q4 — au détachement de la fiche, le rapport de présélection joint d'office part avec elle. */
     public void detacher(Integer idDossier) {
-        typesPiece.findFirstByCode(CODE_PIECE).ifPresent(t -> pieces.findByIdDossier(idDossier).stream()
-                .filter(p -> t.getIdTypePiece().equals(p.getIdTypePiece())).forEach(pieces::delete));
+        for (String code : List.of(CODE_PIECE, CODE_PIECE_PV)) {   // ⚠️ 2026-10-15 : le relevé part avec le rapport
+            typesPiece.findFirstByCode(code).ifPresent(t -> pieces.findByIdDossier(idDossier).stream()
+                    .filter(p -> t.getIdTypePiece().equals(p.getIdTypePiece())).forEach(pieces::delete));
+        }
     }
 
     // ------------------------------------------------------------------ outils : classement, rapport, finalisation
@@ -541,6 +565,37 @@ public class AmiPreselectionService {
         List<GenerateurDocumentsFiche.Fichier> f = generateur.generer(document(a));
         f.stream().filter(x -> "pdf".equals(x.extension())).findFirst().ifPresent(x -> a.setRapportPdf(x.contenu()));
         f.stream().filter(x -> "docx".equals(x.extension())).findFirst().ifPresent(x -> a.setRapportDocx(x.contenu()));
+    }
+
+    /**
+     * ⚠️ 2026-10-15 (§B1) — le relevé d'ouverture des expressions : l'AMI, sa date limite, puis chaque expression reçue (numéro,
+     * candidat et NIF, date de dépôt, empreinte, état : déposée, retirée, remplacée). Pas de séance : les expressions ne sont pas
+     * scellées ; le relevé est validé par les signatures du rapport de présélection.
+     */
+    DocumentLibre releve(Ami a) {
+        List<DocumentLibre.Element> el = new ArrayList<>();
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "RELEVÉ D'OUVERTURE DES EXPRESSIONS D'INTÉRÊT"));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "Appel à manifestation d'intérêt — " + Objects.toString(a.getObjet(), "—")));
+        para(el, "Publié le " + (a.getPublieLe() == null ? "—" : a.getPublieLe().format(HORODATAGE)) + " ; date limite de dépôt : "
+                + a.getDateLimite().format(HORODATAGE) + ". Les expressions sont déposées sur la plateforme, horodatées et empreintes à "
+                + "leur dépôt ; elles ne sont pas scellées et ne font pas l'objet d'une séance d'ouverture.");
+        List<AmiExpression> toutes = expressions.findByIdDmcOrderByNumeroAscDeposeeLeAsc(a.getIdDmc());
+        List<List<List<String>>> lignes = new ArrayList<>();
+        lignes.add(List.of(List.of("N°"), List.of("Candidat"), List.of("NIF"), List.of("Déposée le"), List.of("Empreinte (SHA-256)"), List.of("État")));
+        for (AmiExpression x : toutes) {
+            String etat = AmiExpression.RETIREE.equals(x.getEtat())
+                    ? "retirée" + (x.getRetireeLe() == null ? "" : " le " + x.getRetireeLe().format(HORODATAGE))
+                    : AmiExpression.REMPLACEE.equals(x.getEtat()) ? "remplacée par une nouvelle expression" : "déposée";
+            lignes.add(List.of(List.of(x.getNumero() == null ? "—" : String.valueOf(x.getNumero())), List.of(Objects.toString(x.getRaisonSociale(), "—")),
+                    List.of(Objects.toString(x.getNif(), "—")), List.of(x.getDeposeeLe() == null ? "—" : x.getDeposeeLe().format(HORODATAGE)),
+                    List.of(Objects.toString(x.getEmpreinte(), "—")), List.of(etat)));
+        }
+        el.add(new DocumentLibre.Tableau(6, lignes));
+        long deposees = toutes.stream().filter(x -> AmiExpression.DEPOSEE.equals(x.getEtat())).count();
+        para(el, toutes.size() + " expression(s) reçue(s), dont " + deposees + " en vigueur à la date limite.");
+        return new DocumentLibre("RELEVE_OUVERTURE_AMI", null, el, "Procédure " + a.getIdDmc() + " — relevé produit par l'application ; validé "
+                + "par les signatures du rapport de présélection" + (a.getListeDefinitiveLe() == null ? "" : " (liste définitive le "
+                        + a.getListeDefinitiveLe().format(HORODATAGE) + ")") + ".");
     }
 
     private DocumentLibre document(Ami a) {

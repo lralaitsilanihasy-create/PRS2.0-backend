@@ -135,6 +135,8 @@ public class DossierService {
     private final org.springframework.beans.factory.ObjectProvider<ControlesService> controles;
     /** ⚠️ 2026-10-14 (demande front « q-piece », §B1 ; V114) — le calendrier complet du plan, exigé à la soumission. */
     private final org.springframework.beans.factory.ObjectProvider<CalendrierPlan> calendrierPlan;
+    /** ⚠️ V118 (2026-10-15, §B2) — la publication de l'AGPM du plan, reprise d'office à la soumission. */
+    private final org.springframework.beans.factory.ObjectProvider<PublicationAgpmService> publicationAgpm;
     /** ⚠️ M3 (manuel de contrôle) — la grille du dossier. */
     private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
     /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
@@ -193,8 +195,10 @@ public class DossierService {
             org.springframework.beans.factory.ObjectProvider<ActesGestionService> actesGestion,
             org.springframework.beans.factory.ObjectProvider<InstantaneService> instantanes,
             org.springframework.beans.factory.ObjectProvider<ControlesService> controles,
-            org.springframework.beans.factory.ObjectProvider<CalendrierPlan> calendrierPlan) {
+            org.springframework.beans.factory.ObjectProvider<CalendrierPlan> calendrierPlan,
+            org.springframework.beans.factory.ObjectProvider<PublicationAgpmService> publicationAgpm) {
         this.calendrierPlan = calendrierPlan;
+        this.publicationAgpm = publicationAgpm;
         this.controles = controles;
         this.instantanes = instantanes;
         this.actesGestion = actesGestion;
@@ -774,6 +778,7 @@ public class DossierService {
     }
 
     public DossierDto create(DossierDto dto) {
+        SousTypesDossier.exigerHorsFiche(dto.getIdSousType());   // ⚠️ 2026-10-15 (dossier-par-fiche, §B1, H2 : pas d'exception)
         Dossier entity = DossierMapper.toEntity(dto);
         entity.setIdDossier(repository.nextIdDossier().intValue()); // ⚠️ PK serveur (séquence) ; id client ignoré
         return dto(repository.save(entity));
@@ -938,6 +943,8 @@ public class DossierService {
         // (réception, solde, plafond du tiers).
         actesGestion.getObject().exigerAvantSoumission(dossier);
         // Pièces jointes obligatoires de la famille de dossier (référentiel) : toutes doivent être présentes.
+        // ⚠️ V118 (2026-10-15, §B2) — la publication de l'AGPM déposée sur le plan est reprise d'office si le dossier ne la porte pas.
+        publicationAgpm.getObject().joindreSiAbsente(dossier);
         validerPiecesObligatoires(dossier);
         // ⚠️ 2026-08-05 — une MISE À JOUR exige en plus le PV du prédécesseur et le PPM daté et signé des
         // versions antérieures. Sans effet sur un dossier initial.
@@ -1047,7 +1054,7 @@ public class DossierService {
                 .filter(t -> !pieceJointeDossierRepository
                         .existsByIdDossierAndIdTypePiece(dossier.getIdDossier(), t.getIdTypePiece()))
                 .map(t -> new ErrorResponse.FieldError("piecesJointes",
-                        "La pièce '" + t.getLibellePiece() + "' est obligatoire."))
+                        "La pièce '" + t.getLibellePiece() + "' est obligatoire." + PublicationAgpmService.indication(t)))   // ⚠️ V118
                 .toList());
         if (!manquantes.isEmpty()) {
             throw new ChampsInvalidesException(manquantes);

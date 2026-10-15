@@ -38,6 +38,20 @@ public final class SousTypesDossier {
     }
 
     /**
+     * ⚠️ 2026-10-15 (demande front « dossier-par-fiche », §B1 ; décision du pilote du 15/10) — un dossier d'appel d'offres ou de
+     * consultation se prépare dans sa fiche DAO : sa création directe (saisie d'un dossier vide, création brute de l'Administrateur,
+     * sans exception — H2) est refusée, 409 {@code DOSSIER_PAR_FICHE}. Seule la validation de la fiche le crée
+     * ({@code FicheMarcheDossierService}). Les dossiers déjà créés hors fiche restent tels quels (H1).
+     */
+    public static void exigerHorsFiche(String sousType) {
+        if (sousType != null && PRODUITS_PAR_FICHE.contains(sousType.trim().toUpperCase(Locale.ROOT))) {
+            throw new cnm.prs.exception.BusinessRuleException("Un dossier d'appel d'offres ou de consultation (" + sousType.trim()
+                    + ") se prépare dans sa fiche DAO : choisissez la ligne du plan de passation, la validation de la fiche produit le "
+                    + "dossier.", "DOSSIER_PAR_FICHE");
+        }
+    }
+
+    /**
      * Le sous-type du dossier de mise en concurrence d'une fiche : prestations intellectuelles → {@code DC} ; mode « … international »
      * → {@code DAORI} (restreint) ou {@code DAOOI} ; « … pré-qualification » → {@code DAOOPREQUAL} ; « restreint » → {@code DAOR} ;
      * sinon {@code DAOO}.

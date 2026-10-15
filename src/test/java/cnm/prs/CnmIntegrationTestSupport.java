@@ -204,6 +204,8 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
             sousTypeDossierRepository.save(new SousTypeDossier(s[0], s[1], "DMC"));
         }
         sousTypeDossierRepository.save(new SousTypeDossier("DAOR", "Dossier d'Appel d'Offres Restreint", "DMC"));
+        // ⚠️ 2026-10-15 (dossier-par-fiche) — un sous-type de la famille qu'aucune fiche ne produit : sa saisie directe reste permise.
+        sousTypeDossierRepository.save(new SousTypeDossier("DP", "Demande de propositions", "DMC"));
 
         profileRepository.save(profile(1, "PRMP"));
         profileRepository.save(profile(2, "Président"));
@@ -823,6 +825,45 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         }
         return x;
     }
+
+    /**
+     * ⚠️ 2026-10-15 (demande front « dossier-par-fiche », H1) — un dossier de mise en concurrence <strong>saisi hors fiche avant la
+     * règle</strong> : la saisie directe d'un sous-type produit par une fiche est refusée (409 {@code DOSSIER_PAR_FICHE}) ; le dossier
+     * est donc saisi sous un sous-type permis (DP) par le jeton donné (même création : brouillon, PRMP, mandat, journal), puis requalifié en
+     * base dans la famille et le sous-type voulus.
+     */
+    protected int dossierSaisiHorsFiche(String famille, String sousType, String jeton) throws Exception {
+        String cree = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/saisies/dossier")
+                .header("Authorization", jeton).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"DP\",\"idEntiteContract\":1}")).andExpect(status().isCreated()).andReturn().getResponse()
+                .getContentAsString();
+        int id = com.jayway.jsonpath.JsonPath.read(cree, "$.idDossier");
+        cnm.prs.entity.Dossier d = dossierRepository.findById(id).orElseThrow();
+        d.setIdTypeDossier(famille);
+        d.setIdSousType(sousType);
+        dossierRepository.save(d);
+        return id;
+    }
+
+    /**
+     * ⚠️ V118 (2026-10-15, §B2, H1) — la publication de l'AGPM déposée sur le plan {@code idPlan} (en base, sans les gardes du dépôt) :
+     * l'avis spécifique lit sur elle le numéro et la date du journal de l'avis général, et ne s'imprime pas sans elle.
+     */
+    protected void publicationAgpmDeTest(int idPlan) {
+        cnm.prs.entity.PublicationAgpm p = new cnm.prs.entity.PublicationAgpm();
+        p.setIdDossier(idPlan);
+        p.setJournal("Journal des Marchés Publics");
+        p.setNumero("123");
+        p.setDateParution(LocalDate.of(2026, 1, 15));
+        p.setReferenceAgpm("AGPM-" + idPlan);
+        p.setNomFichier("jmp-123.pdf");
+        p.setContenu(pdfMinimal());
+        p.setTaille((long) pdfMinimal().length);
+        p.setDeposeLe(java.time.LocalDateTime.now());
+        publicationAgpmRepository.save(p);
+    }
+
+    @Autowired protected cnm.prs.repository.PublicationAgpmRepository publicationAgpmRepository;
 
     protected void besoinDeTest(Long idDmc) throws Exception {
         String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))

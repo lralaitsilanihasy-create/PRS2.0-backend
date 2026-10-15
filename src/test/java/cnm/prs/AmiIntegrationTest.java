@@ -305,10 +305,22 @@ class AmiIntegrationTest extends CnmIntegrationTestSupport {
                 .orElseThrow();
         tp.setCode("RAPPORT_PRESELECTION");
         typePieceJointeRepository.save(tp);
+        // ⚠️ 2026-10-15 (pièces de l'AMI, §B1) — le relevé d'ouverture des expressions, joint avec lui sous la pièce PV_AMI.
+        cnm.prs.entity.TypePieceJointe pv = typePieceJointeRepository.findFirstByCode("PV_AMI").orElseGet(() -> {
+            cnm.prs.entity.TypePieceJointe t = typePieceJointeRepository.findById(seedTypePiece("PV d'ouverture et PV de validation de l'AMI",
+                    false, "DMC", 10)).orElseThrow();
+            t.setCode("PV_AMI");
+            return typePieceJointeRepository.save(t);
+        });
         String dossier = mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         int idDossier = JsonPath.read(dossier, "$.idDossier");
         assertThat(pieceJointeDossierRepository.findByIdDossier(idDossier)).extracting(p -> p.getNomFichier()).contains("rapport-preselection-ami_" + idDmc + ".pdf");
+        cnm.prs.entity.PieceJointeDossier releve = pieceJointeDossierRepository.findByIdDossier(idDossier).stream()
+                .filter(p -> pv.getIdTypePiece().equals(p.getIdTypePiece())).findFirst().orElseThrow();
+        assertThat(releve.getNomFichier()).isEqualTo("releve-ouverture-ami_" + idDmc + ".pdf");
+        assertThat(texteDuPdf(releve.getContenu())).contains("RELEVÉ D'OUVERTURE DES EXPRESSIONS D'INTÉRÊT", "Bureau Beta", "validé par les "
+                + "signatures du rapport de présélection");
         receptionRepository.save(reception(9950, idDossier, "CTRCC1", true));
         dispatchRepository.save(dispatch(9950, 9950, "CTRCC1", "CTRMEM", "CTRPRE"));
         examenRepository.save(examen(9950, 9950, "CTRMEM"));

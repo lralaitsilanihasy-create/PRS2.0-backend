@@ -1166,6 +1166,12 @@ marché* et § *DMC*.
 
 #### Le dossier soumis (lot 1b, demande front du 2026-09-23, arbitrage du pilote)
 
+⚠️ **2026-10-15 — un dossier d'appel d'offres ou de consultation se prépare dans l'application (décision du pilote).** Il ne
+se crée plus vide pour y joindre des documents préparés ailleurs : seule la validation de sa fiche DAO le produit, avec ses
+documents et ses écrans figés. La création directe des sous-types qu'une fiche produit (DAOO, DAOR, DAOOI, DAORI, DAOOPREQUAL,
+DC) est refusée à tous, Administrateur compris. Les dossiers de ces sous-types créés avant la règle gardent leur cycle ; les
+autres sous-types de la mise en concurrence (DPREQUAL, DP, RJ) restent saisissables.
+
 ⚠️ **La fiche produit le dossier.** Le dossier n° 100332 (DAO, six PDF joints à la main) ne disait rien de sa fiche
 et ne pouvait rien en dire : aucune colonne ne reliait les deux objets. Le lien est porté par le **dossier**
 (`t_dossier.ID_DMC`, V36) — objet du circuit, qui gagne un attribut comme il en a un pour son PPM — et non par le
@@ -2366,6 +2372,14 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     « non daté ». La pièce « Calendrier annuel de passation mis à jour et signé » n'est plus demandée au dossier conduit dans
     l'application, ni la pièce « Canevas de rapport d'évaluation » (le rapport est produit par l'application ; un canevas par
     sous-type viendra des modèles du pilote) ; le dossier saisi hors application garde les deux (V115).
+- Publication de l'AGPM — **déposée une fois, sur le plan** [Action] ⚠️ **Décision du pilote (2026-10-15 ; V118)**
+  - La publication de l'AGPM (le journal) vaut pour tout le plan : la PRMP ou son UGPM la dépose sur le plan contrôlé (PV signé
+    favorable), avec le nom du journal, son numéro, la date de parution et la référence de l'AGPM. Une nouvelle publication
+    remplace la précédente ; une version suivante du plan garde celle de la précédente tant qu'une nouvelle n'est pas déposée.
+  - Chaque dossier conduit dans l'application dont la ligne relève du plan la **reprend d'office** à sa création et à sa
+    soumission ; sans publication sur le plan, la pièce reste à joindre au dossier. L'avis spécifique cite le numéro et la date
+    du journal **tels que déposés sur le plan**, et ne s'imprime pas tant qu'elle n'y est pas. Le journal de publication de l'AMI
+    reste une pièce du dossier de consultation.
 - Montants — **hors taxes** [Écriture] ⚠️ **Précision du pilote (2026-09-18)**
   - Les montants estimatifs des lignes du PPM (montant initial, nouveau montant, montants par service
     bénéficiaire) sont saisis et conservés **hors taxes**, comme les seuils de l'arrêté
@@ -3381,6 +3395,9 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
       la page de l'AMI et notifiée à chaque candidat (les non retenus avec leur motif) ;
     - le dossier de la demande de propositions ne se crée qu'une fois la liste définitive, et reçoit d'office le rapport
       signé, que la Commission examine avec lui ;
+    - ⚠️ 2026-10-15 — il reçoit aussi d'office le **relevé d'ouverture des expressions** (expressions reçues, dates de dépôt,
+      empreintes, retraits et remplacements), validé par les signatures du rapport : le rapport vaut PV de validation, le relevé PV
+      d'ouverture, et la pièce « PV d'ouverture et PV de validation de l'AMI » est satisfaite d'office ;
     - les lettres d'invitation sont adressées aux candidats de la liste, avec leurs comptes : chacun est averti en ligne et
       par courriel.
   - ⚠️ **La consultation restreinte des prestations intellectuelles (2026-10-08, lot 3, tranche PI-a ; art. 42)** :

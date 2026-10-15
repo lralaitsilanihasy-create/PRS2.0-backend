@@ -501,18 +501,31 @@ class DossierVisibiliteIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Façade saisie DAO : dossier DAO BROUILLON ; type PPM refusé")
+    @DisplayName("Façade saisie : dossier BROUILLON (DP) ; ⚠️ 2026-10-15 : sous-type produit par une fiche (DAO, DAOO…) → 409 DOSSIER_PAR_FICHE, "
+            + "y compris par la création brute de l'Administrateur ; type PPM refusé")
     void saisieDossier_dao() throws Exception {
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idTypeDossier\":\"DAO\",\"idEntiteContract\":1}"))
+                .content("{\"idSousType\":\"DP\",\"idEntiteContract\":1}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statut").value("BROUILLON"))
                 .andExpect(jsonPath("$.idTypeDossier").value("DMC"))       // famille déduite du sous-type
-                .andExpect(jsonPath("$.idSousType").value("DAOO"))         // ⚠️ M1 : « DAO » (legacy) lu « DAOO »
+                .andExpect(jsonPath("$.idSousType").value("DP")) // famille déduite du sous-type
                 .andExpect(jsonPath("$.idLocalite").value("ANT"))      // dérivée de l'entité 1
                 .andExpect(jsonPath("$.idEntiteContract").value(1))
                 .andExpect(jsonPath("$.idDossier").isNumber());        // PK attribuée par le serveur (séquence)
+        // ⚠️ 2026-10-15 (dossier-par-fiche, §B1) — un dossier d'appel d'offres se prépare dans sa fiche DAO : « DAO » (legacy, lu
+        // « DAOO ») et la création brute de l'Administrateur sont refusés.
+        mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idTypeDossier\":\"DAO\",\"idEntiteContract\":1}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DOSSIER_PAR_FICHE"));
+        mvc.perform(post("/api/dossiers").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idTypeDossier\":\"DMC\",\"idSousType\":\"DC\",\"statut\":\"BROUILLON\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DOSSIER_PAR_FICHE"));
         // Le type PPM est refusé par cette façade (utiliser /api/saisies/ppm).
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -620,23 +633,23 @@ class DossierVisibiliteIntegrationTest extends CnmIntegrationTestSupport {
         // Même PRMP (PRMP001), 2 entités de localités différentes → 2 dossiers de localités différentes.
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":82,\"idTypeDossier\":\"DAO\",\"idEntiteContract\":1}"))
+                .content("{\"idDossier\":82,\"idSousType\":\"DP\",\"idEntiteContract\":1}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idLocalite").value("ANT"));
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":83,\"idTypeDossier\":\"DAO\",\"idEntiteContract\":2}"))
+                .content("{\"idDossier\":83,\"idSousType\":\"DP\",\"idEntiteContract\":2}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idLocalite").value("TMS"));
         // Entité non rattachée à la PRMP → 403.
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":84,\"idTypeDossier\":\"DAO\",\"idEntiteContract\":9}"))
+                .content("{\"idDossier\":84,\"idSousType\":\"DP\",\"idEntiteContract\":9}"))
                 .andExpect(status().isForbidden());
         // Entité rattachée mais sans localité → 400.
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":85,\"idTypeDossier\":\"DAO\",\"idEntiteContract\":10}"))
+                .content("{\"idDossier\":85,\"idSousType\":\"DP\",\"idEntiteContract\":10}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -738,15 +751,21 @@ class DossierVisibiliteIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Saisie dossier DMC/DDM : idSousType choisi (DAOR) → famille déduite ; sous-type DDP refusé ; sous-type inconnu → 400")
+    @DisplayName("Saisie dossier DMC : idSousType choisi (DP) → famille déduite ; DAOR → 409 DOSSIER_PAR_FICHE ; sous-type DDP refusé ; "
+            + "sous-type inconnu → 400")
     void saisieDossier_sousTypeChoisi() throws Exception {
         // Nouveau contrat : idSousType → famille déduite du référentiel.
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idSousType\":\"DAOR\",\"idEntiteContract\":1}"))
+                .content("{\"idSousType\":\"DP\",\"idEntiteContract\":1}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idTypeDossier").value("DMC"))
-                .andExpect(jsonPath("$.idSousType").value("DAOR"));
+                .andExpect(jsonPath("$.idSousType").value("DP"));
+        mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"DAOR\",\"idEntiteContract\":1}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DOSSIER_PAR_FICHE"));
         // Un sous-type de la famille DDP (planification) est refusé sur cette façade.
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)

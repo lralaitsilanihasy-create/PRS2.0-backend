@@ -69,6 +69,8 @@ public class AvisSpecifiqueService {
     public static final String CEREMONIE_NON_CLOSE = "CEREMONIE_NON_CLOSE";
     /** ⚠️ R3c (manuel révisé, lot 1, §B3) — un appel d'offres restreint n'a pas d'avis public : lettres d'invitation (LETTRE-AOR). */
     public static final String MODE_SANS_AVIS = "MODE_SANS_AVIS";
+    /** ⚠️ V118 (2026-10-15, §B2, H1) — le plan ne porte pas de publication de l'AGPM : le journal de l'avis général ne se lit nulle part. */
+    public static final String PUBLICATION_AGPM_ABSENTE = PublicationAgpmService.CODE_ABSENTE;
 
     /** Journal du dossier : une impression de l'avis. */
     public static final String JOURNAL_AVIS_IMPRIME = "AVIS_SPECIFIQUE_IMPRIME";
@@ -104,12 +106,16 @@ public class AvisSpecifiqueService {
     /** ⚠️ R9a (manuel révisé, lot 2, §B4 n° 2, art. 31) — le DAO complet de la version, exigé avant toute publication. */
     private final DaoCompletService daoComplet;
 
+    /** ⚠️ V118 (§B2, H1) — la publication de l'AGPM du plan : numéro et date du journal de l'avis général. */
+    private final PublicationAgpmService publicationAgpm;
+
     public AvisSpecifiqueService(FicheMarcheService fiches, FicheMarcheRepository ficheRepository,
             DossierRepository dossierRepository, PvExamenRepository pvRepository, DocumentsFicheMarcheService documents,
             DossierIntegriteService dossierIntegrite, JournalDossierService journal,
             cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, CeremonieService ceremonie, ValeursPpmService valeursPpm,
-            DelaisPublicite delaisPublicite, DaoCompletService daoComplet) {
+            DelaisPublicite delaisPublicite, DaoCompletService daoComplet, PublicationAgpmService publicationAgpm) {
+        this.publicationAgpm = publicationAgpm;
         this.daoComplet = daoComplet;
         this.delaisPublicite = delaisPublicite;
         this.valeursPpm = valeursPpm;
@@ -157,7 +163,9 @@ public class AvisSpecifiqueService {
     @Transactional
     public List<DocumentFicheDto> produire(Long idDmc, AvisSpecifiqueRequest corps) {
         exigerProfil();
-        Map<String, String> publication = publication(corps);
+        // ⚠️ V118 (§B2, H1) — le numéro et la date du journal de l'avis général se lisent sur la publication déposée sur le plan.
+        cnm.prs.entity.PublicationAgpm agpm = publicationAgpm.enVigueurPourDmc(idDmc).orElse(null);
+        Map<String, String> publication = publication(corps, agpm);
         FicheMarcheDto courante = fiches.lire(idDmc);
         AvisDisponibiliteDto dispo = evaluer(idDmc, courante, false);
         if (!dispo.disponible()) {
@@ -177,8 +185,10 @@ public class AvisSpecifiqueService {
         boolean premiereImpression = premiereImpression(origine);
         Map<String, String> trace = new LinkedHashMap<>();
         trace.put("datePublication", corps.datePublication().trim());
-        trace.put("jmpNumero", corps.jmpNumero() == null ? "" : corps.jmpNumero().trim());
-        trace.put("jmpDate", corps.jmpDate().trim());
+        trace.put("jmpNumero", agpm.getNumero() == null ? "" : agpm.getNumero());   // ⚠️ V118 (H1) : lus sur le plan
+        trace.put("jmpDate", agpm.getDateParution().toString());
+        trace.put("journal", agpm.getJournal());
+        trace.put("referenceAgpm", agpm.getReferenceAgpm());
         trace.put("supports", corps.supports() == null ? "" : corps.supports().trim());
         // ⚠️ 2026-10-01 (§B8.3) — le compte bancaire de l'ARMP ({{PARAM.compte-dao}}) : DocumentsFicheMarcheService.parametresDocuments.
         Set<Integer> ids = documents.enregistrerAvis(validee.getIdFiche(),
@@ -370,6 +380,10 @@ public class AvisSpecifiqueService {
         if (raison == null && RemiseElectronique.electronique(courante.getCadrage()) && !ceremonie.estClose(idDmc)) {
             raison = CEREMONIE_NON_CLOSE;
         }
+        // ⚠️ V118 (2026-10-15, §B2, H1) — l'avis cite le journal de l'avis général : la publication de l'AGPM est déposée sur le plan.
+        if (raison == null && !lettre && publicationAgpm.enVigueurPourDmc(idDmc).isEmpty()) {
+            raison = PUBLICATION_AGPM_ABSENTE;
+        }
         return new AvisDisponibiliteDto(raison == null, raison, avis, pv.getStatutPv(), statutDossier, idDossier);
     }
 
@@ -389,13 +403,15 @@ public class AvisSpecifiqueService {
     }
 
     /** Les informations de publication, contrôlées et mises en forme pour les jetons {@code {{AVIS.*}}}. */
-    private static Map<String, String> publication(AvisSpecifiqueRequest corps) {
+    private static Map<String, String> publication(AvisSpecifiqueRequest corps, cnm.prs.entity.PublicationAgpm agpm) {
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
         AvisSpecifiqueRequest c = corps == null ? new AvisSpecifiqueRequest(null, null, null, null) : corps;
         String datePublication = date(c.datePublication(), "datePublication", "La date de publication de l'avis", erreurs);
         // ⚠️ 2026-10-01 (§B7.5) — le numéro du JMP et les supports sont facultatifs : vides, pointillés et « et dans … » retiré.
-        String jmpNumero = c.jmpNumero() == null || c.jmpNumero().isBlank() ? null : c.jmpNumero().trim();
-        String jmpDate = date(c.jmpDate(), "jmpDate", "La date du Journal des Marchés Publics de l'avis général", erreurs);
+        // ⚠️ V118 (2026-10-15, §B2, H1) — numéro et date du journal lus sur la publication de l'AGPM du plan, figés : ceux du corps sont
+        // ignorés ; sans publication, l'avis est indisponible (409 PUBLICATION_AGPM_ABSENTE, jugé ensuite).
+        String jmpNumero = agpm == null || agpm.getNumero() == null ? null : agpm.getNumero();
+        String jmpDate = agpm == null ? null : agpm.getDateParution().format(JOUR);
         String supports = c.supports() == null || c.supports().isBlank() ? null : c.supports().trim();
         if (!erreurs.isEmpty()) {
             throw new ChampsInvalidesException(erreurs);
@@ -451,6 +467,8 @@ public class AvisSpecifiqueService {
                     + "son offre. " + quoi + " " + accord + " une fois la cérémonie close.";
             case MODE_SANS_AVIS -> "Un appel d'offres restreint n'a pas d'avis spécifique : les candidats de la liste restreinte "
                     + "reçoivent une lettre d'invitation à soumissionner.";
+            case PUBLICATION_AGPM_ABSENTE -> "La publication de l'AGPM n'est pas déposée sur le plan de passation : l'avis spécifique cite le "
+                    + "numéro et la date du journal de l'avis général, qui se lisent sur elle. Déposez-la sur le plan contrôlé.";
             default -> "La fiche marché n'a aucune version validée : " + (lettre ? "pas de lettre d'invitation." : "pas d'avis spécifique.");
         };
     }

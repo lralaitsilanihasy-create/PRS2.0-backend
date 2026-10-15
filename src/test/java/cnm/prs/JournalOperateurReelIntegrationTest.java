@@ -74,11 +74,7 @@ class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     private int dossierCreeParLUgpm() throws Exception {
-        String reponse = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenUgpm())
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idTypeDossier\":\"DAO\",\"idEntiteContract\":1}"))
-                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        return JsonPath.read(reponse, "$.idDossier");
+        return dossierSaisiHorsFiche("DMC", "DAOO", tokenUgpm());   // ⚠️ 2026-10-15 : saisi hors fiche avant la règle (H1)
     }
 
     // ------------------------------------------------------------------ 1. la création porte l'UGPM
@@ -241,11 +237,7 @@ class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
     void ordreDesNoms_uniformeSurToutesLesLignes() throws Exception {
         // Créé ET soumis par la PRMP : les deux lignes nomment la même personne — elles doivent
         // désormais l'écrire pareil. Avant : « Nom Prenoms » à la création, « Prenoms Nom » à la soumission.
-        String reponse = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idTypeDossier\":\"DAO\",\"idEntiteContract\":1}"))
-                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        int idDossier = JsonPath.read(reponse, "$.idDossier");
+        int idDossier = dossierSaisiHorsFiche("DMC", "DAOO", tokenPrmp);   // ⚠️ 2026-10-15 : saisi hors fiche avant la règle (H1)
         mvc.perform(post("/api/dossiers/" + idDossier + "/soumettre").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
 
