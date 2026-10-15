@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.EvaluationDto;
 import cnm.prs.dto.FinanciereDto;
+import cnm.prs.dto.SeanceDto;
 import cnm.prs.dto.TechniqueDto;
 import cnm.prs.entity.Negociation;
 import cnm.prs.entity.Offre;
@@ -156,6 +157,32 @@ public class ResultatsPi {
                     + String.join(" ; ", parElement) + ") — " + (EvaluationTechniqueService.ELIMINEE.equals(o.statut())
                             ? "éliminée : " + o.motifElimination() : "qualifiée, rang technique " + o.rang()) + ".");
         }
+        // ⚠️ 2026-10-15 (« modeles-guide-cao », §B4.3 ; guide de la CAO, annexe 3) — la notation en tableau : critère et sous-critère, score
+        // maximal, score de chaque proposition (moyenne des membres), total et rang technique.
+        if (!t.offres().isEmpty()) {
+            List<List<List<String>>> lignes = new ArrayList<>();
+            List<List<String>> entete = new ArrayList<>(List.of(List.of("Critère / sous-critère"), List.of("Score maximal")));
+            t.offres().forEach(o -> entete.add(List.of("N° " + o.numero() + " — " + o.raisonSociale())));
+            lignes.add(entete);
+            for (TechniqueDto.Element e : tech.elements()) {
+                List<List<String>> ligne = new ArrayList<>(List.of(List.of(Objects.toString(e.libelleCritere(), Objects.toString(e.critere(), ""))
+                        + (e.libelle() == null || e.libelle().equals(e.libelleCritere()) ? "" : " — " + e.libelle())), List.of(lisible(e.max()))));
+                for (TechniqueDto.Offre o : t.offres()) {
+                    ligne.add(List.of(o.moyennes().stream().filter(m -> m.element().equals(e.code())).findFirst().map(m -> lisible(m.moyenne()))
+                            .orElse("—")));
+                }
+                lignes.add(ligne);
+            }
+            List<List<String>> total = new ArrayList<>(List.of(List.of("Total"), List.of(lisible(tech.elements().stream().map(TechniqueDto.Element::max)
+                    .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add)))));
+            t.offres().forEach(o -> total.add(List.of(lisible(o.total()))));
+            lignes.add(total);
+            List<List<String>> rang = new ArrayList<>(List.of(List.of("Rang technique"), List.of("")));
+            t.offres().forEach(o -> rang.add(List.of(EvaluationTechniqueService.ELIMINEE.equals(o.statut()) ? "éliminée"
+                    : o.rang() == null ? "—" : String.valueOf(o.rang()))));
+            lignes.add(rang);
+            el.add(new DocumentLibre.Tableau(2 + t.offres().size(), lignes));
+        }
         FinanciereDto f = financiere.calculer(idDmc);
         FinanciereDto.Lot fl = EvaluationFinanciereService.lot(f, lot);
         sous(el, "5. Évaluation financière (hors taxes)" + suffixe);
@@ -190,6 +217,22 @@ public class ResultatsPi {
                 }
             }
             para(el, b.append(".").toString());
+        }
+        // ⚠️ 2026-10-15 (« modeles-guide-cao », §B4.2 ; guide de la CAO, annexe 3) — le tableau de la méthode de sélection : montant lu,
+        // corrigé, rabais déclaré (lu, non appliqué à l'évaluation financière), montant comparé, scores, classement.
+        if (!fl.propositions().isEmpty()) {
+            List<List<List<String>>> lignes = new ArrayList<>();
+            lignes.add(List.of(List.of("N°"), List.of("Candidat"), List.of("Score technique"), List.of("Montant lu HT"), List.of("Montant corrigé HT"),
+                    List.of("Rabais déclaré"), List.of("Montant comparé"), List.of("Score financier"), List.of("Score combiné"), List.of("Rang")));
+            for (FinanciereDto.Ligne p : fl.propositions()) {
+                FinanciereDto.Saisie s = p.saisie();
+                SeanceDto.RabaisLu r = p.idFinanciere() == null ? null : RabaisOffre.lire(acteEngagement(offres.findById(p.idFinanciere()).orElse(null)));
+                lignes.add(List.of(List.of(String.valueOf(p.numero())), List.of(p.raisonSociale()), List.of(lisible(p.noteTechnique())),
+                        List.of(s == null ? "—" : lisible(s.prixLu())), List.of(s == null ? "—" : lisible(s.prixCorrige())),
+                        List.of(r == null ? "aucun" : r.lecture()), List.of(lisible(p.montantCompare())), List.of(lisible(p.scoreFinancier())),
+                        List.of(lisible(p.scoreCombine())), List.of(p.rang() == null ? Objects.toString(p.motif(), "—") : String.valueOf(p.rang()))));
+            }
+            el.add(new DocumentLibre.Tableau(10, lignes));
         }
         sous(el, "6. Classement" + suffixe);
         List<FinanciereDto.Ligne> classees = fl.propositions().stream().filter(p -> p.rang() != null).sorted(Comparator.comparing(FinanciereDto.Ligne::rang))

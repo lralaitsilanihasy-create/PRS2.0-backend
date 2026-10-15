@@ -485,6 +485,9 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
                 "score combiné 85.6", "6. Classement", "Rang 1 — proposition n° 2", "n'a pas abouti — Le candidat remplace le chef de mission",
                 "La commission propose d'attribuer le marché à Cabinet A (proposition n° 1)", "(propositions remises en ligne)",
                 "Grilles individuelles de notation technique").doesNotContain("Post-qualification");
+        // ⚠️ 2026-10-15 (« modeles-guide-cao », §B4.2, §B4.3) — la notation et la méthode de sélection en tableaux (guide, annexe 3).
+        assertThat(rapport).contains("Critère / sous-critère", "Score maximal", "Rang technique", "Montant corrigé HT", "Rabais déclaré",
+                "Montant comparé", "Score combiné");
         typeDossierRepository.save(new cnm.prs.entity.TypeDossier("DDM", "Dossier de Marché"));
         sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier("MPI", "Marché de Prestations Intellectuelles", "DDM"));
         String att = "/api/fiches-marche/" + idDmc + "/attribution";

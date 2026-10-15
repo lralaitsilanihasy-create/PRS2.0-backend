@@ -128,6 +128,8 @@ public class EvaluationService {
     private final cnm.prs.repository.CaoRepository caoRepository;
     /** ⚠️ PI-d2b — les résultats PI (proposition, rapport) ; paresseux : les services PI relisent cette évaluation. */
     private final org.springframework.beans.factory.ObjectProvider<ResultatsPi> resultatsPi;
+    /** ⚠️ V120 (§B5 « modeles-guide-cao ») — les rapports retirés par le président avant leur dernière signature. */
+    private final cnm.prs.repository.EvaluationRapportRetireRepository retraits;
 
     public EvaluationService(EvaluationRepository evaluations, EvaluationDeclarationRepository declarations, EvaluationEtapeRepository etapes,
             EvaluationDecisionRepository decisions, EvaluationDemandeRepository demandes, EvaluationJournalRepository journal,
@@ -136,8 +138,10 @@ public class EvaluationService {
             DossierMecRepository dmcRepository, ParametreService parametres, ObjectMapper mapper, Clock horloge,
             cnm.prs.repository.LotRepository lotRepository, ValeursPpmService valeursPpm, cnm.prs.repository.EvaluationRapportRepository rapports,
             cnm.prs.repository.EvaluationSignatureRepository signatures, GenerateurDocumentsFiche generateur, cnm.prs.repository.CaoRepository caoRepository,
-            org.springframework.beans.factory.ObjectProvider<ResultatsPi> resultatsPi, QuorumCao quorumCao) {
+            org.springframework.beans.factory.ObjectProvider<ResultatsPi> resultatsPi, QuorumCao quorumCao,
+            cnm.prs.repository.EvaluationRapportRetireRepository retraits) {
         this.quorumCao = quorumCao;
+        this.retraits = retraits;
         this.evaluations = evaluations;
         this.declarations = declarations;
         this.etapes = etapes;
@@ -1640,6 +1644,77 @@ public class EvaluationService {
         return dto(idDmc, e);
     }
 
+    /**
+     * ⚠️ V120 (2026-10-15, demande front « modeles-guide-cao », §B5 ; décision du pilote n° 16) — la commission refuse de valider : avant
+     * la dernière signature, le président (ou son représentant désigné pour le rapport) retire le rapport avec un motif. Le rapport et
+     * les signatures déjà posées sont gardés (marqué retiré), les signatures tombent, l'évaluation redevient en cours (les étapes se
+     * rouvrent à nouveau) et la commission est avertie. 400 {@code MOTIF_OBLIGATOIRE} ; 403 ; 409 {@code RAPPORT_NON_PRODUIT},
+     * {@code RAPPORT_SIGNE} (H3 : signé, l'évaluation est close).
+     */
+    public EvaluationDto retirerRapport(Long idDmc, EvaluationDto.RetraitRequest x) {
+        Evaluation e = exigerEvaluation(idDmc);
+        String k = membreAppelant(idDmc);
+        boolean president = k != null && caoMembres.findByIdDmcOrderByRangAscIdMembreAsc(idDmc).stream()
+                .anyMatch(m -> k.equals(m.getIdCompte()) && Boolean.TRUE.equals(m.getPresident()));
+        boolean representant = k != null && quorumCao.representant(idDmc, QuorumCao.RAPPORT).filter(k::equals).isPresent();
+        if (!president && !representant) {
+            throw new AccessDeniedException("Le rapport d'évaluation se retire par le président de la commission (ou son représentant désigné "
+                    + "pour le rapport).");
+        }
+        cnm.prs.entity.EvaluationRapport r = rapports.findById(idDmc)
+                .orElseThrow(() -> new BusinessRuleException("Le rapport d'évaluation n'est pas produit.", "RAPPORT_NON_PRODUIT"));
+        if (r.getSigneLe() != null) {
+            throw new BusinessRuleException("Le rapport est entièrement signé : l'évaluation est close, il ne se retire plus.", "RAPPORT_SIGNE");
+        }
+        String motif = x == null ? null : nettoyer(x.motif());
+        if (motif == null) {
+            throw new BadRequestException("Le retrait du rapport exige un motif.", "MOTIF_OBLIGATOIRE");
+        }
+        List<cnm.prs.entity.EvaluationSignature> posees = signatures.findByIdDmcOrderByDateAscIdAsc(idDmc);
+        cnm.prs.entity.EvaluationRapportRetire a = new cnm.prs.entity.EvaluationRapportRetire();
+        a.setIdDmc(idDmc);
+        a.setProduitLe(r.getProduitLe());
+        a.setProduitPar(r.getProduitPar());
+        a.setRetireLe(maintenant());
+        a.setRetirePar(k);
+        a.setMotif(motif);
+        a.setSignatures(posees.isEmpty() ? null : posees.stream().map(s -> internes.nomMembre(s.getIm()) + (Boolean.TRUE.equals(s.getEmpechement())
+                ? " (empêché : " + s.getMotif() + ")" : " le " + s.getDate().format(HORODATAGE))).collect(Collectors.joining(" ; ")));
+        a.setPdf(r.getPdf());
+        a.setDocx(r.getDocx());
+        retraits.save(a);
+        signatures.deleteAll(posees);
+        rapports.delete(r);
+        e.setEtat(Evaluation.EN_COURS);
+        evaluations.save(e);
+        String nom = internes.nomMembre(k);
+        tracer(idDmc, "RAPPORT_RETIRE", "Rapport d'évaluation retiré par " + nom + (president ? "" : " (représentant du président)") + " : " + motif
+                + (posees.isEmpty() ? "" : " ; " + posees.size() + " signature(s) tombée(s)"));
+        String titre = "Rapport d'évaluation retiré";
+        String corps = "Le rapport d'évaluation de la procédure " + idDmc + " est retiré par " + nom + " avant sa validation : " + motif
+                + ". L'évaluation reprend ; un nouveau rapport sera produit et soumis à signature.";
+        internes.membresCao(idDmc).forEach(m -> internes.notifierMembre(idDmc, m, TypeNotification.RAPPORT_RETIRE, titre, corps));
+        return dto(idDmc, e);
+    }
+
+    /** ⚠️ V120 (§B5) — un rapport retiré, en PDF ou en Word : les lecteurs du rapport ; 404 inconnu sur la procédure. */
+    @Transactional(readOnly = true)
+    public byte[] rapportRetire(Long idDmc, Long id, boolean docx) {
+        exigerLecteur(idDmc);
+        cnm.prs.entity.EvaluationRapportRetire a = retraits.findById(id).filter(x -> idDmc.equals(x.getIdDmc()))
+                .orElseThrow(() -> new ResourceNotFoundException("Aucun rapport retiré n° " + id + " sur la procédure " + idDmc + "."));
+        byte[] b = docx ? a.getDocx() : a.getPdf();
+        if (b == null) {
+            throw new ResourceNotFoundException("Ce rapport retiré n'a pas de version " + (docx ? "Word" : "PDF") + ".");
+        }
+        return b;
+    }
+
+    private List<EvaluationDto.RapportRetire> retraitsDto(Long idDmc) {
+        return retraits.findByIdDmcOrderByRetireLeAscIdAsc(idDmc).stream().map(a -> new EvaluationDto.RapportRetire(a.getId(), a.getProduitLe(),
+                a.getRetireLe(), a.getRetirePar(), internes.nomMembre(a.getRetirePar()), a.getMotif(), a.getSignatures())).toList();
+    }
+
     private cnm.prs.entity.EvaluationRapport rapportASigner(Long idDmc) {
         cnm.prs.entity.EvaluationRapport r = rapports.findById(idDmc)
                 .orElseThrow(() -> new BusinessRuleException("Le rapport d'évaluation n'est pas produit.", "RAPPORT_NON_PRODUIT"));
@@ -1841,6 +1916,11 @@ public class EvaluationService {
         el.addAll(quorumCao.sectionSeanceDeValidation("10. Séance de validation", idDmc, quorumCao.evaluer(idDmc, QuorumCao.RAPPORT,
                 vues.stream().filter(sv -> !sv.empechement()).map(QuorumCao.SignatureVue::im).toList()), r.getSigneLe(), vues,
                 ev.declarations().stream().filter(d -> Boolean.TRUE.equals(d.conflit())).map(EvaluationDto.Declaration::nom).toList()));
+        // ⚠️ V120 (§B5 « modeles-guide-cao ») — les rapports précédents retirés par la commission, cités dans la séance de validation.
+        for (EvaluationDto.RapportRetire x : ev.rapportsRetires()) {
+            para(el, "Un rapport précédent, produit le " + x.produitLe().format(HORODATAGE) + ", a été retiré le " + x.retireLe().format(HORODATAGE)
+                    + " par " + Objects.toString(x.nom(), x.retirePar()) + ", la commission refusant de le valider. Motif : " + x.motif() + ".");
+        }
         sous(el, "Annexe 1 — Déclarations d'absence de conflit d'intérêts et de confidentialité");
         for (EvaluationDto.Declaration d : ev.declarations()) {
             para(el, d.nom() + " : " + (d.signeeLe() == null ? "non signée" : "signée le " + d.signeeLe().format(HORODATAGE)
@@ -2124,7 +2204,7 @@ public class EvaluationService {
         });
         List<EvaluationDto.NonEvaluee> non = lecture.nonOuvertes().stream()
                 .map(n -> new EvaluationDto.NonEvaluee(n.numero(), n.entreprise(), n.etat(), n.motif())).toList();
-        return new EvaluationDto(idDmc, e.getEtat(), e.getOuverteLe(), e.getOuvertePar(), decl, lots, non, rapportDto(idDmc));
+        return new EvaluationDto(idDmc, e.getEtat(), e.getOuverteLe(), e.getOuvertePar(), decl, lots, non, rapportDto(idDmc), retraitsDto(idDmc));
     }
 
     private EvaluationDto.Demande demandeDto(EvaluationDemande x, Integer numero) {

@@ -932,6 +932,17 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
   - il est signé par chaque membre de la commission, hors ceux qui ont déclaré un conflit d'intérêts ; un membre en désaccord joint
     une **observation** à sa signature ; l'empêchement d'un membre est constaté par le président, avec un motif ;
   - à la dernière signature, l'évaluation est close et la PRMP est avertie ; le rapport n'est pas public.
+  - ⚠️ **2026-10-15 — la commission peut refuser de valider** (décision du pilote n° 16 ; guide de la CAO ; V120) : avant la dernière
+    signature, le président (ou son représentant désigné pour le rapport) **retire** le rapport avec un motif ; les signatures déjà
+    posées tombent, le rapport retiré reste consultable, l'évaluation reprend et la commission est avertie ; le rapport suivant cite le
+    retrait. Un rapport entièrement signé ne se retire plus.
+  - ⚠️ **2026-10-15 — les PV et rapports suivent le Guide de la Commission d'Appel d'Offres** (ARMP, 2008), **par catégorie** et non
+    par sous-type, en citant la loi n° 2016-055 : PV d'ouverture avec l'avis de la Commission sur le DAO, la date de lancement, le
+    tableau récapitulatif des plis, la formule de carence et la levée de séance ; PV financier PI désignant la procédure et la liste
+    restreinte ; tableaux de notation et de la méthode de sélection au rapport PI. Restent les choix du travail en ligne : rapport
+    signé valant PV de validation, pas de sous-comité technique, pas de signature des représentants des candidats, signature
+    électronique et journal ; la conversion en monnaie unique est sans objet tant que le DAO impose l'ariary. La validité de la
+    garantie se vérifie à l'examen de conformité. Les grilles du rapport des fournitures et travaux (conformité C/SC/NC) suivent.
 - ⚠️ **De la proposition à l'attribution : le contrôle de la Commission** (lot 2, demande front du 2026-10-07, arbitrages du pilote
   du 07/10) :
   - **chaque marché** issu d'une procédure en ligne passe au contrôle a priori de la Commission, sans seuil ;
@@ -2370,8 +2381,9 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   - Le **calendrier annuel de passation** est **produit** par l'application à partir du plan (PDF, lisible depuis le dossier de
     planification et depuis le dossier d'appel d'offres qui en dépend) ; un processus manquant d'un plan antérieur y est écrit
     « non daté ». La pièce « Calendrier annuel de passation mis à jour et signé » n'est plus demandée au dossier conduit dans
-    l'application, ni la pièce « Canevas de rapport d'évaluation » (le rapport est produit par l'application ; un canevas par
-    sous-type viendra des modèles du pilote) ; le dossier saisi hors application garde les deux (V115).
+    l'application, ni la pièce « Canevas de rapport d'évaluation » (le rapport est produit par l'application ; ⚠️ 15/10 : son
+    canevas est celui du Guide de la Commission d'Appel d'Offres, par catégorie et non par sous-type) ; le dossier saisi hors
+    application garde les deux (V115).
 - CCAG et descriptif des travaux [Action] ⚠️ **Décisions du pilote (2026-10-15 ; V119)**
   - Le CCAG n'est plus une pièce exigée : le dossier d'appel d'offres complet le recopie (partie 2.3, CCAG de la catégorie).
   - Le **descriptif technique et les plans** d'un marché de travaux restent de vrais documents : une pièce du dossier d'appel

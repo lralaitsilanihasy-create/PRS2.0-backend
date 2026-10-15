@@ -78,12 +78,15 @@ public class SeanceFinanciereService {
     private final ObjectMapper mapper;
     private final Clock horloge;
     private final NegociationService negociation;
+    /** ⚠️ 2026-10-15 (« modeles-guide-cao », §B2.1) — la référence, l'objet et la liste restreinte, à l'en-tête du PV. */
+    private final ReferencesCommission references;
 
     public SeanceFinanciereService(SeanceService seance, PartsEnSeance memoire, SeanceRepository seances, SeanceFinanciereRepository financieres,
             OffreRepository offres, EvaluationTechniqueService technique, FicheMarcheService fiches, ParametresInternesService internes,
             NotificationService notifications, CompteCandidatRepository candidats, GenerateurDocumentsFiche generateur,
             EvaluationJournalRepository journal, ObjectMapper mapper, Clock horloge, NegociationService negociation, QuorumCao quorumCao,
-            cnm.prs.repository.SeanceFinanciereSignatureRepository signatures) {
+            cnm.prs.repository.SeanceFinanciereSignatureRepository signatures, ReferencesCommission references) {
+        this.references = references;
         this.quorumCao = quorumCao;
         this.signatures = signatures;
         this.seance = seance;
@@ -525,8 +528,16 @@ public class SeanceFinanciereService {
         if (complementaire) {
             para(el, "Séance complémentaire n° " + (s.getRonde() - 1) + ". Motif : " + s.getMotif());
         }
-        para(el, "Procédure " + s.getIdDmc() + (s.getMethode() == null ? "" : " — méthode de sélection : " + s.getMethode())
-                + ". Séance ouverte le " + s.getOuverteLe().format(HORODATAGE) + ", enveloppes ouvertes le "
+        // ⚠️ 2026-10-15 (« modeles-guide-cao », §B2.1 ; guide de la CAO, annexe 3) — la procédure par sa référence et son objet, l'autorité
+        // contractante et ce qui a arrêté la liste restreinte.
+        List<String> designation = references.designation(s.getIdDmc());
+        if (designation.isEmpty()) {
+            para(el, "Procédure " + s.getIdDmc() + ".");
+        }
+        designation.forEach(x -> para(el, x));
+        references.listeRestreinte(s.getIdDmc()).ifPresent(x -> para(el, x));
+        para(el, (s.getMethode() == null ? "" : "Méthode de sélection : " + s.getMethode() + ". ")
+                + "Séance ouverte le " + s.getOuverteLe().format(HORODATAGE) + ", enveloppes ouvertes le "
                 + (s.getDechiffreeLe() == null ? "—" : s.getDechiffreeLe().format(HORODATAGE)) + ".");
         sous(el, "Présents");
         d.presents().forEach(im -> para(el, internes.nomMembre(im) + " (membre de la commission)"));
@@ -540,7 +551,21 @@ public class SeanceFinanciereService {
             para(el, "Proposition n° " + e.numero() + " — " + e.raisonSociale() + (e.lot() == null ? "" : ", lot " + e.lot()) + " : note technique "
                     + (e.noteTechnique() == null ? "—" : e.noteTechnique().stripTrailingZeros().toPlainString()) + " points (rang " + e.rangTechnique()
                     + ") ; " + (ae == null ? "acte d'engagement illisible" : "montant HT : " + ae.get("montantHt") + " ; montant TTC : " + ae.get("montantTtc")
-                            + " " + Objects.toString(ae.get("monnaie"), "MGA")) + " ; intégrité : " + e.integrite() + ".");
+                            + " " + Objects.toString(ae.get("monnaie"), "MGA") + " ; rabais : " + rabais(ae)) + " ; intégrité : " + e.integrite() + ".");
+        }
+        // ⚠️ §B2.2 — le tableau du guide (annexe 3) : montant lu et rabais de chaque proposition ouverte.
+        if (!d.aOuvrir().isEmpty()) {
+            List<List<List<String>>> lignes = new ArrayList<>();
+            lignes.add(List.of(List.of("N°"), List.of("Lot"), List.of("Candidat"), List.of("Note technique (rang)"), List.of("Montant HT"),
+                    List.of("Montant TTC"), List.of("Rabais")));
+            for (SeanceFinanciereDto.Enveloppe e : d.aOuvrir()) {
+                Map<String, Object> ae = e.acteEngagement();
+                lignes.add(List.of(List.of(String.valueOf(e.numero())), List.of(e.lot() == null ? "—" : String.valueOf(e.lot())), List.of(e.raisonSociale()),
+                        List.of((e.noteTechnique() == null ? "—" : e.noteTechnique().stripTrailingZeros().toPlainString()) + " (" + e.rangTechnique() + ")"),
+                        List.of(ae == null ? "illisible" : Objects.toString(ae.get("montantHt"), "—")),
+                        List.of(ae == null ? "illisible" : Objects.toString(ae.get("montantTtc"), "—")), List.of(ae == null ? "—" : rabais(ae))));
+            }
+            el.add(new DocumentLibre.Tableau(7, lignes));
         }
         if (!d.nonOuvertes().isEmpty()) {
             sous(el, "Propositions financières non ouvertes");
@@ -570,6 +595,12 @@ public class SeanceFinanciereService {
                     quorumCao.regle(s.getIdDmc())));
         }
         return new DocumentLibre("PV_FINANCIER", null, el, "Procédure " + s.getIdDmc() + " — PV d'ouverture des propositions financières");
+    }
+
+    /** ⚠️ §B2.2 — le rabais lu sur l'acte d'engagement, comme au PV d'ouverture ({@link RabaisOffre#lire}). */
+    private static String rabais(Map<String, Object> ae) {
+        SeanceDto.RabaisLu r = RabaisOffre.lire(ae);
+        return r == null ? "aucun" : r.lecture();
     }
 
     // ------------------------------------------------------------------ outils

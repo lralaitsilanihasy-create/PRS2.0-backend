@@ -95,6 +95,8 @@ public class SeanceService {
     private final QuorumCao quorumCao;
     /** ⚠️ R9b (§B4 n° 4, art. 44) — les tentatives de dépôt refusées hors délai, portées au PV d'ouverture. */
     private final TentativesRefusees tentatives;
+    /** ⚠️ 2026-10-15 (« modeles-guide-cao », §B1.1) — l'avis de la Commission sur le DAO et la publication de l'avis, à l'en-tête du PV. */
+    private final ReferencesCommission references;
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final SeanceRepository seances;
@@ -130,8 +132,9 @@ public class SeanceService {
             RapprochementCandidatService rapprochements, CompteCandidatRepository candidats, NotificationService notifications,
             GenerateurDocumentsFiche generateur, DossierMecRepository dmcRepository, ObjectMapper mapper, Clock horloge,
             SeanceSignatureRepository signatures, FormulairesEnLigne formulaires, QuorumCao quorumCao,
-            TentativesRefusees tentatives) {
+            TentativesRefusees tentatives, ReferencesCommission references) {
         this.tentatives = tentatives;
+        this.references = references;
         this.quorumCao = quorumCao;
         this.formulaires = formulaires;
         this.signatures = signatures;
@@ -1108,6 +1111,9 @@ public class SeanceService {
             }
             el.add(para("Date limite de remise des offres : " + p.dateLimite()));
         }
+        // ⚠️ 2026-10-15 (« modeles-guide-cao », §B1.1 ; guide de la CAO, annexes 1 et 2) — l'avis de la Commission sur le DAO et le lancement.
+        references.avisCommission(idDmc).ifPresent(x -> el.add(para(x)));
+        references.lignePublication(idDmc).ifPresent(x -> el.add(para(x)));
         el.add(para("Séance ouverte le " + s.getOuverteLe().format(HORODATAGE) + " (heure du serveur)."));
         SeanceDto d = dto(idDmc);
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Présents"));
@@ -1132,7 +1138,10 @@ public class SeanceService {
             SeanceDto.Lecture l = construireLecture(idDmc, complet);
             el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Offres reçues : " + (l.offres().size() + l.nonOuvertes().size())));
             if (l.offres().isEmpty() && l.nonOuvertes().isEmpty()) {
-                el.add(para("Aucune offre n'a été déposée avant la date limite : la séance constate la carence."));
+                // ⚠️ 2026-10-15 (« modeles-guide-cao », §B1.4) — la formule de carence du guide, avec l'article de la loi n° 2016-055.
+                el.add(para("Aucun pli n'a été reçu à la date et à l'heure limites de remise des offres" + (p == null || p.dateLimite() == null ? "" : " (" + dateLisible(p.dateLimite()) + ")")
+                        + " : la séance constate la carence, et la commission propose de déclarer l'appel d'offres infructueux (art. 56 de la "
+                        + "loi n° 2016-055 relative aux marchés publics)."));
             }
             // ⚠️ V86 (lot 3 PI, PI-b) — une consultation restreinte : la séance n'ouvre que les enveloppes techniques.
             List<Offre> financieres = financieresScellees(idDmc);
@@ -1140,6 +1149,9 @@ public class SeanceService {
                 el.add(para("Séance d'ouverture des propositions techniques : aucun montant n'est lu. Propositions financières : "
                         + financieres.size() + " enveloppe(s) déposée(s), restées scellées ; elles s'ouvriront en seconde séance, pour les seuls "
                         + "candidats qualifiés techniquement (art. 42 de la loi n° 2016-055)."));
+            }
+            if (!l.offres().isEmpty()) {
+                el.add(recapitulatif(l.offres()));
             }
             for (SeanceDto.OffreLue o : l.offres()) {
                 el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Offre n° " + o.numero() + " — " + o.entreprise().raisonSociale()
@@ -1159,7 +1171,7 @@ public class SeanceService {
                 SeanceDto.Garantie g = o.garantie();
                 el.add(para("Garantie : " + (g == null ? "non fournie" : "fournie, code de vérification " + g.codeVerification()
                         + (g.montant() == null ? "" : " ; montant : " + montantLisible(g.montant()) + " " + Objects.toString(g.monnaie(), "MGA"))
-                        + (g.emetteur() == null ? "" : " ; émetteur : " + g.emetteur()))));
+                        + (g.emetteur() == null ? "" : " ; émetteur : " + g.emetteur()) + " ; " + VALIDITE_GARANTIE)));
                 el.add(para("Intégrité : " + o.integrite() + (o.motif() == null ? "" : " (" + o.motif() + ")")));
                 el.add(para("Pièces manquantes : " + (o.piecesManquantes().isEmpty() ? "aucune" : String.join(", ", o.piecesManquantes()))));
                 if (complet) {
@@ -1194,6 +1206,8 @@ public class SeanceService {
             el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Observations"));
             el.add(para(s.getObservations()));
         }
+        // ⚠️ 2026-10-15 (« modeles-guide-cao », §B1.5) — la levée de séance : la production du PV (ou le constat d'illisibilité).
+        levee(idDmc, s).ifPresent(t -> el.add(para("La séance est levée le " + t.format(HORODATAGE) + " (heure du serveur).")));
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Signatures des membres présents"));
         // ⚠️ Arbitrages du pilote (§B2) : la signature électronique simple de chaque membre présent, ou son empêchement constaté.
@@ -1222,6 +1236,53 @@ public class SeanceService {
 
     private static DocumentLibre.Paragraphe para(String t) {
         return new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, t);
+    }
+
+    /**
+     * ⚠️ 2026-10-15 (« modeles-guide-cao », §B1.2 ; arbitrage du 15/10) — la validité de la garantie n'est pas relevée au dépôt : la
+     * commission la vérifie à l'examen de conformité.
+     */
+    static final String VALIDITE_GARANTIE = "validité : vérifiée à l'examen de conformité";
+
+    /**
+     * ⚠️ 2026-10-15 (« modeles-guide-cao », §B1.3 ; guide de la CAO, annexes 1 et 2) — le tableau récapitulatif des plis ouverts : n°, lot,
+     * candidat, acte d'engagement, montant et rabais, garantie, pièces manquantes. Une proposition technique ne lit aucun montant.
+     */
+    private DocumentLibre.Tableau recapitulatif(List<SeanceDto.OffreLue> offres) {
+        List<List<List<String>>> lignes = new ArrayList<>();
+        lignes.add(List.of(List.of("N° du pli"), List.of("Lot"), List.of("Candidat"), List.of("Acte d'engagement"), List.of("Montant lu HT et rabais"),
+                List.of("Garantie"), List.of("Pièces manquantes")));
+        for (SeanceDto.OffreLue o : offres) {
+            Map<String, Object> ae = o.acteEngagement();
+            String montant = estTechnique(o.idOffre()) ? "non lu (proposition technique)" : ae == null || ae.get("montantHt") == null ? "—"
+                    : ae.get("montantHt") + " " + Objects.toString(ae.get("monnaie"), "MGA") + " ; rabais : " + (o.rabais() == null ? "aucun"
+                            : o.rabais().lecture());
+            SeanceDto.Garantie g = o.garantie();
+            String garantie = g == null ? "non fournie" : "fournie" + (g.montant() == null ? "" : " ; " + montantLisible(g.montant()) + " "
+                    + Objects.toString(g.monnaie(), "MGA")) + " ; " + VALIDITE_GARANTIE;
+            lignes.add(List.of(List.of(String.valueOf(o.numero())), List.of(o.lot() == null ? "—" : String.valueOf(o.lot())),
+                    List.of(o.entreprise().raisonSociale() + " (NIF " + o.entreprise().nif() + ")"), List.of(ae == null ? "non fourni" : "fourni"),
+                    List.of(montant), List.of(garantie), List.of(o.piecesManquantes().isEmpty() ? "aucune" : String.join(", ", o.piecesManquantes()))));
+        }
+        return new DocumentLibre.Tableau(7, lignes);
+    }
+
+    /** Une date et heure ISO ({@code 2026-10-14T10:00}) lisible ({@code 14/10/2026 à 10:00}) ; telle quelle si elle ne se lit pas. */
+    private static String dateLisible(String iso) {
+        try {
+            return LocalDateTime.parse(iso).format(HORODATAGE);
+        } catch (RuntimeException e) {
+            return iso;
+        }
+    }
+
+    /** La levée de la séance : le constat d'illisibilité, sinon la dernière production du PV (journal {@code PV}). */
+    private Optional<LocalDateTime> levee(Long idDmc, Seance s) {
+        if (Seance.ILLISIBLE.equals(s.getEtat())) {
+            return Optional.ofNullable(s.getCloseLe());
+        }
+        return journal.findByIdDmcOrderByDateAscIdAsc(idDmc).stream().filter(j -> "PV".equals(j.getAction())).map(SeanceJournal::getDate)
+                .reduce((a, b) -> b);
     }
 
     private void notifierPv(Long idDmc, boolean publie, TypeNotification type, String titre, String corps) {

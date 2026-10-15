@@ -3330,6 +3330,37 @@ motif, ou **« non daté »** (plan soumis avant la règle du calendrier complet
 ligne (`GET …/pieces-exigees`), gardées au dossier saisi hors application (H4). Le **canevas par sous-type** (§B3) attend les modèles
 du pilote : le rapport d'évaluation reste sur le plan du guide.
 
+⚠️ **2026-10-15 — PV et rapports de la commission sur le guide de la CAO, tranche 1** (demande front
+`demande-backend-2026-10-15-modeles-guide-cao.md`, §B1, §B2, §B4, §B5 ; décisions du pilote du 15/10 ; **V120** ; arbitrages du
+15/10 : validité de la garantie vérifiée en conformité, deux tranches — le §B3, grilles du rapport des fournitures et travaux, suit).
+- **§B5 — retirer le rapport** (`POST …/evaluation/rapport/retirer`, tableau de la tranche 1d) : avant la dernière signature, le
+  président de la CAO (ou son représentant désigné pour le rapport, contexte `RAPPORT`) retire le rapport avec un **motif** (400
+  `MOTIF_OBLIGATOIRE`). Le rapport (PDF, Word) et les signatures déjà posées sont gardés dans `t_evaluation_rapport_retire` ; les
+  signatures tombent, le rapport en cours est effacé, l'évaluation repasse **`EN_COURS`** : les étapes se rouvrent à nouveau
+  (`…/etapes/{etape}/rouvrir`, PI compris). Journal `RAPPORT_RETIRE` ; notification **`RAPPORT_RETIRE`** (nouveau type) à chaque membre
+  de la CAO. Un rapport entièrement signé ne se retire plus (409 `RAPPORT_SIGNE`, H3) : la reprise sur avis défavorable de la
+  Commission reste la seule voie. `EvaluationDto.rapportsRetires` : `[{ id, produitLe, retireLe, retirePar, nom, motif, signatures }]`
+  (`signatures` : texte lisible des signatures tombées, ou nul) ; `GET …/rapport/retires/{id}` sert le PDF (ou `?format=docx`). Le
+  rapport suivant cite chaque retrait (date, auteur, motif) dans sa section « 10. Séance de validation ».
+- **§B1 — PV d'ouverture des plis** (`PV_OUVERTURE`) : en-tête complété, quand l'application les connaît, de l'**avis de la Commission**
+  sur le dossier d'appel d'offres (le plus récent PV signé du dossier que porte le DMC : référence, date, avis) et de la **date de
+  lancement** (date de publication saisie à la première impression de l'avis spécifique) avec les **journaux et supports** ; un
+  **tableau récapitulatif** des plis ouverts (n°, lot, candidat, acte d'engagement fourni, montant lu HT et rabais — « non lu » pour une
+  proposition technique —, garantie, pièces manquantes) précède le détail ; la garantie porte « validité : vérifiée à l'examen de
+  conformité » (pas de date relevée au dépôt) ; la **carence** suit la formule du guide (« aucun pli reçu à la date et à l'heure
+  limites … la commission propose de déclarer l'appel d'offres infructueux », art. 56 de la loi n° 2016-055) ; la **levée de séance**
+  est l'heure de production du PV (ou du constat d'illisibilité).
+- **§B2 — PV d'ouverture des propositions financières** (`PV_FINANCIER`) : la procédure par sa **référence et son objet**, l'autorité
+  contractante, et ce qui a arrêté la **liste restreinte** (le rapport de présélection de l'AMI, signé à telle date, ou sa dispense
+  motivée — l'application ne porte pas de décision numérotée) ; le **rabais** lu de chaque proposition ; un tableau (n°, lot,
+  candidat, note et rang techniques, montants HT et TTC, rabais).
+- **§B4 — rapport PI** : la notation technique en **tableau** (critère et sous-critère, score maximal, score de chaque proposition,
+  total, rang technique) ; le **tableau de la méthode de sélection** (montant lu, corrigé, rabais déclaré, montant comparé, scores
+  financier et combiné, rang). Le rabais déclaré d'une proposition financière est **lu, non appliqué** : l'évaluation financière PI
+  compare le prix corrigé hors dépenses remboursables.
+- Règle commune (H2) : les documents déjà produits ne sont pas réécrits ; un PV ou un rapport se régénère à chaque signature, il
+  prend alors la nouvelle forme.
+
 ⚠️ **2026-10-15 — CCAG et descriptif des travaux** (demande front `demande-backend-2026-10-15-ccag-descriptif-travaux.md` ; **V119** ;
 décisions du pilote du 15/10 ; arbitrage de l'utilisateur au backend : pièce du dossier, servie aux candidats).
 - **§B1** : la pièce `CCAG` n'est plus exigée (`OBLIGATOIRE = false` à la liste de la famille DMC ; aucun sous-type ne l'associait).
@@ -7120,6 +7151,8 @@ Demande front `demande-backend-2026-10-07-evaluation-des-offres.md` (§B6, §B7)
 | GET | /api/fiches-marche/{idDmc}/evaluation/rapport?format=docx | — | le PDF (ou le Word) | 200, 403, 404 (non produit) | CAO, responsable, PRMP, UGPM |
 | POST | /api/fiches-marche/{idDmc}/evaluation/rapport/signer | `{ observation? }` | `EvaluationDto` | 200, 403 `NON_SIGNATAIRE`, 409 `RAPPORT_NON_PRODUIT` / `DEJA_SIGNE` | membre appelé à signer |
 | POST | /api/fiches-marche/{idDmc}/evaluation/rapport/empechement | `{ im, motif }` | `EvaluationDto` | 200, 400 `MOTIF_ABSENT` / `NON_SIGNATAIRE`, 403, 409 `RAPPORT_NON_PRODUIT` / `DEJA_SIGNE` | président de la CAO (à défaut, le responsable) |
+| POST | /api/fiches-marche/{idDmc}/evaluation/rapport/retirer ⚠️ V120 | `{ motif }` | `EvaluationDto` (`etat` = `EN_COURS`, `rapport` nul, `rapportsRetires`) | 200, 400 `MOTIF_OBLIGATOIRE`, 403, 409 `RAPPORT_NON_PRODUIT` / `RAPPORT_SIGNE` | président de la CAO, ou son représentant désigné pour le rapport |
+| GET | /api/fiches-marche/{idDmc}/evaluation/rapport/retires/{id}?format=docx ⚠️ V120 | — | le PDF (ou le Word) du rapport retiré | 200, 403, 404 | lecteurs du rapport |
 
 - **Produire** : toutes les étapes de tous les lots arrêtées. L'évaluation passe à **`RAPPORT_A_SIGNER`** : plus aucune décision ni
   réouverture (409 `EVALUATION_CLOSE`, `RAPPORT_SIGNE`). **Signataires appelés** : les membres de la CAO, **hors ceux qui ont déclaré

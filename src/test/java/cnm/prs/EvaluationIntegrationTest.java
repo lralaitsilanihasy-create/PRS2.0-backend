@@ -620,6 +620,39 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.rapport.quorum.atteint").value(true)).andExpect(jsonPath("$.rapport.quorum.presidentSigne").value(true));
         mvc.perform(post(base + "/rapport/signer").header("Authorization", jetonM1).contentType(JSON).content("{}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_SIGNE"));
+        // ⚠️ V120 (« modeles-guide-cao », §B5) — avant la dernière signature, le président retire le rapport : les signatures tombent, le
+        // rapport retiré reste lisible, l'évaluation reprend et le rapport suivant cite le retrait.
+        mvc.perform(post(base + "/rapport/retirer").header("Authorization", jetonM2).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(base + "/rapport/retirer").header("Authorization", jetonM1).contentType(JSON).content("{\"motif\":\" \"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        String retrait = mvc.perform(post(base + "/rapport/retirer").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"motif\":\"Demander des éclaircissements sur le délai d'exécution\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("EN_COURS")).andExpect(jsonPath("$.rapport").doesNotExist())
+                .andExpect(jsonPath("$.rapportsRetires.length()").value(1))
+                .andExpect(jsonPath("$.rapportsRetires[0].motif").value("Demander des éclaircissements sur le délai d'exécution"))
+                .andExpect(jsonPath("$.rapportsRetires[0].retirePar").value(comptes.get(0)))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(retrait, "$.rapportsRetires[0].signatures")).contains(" le ");
+        Number idRetire = JsonPath.read(retrait, "$.rapportsRetires[0].id");
+        mvc.perform(get(base + "/rapport").header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        assertThat(texteDuPdf(mvc.perform(get(base + "/rapport/retires/" + idRetire).header("Authorization", jetonM2)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray())).contains("RAPPORT D'ÉVALUATION DES OFFRES");
+        mvc.perform(get(base + "/rapport/retires/999999").header("Authorization", jetonM2)).andExpect(status().isNotFound());
+        assertThat(notificationRepository.findPourRefEtType(comptes.get(1), "MEMBRE_CAO")).extracting(Notification::getTypeNotif)
+                .contains("RAPPORT_RETIRE");
+        assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction()).contains("RAPPORT_RETIRE");
+        mvc.perform(post(base + "/lots/1/etapes/QUALIFICATION/rouvrir").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"motif\":\"Éclaircissements reçus\"}")).andExpect(status().isOk());
+        arreter("QUALIFICATION").andExpect(status().isOk());
+        mvc.perform(post(base + "/rapport").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"observations\":\"Évaluation conduite sans incident.\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.rapport.signatures.length()").value(0));
+        mvc.perform(post(base + "/rapport/signer").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"observation\":\"Réserve sur le délai d'exécution proposé.\"}")).andExpect(status().isOk());
+        assertThat(texteDuPdf(mvc.perform(get(base + "/rapport").header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsByteArray())
+                .replaceAll("\\s+", " ")).contains("a été retiré le", "la commission refusant de le valider. Motif : Demander des éclaircissements "
+                        + "sur le délai d'exécution.");
         mvc.perform(post(base + "/rapport/empechement").header("Authorization", jetonM2).contentType(JSON)
                 .content("{\"im\":\"" + comptes.get(1) + "\",\"motif\":\"x\"}")).andExpect(status().isForbidden());
         mvc.perform(post(base + "/rapport/empechement").header("Authorization", jetonM1).contentType(JSON)
@@ -628,6 +661,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"im\":\"" + comptes.get(1) + "\",\"motif\":\"En mission\"}")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.rapport.signe").value(true))
                 .andExpect(jsonPath("$.rapport.signaturesAttendues.length()").value(0));
+        mvc.perform(post(base + "/rapport/retirer").header("Authorization", jetonM1).contentType(JSON).content("{\"motif\":\"Trop tard\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RAPPORT_SIGNE"));   // H3 : signé, l'évaluation est close
         assertThat(texteDuPdf(mvc.perform(get(base + "/rapport").header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsByteArray())
                 .replaceAll("\\s+", " ")).contains("Observation : Réserve sur le délai d'exécution proposé.", "empêché de signer : En mission",
                         // ⚠️ R1 (§B1, Q4 du pilote) — le rapport signé vaut PV de validation : la section « Séance de validation ».

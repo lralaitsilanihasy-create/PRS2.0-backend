@@ -159,6 +159,27 @@ public class EvaluationController {
         return service.signerRapport(idDmc, corps);
     }
 
+    /**
+     * ⚠️ V120 (§B5 « modeles-guide-cao ») — le président (ou son représentant pour le rapport) retire le rapport avant sa dernière
+     * signature ; 400 {@code MOTIF_OBLIGATOIRE} ; 409 {@code RAPPORT_NON_PRODUIT}, {@code RAPPORT_SIGNE}.
+     */
+    @PostMapping("/rapport/retirer")
+    public EvaluationDto retirerRapport(@PathVariable Long idDmc, @RequestBody(required = false) EvaluationDto.RetraitRequest corps) {
+        return service.retirerRapport(idDmc, corps);
+    }
+
+    /** ⚠️ V120 (§B5) — un rapport retiré, en PDF ou en Word ({@code ?format=docx}) ; 404. */
+    @GetMapping("/rapport/retires/{id}")
+    public ResponseEntity<byte[]> rapportRetire(@PathVariable Long idDmc, @PathVariable Long id,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String format) {
+        boolean docx = "docx".equalsIgnoreCase(format);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition("rapport-evaluation-retire-" + idDmc + "-" + id + (docx ? ".docx" : ".pdf")))
+                .contentType(docx ? MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                        : MediaType.APPLICATION_PDF)
+                .body(service.rapportRetire(idDmc, id, docx));
+    }
+
     /** L'empêchement d'un membre, constaté par le président ; 400 {@code MOTIF_ABSENT}, {@code NON_SIGNATAIRE}. */
     @PostMapping("/rapport/empechement")
     public EvaluationDto empechement(@PathVariable Long idDmc, @RequestBody EvaluationDto.EmpechementRequest corps) {

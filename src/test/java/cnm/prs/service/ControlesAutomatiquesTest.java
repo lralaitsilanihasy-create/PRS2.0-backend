@@ -95,6 +95,6 @@ class ControlesAutomatiquesTest {
     private static EvaluationDto evaluation(boolean rapportSigne, QuorumDto q) {
         EvaluationDto.Rapport rapport = new EvaluationDto.Rapport(LocalDateTime.of(2026, 10, 1, 10, 0), null, rapportSigne,
                 rapportSigne ? LocalDateTime.of(2026, 10, 2, 9, 0) : null, List.of(), List.of(), q);
-        return new EvaluationDto(7L, "CLOSE", null, null, List.of(), List.of(), List.of(), rapport);
+        return new EvaluationDto(7L, "CLOSE", null, null, List.of(), List.of(), List.of(), rapport, List.of());
     }
 }

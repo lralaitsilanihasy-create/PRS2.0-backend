@@ -375,6 +375,9 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 "empêché de signer : Appelé en urgence avant la fin de la séance (constaté par", "montant : 1 500 000 MGA",
                 "émetteur : BNI Madagascar", "GARANTIE_INSUFFISANTE", "Quorum de la commission : 1 membre(s) au moins — 1 requis, 1 obtenu(s) : atteint")
                 .doesNotContain("signature attendue");
+        // ⚠️ 2026-10-15 (« modeles-guide-cao », §B1.2, §B1.3, §B1.5) — le tableau récapitulatif des plis, la validité de la garantie, la levée.
+        assertThat(texteDuPdf(pv).replaceAll("\\s+", " ")).contains("N° du pli", "Acte d'engagement", "Montant lu HT et rabais", "Pièces manquantes",
+                "validité : vérifiée à l'examen de conformité", "La séance est levée le");
         byte[] publie = mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pv")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(texteDuPdf(publie)).contains("signé électroniquement sur la plateforme").doesNotContain("GARANTIE_INSUFFISANTE");
@@ -463,7 +466,9 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         String pvF = texteDuPdf(mvc.perform(get(fin + "/pv").header("Authorization", tokenPrmp)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
         assertThat(pvF).contains("PROCÈS-VERBAL D'OUVERTURE DES PROPOSITIONS FINANCIÈRES", "BTP Beta", "montant HT : 11900000",
-                "La part de secours a été employée. Motif : Membre empêché", "Rasoa Lova");
+                "La part de secours a été employée. Motif : Membre empêché", "Rasoa Lova",
+                // ⚠️ 2026-10-15 (« modeles-guide-cao », §B2) — la procédure par sa référence et son objet, le rabais lu, le tableau du guide.
+                "Procédure : ", "rabais : aucun", "Note technique (rang)", "Montant TTC");
         mvc.perform(get(fin + "/pv").param("format", "docx").header("Authorization", tokenPrmp)).andExpect(status().isOk());
         mvc.perform(post(fin + "/cloturer").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SEANCE_CLOSE"));
@@ -490,8 +495,24 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post(base + "/pv").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.etat").value("PV_A_SIGNER")).andExpect(jsonPath("$.pv.signe").value(false))
                 .andExpect(jsonPath("$.pv.quorum.requis").value(1));
+        // ⚠️ 2026-10-15 (« modeles-guide-cao », §B1.1) — le dossier d'appel d'offres de la procédure, au PV signé favorable de la Commission.
+        Integer idDossier = dossierRepository.findIdDossierByIdDmc(idDmc).orElseGet(() -> {
+            Dossier d = dossierLoc(9960, "CLOTURE", "ANT", "PRMP001");
+            d.setIdDmc(idDmc);
+            return dossierRepository.save(d).getIdDossier();
+        });
+        receptionRepository.save(reception(9960, idDossier, "CTRCC1", true));
+        dispatchRepository.save(dispatch(9960, 9960, "CTRCC1", "CTRMEM", "CTRPRE"));
+        examenRepository.save(examen(9960, 9960, "CTRMEM"));
+        seedPvSigne(9960, 9960);
         mvc.perform(post(base + "/pv/signer").header("Authorization", jetonM1)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.pv.signe").value(true));
+        // ⚠️ §B1.4, §B1.5 — la formule de carence du guide, l'article de la loi, la levée de séance.
+        assertThat(texteDuPdf(mvc.perform(get(base + "/pv").header("Authorization", jetonM1)).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsByteArray()).replaceAll("\\s+", " ")).contains("PROCÈS-VERBAL DE CARENCE", "Aucun pli n'a été reçu à la date et à l'heure "
+                        + "limites", "la commission propose de déclarer l'appel d'offres infructueux (art. 56 de la loi n°", "à 10:00)",
+                        "La séance est levée le", "Avis de la Commission nationale des marchés sur le dossier d'appel d'offres : procès-verbal du "
+                                + LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) + ", avis favorable.");
         mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SEANCE_DEJA_OUVERTE"));
     }

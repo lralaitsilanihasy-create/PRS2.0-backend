@@ -175,6 +175,8 @@ public enum TypeNotification {
     RAPPORT_A_SIGNER,
     /** ⚠️ 2026-10-07 (§B6) — le rapport d'évaluation est signé : vers la PRMP et les membres de la CAO. */
     RAPPORT_EVALUATION,
+    /** ⚠️ V120 (2026-10-15, « modeles-guide-cao », §B5) — le rapport d'évaluation est retiré avant sa validation : vers les membres de la CAO. */
+    RAPPORT_RETIRE,
     /** ⚠️ 2026-10-07 (lot 2, tranche 2b, §B4.1) — le résultat de la procédure : vers chaque candidat non retenu du lot (et par courriel). */
     RESULTAT_DISPONIBLE,
     /** ⚠️ 2026-10-07 (§B4.1) — la lettre d'attribution : vers l'attributaire (et par courriel). */

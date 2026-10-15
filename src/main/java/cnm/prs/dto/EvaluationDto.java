@@ -10,7 +10,18 @@ import java.util.List;
  * dépôt, retirées, remplacées) figurent à part, sans être évaluées (H3).
  */
 public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, String ouvertePar, List<Declaration> declarations,
-        List<Lot> lots, List<NonEvaluee> nonEvaluees, Rapport rapport) {
+        List<Lot> lots, List<NonEvaluee> nonEvaluees, Rapport rapport,
+        /** ⚠️ V120 (§B5 « modeles-guide-cao ») — les rapports retirés avant leur dernière signature, du plus ancien au plus récent. */
+        List<RapportRetire> rapportsRetires) {
+
+    /** ⚠️ V120 (§B5) — un rapport retiré par le président (ou son représentant) : {@code signatures} déjà posées, lisibles, ou nul. */
+    public record RapportRetire(Long id, LocalDateTime produitLe, LocalDateTime retireLe, String retirePar, String nom, String motif,
+            String signatures) {
+    }
+
+    /** ⚠️ V120 (§B5) — {@code POST …/rapport/retirer}. */
+    public record RetraitRequest(String motif) {
+    }
 
     /** Un membre de la CAO et sa déclaration préalable ({@code signeeLe} nul : pas encore signée). */
     public record Declaration(String membre, String nom, boolean president, LocalDateTime signeeLe, Boolean conflit, String precision) {
