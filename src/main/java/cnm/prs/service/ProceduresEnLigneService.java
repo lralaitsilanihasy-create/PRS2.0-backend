@@ -66,6 +66,8 @@ public class ProceduresEnLigneService {
     public static final String OUVERTE = "OUVERTE";
     public static final String CLOSE = "CLOSE";
 
+    /** ⚠️ V119 (2026-10-15, §B3, H2) — le descriptif et les plans des travaux, servis avec le DAO. */
+    private final DescriptifPlans descriptifPlans;
     private final FicheMarcheRepository ficheRepository;
     private final FicheMarcheService fiches;
     private final DocumentsFicheMarcheService documents;
@@ -87,7 +89,9 @@ public class ProceduresEnLigneService {
             DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository, LotRepository lotRepository,
             RetraitDaoRepository retraitRepository, CompteCandidatRepository compteRepository,
             EntrepriseRepository entrepriseRepository, PiecesFiche piecesFiche, BesoinFiche besoin,
-            cnm.prs.repository.RecuDaoRepository recuRepository, ParametreService parametres, InvitationsService invitations) {
+            cnm.prs.repository.RecuDaoRepository recuRepository, ParametreService parametres, InvitationsService invitations,
+            DescriptifPlans descriptifPlans) {
+        this.descriptifPlans = descriptifPlans;
         this.invitations = invitations;
         this.recuRepository = recuRepository;
         this.parametres = parametres;
@@ -193,10 +197,14 @@ public class ProceduresEnLigneService {
     public List<ProcedureEnLigneDto.Document> documents(Long idDmc) {
         Lue l = exiger(idDmc);
         exigerInvite(l, candidatAppelant());   // ⚠️ PI-a (§B1)
-        return documents.lister(l.fiche(), l.etat().categorie()).stream()
+        List<ProcedureEnLigneDto.Document> liste = new ArrayList<>(documents.lister(l.fiche(), l.etat().categorie()).stream()
                 .map(d -> new ProcedureEnLigneDto.Document(d.nomFichier(), d.libelle(), d.version(),
                         d.tailleOctets() == null ? 0 : d.tailleOctets()))
-                .toList();
+                .toList());
+        // ⚠️ V119 (2026-10-15, §B3, H2) — le descriptif technique et les plans des travaux, joints au dossier.
+        descriptifPlans.fichiers(idDmc).forEach(p -> liste.add(new ProcedureEnLigneDto.Document(p.getNomFichier(),
+                DescriptifPlans.INTITULE + " — " + p.getNomFichier(), l.fiche().getNumeroVersion(), p.getTaille() == null ? 0 : p.getTaille())));
+        return liste;
     }
 
     /** Un document du DAO, retiré par le candidat {@code idCandidat} : le retrait est journalisé. 404 inconnu. */
@@ -208,6 +216,11 @@ public class ProceduresEnLigneService {
                 .filter(x -> !DocumentsFicheMarcheService.horsDao(x.getType()))   // ⚠️ V117 : ni publication, ni projet, ni estimatif
                 .filter(x -> x.getNomFichier() != null && x.getNomFichier().equals(code))
                 .findFirst()
+                // ⚠️ V119 (§B3, H2) — sinon, un fichier du descriptif et des plans joint au dossier (non enregistré : la trace est le retrait).
+                .or(() -> descriptifPlans.fichiers(idDmc).stream().filter(p -> code.equals(p.getNomFichier())).findFirst()
+                        .map(p -> new DocumentFicheMarche(null, l.fiche().getIdFiche(), DescriptifPlans.CODE_PIECE,
+                                p.getFormat() == null ? null : p.getFormat().toLowerCase(java.util.Locale.ROOT), p.getNomFichier(), p.getTaille(),
+                                null, p.getDateUpload(), p.getContenu(), null, null)))
                 .orElseThrow(() -> new ResourceNotFoundException("Document introuvable : " + code + "."));
         // ⚠️ 2026-10-06 (§B4) — un dossier payant ne se retire qu'avec un reçu validé de l'entreprise (au moins un lot : le dossier
         // est commun). Rien n'est inscrit au registre en cas de refus.

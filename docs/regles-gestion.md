@@ -2372,6 +2372,10 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     « non daté ». La pièce « Calendrier annuel de passation mis à jour et signé » n'est plus demandée au dossier conduit dans
     l'application, ni la pièce « Canevas de rapport d'évaluation » (le rapport est produit par l'application ; un canevas par
     sous-type viendra des modèles du pilote) ; le dossier saisi hors application garde les deux (V115).
+- CCAG et descriptif des travaux [Action] ⚠️ **Décisions du pilote (2026-10-15 ; V119)**
+  - Le CCAG n'est plus une pièce exigée : le dossier d'appel d'offres complet le recopie (partie 2.3, CCAG de la catégorie).
+  - Le **descriptif technique et les plans** d'un marché de travaux restent de vrais documents : une pièce du dossier d'appel
+    d'offres (plusieurs fichiers), exigée à sa soumission, et remise aux candidats avec les documents du DAO.
 - Publication de l'AGPM — **déposée une fois, sur le plan** [Action] ⚠️ **Décision du pilote (2026-10-15 ; V118)**
   - La publication de l'AGPM (le journal) vaut pour tout le plan : la PRMP ou son UGPM la dépose sur le plan contrôlé (PV signé
     favorable), avec le nom du journal, son numéro, la date de parution et la référence de l'AGPM. Une nouvelle publication

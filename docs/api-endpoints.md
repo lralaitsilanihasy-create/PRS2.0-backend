@@ -3330,6 +3330,22 @@ motif, ou **« non daté »** (plan soumis avant la règle du calendrier complet
 ligne (`GET …/pieces-exigees`), gardées au dossier saisi hors application (H4). Le **canevas par sous-type** (§B3) attend les modèles
 du pilote : le rapport d'évaluation reste sur le plan du guide.
 
+⚠️ **2026-10-15 — CCAG et descriptif des travaux** (demande front `demande-backend-2026-10-15-ccag-descriptif-travaux.md` ; **V119** ;
+décisions du pilote du 15/10 ; arbitrage de l'utilisateur au backend : pièce du dossier, servie aux candidats).
+- **§B1** : la pièce `CCAG` n'est plus exigée (`OBLIGATOIRE = false` à la liste de la famille DMC ; aucun sous-type ne l'associait).
+  Un dossier qui l'avait jointe la garde.
+- **§B2 — déjà livré le 06/10** : le DAO complet recopie en partie **2.3** le CCAG de la catégorie (textes fixes de l'ARMP
+  `modeles/dao-fixes/{TRAVAUX|FOURNITURES_SERVICES|PRESTATIONS_INTELLECTUELLES}-CCAG.docx`). **H1 sans objet** : les trois textes sont au
+  serveur, aucun avertissement à servir. Sans Word (DAO complet non assemblé), les documents séparés n'ont pas le CCAG.
+- **§B3** : nouvelle pièce **`DESCRIPTIF_PLANS`** « Descriptif technique et plans des travaux », exigée (obligatoire, sans condition) pour
+  la catégorie `TRAVAUX` de `DAOO`, `DAOOI`, `DAOOPREQUAL`, `DAOR`, `DAORI` : le dossier ne se soumet pas sans elle. Plusieurs fichiers
+  admis (PDF, JPEG, PNG, comme toute pièce). **H2** : ses fichiers sont **servis aux candidats** avec les documents du DAO
+  (`GET /api/procedures-en-ligne/{idDmc}/documents`, `code` = nom du fichier, intitulé « Descriptif technique et plans des travaux —
+  <fichier> ») et se retirent comme eux (`…/documents/{code}`, inscrit au registre des retraits) ; en rectification, seuls les fichiers
+  de la version corrigée. Le Word des spécifications techniques de la fiche reste inséré en partie 2.2 du DAO complet.
+- **H3**, **H4** confirmées : `CCTP`, l'estimation et la garantie de soumission de la famille restent (sous-type `DP`) ; les modèles
+  `C1`/`C2` attendent toujours les modèles officiels.
+
 ⚠️ **2026-10-15 — publication de l'AGPM déposée sur le plan** (demande front `demande-backend-2026-10-15-pieces-ami-agpm.md`, §B2 ; **V118** ;
 propositions du front validées par le pilote le 15/10 ; arbitrages de l'utilisateur au backend : H1 numéro et date figés, H2 filiation).
 

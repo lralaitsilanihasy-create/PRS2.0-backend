@@ -56,6 +56,8 @@ import cnm.prs.service.RemiseElectronique;
  */
 class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
 
+    @org.springframework.beans.factory.annotation.Autowired private cnm.prs.repository.PieceJointeDossierRepository pieceJointeDossierRepository;
+
     private static final String JSON = MediaType.APPLICATION_JSON_VALUE;
     private static final String AVERTISSEMENT = "La plateforme n'accepte pour l'instant que la signature simple : la procédure "
             + "ne pourra pas s'ouvrir en ligne.";
@@ -594,6 +596,54 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     /** L'avis spécifique imprimé (la procédure est lancée), avec sa date de publication. */
+    @Test
+    @DisplayName("V119 (§B3, H2) : le descriptif technique et les plans joints au dossier de la fiche sont servis avec le DAO et se retirent "
+            + "(inscrits au registre) ; en rectification, seuls les fichiers corrigés")
+    void descriptifEtPlans() throws Exception {
+        poserAvis();
+        cnm.prs.entity.TypePieceJointe type = typePieceJointeRepository.findFirstByCode("DESCRIPTIF_PLANS").orElseGet(() -> {
+            cnm.prs.entity.TypePieceJointe t = typePieceJointeRepository.findById(seedTypePiece("Descriptif technique et plans des travaux",
+                    false, null, 0)).orElseThrow();
+            t.setCode("DESCRIPTIF_PLANS");
+            return typePieceJointeRepository.save(t);
+        });
+        cnm.prs.entity.Dossier dossier = dossierLoc(97700, "PV_SIGNE", "ANT", "PRMP001");
+        dossier.setIdTypeDossier("DMC");
+        dossier.setIdSousType("DAOO");
+        dossier.setIdDmc(idDmc);
+        dossierRepository.save(dossier);
+        piece(97700, type.getIdTypePiece(), "plan-de-masse.pdf", null);
+        String url = "/api/procedures-en-ligne/" + idDmc + "/documents";
+        String docs = mvc.perform(get(url).header("Authorization", jetonCandidat)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(docs, "$[*].code")).contains("plan-de-masse.pdf").anyMatch(c -> c.startsWith("DPAO_"));
+        assertThat(JsonPath.<List<String>>read(docs, "$[?(@.code=='plan-de-masse.pdf')].intitule"))
+                .containsExactly("Descriptif technique et plans des travaux — plan-de-masse.pdf");
+        byte[] contenu = mvc.perform(get(url + "/plan-de-masse.pdf").header("Authorization", jetonCandidat)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(contenu, 0, 4)).isEqualTo("%PDF");
+        assertThat(retraitRepository.findByIdDmcOrderByDateRetraitAscIdRetraitAsc(idDmc)).extracting(r -> r.getCodeDocument())
+                .containsExactly("plan-de-masse.pdf");
+
+        piece(97700, type.getIdTypePiece(), "plan-de-masse-corrige.pdf", true);
+        docs = mvc.perform(get(url).header("Authorization", jetonCandidat)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(docs, "$[*].code")).contains("plan-de-masse-corrige.pdf").doesNotContain("plan-de-masse.pdf");
+    }
+
+    private void piece(int idDossier, int idType, String nom, Boolean corrigee) {
+        cnm.prs.entity.PieceJointeDossier p = new cnm.prs.entity.PieceJointeDossier();
+        p.setIdDossier(idDossier);
+        p.setIdTypePiece(idType);
+        p.setNomFichier(nom);
+        p.setContenu(pdfMinimal());
+        p.setFormat("PDF");
+        p.setTaille((long) pdfMinimal().length);
+        p.setDateUpload(LocalDateTime.now());
+        p.setApresLettreRenvoi(false);
+        p.setVersionCorrigee(corrigee);
+        pieceJointeDossierRepository.save(p);
+    }
+
     private void poserAvis() {
         DocumentFicheMarche d = new DocumentFicheMarche();
         d.setIdFiche(idFiche);
