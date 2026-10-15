@@ -80,11 +80,11 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         // 01/10 (DAO du MEN) : − 2 (B02-AU-07, B06-EO-07 passés au fichier des travaux)
         ChampFicheMarcheService.BilanImport cc = importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         assertThat(cc.rejets()).isEmpty();
-        assertThat(cc.crees()).hasSize(133);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D ; 30/09 : + B04-DS-11 (avis spécifique)
+        assertThat(cc.crees()).hasSize(136);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D ; 30/09 : + B04-DS-11 (avis spécifique) ; 15/10 : + B05-MT-03, B05-PM-06, B07-MA-07
 
         assertThat(champs("QUANTITE_FIXE")).hasSize(161);   // 29/09 : − 23 champs non imprimés retirés, − B08-PA-08 (§B6) ; 30/09 : + 6 B04-DS (avis)
         assertThat(champs("A_COMMANDE")).hasSize(164);   // 29/09 : − 25, − B08-PA-08 (§B6) ; 30/09 : + 6 B04-DS (avis)
-        assertThat(champs("CONTRAT_CADRE")).hasSize(177);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2) ; 30/09 : + B04-DS-11, + B05-GS-03 (avis)
+        assertThat(champs("CONTRAT_CADRE")).hasSize(160);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2) ; 30/09 : + B04-DS-11, + B05-GS-03 (avis) ; 15/10 (formulaire type) : − 20 + 3
         // ⚠️ 2026-09-29 (§B6 des champs non imprimés) — B08-PA-08 retiré des fournitures ; B08-FP-03, même avertissement
         // DELAI_PAIEMENT_75, reste servi au contrat-cadre.
         assertThat(champs("A_COMMANDE")).doesNotContain("B08-PA-08").contains("B05-TP-03");
@@ -94,7 +94,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     // ------------------------------------------------------------------ 2. rubriques servies par type (B4)
 
     @Test
-    @DisplayName("2 — Contrat-cadre : B07 et ses 8 rubriques, aucune rubrique partagée des fournitures ; quantité fixe et à "
+    @DisplayName("2 — Contrat-cadre : B07 et ses 7 rubriques, aucune rubrique partagée des fournitures ; quantité fixe et à "
             + "commande : aucune des 37 rubriques du contrat-cadre, pas de B07")
     void rubriquesParType() throws Exception {
         importer("referentiel-champs-fiche-marche-fournitures.csv");
@@ -102,7 +102,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         String cc = referentiel("CONTRAT_CADRE");
         assertThat(JsonPath.<List<String>>read(cc, "$.blocs[*].code")).contains("B07");
         assertThat(JsonPath.<List<String>>read(cc, "$.blocs[?(@.code=='B07')].rubriques[*].code"))
-                .containsExactly("B07-PS", "B07-FS", "B07-MA", "B07-TN", "B07-PI", "B07-DU", "B07-DE", "B07-PE");
+                .containsExactly("B07-PS", "B07-FS", "B07-MA", "B07-TN", "B07-DU", "B07-DE", "B07-PE");   // 15/10 : B07-PI vidée (B07-PI-01 retiré)
         List<String> rubriquesCc = JsonPath.read(cc, "$.blocs[*].rubriques[*].code");
         assertThat(rubriquesCc).contains("B04-RQ", "B09-AU", "B01-AC").doesNotContain("B02-AU", "B04-RO", "B09-AS");
 
@@ -168,16 +168,16 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         cadrage(idDmc, "{\"alloti\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"typePrix\":\"UNITAIRES\","
                 + "\"attributaires\":\"MONO\"}");
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B07").header("Authorization", tokenPrmp).contentType(JSON)
-                .content("{\"valeurs\":{\"B07-MA-01\":10,\"B07-MA-03\":\"Après remise en concurrence\"}}"))
+                .content("{\"valeurs\":{\"B07-MA-01\":10,\"B07-MA-07\":\"Moyenne des prix catalogue\"}}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.valeurs.B07-MA-01").value("10"))
-                .andExpect(jsonPath("$.valeurs.B07-MA-03").doesNotExist());
+                .andExpect(jsonPath("$.valeurs.B07-MA-07").doesNotExist());   // 15/10 : B07-MA-03 retiré, B07-MA-07 multi seul
         cadrage(idDmc, "{\"alloti\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"typePrix\":\"UNITAIRES\","
                 + "\"attributaires\":\"MULTI\"}");
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B07").header("Authorization", tokenPrmp).contentType(JSON)
-                .content("{\"valeurs\":{\"B07-MA-01\":10,\"B07-MA-03\":\"Après remise en concurrence\"}}"))
+                .content("{\"valeurs\":{\"B07-MA-01\":10,\"B07-MA-07\":\"Moyenne des prix catalogue\"}}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.valeurs.B07-MA-03").value("Après remise en concurrence"))
+                .andExpect(jsonPath("$.valeurs.B07-MA-07").value("Moyenne des prix catalogue"))
                 .andExpect(jsonPath("$.valeurs.B07-MA-01").doesNotExist());
 
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", null, Map.of("B05-MT-01", "250000000"));
@@ -353,13 +353,14 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         importer("referentiel-champs-fiche-marche-fournitures.csv");
         importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         String ref = referentiel("CONTRAT_CADRE");
-        List<String> facultatifs = List.of("B04-DS-02", "B04-DS-03", "B06-SC-01", "B06-SO-04", "B07-DU-01", "B07-MA-03",
-                "B07-PI-01", "B08-FP-03", "B10-RS-01");
+        // ⚠️ 2026-10-15 (formulaire type, §B1) — sept des neuf sont retirées : le document type écrit ce texte lui-même.
+        List<String> facultatifs = List.of("B06-SC-01", "B08-FP-03");
         for (String code : facultatifs) {
             assertThat(JsonPath.<List<Boolean>>read(ref, "$.champs[?(@.code=='" + code + "')].obligatoire")).as(code)
                     .containsExactly(false);
         }
-        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).doesNotContain("B07-DU-06").contains("B02-DC-01");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).doesNotContain("B07-DU-06").contains("B02-DC-01")
+                .doesNotContain("B04-DS-02", "B04-DS-03", "B06-SO-04", "B07-DU-01", "B07-MA-03", "B07-PI-01", "B10-RS-01");
 
         Long idDmc = creerDmc(9903);
         cadrage(idDmc, "{\"alloti\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"typePrix\":\"UNITAIRES\","

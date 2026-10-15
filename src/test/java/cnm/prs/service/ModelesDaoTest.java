@@ -69,7 +69,7 @@ class ModelesDaoTest {
     void chargement() {
         ModelesDao dao = new ModelesDao();
         assertThat(dao.modele("DPAC-CC").conditions()).hasSize(18);   // D4 : + CCAG-FOURNITURES, CCAG-TRAVAUX ; 01/10 : + MONTANT-LOTS/-UNIQUE
-        assertThat(dao.modele("AE-CC").conditions()).hasSize(53);   // 15/10 (articles vides, §B2) : - AVANCE, AVANCE-SOUS-TRAITANT
+        assertThat(dao.modele("AE-CC").conditions()).hasSize(56);   // 15/10 (articles vides, §B2) : - AVANCE, AVANCE-SOUS-TRAITANT ; 15/10 (formulaire type) : + ACTUALISATION, MINIMUM, SANS-MINIMUM
         // ⚠️ Lot D2 (2026-09-29) — les trois documents des fournitures, un modèle pour la quantité fixe et à commande.
         assertThat(dao.modele("DPAO-F").conditions()).hasSize(47);   // 03/10 (V62, pièces des fournitures) : + PIECES-OFFRE-LISTE/-TEXTE, PIECES-ADM, -ADM-LISTE/-TEXTE
         assertThat(dao.modele("AE-F").conditions()).hasSize(22);
@@ -195,6 +195,13 @@ class ModelesDaoTest {
                 "❏ Renoncer à percevoir une avance pour chacun des marchés subséquents.",
                 "interviendra dans les " + FormulairesCandidat.POINTILLES + " jours calendaires", "10.4 – Remboursement de l’avance",
                 "10.5 – Versement d’une avance au sous-traitant");
+        // ⚠️ 15/10 (formulaire type, §B3, §B4, §B5, Q2) — sans indice ni minimum, mono-attributaire : la phrase
+        // d'actualisation tombe, le contrat-cadre est conclu sans minimum (et sans indemnité de résiliation), pas de clause
+        // du prix moyen ; l'en-tête de l'acheteur nomme la PRMP.
+        assertThat(ae).contains("conclu sans minimum ni maximum", "La résiliation n’ouvrira droit au profit du titulaire à aucune indemnité.",
+                        "Les prix des marchés sont fermes.", "Personne responsable des marchés publics : ")
+                .doesNotContain("formule suivante", "prix moyen du marché", "conclu avec un minimum");
+        assertThat(dpac).contains("Personne responsable des marchés publics : ", "Courriel : ");
     }
 
     @Test
@@ -231,6 +238,11 @@ class ModelesDaoTest {
                 "B07-MA-04", "Titulaires de tous les lots", "B05-PM-02", "OUI", "B05-PM-05", "OUI", "B05-PM-04", "5",
                 "B09-GP-01", "OUI", "B09-GP-04", "À partir de la date de mise en service", "B09-GP-03", "12",
                 "B04-SE-02", "https://depot.cnm.mg", "B04-DS-05#1", "100000", "B04-DS-05#2", "150000")));
+        // ⚠️ 15/10 (formulaire type, §B2, §B3, §B4, Q2)
+        fiche.getValeurs().putAll(v("B07-MA-07", "moyenne des prix catalogue publics des trois derniers mois",
+                "B05-PM-06", "indice des prix à la consommation (INSTAT)", "B05-MT-03", "5000000",
+                "B08-FP-01", "Les demandes de paiement sont présentées en trois exemplaires.",
+                "B08-FP-05", "après livraison de chaque commande"));
         fiche.setValeursPpm(new HashMap<>(v("B01-AC-13", "Appel d'offres restreint")));
         fiche.setValeursCadrage(new HashMap<>(v("B08-AV-02", "15", "B02-LV-05", "2")));
         String dpac = FormulairesCandidat.rendreModele("DPAC", null, fiche, champs(), dao.modele("DPAC-CC"), null).texte();
@@ -252,6 +264,15 @@ class ModelesDaoTest {
                     "12 mois à partir de la date de mise en service", "Le groupement d’entrepreneurs solidaire/ conjoint")
                     .contains("notifiée dans un délai")   // PRIX-CRITERE : multi et le prix est un critère (B05-PM-02 = OUI)
                     .doesNotContain("CCAP UNIQUE", "n’est pas alloti", "de l’admission de la prestation", "{{", "% %");
+            assertThat(ae).as("lot " + lot).contains(
+                    "Les règles de détermination du prix moyen du marché économique sont les suivantes : moyenne des prix catalogue",
+                    "supérieures de 30 % au prix moyen du marché économique", "délié de l’exclusivité contractuelle",
+                    "résilié à l’égard du ou des titulaires fautifs (décret n° 2019-1064 du 28 mai 2019, article 23).",
+                    "Pn = Po × (Indice n / Indice o)", "L’indice retenu est : indice des prix à la consommation (INSTAT).",
+                    "conclu avec un minimum de 5 000 000", "15.1– Présentation des demandes de paiement\n"
+                            + "Les demandes de paiement sont présentées en trois exemplaires.\n",
+                    "Le règlement des prestations se fera après livraison de chaque commande.")
+                    .doesNotContain("conclu sans minimum ni maximum", "aucune indemnité");
         }
     }
 
@@ -346,6 +367,7 @@ class ModelesDaoTest {
     private static Map<String, ChampFicheMarche> champs() {
         Map<String, ChampFicheMarche> m = new HashMap<>();
         for (String[] t : List.of(new String[] {"B04-CP-02", "DATE_HEURE"}, new String[] {"B05-MT-01", "MONTANT"},
+                new String[] {"B05-MT-03", "MONTANT"},
                 new String[] {"B08-AV-02", "POURCENTAGE"}, new String[] {"B05-PM-04", "POURCENTAGE"})) {
             ChampFicheMarche c = new ChampFicheMarche();
             c.setCode(t[0]);

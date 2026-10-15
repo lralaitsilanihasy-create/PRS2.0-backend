@@ -53,7 +53,13 @@ CONDITION	GARANTIE-CCAGB09-GP-01 = OUI et B09-GP-05 = OUI
 CONDITION	ASSURANCE-NONB09-AU-01 = NON
 CONDITION	ASSURANCE-OUIB09-AU-01 = OUI
 CONDITION	PRIX-CRITEREattributaires = MONO ou B05-PM-02 = OUI
+CONDITION	ACTUALISATIONB05-PM-06 renseigne
+CONDITION	MINIMUMB05-MT-03 renseigne
+CONDITION	SANS-MINIMUMB05-MT-03 vide
 CENTRE	{{B01-AC-01}}
+CENTRE	{{B01-AC-02}}
+CENTRE	Personne responsable des marchés publics : {{B01-AC-05}}
+CENTRE	Courriel : {{B01-AC-06}} – Téléphone : {{B01-AC-07}}
 CENTRE	{{B02-OB-01}}
 PARA	{{SI:NON-ALLOTI}}
 CENTRE	CONTRAT-CADRE Valant acte d’engagement et CCAP UNIQUE
@@ -170,6 +176,9 @@ PARA	{{FINSI:RC-CALENDRIER}}
 PARA	{{SI:MULTI}}
 PARA	Elle se fera dans les conditions précisées dans le règlement de la consultation propre à chaque marché à lancer, et sur la base des critères et sous-critères pondérés suivants: {{B07-MA-06}}
 PARA	Les titulaires du contrat-cadre devront déposer une offre à chaque remise en concurrence des marchés subséquents fondés sur le contrat-cadre.
+PARA	Les règles de détermination du prix moyen du marché économique sont les suivantes : {{B07-MA-07}}
+PARA	Au cas où, après deux mises en concurrence ayant donné lieu à la présentation d’offres supérieures de 30 % au prix moyen du marché économique, déterminé selon les règles ci-dessus, l’acheteur public est, pour cet achat, délié de l’exclusivité contractuelle dont bénéficient les titulaires du contrat-cadre et peut procéder à cet achat en recourant à une mise en concurrence en dehors du contrat-cadre.
+PARA	En cas d’absence répétée d’offres raisonnables, le contrat-cadre est résilié à l’égard du ou des titulaires fautifs (décret n° 2019-1064 du 28 mai 2019, article 23).
 PARA	{{FINSI:MULTI}}
 SOUS_TITRE	ARTICLE 5 – Les termes non couverts par le contrat-cadre
 PARA	{{SI:MONO}}
@@ -250,7 +259,12 @@ PARA	{{SI:PENALITES-SUBSEQUENTS}}
 PARA	Les pénalités de retard seront fixées dans les marchés conclus sur la base du contrat-cadre.
 PARA	{{FINSI:PENALITES-SUBSEQUENTS}}
 SOUS_TITRE	ARTICLE 8 – Montant du contrat-cadre
+PARA	{{SI:SANS-MINIMUM}}
 PARA	Le montant du contrat-cadre, conclu sans minimum ni maximum, est estimé à : {{B05-MT-01}} H.T. et {{B05-MT-02}} T.T.C..
+PARA	{{FINSI:SANS-MINIMUM}}
+PARA	{{SI:MINIMUM}}
+PARA	Le montant du contrat-cadre, conclu avec un minimum de {{B05-MT-03}} H.T. et sans maximum, est estimé à : {{B05-MT-01}} H.T. et {{B05-MT-02}} T.T.C..
+PARA	{{FINSI:MINIMUM}}
 SOUS_TITRE	ARTICLE 9 – Prix - Contenu – Variation des marchés conclus sur la base du présent contrat-cadre
 SOUS_TITRE	9.1 – Prix des marchés
 PARA	{{SI:MONO-PU-BORDEREAU}}
@@ -287,10 +301,13 @@ PARA	Les prix sont réputés comprendre toutes les dépenses résultant de l’e
 SOUS_TITRE	9.3 – Variation des prix des marchés conclus sur la base du présent accord
 PARA	Les offres seront établies sur la base des conditions économiques en vigueur au mois correspondant au mois de remise des offres des marchés subséquents.
 PARA	Les prix des marchés sont fermes.
+PARA	{{SI:ACTUALISATION}}
 PARA	Si le bon de commande ou l’ordre de commencer les prestations intervient après l’expiration du délai de validité de l’offre du titulaire, les prix peuvent être actualisés au moyen de la formule suivante :
-PARA	Indice n P n = Po () Indice o
+PARA	Pn = Po × (Indice n / Indice o)
 PARA	Où Pn est le prix actualisé,
 PARA	Po est le prix des prestations au moment de la remise de l’offre, Indice n est le dernier indice connu au moment de l’actualisation, Indice o est le dernier indice connu au moment de la remise de l’offre.
+PARA	L’indice retenu est : {{B05-PM-06}}.
+PARA	{{FINSI:ACTUALISATION}}
 SOUS_TITRE	ARTICLE 10 – Clauses de financement et de sureté des marchés subséquents conclus sur la base du présent contrat-cadre
 SOUS_TITRE	10.1 – Versement d’une avance au(x) titulaire(s) des marchés conclus sur la base du présent accord
 PARA	Une avance sera accordée au(x) titulaire(s) des marchés conclus sur la base du contrat-cadre dans les conditions prévues à l’article 72 du code des marchés publics, sauf renonciation expresse de sa part figurant ci-dessous :
@@ -361,8 +378,9 @@ PARA	{{FINSI:GARANTIE-CCAG}}
 SOUS_TITRE	ARTICLE 15 – Modalités de facturation et de paiement des prestations objet des marchés subséquents conclus sur la base du présent contrat-cadre
 PARA	Si la durée ou les délais d’exécution des marchés subséquents conclus sur la base du présent contrat-cadre sont inférieurs à trois mois, les prestations seront réglées en une seule fois.
 SOUS_TITRE	15.1– Présentation des demandes de paiement
+PARA	{{B08-FP-01}}
 PARA	Les prestations qui ont données lieu à un commencement d’exécution du marché ouvrent droit à des acomptes.
-PARA	Le règlement des prestations se fera {{B08-FP-01}}.
+PARA	Le règlement des prestations se fera {{B08-FP-05}}.
 SOUS_TITRE	15.2 – Adresse de facturation
 PARA	Les demandes de paiement seront adressées par lettre recommandée avec accusé de réception à l’adresse suivante : {{B08-FP-02}}
 PARA	Outre les mentions légales, le décompte ou la facture est établi en un original et deux copies et devra comporter les mentions suivantes :
@@ -402,7 +420,9 @@ PARA	{{SI:NON-RECONDUCTIBLE}}
 PARA	La résiliation du contrat-cadre pourra être prononcée sans faute du titulaire :
 PARA	– {{B10-RS-02}} mois avant la date anniversaire de la notification du contrat-cadre – pour un motif d’intérêt général.
 PARA	{{FINSI:NON-RECONDUCTIBLE}}
+PARA	{{SI:SANS-MINIMUM}}
 PARA	La résiliation n’ouvrira droit au profit du titulaire à aucune indemnité.
+PARA	{{FINSI:SANS-MINIMUM}}
 SOUS_TITRE	18.2 - Résiliation du contrat-cadre et des marchés subséquents conclus sur la base du présent contrat-cadre
 PARA	{{SI:CCAG-FOURNITURES}}
 PARA	La résiliation pourra être prononcée dans l’exécution des prestations des marchés subséquents conformément aux articles 24 à 33 du CCAG Fournitures

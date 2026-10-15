@@ -5219,6 +5219,46 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
   proposés que si `avance = OUI`) et s'impriment donc en pointillés. Le
   cadrage `avance` reste lu par les autres modèles (AE-F, CCAP-F, AE-T, CCAP-T, AE-PI, CPS-PI) et par le contrôle
   `AVANCE_MAX_20`.
+- ⚠️ **Formulaire du contrat-cadre face au document type** (demande front du 2026-10-15 « formulaire-type-contrat-cadre »,
+  plus Q2 de la demande « marches-subsequents » ; fichier de correspondance du contrat-cadre et
+  `docs/referentiel/2026-10-15-formulaire-type-contrat-cadre.sql`). Pas de migration, aucune route nouvelle.
+  - **§B1, 20 champs retirés** (`actif = non`, valeurs conservées). Aux emplacements proposés, le document type ARMP
+    (2019) porte un **texte fixe**, que DPAC-CC et AE-CC reprennent déjà tel quel (ADR-0011) :
+    - DPAC art. 3.2, 3.3, 3.4 et 6.2 §1-4 : `B04-DS-02`, `-03`, `-06`, `B06-SO-01` à `-04` (le §4 est rempli par
+      `B06-SO-05`) ;
+    - AE art. 4 (choix 2.1), 6, 7.1, 7.4 (choix 2), 10.4, 11.1-11.2, 12, 16, 18.1 : `B07-MA-03`, `B07-PI-01`,
+      `B07-DU-01`, `B07-DE-04`, `B08-FI-04`, `B03-SS-01/02`, `B09-EA-03`, `B09-AU-02`, `B10-RS-01`.
+
+    Les dates de notification (`B06-NO-01/02`) restent en blanc dans le document publié. `B08-FI-05` (avance au
+    sous-traitant) n'est plus lu depuis le §B2 ci-dessus. `B08-FP-03` (délai de paiement) **reste**, facultatif, parce
+    que la règle `DELAI_PAIEMENT_75` le lit.
+  - **§B2, AE art. 15.1.** « Le règlement des prestations se fera `{{B08-FP-05}}`. » imprime désormais le bon champ.
+    `B08-FP-05` devient **obligatoire** et il est servi aux deux catégories. `B08-FP-01` (présentation des demandes de
+    paiement) s'imprime en premier paragraphe sous le sous-titre 15.1.
+  - **§B3, `B05-PM-06` « Indice d'actualisation des prix »** (texte, facultatif). Condition `ACTUALISATION`
+    (`B05-PM-06 renseigne`) : l'art. 9.3 imprime alors la phrase d'actualisation, la formule
+    `Pn = Po × (Indice n / Indice o)`, ses définitions et « L'indice retenu est : … ». Champ vide : rien de tout cela.
+    Le type dit l'actualisation facultative pour les fournitures et services courants.
+  - **§B4, `B05-MT-03` « Minimum du contrat-cadre »** (montant HT, facultatif, `MONTANT_POSITIF`). Le décret
+    2019-1064 (art. 34) n'oblige pas l'acheteur à prévoir un minimum, sans l'interdire. Conditions `MINIMUM` et
+    `SANS-MINIMUM` :
+    - champ renseigné : l'art. 8 imprime « conclu avec un minimum de … H.T. et sans maximum », et l'art. 18.1 retire
+      « La résiliation n'ouvrira droit au profit du titulaire à aucune indemnité. » ;
+    - champ vide : le texte du type reste inchangé.
+
+    Le minimum se donne en valeur. La variante en quantité par article n'est pas faite.
+  - **§B5, en-tête de l'acheteur** (DPAC-CC et AE-CC). Sous l'autorité contractante : son adresse (`B01-AC-02`,
+    `tr_entite_contract.ADRESSE`, déjà portée par l'entité), « Personne responsable des marchés publics : `B01-AC-05` »
+    et « Courriel : `B01-AC-06` – Téléphone : `B01-AC-07` ». Aucun champ n'est créé. Une valeur absente s'imprime en
+    pointillés. ⚠️ Sur DBPRS20, l'adresse des entités n'est le plus souvent qu'une localité : c'est à l'Administrateur
+    de la compléter.
+  - **Q2, `B07-MA-07` « Règles de détermination du prix moyen du marché »** (texte long). Il est **obligatoire en
+    multi-attributaire** (`attributaires = MULTI`) et imprimé à l'art. 4, dans la partie multi-attributaire. Suivent
+    les deux clauses que l'article 23 du décret impose au contrat-cadre :
+    - la déliaison de l'exclusivité après deux mises en concurrence à plus de 30 % du prix moyen ;
+    - la résiliation à l'égard des titulaires fautifs en cas d'absence répétée d'offres raisonnables.
+  - AE-CC déclare désormais **56** conditions. Compteurs de la fiche du contrat-cadre des fournitures : 20 champs
+    retirés et 3 ajoutés.
 - **Refus au démarrage**, fichier nommé (`ModelesDao`, et désormais `ModelesCandidat`) : condition illisible ou déclarée
   deux fois, section utilisée sans être déclarée (hors noms historiques pour le candidat), `FINSI` qui ne ferme pas la
   dernière section ouverte, section non refermée, jeton `{{INT-…}}`.

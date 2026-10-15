@@ -536,6 +536,29 @@ déjà produits ne changent pas : une nouvelle version validée de la fiche les 
   - La réponse « avance » du cadrage n'efface plus cet article. Elle garde son effet dans les documents dont le modèle
     fait choisir l'acheteur (fournitures, travaux et prestations intellectuelles hors contrat-cadre).
 
+#### Le formulaire du contrat-cadre suit le document type (décision du pilote du 2026-10-15)
+
+⚠️ **La fiche du contrat-cadre ne demande que ce que le document type laisse à remplir.** C'est la règle du 30/09
+appliquée au contrat-cadre. Contrat : `docs/api-endpoints.md`, § *Le DAO complet sur les documents types officiels —
+lot D*.
+
+- **Ce que le type écrit lui-même ne se saisit plus.** Vingt informations sortent de la fiche, leurs valeurs gardées :
+  l'ouverture et l'analyse des offres, la langue, l'acquisition et la modification du dossier, les pièces
+  contractuelles, l'entrée en vigueur, la sous-traitance, le remboursement de l'avance, l'assurance, la résiliation sans
+  faute, et les dates de notification, qui restent en blanc dans le document publié.
+- **Le règlement des prestations** (après chaque commande, à chaque phase…) est demandé et s'imprime à sa place. La
+  présentation des demandes de paiement le précède.
+- **Trois informations s'ajoutent :**
+  - l'**indice d'actualisation** des prix (facultatif) : sans indice, les prix restent fermes, sans formule
+    d'actualisation ;
+  - le **minimum** du contrat-cadre (facultatif) : l'acheteur n'est pas tenu d'en prévoir un (décret n° 2019-1064,
+    art. 34). S'il en prévoit un, le contrat le dit, et la résiliation sans faute n'exclut plus l'indemnité ;
+  - en multi-attributaire, les **règles de détermination du prix moyen du marché** (obligatoires). Le contrat-cadre les
+    imprime avec les deux clauses de l'article 23 du décret : déliaison de l'exclusivité après deux remises en
+    concurrence à plus de 30 % de ce prix, et résiliation en cas d'absence répétée d'offres raisonnables.
+- **L'en-tête de l'acheteur** des données particulières et du contrat-cadre nomme l'autorité contractante, son
+  adresse, la PRMP, son courriel et son téléphone, repris de l'entité et du plan.
+
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 
 ⚠️ **Un marché de fournitures, à quantité fixe ou à commande, produit à son tour les documents types de l'ARMP
