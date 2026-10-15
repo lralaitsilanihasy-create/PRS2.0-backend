@@ -24,8 +24,8 @@ import cnm.prs.repository.DelaiParametreRepository;
  * d'offres ouvert national, art. 35-II), 45 (international) ou 10 (consultation ouverte, art. 41-II) — <strong>bloquant</strong> à la
  * validation de la fiche (contre la date de publication prévue : {@code B04-SE-17}, à défaut la prévision LANCEMENT du plan) et à
  * l'impression de l'avis (contre la date de publication saisie). Les autres modes (restreint, prestations intellectuelles, AMI,
- * pré-qualification, contrat-cadre) et le délai aménagé justifié au plan lisent un paramètre administrable : <strong>signalé</strong>,
- * jamais bloquant. Convention : le jour de départ n'est pas compté ({@code limite − départ ≥ requis}).
+ * pré-qualification) et le délai aménagé justifié au plan lisent un paramètre administrable : <strong>signalé</strong>,
+ * jamais bloquant. ⚠️ 2026-10-15 : le contrat-cadre suit le décret n° 2019-1064 (art. 10), bloquant comme la loi. Convention : le jour de départ n'est pas compté ({@code limite − départ ≥ requis}).
  */
 @Service
 public class DelaisPublicite {
@@ -73,7 +73,10 @@ public class DelaisPublicite {
             return parametre("PUBLICITE_DC_PI");
         }
         if ("CONTRAT_CADRE".equals(typeMarche)) {
-            return parametre("PUBLICITE_CONTRAT_CADRE");
+            // ⚠️ 2026-10-15 (marchés subséquents, §B0.1) — décret n° 2019-1064, art. 10 : 10 jours au moins par appel d'offres,
+            // 5 jours calendaires par consultation ; bloquants (n° 10 et 11 de la table), plus le paramètre de 30 jours.
+            return legal(m.contains("consultation") ? DelaisLegaux.PUBLICITE_CONTRAT_CADRE_CONSULTATION
+                    : DelaisLegaux.PUBLICITE_CONTRAT_CADRE_AO);
         }
         if (m.contains("manifestation")) {
             return parametre("PUBLICITE_AMI");

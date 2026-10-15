@@ -80,11 +80,11 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         // 01/10 (DAO du MEN) : − 2 (B02-AU-07, B06-EO-07 passés au fichier des travaux)
         ChampFicheMarcheService.BilanImport cc = importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         assertThat(cc.rejets()).isEmpty();
-        assertThat(cc.crees()).hasSize(136);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D ; 30/09 : + B04-DS-11 (avis spécifique) ; 15/10 : + B05-MT-03, B05-PM-06, B07-MA-07
+        assertThat(cc.crees()).hasSize(137);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D ; 30/09 : + B04-DS-11 (avis spécifique) ; 15/10 : + B05-MT-03, B05-PM-06, B07-MA-07, B02-DC-05 (durée, §B0.5)
 
         assertThat(champs("QUANTITE_FIXE")).hasSize(161);   // 29/09 : − 23 champs non imprimés retirés, − B08-PA-08 (§B6) ; 30/09 : + 6 B04-DS (avis)
         assertThat(champs("A_COMMANDE")).hasSize(164);   // 29/09 : − 25, − B08-PA-08 (§B6) ; 30/09 : + 6 B04-DS (avis)
-        assertThat(champs("CONTRAT_CADRE")).hasSize(160);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2) ; 30/09 : + B04-DS-11, + B05-GS-03 (avis) ; 15/10 (formulaire type) : − 20 + 3
+        assertThat(champs("CONTRAT_CADRE")).hasSize(161);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2) ; 30/09 : + B04-DS-11, + B05-GS-03 (avis) ; 15/10 (formulaire type) : − 20 + 3 ; + B02-DC-05
         // ⚠️ 2026-09-29 (§B6 des champs non imprimés) — B08-PA-08 retiré des fournitures ; B08-FP-03, même avertissement
         // DELAI_PAIEMENT_75, reste servi au contrat-cadre.
         assertThat(champs("A_COMMANDE")).doesNotContain("B08-PA-08").contains("B05-TP-03");
@@ -368,7 +368,8 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         String b08 = mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B08").header("Authorization", tokenPrmp)
                 .contentType(JSON).content("{\"valeurs\":{\"B08-FP-03\":90}}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(b08, "$.bilanControles.avertissements[*].regle")).contains("DELAI_PAIEMENT_75");
+        assertThat(JsonPath.<List<String>>read(b08, "$.bilanControles.avertissements[*].regle")).contains("DELAI_PAIEMENT_75",
+                "MULTI_ATTRIBUTAIRE_NON_OUTILLE");   // 15/10 : cadrage MULTI signalé tant que la tranche MT n'est pas livrée
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B08").header("Authorization", tokenPrmp)
                 .contentType(JSON).content("{\"valeurs\":{}}")).andExpect(status().isOk());
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", "FOURNITURES_SERVICES", Map.of("B05-MT-01", "250000000"));

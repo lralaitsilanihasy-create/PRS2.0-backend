@@ -18,15 +18,24 @@ package cnm.prs.dto;
  *                        l'impression, qui peut alors rendre 409 {@code DAO_COMPLET_ABSENT}) ; {@code SANS_ASSEMBLAGE} (pas
  *                        d'assemblage sur ce serveur : la règle ne s'applique pas) ; {@code null} sans version validée. N'entre pas
  *                        dans {@code disponible}.
+ * @param supportsMinimaux ⚠️ 2026-10-15 (demande front « marchés subséquents », §B0.2) — rappel, à l'impression, des supports où
+ *                        la mise en concurrence d'un <strong>contrat-cadre</strong> doit au minimum être publiée, en sus des
+ *                        art. 32-33 de la loi (décret n° 2019-1064, art. 9) ; liste vide hors contrat-cadre. N'entre pas dans
+ *                        {@code disponible} : les supports saisis à l'impression restent libres.
  */
 public record AvisDisponibiliteDto(boolean disponible, String raison, String idAvis, String statutPv,
-        String statutDossier, Integer idDossierSoumis, String daoComplet) {
+        String statutDossier, Integer idDossierSoumis, String daoComplet, java.util.List<String> supportsMinimaux) {
 
     public AvisDisponibiliteDto(boolean disponible, String raison, String idAvis, String statutPv, String statutDossier, Integer idDossierSoumis) {
-        this(disponible, raison, idAvis, statutPv, statutDossier, idDossierSoumis, null);
+        this(disponible, raison, idAvis, statutPv, statutDossier, idDossierSoumis, null, java.util.List.of());
     }
 
     public AvisDisponibiliteDto avecDaoComplet(String etat) {
-        return new AvisDisponibiliteDto(disponible, raison, idAvis, statutPv, statutDossier, idDossierSoumis, etat);
+        return new AvisDisponibiliteDto(disponible, raison, idAvis, statutPv, statutDossier, idDossierSoumis, etat, supportsMinimaux);
+    }
+
+    public AvisDisponibiliteDto avecSupportsMinimaux(java.util.List<String> supports) {
+        return new AvisDisponibiliteDto(disponible, raison, idAvis, statutPv, statutDossier, idDossierSoumis, daoComplet,
+                supports == null ? java.util.List.of() : supports);
     }
 }

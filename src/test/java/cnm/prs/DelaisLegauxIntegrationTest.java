@@ -69,19 +69,21 @@ class DelaisLegauxIntegrationTest extends CnmIntegrationTestSupport {
     @org.springframework.beans.factory.annotation.Autowired private cnm.prs.service.ChampFicheMarcheService champService;
 
     @Test
-    @DisplayName("GET /api/delais-legaux : les neuf délais de la loi ; GET /api/delais-parametres : les six délais semés actifs ; PUT par "
+    @DisplayName("GET /api/delais-legaux : les onze délais de la loi et du décret ; GET /api/delais-parametres : les six délais semés (le contrat-cadre désactivé, V121) ; PUT par "
             + "l'Administrateur seul (403 PRMP), 404 code inconnu, 400 valeur négative ou unité inconnue, un champ absent garde sa valeur")
     void delais() throws Exception {
         String legaux = mvc.perform(get("/api/delais-legaux").header("Authorization", tokenPrmp)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<Integer>>read(legaux, "$[*].numero")).containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9);
+        assertThat(JsonPath.<List<Integer>>read(legaux, "$[*].numero")).containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);   // 15/10 : + décret 2019-1064, art. 10
         assertThat(JsonPath.<List<String>>read(legaux, "$[?(@.bloquant==true)].code")).contains("PUBLICITE_AOO_NATIONAL", "ATTENTE_SIGNATURE")
                 .doesNotContain("AVIS_ATTRIBUTION");
         String parametres = mvc.perform(get("/api/delais-parametres").header("Authorization", tokenMembre)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(parametres, "$[*].code")).contains("PUBLICITE_AOR", "PUBLICITE_DC_PI", "PUBLICITE_AMI",
                 "PUBLICITE_CONTRAT_CADRE", "PUBLICITE_PREQUALIFICATION", "DELAI_AMENAGE");
-        assertThat(JsonPath.<List<Boolean>>read(parametres, "$[*].actif")).containsOnly(true);
+        // ⚠️ V121 (15/10) — le paramètre du contrat-cadre est désactivé : le décret 2019-1064 (art. 10) l'a remplacé.
+        assertThat(JsonPath.<List<Boolean>>read(parametres, "$[?(@.code=='PUBLICITE_CONTRAT_CADRE')].actif")).containsExactly(false);
+        assertThat(JsonPath.<List<Boolean>>read(parametres, "$[?(@.code!='PUBLICITE_CONTRAT_CADRE')].actif")).containsOnly(true);
 
         mvc.perform(put("/api/delais-parametres/PUBLICITE_AOR").header("Authorization", tokenPrmp).contentType(JSON).content("{\"valeur\":20}"))
                 .andExpect(status().isForbidden());

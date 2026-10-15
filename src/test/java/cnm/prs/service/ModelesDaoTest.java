@@ -205,6 +205,55 @@ class ModelesDaoTest {
     }
 
     @Test
+    @DisplayName("Durée du contrat-cadre (15/10, marchés subséquents §B0.5, décret 2019-1064 art. 19) : au-delà de 24 mois — en mois ou "
+            + "en années — bloquant sans justification, « ok » avec ; ≤ 24 mois ok ; aucune durée saisie : la règle attend")
+    void dureeContratCadre() {
+        List<ChampFicheMarche> champs = List.of(controle("B02-DC-01", "NOMBRE", "DUREE_CONTRAT_CADRE_MAX:MOIS"),
+                controle("B02-DC-02", "NOMBRE", "DUREE_CONTRAT_CADRE_MAX:PERIODE"),
+                controle("B07-DU-05", "NOMBRE", "DUREE_CONTRAT_CADRE_MAX:ANS"),
+                controle("B02-DC-05", "TEXTE_LONG", "DUREE_CONTRAT_CADRE_MAX:JUSTIFICATION"));
+        java.util.function.Function<Map<String, String>, cnm.prs.dto.BilanControlesDto> bilan =
+                v -> ControlesFicheMarche.bilan(champs, v, Map.of(), Map.of());
+        String regle = ControlesFicheMarche.DUREE_CONTRAT_CADRE_MAX;
+        assertThat(bilan.apply(v("B02-DC-01", "24", "B02-DC-02", "12")).ok()).extracting(c -> c.regle()).contains(regle);
+        assertThat(bilan.apply(v("B02-DC-01", "36", "B02-DC-02", "12")).bloquants())
+                .filteredOn(c -> regle.equals(c.regle())).singleElement()
+                .satisfies(c -> assertThat(c.champs()).containsExactly("B02-DC-01", "B02-DC-02", "B02-DC-05"))
+                .satisfies(c -> assertThat(c.message()).contains("36 mois", "art. 19"));
+        assertThat(bilan.apply(v("B02-DC-01", "24", "B07-DU-05", "3")).bloquants()).extracting(c -> c.regle()).contains(regle);   // 3 ans = 36 mois
+        assertThat(bilan.apply(v("B02-DC-01", "36", "B02-DC-05", "Investissements amortissables sur trois ans")).ok())
+                .filteredOn(c -> regle.equals(c.regle())).singleElement()
+                .satisfies(c -> assertThat(c.message()).contains("justifiée"));
+        cnm.prs.dto.BilanControlesDto vide = bilan.apply(Map.of());
+        assertThat(vide.ok()).extracting(c -> c.regle()).doesNotContain(regle);
+        assertThat(vide.bloquants()).extracting(c -> c.regle()).doesNotContain(regle);
+        // §B0.2 — le rappel des supports du décret (art. 9), servi en contrat-cadre seulement.
+        assertThat(AvisSpecifiqueService.supportsMinimaux("CONTRAT_CADRE")).hasSize(5).contains("Bureau du contrôle financier");
+        assertThat(AvisSpecifiqueService.supportsMinimaux("QUANTITE_FIXE")).isEmpty();
+        // Arbitrage du pilote sur B0 n° 3-4 : le cadrage multi-attributaire est signalé tant que la tranche MT n'est pas livrée.
+        String multi = ControlesFicheMarche.MULTI_ATTRIBUTAIRE_NON_OUTILLE;
+        assertThat(ControlesFicheMarche.bilan(champs, Map.of(), Map.of("attributaires", "MULTI"), Map.of()).avertissements())
+                .filteredOn(c -> multi.equals(c.regle())).singleElement()
+                .satisfies(c -> assertThat(c.bloc()).isEqualTo("B07"))
+                .satisfies(c -> assertThat(c.message()).contains("qu'un titulaire par lot"));
+        cnm.prs.dto.BilanControlesDto mono = ControlesFicheMarche.bilan(champs, Map.of(), Map.of("attributaires", "MONO"), Map.of());
+        assertThat(mono.avertissements()).extracting(c -> c.regle()).doesNotContain(multi);
+        assertThat(mono.bloquants()).extracting(c -> c.regle()).doesNotContain(multi);
+    }
+
+    private static ChampFicheMarche controle(String code, String type, String regle) {
+        ChampFicheMarche c = new ChampFicheMarche();
+        c.setCode(code);
+        c.setCodeRubrique(code.substring(0, 6));
+        c.setType(type);
+        c.setSource("SAISIE");
+        c.setControle(regle);
+        c.setActif(true);
+        c.setObligatoire(false);
+        return c;
+    }
+
+    @Test
     @DisplayName("Articles vides (15/10, §B1) : un titre d'article sans rien de retenu reçoit « Sans objet. » — avant l'article "
             + "suivant, avant un titre, en fin de document ; un sous-titre interne ou un tableau vide n'est pas un contenu")
     void articlesSansObjet() {

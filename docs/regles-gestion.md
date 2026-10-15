@@ -559,6 +559,27 @@ lot D*.
 - **L'en-tête de l'acheteur** des données particulières et du contrat-cadre nomme l'autorité contractante, son
   adresse, la PRMP, son courriel et son téléphone, repris de l'entité et du plan.
 
+#### La passation du contrat-cadre suit le décret n° 2019-1064 (décision du pilote du 2026-10-15)
+
+⚠️ **Le décret du 28 mai 2019, qui précise l'article 67 de la loi, s'applique au contrat-cadre lui-même**, avant tout marché
+subséquent. Contrat : `docs/api-endpoints.md`, §§ *Délais légaux* et *Le DAO complet sur les documents types officiels —
+lot D*.
+
+- **Délai de remise (art. 10)** : au moins **10 jours** entre la publication et la remise des soumissions par appel
+  d'offres, **5 jours calendaires** par consultation. La règle est **bloquante**, comme les délais de la loi, à la validation
+  de la fiche et à l'impression de l'avis. Elle remplace la valeur provisoire de 30 jours.
+- **Publicité (art. 9)** : en plus des supports de la loi, la mise en concurrence se publie au minimum sur le site de
+  l'acheteur et celui de l'ARMP, au bureau du contrôle financier, à la Chambre de Commerce, et par un média écrit ou
+  audiovisuel local. L'application le **rappelle** à l'impression de l'avis ; les supports restent saisis librement.
+- **Durée (art. 19)** : **deux ans au plus**, reconductions comprises. Au-delà, la fiche ne se valide qu'avec la
+  justification d'un cas exceptionnel, par exemple un objet ou des investissements amortissables sur plus de deux ans.
+- **Notification, contestation et avis d'attribution (art. 15)** : le décret reprend les délais de la loi déjà appliqués à
+  l'attribution, à savoir dix jours francs avant la signature et un avis d'attribution dans les trente jours de la
+  notification. L'attribution à **plusieurs titulaires** et la proposition d'infructuosité quand l'évaluation n'en dégage
+  qu'un (art. 17) attendent l'évaluation propre au contrat-cadre multi-attributaire. C'est la tranche « plusieurs
+  titulaires », placée par le pilote avant les marchés subséquents. D'ici là, une fiche multi-attributaire se valide avec
+  un **avertissement** : l'application ne désignera qu'un titulaire par lot.
+
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 
 ⚠️ **Un marché de fournitures, à quantité fixe ou à commande, produit à son tour les documents types de l'ARMP

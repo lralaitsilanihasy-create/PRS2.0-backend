@@ -5259,6 +5259,22 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
     - la résiliation à l'égard des titulaires fautifs en cas d'absence répétée d'offres raisonnables.
   - AE-CC déclare désormais **56** conditions. Compteurs de la fiche du contrat-cadre des fournitures : 20 champs
     retirés et 3 ajoutés.
+- ⚠️ **Durée du contrat-cadre : deux ans au plus, sauf justification** (demande front « marches-subsequents », §B0.5 ;
+  décret n° 2019-1064, art. 19 ; `docs/referentiel/2026-10-15-duree-contrat-cadre.sql`). C'est la règle **bloquante**
+  `DUREE_CONTRAT_CADRE_MAX` du bilan, bloc `B02`. Ses rôles :
+  - `MOIS` : `B02-DC-01`, durée maximale ;
+  - `PERIODE` : `B02-DC-02`, première période ;
+  - `ANS` : `B07-DU-05`, compté × 12 ;
+  - `JUSTIFICATION` : `B02-DC-05`, champ nouveau en texte long, facultatif, imprimé par aucun document (document maître
+    `AUCUN`), lu par la règle.
+
+  La plus longue des durées saisies au-delà de **24 mois** est bloquante tant que la justification est vide. Justifiée,
+  elle passe en `ok` (« justifiée »). Les `champs` du contrôle nomment les durées saisies et `B02-DC-05`. Sans aucune durée
+  saisie, la règle n'est pas évaluée. Cette règle tranche le « plafond de durée » qui attendait le juriste (28/09).
+- ⚠️ **Multi-attributaire signalé** (même demande, arbitrage du pilote du 15/10 sur B0 n° 3-4). L'avertissement
+  **`MULTI_ATTRIBUTAIRE_NON_OUTILLE`** apparaît au bilan dès que le cadrage porte `attributaires = MULTI`. Il est rangé en
+  bloc `B07`, sans champ, et **ne bloque jamais**. Son message : l'évaluation et l'attribution de l'application ne désignent
+  encore qu'un titulaire par lot. Il disparaîtra avec la tranche **MT** (plusieurs titulaires), qui précède MS-1.
 - **Refus au démarrage**, fichier nommé (`ModelesDao`, et désormais `ModelesCandidat`) : condition illisible ou déclarée
   deux fois, section utilisée sans être déclarée (hors noms historiques pour le candidat), `FINSI` qui ne ferme pas la
   dernière section ouverte, section non refermée, jeton `{{INT-…}}`.
@@ -5382,6 +5398,13 @@ PRMP et UGPM (403 sinon), au périmètre de la fiche. Réponse 200 :
 Les trois statuts « réserves levées » sont lus sur la navette réelle. Le vérificateur pose `OBSERVATIONS_LEVEES` à la
 levée. Pour un FAVR, la transmission à SIGMP n'est possible qu'après la levée, et l'archivage (`CLOTURE`) qu'après la
 transmission.
+
+⚠️ **2026-10-15 (demande front « marchés subséquents », §B0.2)** — champ `supportsMinimaux` (liste de textes, jamais `null`).
+Pour une fiche de **contrat-cadre**, il porte les cinq supports où, selon le décret n° 2019-1064 (art. 9), la mise en
+concurrence doit au minimum être publiée, en plus des art. 32-33 de la loi : le site web de l'acheteur public, celui de
+l'ARMP, le bureau du contrôle financier, celui de la Chambre de Commerce, et un média écrit ou audiovisuel local. La liste
+est vide pour les autres formes. C'est un **rappel** pour la saisie des `supports` à l'impression : il n'entre pas dans
+`disponible` et rien n'est exigé.
 
 #### `POST /api/fiches-marche/{idDmc}/avis-specifique`
 
@@ -8450,6 +8473,11 @@ Les **neuf délais de la loi n° 2016-055** (table en code `DelaisLegaux`, véri
 `PIECES_ATTRIBUTAIRE` 15 j (art. 20-I), 8 `AVIS_ATTRIBUTION` 30 j (art. 53, non bloquant), 9 `SANS_SUITE_AVIS` 5 j (art. 55-II).
 **Convention (H1)** : le jour de départ n'est pas compté, la date limite tombe au plus tôt le 31e (46e, 11e…) jour.
 
+⚠️ **2026-10-15 (demande front « marchés subséquents », §B0.1)** — la table compte **onze** délais. S'ajoutent deux délais du
+**décret n° 2019-1064** (art. 10), bloquants :
+- 10 `PUBLICITE_CONTRAT_CADRE_AO` : 10 jours au moins par appel d'offres ;
+- 11 `PUBLICITE_CONTRAT_CADRE_CONSULTATION` : 5 jours calendaires par consultation.
+
 #### `GET /api/delais-parametres` · `PUT /api/delais-parametres/{code}`
 
 Les délais **administrables** (`t_delai_parametre` : `code, valeur, unite, texte, actif, dateMaj, imActeur`), **signalés, jamais
@@ -8459,6 +8487,8 @@ bloquants** tant que le pilote ne les a pas confirmés. Semés actifs avec les v
 l'**Administrateur** : `{ valeur, unite, texte, actif }`, un champ absent garde sa valeur ; **404** code inconnu ; **400** nominatif
 (valeur négative, unité hors `JOURS` / `JOURS_FRANCS` / `JOURS_OUVRABLES` / `MOIS`, texte > 300). Un paramètre inactif n'est plus
 évalué. `FICHE_SE_DELAI_MIN_REMISE_JOURS` (V50, mode électronique, règle `SE_OUVERTURE_DEPOTS`) subsiste ; la règle de la loi prime.
+⚠️ **V121 (2026-10-15)** : `PUBLICITE_CONTRAT_CADRE` est **désactivé**, remplacé par les délais légaux n° 10 et 11 ; il reste
+listé pour l'historique et n'est plus lu.
 
 #### Le délai de publicité (règles 1-2 et 4)
 
@@ -8467,6 +8497,10 @@ prix ouverte) → 10 j (loi), « appel d'offres ouvert » → 30 j (loi) ; prest
 `PUBLICITE_CONTRAT_CADRE`, « manifestation » → `PUBLICITE_AMI`, « restreint » → `PUBLICITE_AOR`, « qualification » →
 `PUBLICITE_PREQUALIFICATION`, ligne du plan à **délai aménagé justifié** → `DELAI_AMENAGE` (paramètres, signalés) ; gré à gré et
 achat direct : aucune. **La date limite** est le premier champ renseigné parmi `B04-LR-03`, `B04-OV-02`, `B04-CP-02`, `B04-LH-02`.
+⚠️ **2026-10-15 (§B0.1)** — le contrat-cadre ne lit plus `PUBLICITE_CONTRAT_CADRE`. Il suit le décret n° 2019-1064 (art. 10) :
+un mode « consultation » exige **5 jours** (n° 11), tout autre mode **10 jours** (n° 10). Ces délais sont **bloquants** à la
+validation (règle `DELAI_PUBLICITE`) et à l'impression de l'avis (409 `DELAI_PUBLICITE`). Les prestations intellectuelles gardent
+`PUBLICITE_DC_PI`.
 
 - **À la validation de la fiche** (bilan `POST /{idDmc}/controler`, règle **`DELAI_PUBLICITE`**, bloc `B04`) : le départ est la date de
   publication prévue `B04-SE-17` (H2, remise électronique), à défaut la **prévision LANCEMENT** du plan ; une date manquante : rien

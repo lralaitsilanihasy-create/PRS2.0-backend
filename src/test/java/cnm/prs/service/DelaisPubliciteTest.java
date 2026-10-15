@@ -23,9 +23,11 @@ class DelaisPubliciteTest {
     private final DelaisPublicite delais = new DelaisPublicite(repo);
 
     @Test
-    @DisplayName("Table de la loi : neuf délais numérotés 1 à 9, les trois de publicité bloquants (30 / 45 / 10 jours)")
+    @DisplayName("Table de la loi et du décret 2019-1064 : onze délais numérotés 1 à 11, les cinq de publicité bloquants (30 / 45 / 10 jours ; contrat-cadre 10 / 5)")
     void table() {
-        assertThat(DelaisLegaux.TABLE).hasSize(9).extracting(d -> d.numero()).containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9);
+        assertThat(DelaisLegaux.TABLE).hasSize(11).extracting(d -> d.numero()).containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+        assertThat(DelaisLegaux.par(DelaisLegaux.PUBLICITE_CONTRAT_CADRE_AO).orElseThrow().valeur()).isEqualTo(10);   // 15/10 : décret, art. 10
+        assertThat(DelaisLegaux.par(DelaisLegaux.PUBLICITE_CONTRAT_CADRE_CONSULTATION).orElseThrow().valeur()).isEqualTo(5);
         assertThat(DelaisLegaux.par(DelaisLegaux.PUBLICITE_AOO_NATIONAL).orElseThrow().valeur()).isEqualTo(30);
         assertThat(DelaisLegaux.par(DelaisLegaux.PUBLICITE_AOO_INTERNATIONAL).orElseThrow().valeur()).isEqualTo(45);
         assertThat(DelaisLegaux.par(DelaisLegaux.PUBLICITE_CONSULTATION).orElseThrow().valeur()).isEqualTo(10);
@@ -35,7 +37,8 @@ class DelaisPubliciteTest {
 
     @Test
     @DisplayName("Exigence par mode : AOO national 30 j (loi, bloquant), international 45 j, consultation 10 j ; restreint, PI, AMI, "
-            + "contrat-cadre, pré-qualification et délai aménagé → paramètre signalé (inactif ou absent : aucune exigence) ; "
+            + "pré-qualification et délai aménagé → paramètre signalé (inactif ou absent : aucune exigence) ; contrat-cadre : décret, 10 j "
+            + "par appel d'offres, 5 j par consultation, bloquant ; "
             + "gré à gré et achat direct : aucune")
     void exigences() {
         when(repo.findById("PUBLICITE_AOR")).thenReturn(Optional.of(new DelaiParametre("PUBLICITE_AOR", 15, "JOURS", "AOR", true, null, null)));
@@ -59,7 +62,11 @@ class DelaisPubliciteTest {
         assertThat(aor.bloquant()).isFalse();
         assertThat(aor.libelle()).isEqualTo("AOR");
         assertThat(delais.exigence("Appel d'offres ouvert", false, "PRESTATIONS_INTELLECTUELLES", "QUANTITE_FIXE").code()).isEqualTo("PUBLICITE_DC_PI");
-        assertThat(delais.exigence("Appel d'offres ouvert", false, "FOURNITURES_SERVICES", "CONTRAT_CADRE")).isNull();   // paramètre absent
+        DelaisPublicite.Exigence cc = delais.exigence("Appel d'offres ouvert", false, "FOURNITURES_SERVICES", "CONTRAT_CADRE");
+        assertThat(cc.code()).isEqualTo(DelaisLegaux.PUBLICITE_CONTRAT_CADRE_AO);   // 15/10 : le paramètre (absent ici) n'est plus lu
+        assertThat(cc.requis()).isEqualTo(10);
+        assertThat(cc.bloquant()).isTrue();
+        assertThat(delais.exigence("Consultation de prix ouverte", false, "FOURNITURES_SERVICES", "CONTRAT_CADRE").requis()).isEqualTo(5);
         assertThat(delais.exigence("Appel d'offres ouvert", true, "FOURNITURES_SERVICES", "QUANTITE_FIXE")).isNull();   // DELAI_AMENAGE inactif
         assertThat(delais.exigence("Gré à gré", false, "FOURNITURES_SERVICES", "QUANTITE_FIXE")).isNull();
         assertThat(delais.exigence("Achat Direct", false, null, null)).isNull();

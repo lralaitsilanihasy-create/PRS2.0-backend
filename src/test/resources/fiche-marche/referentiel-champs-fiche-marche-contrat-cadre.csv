@@ -6,10 +6,11 @@ B02-SG-03;Acte de nomination de la PRMP (nature, numéro, date);TEXTE;SAISIE;AE;
 B02-PC-01;Référence de l'article du code des marchés publics de la procédure choisie;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B02-PC-02;Rythme de passation des marchés subséquents;LISTE;SAISIE;DPAC;AE;CONTRAT_CADRE;;oui;;;Au fur et à mesure des besoins,Selon le calendrier fixé ci-après;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B02-PC-03;Calendrier de remise en concurrence des titulaires;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
-B02-DC-01;Durée maximale du contrat-cadre (mois);NOMBRE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
-B02-DC-02;Durée de validité du contrat-cadre (mois);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B02-DC-01;Durée maximale du contrat-cadre (mois);NOMBRE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;DUREE_CONTRAT_CADRE_MAX:MOIS;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B02-DC-02;Durée de validité du contrat-cadre (mois);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DUREE_CONTRAT_CADRE_MAX:PERIODE;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B02-DC-03;Contrat-cadre reconductible;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B02-DC-04;Conditions de reconduction de la période de validité;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B02-DC-05;Justification d'une durée supérieure à deux ans (décret n° 2019-1064, article 19);TEXTE_LONG;SAISIE;AUCUN;;CONTRAT_CADRE;;non;;DUREE_CONTRAT_CADRE_MAX:JUSTIFICATION;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B02-AL-02;Numéro et désignation des lots;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;alloti = OUI;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B02-AL-03;Contrat-cadre mono ou multi-attributaire;LISTE;CADRAGE;AE;DPAC;CONTRAT_CADRE;;non;;;;attributaires;;oui
 B03-TI-01;Dénomination sociale du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
@@ -78,7 +79,7 @@ B07-DU-01;Entrée en vigueur du contrat-cadre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADR
 B07-DU-02;Durée des marchés subséquents fixée dans le contrat-cadre;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B07-DU-03;Durée des marchés subséquents (jours);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B07-DU-04;Nombre de reconductions du contrat-cadre;NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
-B07-DU-05;Nombre d'années maximum du contrat-cadre, reconductions comprises;NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B07-DU-05;Nombre d'années maximum du contrat-cadre, reconductions comprises;NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;DUREE_CONTRAT_CADRE_MAX:ANS;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B07-DU-06;Durée totale du contrat-cadre, reconduit ou non (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
 B07-DE-01;Délais d'exécution des marchés subséquents uniques ou non fractionnés;LISTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;Fixés par l'autorité contractante,À l'initiative des candidats,Fixés dans les marchés subséquents;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B07-DE-02;Délai d'exécution fixé par l'autorité contractante;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX

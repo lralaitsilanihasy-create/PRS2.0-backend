@@ -47,6 +47,8 @@ import cnm.prs.enums.TypeChampFiche;
  * <tr><td>PIECES_OFFRE_EXIGEES (⚠️ V61)</td><td>TEXTE (B04-PI-01) — ou la liste des pièces OFFRE ; travaux seulement</td><td>bloquant</td></tr>
  * <tr><td>PIECES_EN_DOUBLE (⚠️ V61, retiré le 2026-10-07 : constat E1)</td><td>—</td><td>—</td></tr>
  * <tr><td>MATERIEL_EXIGE (⚠️ V60)</td><td>TEXTE (B03-QT-09) — ou la liste du matériel ; travaux seulement</td><td>bloquant</td></tr>
+ * <tr><td>DUREE_CONTRAT_CADRE_MAX (⚠️ 2026-10-15)</td><td>MOIS, PERIODE (mois), ANS (années), JUSTIFICATION (texte)</td><td>bloquant</td></tr>
+ * <tr><td>MULTI_ATTRIBUTAIRE_NON_OUTILLE (⚠️ 2026-10-15)</td><td>— (cadrage {@code attributaires = MULTI})</td><td>avertissement</td></tr>
  * </table>
  */
 public final class ControlesFicheMarche {
@@ -61,6 +63,18 @@ public final class ControlesFicheMarche {
     public static final String PENALITES_PLAFOND_15 = "PENALITES_PLAFOND_15";
     public static final String INTERETS_MORATOIRES_TAUX = "INTERETS_MORATOIRES_TAUX";
     public static final String DELAI_PAIEMENT_75 = "DELAI_PAIEMENT_75";
+    /**
+     * ⚠️ 2026-10-15 (demande front « marchés subséquents », §B0.5) — décret n° 2019-1064, art. 19 : la durée maximale du contrat-cadre
+     * ne peut excéder deux ans, sauf cas exceptionnels dûment justifiés (objet, investissements amortissables sur plus de deux ans).
+     */
+    public static final String DUREE_CONTRAT_CADRE_MAX = "DUREE_CONTRAT_CADRE_MAX";
+    static final int DUREE_CONTRAT_CADRE_MOIS = 24;
+    /**
+     * ⚠️ 2026-10-15 (demande front « marchés subséquents », arbitrage du pilote sur B0 n° 3-4) — tant que la tranche MT (plusieurs
+     * titulaires) n'est pas livrée, l'évaluation et l'attribution ne retiennent qu'un titulaire par lot : un cadrage multi-attributaire
+     * est signalé, jamais bloqué.
+     */
+    public static final String MULTI_ATTRIBUTAIRE_NON_OUTILLE = "MULTI_ATTRIBUTAIRE_NON_OUTILLE";
     /**
      * ⚠️ 2026-10-02 (demande front « référentiel des travaux routiers », §B2) — l'assurance décennale, exigée pour des
      * travaux de bâtiment seulement : le CCAP-T ne l'imprime que sous {@code BATIMENT}.
@@ -266,6 +280,8 @@ public final class ControlesFicheMarche {
         penalites(roles.get(PENALITES_PLAFOND_15), valeurs, plafondPenalites(categorie), avertissements, ok);
         interetsMoratoires(roles.get(INTERETS_MORATOIRES_TAUX), valeurs, avertissements, ok);
         delaiPaiement(roles.get(DELAI_PAIEMENT_75), valeurs, avertissements, ok);
+        dureeContratCadre(roles.get(DUREE_CONTRAT_CADRE_MAX), valeurs, bloquants, ok);
+        multiAttributaire(cadrage, avertissements);
         assuranceDecennale(roles.get(ASSURANCE_DECENNALE), valeurs, bloquants, ok);
         liquiditeDouble(roles.get(LIQUIDITE_DOUBLE), valeurs, nbLots, bloquants, ok);
         caMoyenne(roles.get(CA_MOYENNE), valeurs, nbLots, bloquants, ok);
@@ -1195,6 +1211,58 @@ public final class ControlesFicheMarche {
         }
     }
 
+    /**
+     * ⚠️ 2026-10-15 (§B0.5) — la plus longue des durées saisies (maximale et première période en mois, maximale en années) au-delà de
+     * {@value #DUREE_CONTRAT_CADRE_MOIS} mois exige la justification du décret ; sans aucune durée saisie, la règle attend.
+     */
+    private static void dureeContratCadre(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, List<Controle> bloquants,
+            List<Controle> ok) {
+        if (r == null) {
+            return;
+        }
+        List<String> champs = new ArrayList<>();
+        BigDecimal mois = null;
+        for (String role : List.of("MOIS", "PERIODE", "ANS")) {
+            ChampFicheMarche c = r.get(role);
+            BigDecimal v = c == null ? null : nombre(valeurs.get(c.getCode()));
+            if (v == null) {
+                continue;
+            }
+            champs.add(c.getCode());
+            BigDecimal enMois = "ANS".equals(role) ? v.multiply(BigDecimal.valueOf(12)) : v;
+            mois = mois == null || enMois.compareTo(mois) > 0 ? enMois : mois;
+        }
+        if (mois == null) {
+            return;
+        }
+        ChampFicheMarche justification = r.get("JUSTIFICATION");
+        String motif = justification == null ? null : valeurs.get(justification.getCode());
+        String bloc = r.values().iterator().next().codeBloc();
+        String duree = mois.stripTrailingZeros().toPlainString() + " mois";
+        if (mois.compareTo(BigDecimal.valueOf(DUREE_CONTRAT_CADRE_MOIS)) <= 0) {
+            ok.add(new Controle(DUREE_CONTRAT_CADRE_MAX, champs, bloc, "Durée du contrat-cadre ≤ deux ans (" + duree + ")."));
+        } else if (motif != null && !motif.isBlank()) {
+            champs.add(justification.getCode());
+            ok.add(new Controle(DUREE_CONTRAT_CADRE_MAX, champs, bloc, "Durée du contrat-cadre de " + duree
+                    + ", au-delà de deux ans : justifiée (décret n° 2019-1064, art. 19)."));
+        } else {
+            if (justification != null) {
+                champs.add(justification.getCode());
+            }
+            bloquants.add(new Controle(DUREE_CONTRAT_CADRE_MAX, champs, bloc, "Durée du contrat-cadre de " + duree
+                    + " : au-delà de deux ans, le décret n° 2019-1064 (art. 19) exige la justification d'un cas exceptionnel "
+                    + "(objet, investissements amortissables sur plus de deux ans)."));
+        }
+    }
+    /** ⚠️ 2026-10-15 — l'avertissement du cadrage multi-attributaire, en attendant la tranche MT (bloc B07, aucun champ). */
+    private static void multiAttributaire(Map<String, ?> cadrage, List<Controle> avertissements) {
+        if (cadrage == null || !"MULTI".equalsIgnoreCase(String.valueOf(cadrage.get("attributaires")))) {
+            return;
+        }
+        avertissements.add(new Controle(MULTI_ATTRIBUTAIRE_NON_OUTILLE, List.of(), "B07", "Contrat-cadre multi-attributaire : "
+                + "l'évaluation et l'attribution de l'application ne désignent encore qu'un titulaire par lot. La désignation de "
+                + "plusieurs titulaires viendra avec la tranche « plusieurs titulaires » ; d'ici là, elle se fait hors de l'application."));
+    }
     // ------------------------------------------------------------------ lectures
 
     /** Un nombre depuis une valeur normalisée ; {@code null} si absent ou illisible. */

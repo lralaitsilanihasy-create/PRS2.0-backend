@@ -968,7 +968,8 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
             case "DATE" -> LocalDate.of(2026, 1, 1).plusDays(40L * rang).toString();
             case "DATE_HEURE" -> LocalDate.of(2026, 1, 1).plusDays(40L * rang).toString() + "T10:00";   // V50
             case "URL" -> "https://exemple.mg/depot";   // V50
-            case "NOMBRE" -> 30;
+            // ⚠️ 2026-10-15 (marchés subséquents, §B0.5) — une durée de contrat-cadre reste sous les deux ans du décret 2019-1064.
+            case "NOMBRE" -> controle != null && controle.contains(cnm.prs.service.ControlesFicheMarche.DUREE_CONTRAT_CADRE_MAX) ? 1 : 30;
             case "MONTANT" -> 1000000;
             case "POURCENTAGE" -> 10;
             case "OUI_NON" -> "NON";

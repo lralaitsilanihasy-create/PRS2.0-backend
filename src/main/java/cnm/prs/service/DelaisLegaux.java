@@ -9,8 +9,12 @@ import cnm.prs.dto.DelaiLegalDto;
  * ⚠️ R6a (manuel révisé pour l'application, lot 2, §B1 ; arbitrage Q6 du pilote du 10/10 ; 2026-10-13) — les <strong>neuf délais de
  * la loi n° 2016-055</strong>, vérifiés dans le texte (version CNLEGIS) : une table en code, pas en base, parce que ce sont des valeurs
  * légales. Convention de décompte : le jour de départ n'est pas compté, la date limite tombe au plus tôt le 31e (46e, 11e…) jour.
- * Les autres délais (restreint, prestations intellectuelles, AMI, contrat-cadre, délai aménagé…) sont des paramètres administrables
+ * Les autres délais (restreint, prestations intellectuelles, AMI, pré-qualification, délai aménagé…) sont des paramètres administrables
  * ({@code t_delai_parametre}), signalés et non bloquants.
+ *
+ * <p>⚠️ 2026-10-15 (demande front « marchés subséquents », §B0.1) — deux délais du <strong>décret n° 2019-1064</strong> (art. 10, contrat-cadre)
+ * rejoignent la table, n° 10 et 11 : ce sont des valeurs réglementaires, confirmées par le pilote, et non plus le paramètre
+ * {@code PUBLICITE_CONTRAT_CADRE} (30 jours « à confirmer », désactivé par V121).</p>
  */
 public final class DelaisLegaux {
 
@@ -23,6 +27,9 @@ public final class DelaisLegaux {
     public static final String PIECES_ATTRIBUTAIRE = "PIECES_ATTRIBUTAIRE";
     public static final String AVIS_ATTRIBUTION = "AVIS_ATTRIBUTION";
     public static final String SANS_SUITE_AVIS = "SANS_SUITE_AVIS";
+    /** ⚠️ 2026-10-15 — décret n° 2019-1064, art. 10 : le contrat-cadre par appel d'offres, puis par consultation. */
+    public static final String PUBLICITE_CONTRAT_CADRE_AO = "PUBLICITE_CONTRAT_CADRE_AO";
+    public static final String PUBLICITE_CONTRAT_CADRE_CONSULTATION = "PUBLICITE_CONTRAT_CADRE_CONSULTATION";
 
     public static final String MINIMUM = "MINIMUM";
     public static final String MAXIMUM = "MAXIMUM";
@@ -59,7 +66,14 @@ public final class DelaisLegaux {
                     "non bloquant : alerte à J+20, tâche obligatoire avant la clôture du dossier de marché (lot 2, R6c)", false),
             new DelaiLegalDto(9, SANS_SUITE_AVIS, 5, "JOURS", MAXIMUM,
                     "Avis de l'organe de contrôle sur une déclaration sans suite", "saisine (dépôt des motifs)", "art. 55-II",
-                    "relance à J+5 ; blocage maintenu jusqu'à l'avis exprès (existant ; relance : lot 2, R6c)", true));
+                    "relance à J+5 ; blocage maintenu jusqu'à l'avis exprès (existant ; relance : lot 2, R6c)", true),
+            new DelaiLegalDto(10, PUBLICITE_CONTRAT_CADRE_AO, 10, "JOURS", MINIMUM,
+                    "Contrat-cadre par appel d'offres : publicité → remise de la soumission (candidature, offres technique et financière)",
+                    "date de publication de l'avis spécifique", "décret n° 2019-1064, art. 10",
+                    "bloquant : date limite < publication + 10 j refusée (fiche, impression de l'avis)", true),
+            new DelaiLegalDto(11, PUBLICITE_CONTRAT_CADRE_CONSULTATION, 5, "JOURS", MINIMUM,
+                    "Contrat-cadre par consultation : publicité → remise de la soumission", "date d'affichage de l'avis",
+                    "décret n° 2019-1064, art. 10", "bloquant : date limite < affichage + 5 j calendaires refusée (fiche, impression de l'avis)", true));
 
     private DelaisLegaux() {
     }

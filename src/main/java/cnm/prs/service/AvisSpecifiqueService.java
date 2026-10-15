@@ -136,7 +136,25 @@ public class AvisSpecifiqueService {
     @Transactional(readOnly = true)
     public AvisDisponibiliteDto disponibilite(Long idDmc) {
         exigerProfil();
-        return evaluer(idDmc, fiches.lire(idDmc), false).avecDaoComplet(etatDaoComplet(idDmc));
+        FicheMarcheDto courante = fiches.lire(idDmc);
+        return evaluer(idDmc, courante, false).avecDaoComplet(etatDaoComplet(idDmc))
+                .avecSupportsMinimaux(supportsMinimaux(courante.getTypeMarche()));
+    }
+
+    /**
+     * ⚠️ 2026-10-15 (demande front « marchés subséquents », §B0.2) — décret n° 2019-1064, art. 9 : en sus des art. 32-33 de la loi,
+     * la mise en concurrence d'un contrat-cadre se publie au minimum sur ces supports. Un rappel servi à la disponibilité ; rien
+     * n'est exigé à l'impression.
+     */
+    static final List<String> SUPPORTS_MINIMAUX_CONTRAT_CADRE = List.of(
+            "Site web de l'acheteur public",
+            "Site web de l'Autorité de Régulation des Marchés Publics",
+            "Bureau du contrôle financier",
+            "Bureau de la Chambre de Commerce",
+            "Média écrit ou audiovisuel local");
+
+    static List<String> supportsMinimaux(String typeMarche) {
+        return "CONTRAT_CADRE".equals(typeMarche) ? SUPPORTS_MINIMAUX_CONTRAT_CADRE : List.of();
     }
 
     /**
