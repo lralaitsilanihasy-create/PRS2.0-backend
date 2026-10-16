@@ -40,11 +40,28 @@ public class DaoCompletWord {
      * Une partie : une nouvelle section, ses titres (aucun : suite de la partie précédente), puis son fichier Word ({@code null} :
      * les titres seuls).
      */
-    public record Partie(List<Titre> titres, byte[] docx) {
+    public record Partie(List<Titre> titres, byte[] docx, boolean separateur, String partie) {
+
+        /** ⚠️ 2026-10-16 (charte, §B2) — une partie qui ouvre une section du sommaire (un titre de niveau 2) a sa page de séparation. */
+        public Partie(List<Titre> titres, byte[] docx) {
+            this(titres, docx, titres != null && titres.stream().anyMatch(t -> t.niveau() == 2), null);
+        }
     }
 
     /** Une ligne de la page de garde. */
-    public record LigneGarde(String texte, int taille, boolean gras) {
+    public record LigneGarde(String texte, int taille, boolean gras, boolean gauche) {
+
+        public LigneGarde(String texte, int taille, boolean gras) {
+            this(texte, taille, gras, false);
+        }
+    }
+
+    /**
+     * ⚠️ 2026-10-16 (charte, §B1-B2) — la présentation du dossier : la page de garde, le bloc des pages de séparation, l'en-tête
+     * courant (« DAO n° … » à gauche, l'objet à droite) et le pied courant (autorité, version de la fiche ; « page n / N » à droite).
+     */
+    public record Charte(List<LigneGarde> garde, List<LigneGarde> separateur, String titreSommaire, String enteteGauche, String enteteDroite,
+            String piedGauche, String piedCentre) {
     }
 
     public record Resultat(byte[] docx, byte[] pdf) {
@@ -66,7 +83,12 @@ public class DaoCompletWord {
     }
 
     /** Assemble ; {@link IllegalStateException} sur un échec (Word absent, délai dépassé, script en erreur). */
-    public synchronized Resultat assembler(List<LigneGarde> garde, String titreSommaire, String entete, List<Partie> parties) {
+    public Resultat assembler(List<LigneGarde> garde, String titreSommaire, String entete, List<Partie> parties) {
+        return assembler(new Charte(garde, List.of(), titreSommaire, entete, "", "", ""), parties);
+    }
+
+    /** ⚠️ 2026-10-16 (charte) — l'assemblage avec la présentation complète. */
+    public synchronized Resultat assembler(Charte charte, List<Partie> parties) {
         Path dossier = null;
         try {
             dossier = Files.createTempDirectory("dao-complet-");
@@ -84,6 +106,8 @@ public class DaoCompletWord {
                 Map<String, Object> p = new LinkedHashMap<>();
                 p.put("titres", parties.get(i).titres() == null ? List.of() : parties.get(i).titres());
                 p.put("fichier", "");
+                p.put("separateur", parties.get(i).separateur());
+                p.put("partie", parties.get(i).partie() == null ? "" : parties.get(i).partie());
                 if (parties.get(i).docx() != null) {
                     Path f = dossier.resolve(String.format("partie-%02d.docx", i));
                     Files.write(f, parties.get(i).docx());
@@ -102,9 +126,13 @@ public class DaoCompletWord {
             Path pdf = dossier.resolve("dao-complet.pdf");
             Map<String, Object> manifeste = new LinkedHashMap<>();
             manifeste.put("embleme", Files.exists(embleme) ? embleme.toAbsolutePath().toString() : "");
-            manifeste.put("garde", garde);
-            manifeste.put("titreSommaire", titreSommaire);
-            manifeste.put("entete", entete);
+            manifeste.put("garde", charte.garde());
+            manifeste.put("separateur", charte.separateur() == null ? List.of() : charte.separateur());
+            manifeste.put("titreSommaire", charte.titreSommaire());
+            manifeste.put("enteteGauche", nul(charte.enteteGauche()));
+            manifeste.put("enteteDroite", nul(charte.enteteDroite()));
+            manifeste.put("piedGauche", nul(charte.piedGauche()));
+            manifeste.put("piedCentre", nul(charte.piedCentre()));
             manifeste.put("parties", lignes);
             manifeste.put("docx", docx.toAbsolutePath().toString());
             manifeste.put("pdf", pdf.toAbsolutePath().toString());
@@ -133,6 +161,10 @@ public class DaoCompletWord {
         }
     }
 
+    private static String nul(String s) {
+        return s == null ? "" : s;
+    }
+
     private static byte[] concat(byte[] a, byte[] b) {
         byte[] out = new byte[a.length + b.length];
         System.arraycopy(a, 0, out, 0, a.length);
@@ -158,7 +190,9 @@ public class DaoCompletWord {
                 StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(Files.readAllBytes(f)));
                 return StandardCharsets.UTF_8;
             } catch (Exception e) {
-                return java.nio.charset.Charset.defaultCharset();
+                // ⚠️ 2026-10-16 — depuis Java 18 le jeu par défaut est UTF-8 : la console de PowerShell écrit dans sa page OEM.
+                return java.nio.charset.Charset.isSupported("IBM850") ? java.nio.charset.Charset.forName("IBM850")
+                        : java.nio.charset.StandardCharsets.ISO_8859_1;
             }
         }
     }

@@ -55,6 +55,38 @@ class DaoCompletPartiesTest {
     }
 
     @Test
+    @DisplayName("⚠️ 16/10 (charte, §B3) — avec un besoin : le bordereau en annexe 1 de l'AE ; en 2.2 les spécifications, le Word de la "
+            + "PRMP après, la liste générée (le document LF n'entre plus) ; travaux : bordereau des prix unitaires puis DQE")
+    void tableauxDuBesoin() {
+        SpecificationsFicheRepository specs = mock(SpecificationsFicheRepository.class);
+        SpecificationsFiche s = new SpecificationsFiche();
+        s.setContenu(new byte[] { 99 });
+        when(specs.findById(7)).thenReturn(Optional.of(s));
+        BesoinFiche besoin = mock(BesoinFiche.class);
+        cnm.prs.dto.ArticleBesoinDto a = new cnm.prs.dto.ArticleBesoinDto();
+        a.setOrdre(1);
+        a.setDesignation("Rame de papier");
+        a.setUnite("Rame");
+        a.setQuantite(java.math.BigDecimal.TEN);
+        a.setNumeroPrix("001");
+        a.setCaracteristiques(List.of());
+        when(besoin.lister(7)).thenReturn(List.of(a));
+        DaoCompletService service = new DaoCompletService(null, null, null, specs, null, besoin, null);
+        List<DaoCompletWord.Partie> p = service.parties(etat("FOURNITURES_SERVICES", "QUANTITE_FIXE"), 7, List.of(doc("AE", "docx", null, 1),
+                doc("CCAP", "docx", null, 2), doc("LF", "docx", null, 3)));
+        String plan = p.stream().map(DaoCompletPartiesTest::titres).collect(Collectors.joining(" / "));
+        assertThat(plan).contains("2:2.1. - Acte d'Engagement / 3:Annexe 1 : Cadre du bordereau des prix / 2:2.2.",
+                "3:Spécifications techniques /  / 4:Annexe : Liste des fournitures et calendrier de livraison");
+        int i = p.stream().map(DaoCompletPartiesTest::titres).toList().indexOf("3:Spécifications techniques");
+        assertThat(p.get(i + 1).docx()).containsExactly(99);   // le Word de la PRMP suit le tableau des spécifications
+        assertThat(p).noneMatch(x -> x.docx() != null && x.docx().length == 1 && x.docx()[0] == 3);   // le document LF n'entre plus
+        assertThat(p.stream().filter(x -> x.titres().stream().anyMatch(t -> t.niveau() == 2)).allMatch(DaoCompletWord.Partie::separateur)).isTrue();
+        String travaux = service.parties(etat("TRAVAUX", "QUANTITE_FIXE"), 7, List.of(doc("AE", "docx", null, 1))).stream()
+                .map(DaoCompletPartiesTest::titres).collect(Collectors.joining(" / "));
+        assertThat(travaux).contains("3:Annexe : Bordereau des prix unitaires / 3:Annexe : Détail quantitatif et estimatif").doesNotContain("Cadre du bordereau");
+    }
+
+    @Test
     @DisplayName("Travaux : garanties B1 / B2 sous « B. », pas d'attestation du fabricant ; titres restés sans document reportés")
     void travaux() {
         SpecificationsFicheRepository specs = mock(SpecificationsFicheRepository.class);
@@ -87,7 +119,7 @@ class DaoCompletPartiesTest {
     }
 
     @Test
-    @DisplayName("Page de garde (C1) : ministère, entité, PRMP, UGPM, intitulé portant le mode, n°, objet, lots, « Lancé le », "
+    @DisplayName("Page de garde (C1 ; ⚠️ charte du 16/10, §B2) : ministère, entité, PRMP séparés par des tirets, intitulé portant le mode, n°, « Lancé le », objet, lots, "
             + "financement, imputation (sans les montants), compte")
     void garde() {
         FicheMarcheDto etat = etat("FOURNITURES_SERVICES", "QUANTITE_FIXE");
@@ -97,11 +129,26 @@ class DaoCompletPartiesTest {
                 "ENTITE", "Direction des affaires financières", "MODE", "Appel d'offres ouvert", "LOTS_DESIGNATION", "Ordinateurs ; Imprimantes",
                 "FINANCEMENT", "RPI", "BENEFICIAIRES", "00-71-0-110 – DAF (8 400 000 Ariary)", "COMPTES", "2321"))
                 .stream().map(DaoCompletWord.LigneGarde::texte).filter(t -> !t.isEmpty()).toList();
-        assertThat(l).containsExactly("MINISTÈRE DE L'ÉDUCATION NATIONALE", "DIRECTION DES AFFAIRES FINANCIÈRES",
-                "PERSONNE RESPONSABLE DES MARCHÉS PUBLICS", "UNITÉ DE GESTION DE LA PASSATION DES MARCHÉS",
-                "DOSSIER D'APPEL D'OFFRES OUVERT", "N° 001-DAOO/MEN/PRMP/Tvx-PI-2026", "Acquisition de matériels informatiques",
-                "Lot 1 : Ordinateurs", "Lot 2 : Imprimantes", "Lancé le …………………………", "Financement : RPI",
-                "Imputation administrative : 00-71-0-110 – DAF", "Compte : 2321");
+        // ⚠️ 16/10 (charte, §B2) — le bloc de l'autorité séparé par des tirets, « Lancé le », l'objet, puis financement et imputation
+        // budgétaire (les comptes du plan, B01-AC-17).
+        assertThat(l).containsExactly("MINISTÈRE DE L'ÉDUCATION NATIONALE", "-------------", "DIRECTION DES AFFAIRES FINANCIÈRES", "-------------",
+                "PERSONNE RESPONSABLE DES MARCHÉS PUBLICS", "-------------", "DOSSIER D'APPEL D'OFFRES OUVERT", "N° 001-DAOO/MEN/PRMP/Tvx-PI-2026",
+                "Lancé le …………………………", "Objet : Acquisition de matériels informatiques", "Lot 1 : Ordinateurs", "Lot 2 : Imprimantes",
+                "FINANCEMENT : RPI", "IMPUTATION BUDGETAIRE : 2321");
+        // La date de lancement saisie (B04-CP-01), à défaut celle de la validation ; une ligne non allotie : « en un lot unique ».
+        FicheMarcheDto cc = etat("FOURNITURES_SERVICES", "CONTRAT_CADRE");
+        cc.setValeurs(Map.of("B02-OB-03", "07-CC/MEF", "B04-CP-01", "2027-01-18"));
+        cc.setDesignationMarche("Fourniture d'articles de bureau");
+        DaoCompletWord.Charte charte = new DaoCompletService(null, null, null, null, null).charte(cc, Map.of("MINISTERE",
+                "Ministère de l'Économie et des Finances", "ENTITE", "Secrétariat général"), 3, java.time.LocalDateTime.of(2027, 1, 12, 9, 0));
+        assertThat(charte.garde()).extracting(DaoCompletWord.LigneGarde::texte).contains("Lancé le 18/01/2027",
+                "Objet : Fourniture d'articles de bureau, en un lot unique");
+        assertThat(charte.separateur()).extracting(DaoCompletWord.LigneGarde::texte).contains("SECRÉTARIAT GÉNÉRAL", "N° 07-CC/MEF",
+                "Objet : Fourniture d'articles de bureau").doesNotContain("FINANCEMENT : RPI");
+        assertThat(charte.enteteGauche()).isEqualTo("DAO n° 07-CC/MEF");
+        assertThat(charte.piedGauche()).isEqualTo("Secrétariat général — PRMP");
+        assertThat(charte.piedCentre()).isEqualTo("Fiche v3 validée le 12/01/2027");
+        assertThat(DaoCompletService.lance(cc, null)).isEqualTo("18/01/2027");
         assertThat(DaoCompletService.intitule("Consultation de prix", false)).isEqualTo("DOSSIER D'APPEL D'OFFRES");
         assertThat(DocumentsFicheMarcheService.nomFichier("DAO_COMPLET", "001-DAOO/MEN/PRMP/Tvx-PI-2026", 303279, 1, "pdf"))
                 .isEqualTo("DAO_COMPLET_001-DAOO-MEN-PRMP-Tvx-PI-2026_303279_v1.pdf");

@@ -58,14 +58,25 @@ public class DaoCompletService {
     private final DocumentFicheMarcheRepository documentRepository;
     private final SpecificationsFicheRepository specificationsRepository;
     private final ValeursPpmService valeursPpm;
+    /** ⚠️ 2026-10-16 (charte, §B3) — le besoin de la version validée et le taux de TVA, pour les tableaux imprimés. */
+    private final BesoinFiche besoin;
+    private final ParametreService parametres;
 
     public DaoCompletService(DaoCompletWord word, DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository,
             SpecificationsFicheRepository specificationsRepository, ValeursPpmService valeursPpm) {
+        this(word, documents, documentRepository, specificationsRepository, valeursPpm, null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DaoCompletService(DaoCompletWord word, DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository,
+            SpecificationsFicheRepository specificationsRepository, ValeursPpmService valeursPpm, BesoinFiche besoin, ParametreService parametres) {
         this.word = word;
         this.documents = documents;
         this.documentRepository = documentRepository;
         this.specificationsRepository = specificationsRepository;
         this.valeursPpm = valeursPpm;
+        this.besoin = besoin;
+        this.parametres = parametres;
     }
 
     public boolean actif() {
@@ -90,7 +101,8 @@ public class DaoCompletService {
         }
         try {
             Map<String, String> plan = plan(etat);
-            DaoCompletWord.Resultat r = word.assembler(garde(etat, plan), "SOMMAIRE GÉNÉRAL", entete(etat), parties(etat, fiche.getIdFiche(), docs));
+            DaoCompletWord.Resultat r = word.assembler(charte(etat, plan, fiche.getNumeroVersion(),
+                    fiche.getDateValidation() != null ? fiche.getDateValidation() : etat.getDateValidation()), parties(etat, fiche.getIdFiche(), docs));
             LocalDateTime maintenant = LocalDateTime.now();
             Integer idDetail = etat.getIdDetailCourant() != null ? etat.getIdDetailCourant() : etat.getIdDetail();
             // ⚠️ C5 (recette du 06/10) — le nom porte le numéro du DAO (B02-OB-03), à défaut la référence du plan.
@@ -132,7 +144,7 @@ public class DaoCompletService {
         } else {
             p.titre("1.1. - Instructions aux candidats", 2);
         }
-        p.document(fixe(categorie, "IC"));
+        p.document(CharteDao.fixe(fixe(categorie, "IC")));
         p.titre(pi ? "1.3. - Données Particulières des Instructions aux Candidats (DPIC)"
                 : cc ? "1.2. - Données Particulières d'Appel à Concurrence (DPAC)"
                         : "1.2. - Données Particulières de l'Appel d'Offres (DPAO)", 2);
@@ -145,7 +157,7 @@ public class DaoCompletService {
                 p.titre("A. - Modèles de fiches de renseignements", 3);
                 for (DocumentFicheMarche d : fiches) {
                     p.titre(FORMULAIRES.getOrDefault(d.getType(), d.getType()), 4);
-                    p.document(d.getContenu());
+                    p.document(CharteDao.partie(d.getContenu()));
                 }
             }
             if (!garanties.isEmpty()) {
@@ -155,7 +167,7 @@ public class DaoCompletService {
                 p.titre(travaux ? "B. - Modèles de garantie de soumission" : "C. - Modèles de garantie de soumission", 3);
                 for (DocumentFicheMarche d : garanties) {
                     p.titre((travaux ? GARANTIES_TRAVAUX : GARANTIES_FOURNITURES).getOrDefault(d.getType(), d.getType()), 4);
-                    p.document(d.getContenu());
+                    p.document(CharteDao.partie(d.getContenu()));
                 }
             }
         }
@@ -170,7 +182,23 @@ public class DaoCompletService {
             if (parLot && d.getLot() != null) {
                 p.titre("Lot " + d.getLot(), 3);
             }
-            p.document(d.getContenu());
+            p.document(CharteDao.partie(d.getContenu()));
+        }
+        // ⚠️ 2026-10-16 (charte, §B3) — les tableaux du besoin : le bordereau en annexe 1 de l'acte d'engagement ; en travaux, le
+        // bordereau des prix unitaires puis le détail quantitatif et estimatif.
+        Tableaux t = tableaux(etat, idFiche);
+        if (travaux) {
+            if (t.bpu() != null) {
+                p.titre("Annexe : Bordereau des prix unitaires", 3);
+                p.document(t.bpu());
+            }
+            if (t.dqe() != null) {
+                p.titre("Annexe : Détail quantitatif et estimatif", 3);
+                p.document(t.dqe());
+            }
+        } else if (t.bordereau() != null) {
+            p.titre("Annexe 1 : Cadre du bordereau des prix", 3);
+            p.document(t.bordereau());
         }
         p.titre("2.2. - Cahier des Prescriptions Spéciales", 2);
         List<DocumentFicheMarche> ccap = choisir(word, List.of("CCAP"));
@@ -180,22 +208,81 @@ public class DaoCompletService {
             p.documents(ccap);
         }
         byte[] specifications = specificationsRepository.findById(idFiche).map(s -> s.getContenu()).orElse(null);
-        List<DocumentFicheMarche> lf = choisir(word, List.of("LF"));
-        if (specifications != null || !lf.isEmpty()) {
+        // ⚠️ 2026-10-16 (charte, §B3) — avec un besoin, la liste des fournitures est le tableau généré (le document LF, produit à part,
+        // n'entre plus au DAO) ; le Word joint par la PRMP suit le tableau des spécifications, il ne le remplace pas.
+        List<DocumentFicheMarche> lf = t.avecBesoin() ? List.of() : choisir(word, List.of("LF"));
+        if (specifications != null || !lf.isEmpty() || t.specifications() != null || t.liste() != null) {
             p.titre(pi ? "Termes de références" : "Spécifications techniques", 3);
+            if (t.specifications() != null) {
+                p.document(t.specifications());
+            }
             if (specifications != null) {
-                p.document(specifications);
+                p.document(specifications);   // ⚠️ charte (§B1) : le Word joint par la PRMP garde son contenu
+            }
+            if (t.liste() != null) {
+                p.titre("Annexe : Liste des fournitures et calendrier de livraison", 4);
+                p.document(t.liste());
             }
             for (DocumentFicheMarche d : lf) {
                 p.titre("Annexe : Liste des fournitures et calendrier de livraison", 4);
-                p.document(d.getContenu());
+                p.document(CharteDao.partie(d.getContenu()));
             }
         }
         p.titre("2.3. - Cahier des Clauses Administratives Générales" + (pi ? " applicable aux marchés publics de prestations intellectuelles"
                 : travaux ? " applicable aux marchés publics de travaux"
                         : " applicable aux marchés publics de fournitures et de prestations de services courantes"), 2);
-        p.document(fixe(categorie, "CCAG"));
+        p.document(CharteDao.fixe(fixe(categorie, "CCAG")));
         return p.fin();
+    }
+
+    /** ⚠️ 2026-10-16 (charte, §B3) — les tableaux du besoin produits pour la version, chacun {@code null} s'il ne l'est pas. */
+    record Tableaux(boolean avecBesoin, byte[] bordereau, byte[] specifications, byte[] liste, byte[] bpu, byte[] dqe) {
+        static final Tableaux AUCUN = new Tableaux(false, null, null, null, null, null);
+    }
+
+    /**
+     * Les tableaux du besoin de la version validée ({@code GET …/articles}), un tableau par lot dans l'ordre des lots du plan. Rien
+     * sans besoin (l'avertissement du bloc B12 suffit) ni en prestations intellectuelles. La liste des fournitures et le calendrier :
+     * appel d'offres de fournitures (quantité fixe ou à commandes) ; pour un contrat-cadre, seulement à marchés subséquents uniques
+     * non fractionnés dont le délai est fixé par l'autorité (condition {@code DELAI-AC} de l'AE-CC).
+     */
+    Tableaux tableaux(FicheMarcheDto etat, Integer idFiche) {
+        String categorie = categorie(etat);
+        if (besoin == null || idFiche == null || CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie)) {
+            return Tableaux.AUCUN;
+        }
+        List<cnm.prs.dto.ArticleBesoinDto> articles = besoin.lister(idFiche);
+        if (articles.isEmpty()) {
+            return Tableaux.AUCUN;
+        }
+        boolean cc = contratCadre(etat);
+        Map<String, String> valeurs = etat.getValeurs() == null ? Map.of() : etat.getValeurs();
+        TableauxBesoin.Contexte c = new TableauxBesoin.Contexte(TypeMarcheDao.A_COMMANDE.name().equals(etat.getTypeMarche()), cc, objet(etat),
+                lots(etat));
+        if (CategorieDao.TRAVAUX.name().equals(categorie)) {
+            return new Tableaux(true, null, null, null, TableauxBesoin.bpu(c, articles),
+                    TableauxBesoin.dqe(c, articles, parametres == null ? null : parametres.tauxTva()));
+        }
+        boolean liste = !cc || "Marchés uniques non fractionnés".equals(valeurs.get("B07-FS-01"))
+                && "Fixés par l'autorité contractante".equals(valeurs.get("B07-DE-01"));
+        return new Tableaux(true, TableauxBesoin.bordereau(c, articles), TableauxBesoin.specifications(c, articles),
+                liste ? TableauxBesoin.liste(c, articles, valeurs) : null, null, null);
+    }
+
+    /** Les lots du plan, avec leur intitulé ; une ligne non allotie n'en a qu'un, sans numéro. */
+    private List<TableauxBesoin.Lot> lots(FicheMarcheDto etat) {
+        int nb = etat.getNbLots() == null ? 1 : etat.getNbLots();
+        if (!LotsFiche.alloti(nb)) {
+            return List.of(new TableauxBesoin.Lot(null, null));
+        }
+        String designations = plan(etat).get("LOTS_DESIGNATION");
+        String[] parts = designations == null ? new String[0] : designations.split(" ; ");
+        List<TableauxBesoin.Lot> out = new ArrayList<>();
+        for (int i = 1; i <= nb; i++) {
+            String d = i <= parts.length ? parts[i - 1].trim().replaceFirst("(?i)^lot\\s*\\d+\\s*:\\s*", "") : "";
+            out.add(new TableauxBesoin.Lot(i, d));
+        }
+        return out;
     }
 
     /** Les parties en construction : les titres s'accumulent jusqu'au document qu'ils précèdent. */
@@ -203,23 +290,35 @@ public class DaoCompletService {
         private final List<DaoCompletWord.Partie> parties = new ArrayList<>();
         private List<DaoCompletWord.Titre> titres = new ArrayList<>();
 
+        /** ⚠️ 2026-10-16 (charte, §B2) — la partie du DAO en cours : rappelée sur la page de séparation d'une section qui ne l'ouvre pas. */
+        private String partieCourante;
+
         void titre(String texte, int niveau) {
             titres.add(new DaoCompletWord.Titre(texte, niveau));
+            if (niveau == 1) {
+                partieCourante = texte;
+            }
         }
 
         void document(byte[] docx) {
-            parties.add(new DaoCompletWord.Partie(titres, docx));
+            parties.add(partie(docx));
             titres = new ArrayList<>();
         }
 
+        private DaoCompletWord.Partie partie(byte[] docx) {
+            boolean separateur = titres.stream().anyMatch(t -> t.niveau() == 2);
+            boolean ouvre = titres.stream().anyMatch(t -> t.niveau() == 1);
+            return new DaoCompletWord.Partie(titres, docx, separateur, separateur && !ouvre ? partieCourante : null);
+        }
+
         void documents(List<DocumentFicheMarche> docs) {
-            docs.forEach(d -> document(d.getContenu()));
+            docs.forEach(d -> document(CharteDao.partie(d.getContenu())));
         }
 
         /** Des titres restés sans document (une section vide) forment une partie à eux seuls. */
         List<DaoCompletWord.Partie> fin() {
             if (!titres.isEmpty()) {
-                parties.add(new DaoCompletWord.Partie(titres, null));
+                parties.add(partie(null));
             }
             return parties;
         }
@@ -268,42 +367,102 @@ public class DaoCompletService {
      * imputation administrative, compte. Une valeur absente omet sa ligne ; « Lancé le » reste à compléter.
      */
     List<DaoCompletWord.LigneGarde> garde(FicheMarcheDto etat, Map<String, String> plan) {
+        return garde(etat, plan, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-16 (charte, §B2) — la page de garde des DAO réels, de haut en bas : le bloc de l'autorité centré, en capitales et
+     * séparé par des tirets (ministère, entité, PRMP) ; « DOSSIER D'APPEL D'OFFRES {mode} », « N° … », « Lancé le … » (la date de
+     * lancement {@code B04-CP-01} quand elle est saisie, à défaut celle de la validation) ; l'objet suivi des lots ; puis, à gauche,
+     * « FINANCEMENT » et « IMPUTATION BUDGETAIRE » (les comptes budgétaires du plan, {@code B01-AC-17}).
+     */
+    List<DaoCompletWord.LigneGarde> garde(FicheMarcheDto etat, Map<String, String> plan, LocalDateTime validation) {
         Map<String, String> p = plan == null ? Map.of() : plan;
+        List<DaoCompletWord.LigneGarde> l = new ArrayList<>(autorite(etat, p, validation, true));
+        vide(l);
+        ligne(l, p.get("FINANCEMENT") == null ? null : "FINANCEMENT : " + p.get("FINANCEMENT"), 11, true, true);
+        ligne(l, p.get("COMPTES") == null ? null : "IMPUTATION BUDGETAIRE : " + p.get("COMPTES"), 11, true, true);
+        return l;
+    }
+
+    /**
+     * Le bloc commun à la garde et aux pages de séparation (§B2) : autorité, intitulé du dossier, n°, « Lancé le », objet ; la garde
+     * y ajoute les lots.
+     */
+    private List<DaoCompletWord.LigneGarde> autorite(FicheMarcheDto etat, Map<String, String> p, LocalDateTime validation, boolean garde) {
         boolean pi = CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie(etat));
         List<DaoCompletWord.LigneGarde> l = new ArrayList<>();
-        ligne(l, majuscules(p.get("MINISTERE")), 12, true);
+        ligne(l, majuscules(p.get("MINISTERE")), 10, true);
+        tirets(l, p.get("MINISTERE") != null);
         // ⚠️ D1 (contre-recette du 06/10) — l'entité n'est imprimée que si elle diffère du ministère hors accents, casse et blancs.
         if (p.get("ENTITE") != null && !comparable(p.get("ENTITE")).equals(comparable(p.get("MINISTERE")))) {
-            ligne(l, majuscules(p.get("ENTITE")), 11, true);
+            ligne(l, majuscules(p.get("ENTITE")), 10, true);
+            tirets(l, true);
         }
-        ligne(l, "PERSONNE RESPONSABLE DES MARCHÉS PUBLICS", 11, true);
-        ligne(l, "UNITÉ DE GESTION DE LA PASSATION DES MARCHÉS", 11, true);
+        ligne(l, "PERSONNE RESPONSABLE DES MARCHÉS PUBLICS", 10, true);
+        tirets(l, true);
+        vide(l);
         vide(l);
         String mode = p.get("MODE");
         String intitule = intitule(mode, pi);
-        ligne(l, intitule, 20, true);
+        ligne(l, intitule, garde ? 15 : 12, true);
         if (mode != null && !intitule.contains(majuscules(mode))) {
             ligne(l, mode, 12, false);
         }
-        ligne(l, numero(etat) == null ? null : "N° " + numero(etat), 13, true);
+        ligne(l, numero(etat) == null ? null : "N° " + numero(etat), 12, true);
+        ligne(l, "Lancé le " + lance(etat, validation), 12, true);
         vide(l);
-        ligne(l, objet(etat), 13, true);
         String lots = p.get("LOTS_DESIGNATION");
-        if (lots != null && lots.contains(" ; ")) {
+        boolean alloti = lots != null && lots.contains(" ; ");
+        String objet = objet(etat);
+        ligne(l, objet == null ? null : "Objet : " + objet + (garde && !alloti ? ", en un lot unique" : ""), 12, true, true);
+        if (garde && alloti) {
             String[] parts = lots.split(" ; ");
             for (int i = 0; i < parts.length; i++) {
                 String d = parts[i].trim();
-                ligne(l, d.toLowerCase(Locale.FRENCH).startsWith("lot") ? d : "Lot " + (i + 1) + " : " + d, 11, false);
+                ligne(l, d.toLowerCase(Locale.FRENCH).startsWith("lot") ? d : "Lot " + (i + 1) + " : " + d, 11, false, true);
             }
         }
-        vide(l);
-        ligne(l, "Lancé le …………………………", 11, false);
-        vide(l);
-        ligne(l, p.get("FINANCEMENT") == null ? null : "Financement : " + p.get("FINANCEMENT"), 11, false);
-        String imputation = p.get("BENEFICIAIRES") == null ? null : p.get("BENEFICIAIRES").replaceAll("\\s*\\([^)]*\\)", "").trim();
-        ligne(l, imputation == null || imputation.isEmpty() ? null : "Imputation administrative : " + imputation, 11, false);
-        ligne(l, p.get("COMPTES") == null ? null : "Compte : " + p.get("COMPTES"), 11, false);
         return l;
+    }
+
+    /** « Lancé le » : {@code B04-CP-01} (date de lancement) quand elle est saisie, à défaut la date de validation. */
+    static String lance(FicheMarcheDto etat, LocalDateTime validation) {
+        String saisie = etat.getValeurs() == null ? null : etat.getValeurs().get("B04-CP-01");
+        if (saisie != null && !saisie.isBlank()) {
+            try {
+                return java.time.LocalDate.parse(saisie.trim().substring(0, Math.min(10, saisie.trim().length()))).format(JOUR);
+            } catch (RuntimeException e) {
+                return saisie.trim();
+            }
+        }
+        return validation == null ? "…………………………" : validation.format(JOUR);
+    }
+
+    /**
+     * ⚠️ 2026-10-16 (charte, §B1-B2) — la présentation : la garde, le bloc des pages de séparation, l'en-tête courant (« DAO n° … » à
+     * gauche, l'objet à droite) et le pied courant (l'autorité et la PRMP ; « Fiche v{n} validée le {date} » ; « page n / N »).
+     */
+    DaoCompletWord.Charte charte(FicheMarcheDto etat, Map<String, String> plan, Integer version, LocalDateTime validation) {
+        Map<String, String> p = plan == null ? Map.of() : plan;
+        boolean pi = CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie(etat));
+        String o = objet(etat);
+        if (o != null && o.length() > 70) {
+            o = o.substring(0, 67) + "…";
+        }
+        String autorite = p.get("ENTITE") != null ? p.get("ENTITE") : p.get("MINISTERE");
+        return new DaoCompletWord.Charte(garde(etat, p, validation), autorite(etat, p, validation, false), "SOMMAIRE GÉNÉRAL",
+                (pi ? "Dossier de consultation" : "DAO") + (numero(etat) == null ? "" : " n° " + numero(etat)), o == null ? "" : o,
+                (autorite == null ? "Autorité contractante" : autorite.trim()) + " — PRMP",
+                "Fiche v" + (version == null ? "?" : version) + (validation == null ? "" : " validée le " + validation.format(JOUR)));
+    }
+
+    private static final java.time.format.DateTimeFormatter JOUR = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    private static void tirets(List<DaoCompletWord.LigneGarde> l, boolean si) {
+        if (si) {
+            l.add(new DaoCompletWord.LigneGarde("-------------", 10, true));
+        }
     }
 
     /** « DOSSIER D'APPEL D'OFFRES OUVERT » : le mode dans l'intitulé quand il est un appel d'offres ; sinon l'intitulé seul. */
@@ -347,8 +506,12 @@ public class DaoCompletService {
     }
 
     private static void ligne(List<DaoCompletWord.LigneGarde> l, String texte, int taille, boolean gras) {
+        ligne(l, texte, taille, gras, false);
+    }
+
+    private static void ligne(List<DaoCompletWord.LigneGarde> l, String texte, int taille, boolean gras, boolean gauche) {
         if (texte != null && !texte.isBlank()) {
-            l.add(new DaoCompletWord.LigneGarde(texte.trim(), taille, gras));
+            l.add(new DaoCompletWord.LigneGarde(texte.trim(), taille, gras, gauche));
         }
     }
 

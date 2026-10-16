@@ -9518,6 +9518,73 @@ dossier, le serveur assemble un **`DAO_COMPLET`** en `.docx` et en `.pdf` (deux 
 - **Avertissement** au bilan de la fiche, non bloquant : **`SPECIFICATIONS_ABSENTES`** (bloc B14), en fournitures et services et
   en travaux, tant que la version n'a pas de fichier. Muet en prestations intellectuelles.
 
+#### ⚠️ 2026-10-16 — la charte des DAO générés (demande front « charte-dao »)
+
+La **présentation** du DAO complet suit désormais celle des DAO réels (MEF 6114 et 6213, PAOSITRA 297). Son **texte** et son
+ordre ne changent pas. Arbitrages du pilote du 16/10 : Arial, IC et CCAG en entier, tableaux du besoin imprimés, emblème
+national, travaux en deux tableaux, aucun champ nouveau. Pas de migration, pas de route nouvelle, `pom.xml` inchangé.
+
+- **Charte typographique** (§B1), appliquée en deux temps :
+  - **avant Word**, par `CharteDao` (POI), sur chaque partie produite et sur les textes fixes :
+    - Arial et noir partout, les polices de symboles exceptées (cases, puces) ;
+    - parties produites : titre du document 13 pt gras, **article** (« ARTICLE n… ») 11 pt gras sur filet bas de 0,5 pt,
+      **sous-article** 10,5 pt gras souligné, corps 10,5 pt, interligne 1,3, 1,8 mm après, tableaux 9,5 pt à filets noirs de
+      0,5 pt ;
+    - textes fixes de l'ARMP : Arial dans leurs styles, leurs listes et leurs runs, corps ramené à 10,5 pt.
+  - **dans Word** (`assembler-dao.ps1`) :
+    - marges 22 / 20 / 20 / 24 mm et style Normal de la charte (que prennent les styles homonymes des parties) ;
+    - titre 1 en article, titre 2 en sous-article ;
+    - titres du plan en Arial (partie 13 pt en capitales, section 12 pt centrée) ;
+    - **en-tête courant** 8,5 pt « DAO n° {B02-OB-03} » à gauche, l'objet à droite, filet bas ;
+    - **pied courant** 8,5 pt « {autorité} — PRMP », « Fiche v{n} validée le {date} », « page n / N » (continue), filet haut.
+  - Le **Word de spécifications joint par la PRMP** garde son contenu ; seuls ses styles homonymes sont ramenés à la charte.
+- **Page de garde** (§B2, §B5), sans en-tête ni pied :
+  - l'emblème national, puis le bloc de l'autorité centré en capitales, séparé par des tirets (ministère, entité, PRMP) ;
+  - « DOSSIER D'APPEL D'OFFRES {mode} », « N° … », « **Lancé le** … » (`B04-CP-01` saisie, à défaut la date de validation) ;
+  - « Objet : … », suivi des lots, ou de « en un lot unique » ;
+  - puis, à gauche, « FINANCEMENT : … » et « **IMPUTATION BUDGETAIRE** : … », les comptes budgétaires du plan (`B01-AC-17`).
+  - Les lignes UGPM, imputation administrative et compte ne sont plus imprimées.
+- **Pages de séparation** (§B2) : devant **chaque section du sommaire** (1.1 à 2.3), une page sans en-tête ni pied (première
+  page de section distincte). Elle porte le bloc de l'autorité, l'intitulé du dossier, le n°, « Lancé le », l'objet, puis la
+  partie et la section. Les titres « Partie DAO 1-2 » que lit le sommaire y restent posés ; les titres de niveau 3 et 4
+  suivent sur la page d'après, avec la partie.
+- **Tableaux du besoin** (§B3, `TableauxBesoin`), générés depuis le besoin de la **version validée** (`BesoinFiche.lister`) :
+  - un tableau par lot, dans l'ordre des lots du plan ; chaque lot sur une nouvelle page, sous « Lot k : {intitulé} » (rien
+    sur une ligne non allotie, l'objet en tête) ;
+  - **intitulés de colonnes au mot près**, en-tête gras sur gris `#E3E3E3` **répété sur chaque page**, ligne insécable ;
+  - colonnes de prix, de montant et du candidat vides ;
+  - **fournitures et services** :
+    - « Annexe 1 : Cadre du bordereau des prix » à la suite de l'acte d'engagement (2.1) : `N° · DESIGNATION DES ARTICLES ET
+      PRIX UNITAIRE EN TOUTES LETTRES · UNITE · QUANTITE · PRIX UNITAIRE · MONTANT EN ARIARY` (à commandes : `MIN · MAX` à la
+      place de `QUANTITE`). La désignation est « {désignation}, {article défini} {unité} à ….Ariary » (la rame, le paquet,
+      l'unité par défaut). Viennent ensuite « Montant de l'offre », « Arrêté le montant… », « Fait à…, le… », « Le candidat »,
+      et, pour un contrat-cadre, « Les quantités sont indicatives » ;
+    - en 2.2, sous « Spécifications techniques » : `N° · DESIGNATIONS · SPECIFICATIONS MINIMUMS REQUISES · PROPOSITIONS DU
+      CANDIDAT`, une caractéristique par ligne « libellé : exigence ». Le **Word de la PRMP suit le tableau** ;
+    - puis « Annexe : Liste des fournitures et calendrier de livraison » : `N° · Fournitures · Destination finale · Délai de
+      livraison au plus tard · Délai offert par le candidat`. La destination est `B09-LL-01` du lot, le délai `B09-DX-01` jours
+      « à compter du lendemain de la notification de l'ordre de service ». **Contrat-cadre** : pas de liste, sauf à marchés
+      subséquents uniques non fractionnés à délai fixé par l'autorité (`DELAI-AC`) : « Fixée par chaque marché subséquent »
+      et `B07-DE-02`. Avec un besoin, le document `LF` (toujours produit à part) n'entre plus au DAO ;
+  - **travaux** : à la suite de l'acte d'engagement, « Annexe : Bordereau des prix unitaires » (`N° prix · DESIGNATION DES
+    OUVRAGES ET PRIX UNITAIRE EN TOUTES LETTRES · UNITE · PRIX UNITAIRE EN CHIFFRES`, prix en lettres, sans quantité ; le
+    libellé du bordereau quand il est saisi), puis « Annexe : Détail quantitatif et estimatif » (`N° prix · DESIGNATION DES
+    OUVRAGES · UNITE · QUANTITE · PRIX UNITAIRE · MONTANT EN ARIARY`). Les mêmes lignes de série figurent en gras sur gris,
+    sans unité ; total HT, TVA (`FICHE_TAUX_TVA`), TTC ;
+  - **besoin vide**, ou prestations intellectuelles : aucun tableau.
+- **Lisibilité à la relecture** (§B4) :
+  - pas de césure ;
+  - un trait d'union entre deux lettres devient insécable (U+2011). L'import le ramène à « - », dans le texte d'origine comme
+    dans le texte normalisé ;
+  - paragraphe insécable, ligne de tableau insécable, en-tête de tableau répété.
+  - **Recette** (`DaoCompletWordTest.charte`, Word, en local) : un DAO de 40 articles sur deux lots, bordereau passant la page,
+    relu par l'import des articles. On retrouve **40 sur 40**, leur lot, leur quantité et leurs caractéristiques, sans écart.
+    Les polices imprimées sont Arial, symboles et formules exceptés.
+- **Versions déjà validées** (§B6) : leur DAO complet est gardé. La charte vaut pour les DAO assemblés après la livraison (pas de
+  migration de rattrapage).
+- **Pas encore** (second temps, lot distinct) : la même charte pour l'avis spécifique, les lettres d'invitation, le projet de
+  marché et les marchés subséquents.
+
 ### Le retrait du DAO après paiement des frais — V72 ⚠️ 2026-10-06
 
 Demande front `demande-backend-2026-10-06-retrait-apres-paiement.md` (décision du pilote du 06/10, « Voie B ») ; migration **V72**

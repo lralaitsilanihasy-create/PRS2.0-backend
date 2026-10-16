@@ -498,6 +498,20 @@ en un seul document*.
   (`SPECIFICATIONS_ABSENTES`) le rappelle, en fournitures et services et en travaux.
 - **Condition technique** : l'assemblage se fait par Microsoft Word sur le serveur. Sans Word, la validation passe et les
   documents séparés restent servis comme avant.
+- ⚠️ **Depuis le 16/10 : une charte unique** (demande front « charte-dao », arbitrages du pilote du 16/10). Le DAO complet a la
+  présentation des DAO réels, sans que son **texte** change : il a une valeur juridique, et c'est lui que l'import relit.
+  - Arial pour tout le dossier, en noir.
+  - Une page de garde avec l'emblème national, l'autorité, le n°, la date de lancement, l'objet, le financement et
+    l'imputation budgétaire.
+  - Une page de séparation devant chaque section du sommaire.
+  - Un en-tête et un pied communs à toutes les pages courantes.
+  - **Les tableaux du besoin sont imprimés dans le dossier** : le cadre du bordereau des prix, les spécifications techniques
+    et la liste des fournitures avec leur calendrier de livraison ; en travaux, le bordereau des prix unitaires puis le détail
+    quantitatif et estimatif. Les classeurs restent fournis pour la saisie des candidats. Le contrat-cadre n'imprime ni liste
+    ni calendrier, renvoyés à chaque bon de commande ou marché subséquent, sauf quand ses marchés subséquents uniques ont un
+    délai fixé par l'autorité.
+  - **Le dossier se relit** : un DAO produit par l'application, réimporté dans sa fiche, rend ses articles.
+  - La charte vaut pour les DAO assemblés après le 16/10 ; un DAO déjà produit est gardé.
 
 #### Le DAO complet sur les documents types officiels (lot D, demande front du 2026-09-28, feu vert du pilote)
 

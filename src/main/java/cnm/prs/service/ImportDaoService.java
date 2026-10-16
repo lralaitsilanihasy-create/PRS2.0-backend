@@ -209,6 +209,12 @@ public class ImportDaoService {
 
     /** ⚠️ Lot D4 (2026-09-30, §B6.3) — les mêmes unités TELLES QU'ÉCRITES (non normalisées), dans le même ordre. */
     public static List<String> paragraphesDOrigine(String nomFichier, byte[] contenu) {
+        // ⚠️ 2026-10-16 (charte, §B4) — le DAO généré rend insécables les traits d'union entre deux lettres (U+2011) : le texte
+        // d'origine les ramène à « - », pour qu'une valeur relue soit celle de la fiche.
+        return paragraphesBruts(nomFichier, contenu).stream().map(s -> s.replace('‑', '-')).toList();
+    }
+
+    private static List<String> paragraphesBruts(String nomFichier, byte[] contenu) {
         String nom = nomFichier == null ? "" : nomFichier.toLowerCase(Locale.ROOT);
         if (!nom.endsWith(".docx") && !nom.endsWith(".pdf")) {
             throw ImportRefuseException.format(MESSAGE_FORMAT);
