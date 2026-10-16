@@ -196,41 +196,51 @@ try {
         }
         $s.Footers.Item(1).PageNumbers.RestartNumberingAtSection = $false
     }
-    $h = $doc.Sections.Item(1).Headers.Item(1).Range
-    $h.Text = [string]$m.enteteGauche + "`t" + [string]$m.enteteDroite
-    $h.Font.Name = $police
-    $h.Font.Size = 8.5
-    $h.ParagraphFormat.Alignment = 0
-    $h.ParagraphFormat.SpaceAfter = 0
-    $h.ParagraphFormat.LineSpacingRule = 0
-    $h.ParagraphFormat.TabStops.ClearAll()
-    $h.ParagraphFormat.TabStops.Add([single]$largeur, 2) | Out-Null
-    $b = $h.ParagraphFormat.Borders.Item(-3)
-    $b.LineStyle = 1
-    $b.LineWidth = 4
-    $f = $doc.Sections.Item(1).Footers.Item(1).Range
-    $f.Text = [string]$m.piedGauche + "`t" + [string]$m.piedCentre + "`tpage "
-    $f.Font.Name = $police
-    $f.Font.Size = 8.5
-    $f.ParagraphFormat.Alignment = 0
-    $f.ParagraphFormat.SpaceAfter = 0
-    $f.ParagraphFormat.LineSpacingRule = 0
-    $f.ParagraphFormat.TabStops.ClearAll()
-    $f.ParagraphFormat.TabStops.Add([single]($largeur / 2), 1) | Out-Null
-    $f.ParagraphFormat.TabStops.Add([single]$largeur, 2) | Out-Null
-    $b = $f.ParagraphFormat.Borders.Item(-1)
-    $b.LineStyle = 1
-    $b.LineWidth = 4
-    $r = $doc.Sections.Item(1).Footers.Item(1).Range
+    # ⚠️ R2 (recette du 16/10) — en-tête et pied en tableaux sans filets intérieurs : deux zones (« DAO n° … », objet) et trois
+    # (autorité, version, page). Une autorité au nom long ne chevauche plus la zone suivante, comme avec des tabulations.
+    function Zones($range, $textes, $largeurs, $bord) {
+        $range.Text = ''
+        $t = $range.Tables.Add($range, 1, $textes.Count)
+        $t.Borders.Enable = 0
+        $t.TopPadding = 0
+        $t.BottomPadding = 0
+        $t.LeftPadding = 0
+        $t.RightPadding = 0
+        $t.Range.Font.Name = $police
+        $t.Range.Font.Size = 8.5
+        $t.Range.ParagraphFormat.SpaceAfter = 0
+        $t.Range.ParagraphFormat.SpaceBefore = 0
+        $t.Range.ParagraphFormat.LineSpacingRule = 0
+        for ($i = 1; $i -le $textes.Count; $i++) {
+            $c = $t.Cell(1, $i)
+            $c.Width = [single]$largeurs[$i - 1]
+            $c.Range.Text = [string]$textes[$i - 1]
+            $c.Range.ParagraphFormat.Alignment = $(if ($i -eq 1) { 0 } elseif ($i -eq $textes.Count) { 2 } else { 1 })
+        }
+        $b = $t.Borders.Item($bord)
+        $b.LineStyle = 1
+        $b.LineWidth = 4
+        return $t
+    }
+    Zones $doc.Sections.Item(1).Headers.Item(1).Range @([string]$m.enteteGauche, [string]$m.enteteDroite) @(($largeur * 0.4), ($largeur * 0.6)) -3 | Out-Null
+    $t = Zones $doc.Sections.Item(1).Footers.Item(1).Range @([string]$m.piedGauche, [string]$m.piedCentre, 'page ') @(($largeur * 0.42), ($largeur * 0.36), ($largeur * 0.22)) -1
+    $r = $t.Cell(1, 3).Range
     $r.MoveEnd(1, -1) | Out-Null
     $r.Collapse(0)
     $doc.Fields.Add($r, 33) | Out-Null
-    $r = $doc.Sections.Item(1).Footers.Item(1).Range
+    $r = $t.Cell(1, 3).Range
     $r.MoveEnd(1, -1) | Out-Null
     $r.Collapse(0)
     $r.InsertAfter(' / ')
     $r.Collapse(0)
     $doc.Fields.Add($r, 26) | Out-Null
+    # Le paragraphe qui suit un tableau d'en-tête ou de pied, imposé par Word : le plus petit possible.
+    foreach ($z in @($doc.Sections.Item(1).Headers.Item(1).Range, $doc.Sections.Item(1).Footers.Item(1).Range)) {
+        $p = $z.Paragraphs.Last.Range
+        $p.Font.Size = 1
+        $p.ParagraphFormat.SpaceAfter = 0
+        $p.ParagraphFormat.SpaceBefore = 0
+    }
 
     # ⚠️ D2 (contre-recette du 06/10) — un même style pour les quatre niveaux du sommaire : les textes fixes insérés redéfinissent
     # TM 1 à TM 3, TM 4 gardait le défaut de Word. Posé après les insertions ; ⚠️ charte (16/10) : Arial.

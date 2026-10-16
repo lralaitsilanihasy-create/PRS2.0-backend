@@ -75,6 +75,7 @@ public final class CharteDao {
             if (fixe) {
                 styles(doc);
             }
+            normalJustifie(doc);
             numerotation(doc);
             corps(doc.getBodyElements(), fixe, false);
             doc.write(out);
@@ -83,6 +84,29 @@ public final class CharteDao {
             // Une partie que POI ne lit pas passe telle quelle : la charte ne bloque jamais l'assemblage.
             return docx;
         }
+    }
+
+    /**
+     * ⚠️ 2026-10-16 (recette de la charte, R3) — le Normal de la partie est déclaré justifié, comme celui du DAO. À l'insertion, Word
+     * écarte une mise en forme directe égale au style de la source : un alignement « à gauche » posé sur un Normal à gauche était
+     * perdu, et le paragraphe prenait le Normal justifié du DAO (en-têtes de tableau étirés, sous-titres justifiés).
+     */
+    public static void normalJustifie(XWPFDocument doc) {
+        org.apache.poi.xwpf.usermodel.XWPFStyles styles = doc.getStyles() != null ? doc.getStyles() : doc.createStyles();
+        org.apache.poi.xwpf.usermodel.XWPFStyle normal = styles.getStyle("Normal");
+        org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle ct;
+        if (normal == null) {
+            ct = org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle.Factory.newInstance();
+            ct.setStyleId("Normal");
+            ct.setType(org.openxmlformats.schemas.wordprocessingml.x2006.main.STStyleType.PARAGRAPH);
+            ct.setDefault(true);
+            ct.addNewName().setVal("Normal");
+            styles.addStyle(new org.apache.poi.xwpf.usermodel.XWPFStyle(ct, styles));
+        } else {
+            ct = normal.getCTStyle();
+        }
+        var ppr = ct.isSetPPr() ? ct.getPPr() : ct.addNewPPr();
+        (ppr.isSetJc() ? ppr.getJc() : ppr.addNewJc()).setVal(org.openxmlformats.schemas.wordprocessingml.x2006.main.STJc.BOTH);
     }
 
     // ------------------------------------------------------------------ styles (texte fixe)

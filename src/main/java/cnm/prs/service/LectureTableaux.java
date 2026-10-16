@@ -421,7 +421,10 @@ public final class LectureTableaux {
                 List<Integer> coupes = new ArrayList<>();
                 for (int j = 0; j < xs.length; j++) {
                     double x = xs[j];
-                    if (b.v.stream().anyMatch(k -> Math.abs(k.x - x) < 2 && k.y0 <= y0 + 3 && k.y1 >= y1 - 3)) {
+                    // ⚠️ 2026-10-16 (recette de la charte, R3) — une marge intérieure haute laisse, sur une cellule grisée, le filet vertical
+                    // commencer sous le filet du haut : la tolérance suit la hauteur de la ligne (3 à 6 points ; 3 dans le prototype).
+                    double tol = Math.max(3, Math.min(6, 0.2 * (y1 - y0)));
+                    if (b.v.stream().anyMatch(k -> Math.abs(k.x - x) < 2 && k.y0 <= y0 + tol && k.y1 >= y1 - tol)) {
                         coupes.add(j);
                     }
                 }

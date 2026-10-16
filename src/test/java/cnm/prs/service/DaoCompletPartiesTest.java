@@ -149,6 +149,15 @@ class DaoCompletPartiesTest {
         assertThat(charte.piedGauche()).isEqualTo("Secrétariat général — PRMP");
         assertThat(charte.piedCentre()).isEqualTo("Fiche v3 validée le 12/01/2027");
         assertThat(DaoCompletService.lance(cc, null)).isEqualTo("18/01/2027");
+        // ⚠️ R1 (recette du 16/10) — un contrat-cadre porte son numéro en B02-OE-01 (« NUMÉRO » du DPAC), avant B02-OB-03 et le plan.
+        cc.setValeurs(Map.of("B02-OB-03", "07-CC/MEF", "B02-OE-01", "07-CC/MEF/SG/PRMP.2027"));
+        assertThat(DaoCompletService.numero(cc)).isEqualTo("07-CC/MEF/SG/PRMP.2027");
+        cc.setValeurs(Map.of());
+        cc.setRefeDossier("00001/PPM-AGPM/CNM/2026");
+        assertThat(DaoCompletService.numero(cc)).isEqualTo("00001/PPM-AGPM/CNM/2026");
+        FicheMarcheDto qf = etat("FOURNITURES_SERVICES", "QUANTITE_FIXE");
+        qf.setValeurs(Map.of("B02-OE-01", "ignoré", "B02-OB-03", "001-DAOO"));
+        assertThat(DaoCompletService.numero(qf)).isEqualTo("001-DAOO");
         assertThat(DaoCompletService.intitule("Consultation de prix", false)).isEqualTo("DOSSIER D'APPEL D'OFFRES");
         assertThat(DocumentsFicheMarcheService.nomFichier("DAO_COMPLET", "001-DAOO/MEN/PRMP/Tvx-PI-2026", 303279, 1, "pdf"))
                 .isEqualTo("DAO_COMPLET_001-DAOO-MEN-PRMP-Tvx-PI-2026_303279_v1.pdf");

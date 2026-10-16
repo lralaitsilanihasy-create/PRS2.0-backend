@@ -159,7 +159,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         cadrage(idDmc, "{\"attributaires\":\"MONO\",\"groupement\":\"NON\",\"avance\":\"NON\"}");
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", "TRAVAUX", Map.of());
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "BP", "DQE_ESTIMATIF");   // ⚠️ V117 (Q11)   // V59 : + le bordereau des prix et DQE
+        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "A1", "A1", "BP", "DQE_ESTIMATIF");   // ⚠️ V117 (Q11)   // V59 : + le bordereau des prix et DQE   // ⚠️ 16/10 (charte, R4) : B04-CD-01 ouvert au contrat-cadre, fiche A1
     }
 
     @Test

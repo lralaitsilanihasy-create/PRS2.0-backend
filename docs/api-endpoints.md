@@ -9582,6 +9582,26 @@ national, travaux en deux tableaux, aucun champ nouveau. Pas de migration, pas d
     Les polices imprimées sont Arial, symboles et formules exceptés.
 - **Versions déjà validées** (§B6) : leur DAO complet est gardé. La charte vaut pour les DAO assemblés après la livraison (pas de
   migration de rattrapage).
+- ⚠️ **Recette du front du 16/10 (fiche 2, contrat-cadre), R1 à R4** :
+  - **R1 — le numéro du DAO** : pour un contrat-cadre, `B02-OE-01` (le « NUMÉRO » du DPAC), puis `B02-OB-03`, puis la
+    référence du plan. Il s'applique à la garde, à l'en-tête courant, aux séparateurs et au nom du fichier. Les autres formes
+    gardent `B02-OB-03`, puis le plan.
+  - **R2 — l'en-tête et le pied** : ce sont des tableaux sans filets intérieurs, à deux zones (« DAO n° … » 40 %, objet 60 %) et
+    à trois zones (autorité 42 %, version 36 %, page 22 %). Une autorité au nom long passe à la ligne dans sa zone, sans se
+    coller à la version.
+  - **R3 — les cellules des tableaux du besoin** :
+    - alignées à gauche, quantités, MIN et MAX à droite ;
+    - marges intérieures de 1 mm en haut et en bas, de 1,5 mm à gauche et à droite.
+    - Cause du justifié : à l'insertion, Word écarte une mise en forme directe identique au Normal de la source. Le Normal des
+      parties produites est donc déclaré justifié (`CharteDao.normalJustifie`), et un alignement à gauche y est conservé. Le
+      même effet touchait les sous-titres alignés à gauche des modèles.
+    - La lecture des tableaux admet un filet vertical qui commence sous le filet du haut, jusqu'à 6 points selon la hauteur
+      de la ligne (3 dans le prototype) : sur une cellule grisée, Word ne trace pas le filet dans la marge haute. Parité
+      inchangée sur les cinq DAO réels.
+  - **R4 — les formulaires de soumission du contrat-cadre** : `B04-CD-01` (fiches A1 à A4) et `B04-CD-02` (garantie C1, C2)
+    valent désormais aussi pour le contrat-cadre (fichier de correspondance des travaux, commun aux trois catégories ; script
+    `docs/referentiel/2026-10-16-formulaires-contrat-cadre.sql`). Une fiche de contrat-cadre qui les renseigne a sa section
+    1.3, comme les autres formes. Une fiche validée avant reste sans formulaires : il faut une révision.
 - **Pas encore** (second temps, lot distinct) : la même charte pour l'avis spécifique, les lettres d'invitation, le projet de
   marché et les marchés subséquents.
 

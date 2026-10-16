@@ -484,9 +484,20 @@ public class DaoCompletService {
         return (pi ? "Dossier de consultation" : "DAO") + (numero(etat) == null ? "" : " n° " + numero(etat)) + (o == null ? "" : " — " + o);
     }
 
-    private static String numero(FicheMarcheDto etat) {
-        String n = etat.getValeurs() == null ? null : etat.getValeurs().get(DocumentsFicheMarcheService.CHAMP_NUMERO_DAO);
-        return n == null || n.isBlank() ? etat.getRefeDossier() : n.trim();
+    /**
+     * Le numéro du DAO : {@code B02-OB-03}, à défaut la référence du plan. ⚠️ 2026-10-16 (recette de la charte, R1) — un contrat-cadre
+     * porte le sien en {@code B02-OE-01} (« NUMÉRO » du DPAC) : il passe d'abord.
+     */
+    static String numero(FicheMarcheDto etat) {
+        Map<String, String> v = etat.getValeurs() == null ? Map.of() : etat.getValeurs();
+        for (String code : contratCadre(etat) ? List.of("B02-OE-01", DocumentsFicheMarcheService.CHAMP_NUMERO_DAO)
+                : List.of(DocumentsFicheMarcheService.CHAMP_NUMERO_DAO)) {
+            String n = v.get(code);
+            if (n != null && !n.isBlank()) {
+                return n.trim();
+            }
+        }
+        return etat.getRefeDossier();
     }
 
     /** L'objet : la valeur figée de la fiche (champ PPM), à défaut la désignation de la ligne. */

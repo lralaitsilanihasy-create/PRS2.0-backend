@@ -64,6 +64,9 @@ public final class TableauxBesoin {
             "PRIX UNITAIRE EN CHIFFRES");
     static final List<String> DQE = List.of("N° prix", "DESIGNATION DES OUVRAGES", "UNITE", "QUANTITE", "PRIX UNITAIRE", "MONTANT EN ARIARY");
 
+    /** Les colonnes de quantités, alignées à droite (R3). */
+    private static final java.util.Set<String> QUANTITES = java.util.Set.of("QUANTITE", "MIN", "MAX");
+
     /** Largeur du texte (21 cm − 4,4 cm de marges), en vingtièmes de point. */
     static final int LARGEUR = 9412;
     private static final String POINTILLES = "……………………";
@@ -206,6 +209,7 @@ public final class TableauxBesoin {
             return null;
         }
         try (XWPFDocument doc = new XWPFDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            CharteDao.normalJustifie(doc);   // ⚠️ R3 : sans quoi Word perd l'alignement à gauche des cellules à l'insertion
             boolean premier = true;
             List<Lot> lots = c.lots() == null || c.lots().isEmpty() ? List.of(new Lot(null, null)) : c.lots();
             for (Lot lot : lots) {
@@ -264,6 +268,8 @@ public final class TableauxBesoin {
             grille.addNewGridCol().setW(BigInteger.valueOf(l));
         }
         CharteDao.filets(t);
+        // ⚠️ R3 (recette du 16/10) — marges intérieures : 1 mm en haut et en bas, 1,5 mm à gauche et à droite (vingtièmes de point).
+        t.setCellMargins(57, 85, 57, 85);
         for (int i = 0; i <= lignes.size(); i++) {
             XWPFTableRow r = t.getRow(i);
             CTTrPr pr = r.getCtRow().isSetTrPr() ? r.getCtRow().getTrPr() : r.getCtRow().addNewTrPr();
@@ -277,7 +283,7 @@ public final class TableauxBesoin {
                 List<String> ps = i == 0 ? List.of(entete.get(j)) : j < lignes.get(i - 1).size() ? lignes.get(i - 1).get(j) : List.of("");
                 for (int k = 0; k < ps.size(); k++) {
                     XWPFParagraph p = k == 0 ? cell.getParagraphs().get(0) : cell.addParagraph();
-                    p.setAlignment(ParagraphAlignment.LEFT);
+                    p.setAlignment(i > 0 && QUANTITES.contains(entete.get(j)) ? ParagraphAlignment.RIGHT : ParagraphAlignment.LEFT);
                     p.setSpacingAfter(0);
                     p.setSpacingBefore(0);
                     p.getCTP().getPPr().addNewSuppressAutoHyphens();
