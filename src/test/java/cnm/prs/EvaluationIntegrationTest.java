@@ -1222,6 +1222,70 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ outils
 
     @Autowired private cnm.prs.repository.FicheMarcheRepository ficheMarcheRepository;
+    @Autowired private cnm.prs.repository.ContratVigueurRepository contratRepository;
+
+    @Test
+    @DisplayName("MS-1 (16/10, contrat en vigueur, V124) : la PRMP lit ses contrats et leurs alertes, le badge compte la reconduction à décider ; "
+            + "la reconduction se décide par écrit, dans la limite des reconductions ; une décision par période ; échu, plus rien")
+    void contratEnVigueur() throws Exception {
+        cnm.prs.entity.Attribution notifiee = new cnm.prs.entity.Attribution();
+        notifiee.setIdDmc(idDmc);
+        notifiee.setLot(1);
+        notifiee.setEtat("NOTIFIE");
+        attributionRepository.save(notifiee);
+        LocalDate effet = aujourdhui.minusMonths(10);
+        cnm.prs.entity.ContratVigueur c = new cnm.prs.entity.ContratVigueur();
+        c.setIdDmc(idDmc);
+        c.setLot(1);
+        c.setTypeMarche("CONTRAT_CADRE");
+        c.setDateEffet(effet);
+        c.setPeriodeMois(12);
+        c.setDateFin(effet.plusMonths(12).minusDays(1));
+        c.setDureeMaxMois(24);
+        c.setReconductible(true);
+        c.setReconductionsMax(1);
+        c.setPreavisMois(3);
+        c.setCreeLe(LocalDateTime.now());
+        long id = contratRepository.save(c).getId();
+        String url = "/api/contrats-en-vigueur";
+
+        String liste = mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Number>>read(liste, "$[*].id")).extracting(Number::longValue).containsExactly(id);
+        assertThat(JsonPath.<String>read(liste, "$[0].etat")).isEqualTo("EN_VIGUEUR");
+        assertThat(JsonPath.<List<String>>read(liste, "$[0].alertes")).containsExactly("RECONDUCTION_A_DECIDER");
+        assertThat(JsonPath.<String>read(liste, "$[0].finMaximale")).isEqualTo(effet.plusMonths(24).minusDays(1).toString());
+        mvc.perform(get(url).header("Authorization", jetonA)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.compteurs.reconductionsADecider").value(1));
+
+        // La décision écrite de la PRMP (AE-CC, art. 7.3).
+        String rec = url + "/" + id + "/reconduction";
+        mvc.perform(post(rec).header("Authorization", tokenUgpm).contentType(JSON).content("{\"decision\":\"RECONDUIRE\"}")).andExpect(status().isForbidden());
+        mvc.perform(post(rec).header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"PEUT-ETRE\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DECISION_INVALIDE"));
+        mvc.perform(post(rec).header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"RECONDUIRE\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DECISION_OBLIGATOIRE"));
+        String decision = ",\"reference\":\"DEC-2026-12\",\"dateDecision\":\"" + aujourdhui + "\"}";
+        LocalDate finReconduite = effet.plusMonths(12).plusMonths(12).minusDays(1);
+        mvc.perform(post(rec).header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"RECONDUIRE\"" + decision))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.dateFin").value(finReconduite.toString()))
+                .andExpect(jsonPath("$.reconductions").value(1)).andExpect(jsonPath("$.decisions[0].horsPreavis").value(true))
+                .andExpect(jsonPath("$.alertes.length()").value(0));
+        mvc.perform(post(rec).header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"RECONDUIRE\"" + decision))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RECONDUCTIONS_EPUISEES"));
+        mvc.perform(post(rec).header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"NE_PAS_RECONDUIRE\"" + decision))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.decisions.length()").value(2));
+        mvc.perform(post(rec).header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"NE_PAS_RECONDUIRE\"" + decision))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_DECIDE"));
+
+        // Échu : plus de reconduction, l'alerte ECHU.
+        cnm.prs.entity.ContratVigueur echu = contratRepository.findById(id).orElseThrow();
+        echu.setDateFin(aujourdhui.minusDays(1));
+        contratRepository.save(echu);
+        mvc.perform(get(url + "/" + id).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("ECHU")).andExpect(jsonPath("$.alertes[0]").value("ECHU"));
+        mvc.perform(post(rec).header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"NE_PAS_RECONDUIRE\"" + decision))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONTRAT_ECHU"));
+    }
 
     @Test
     @DisplayName("Tranche MT (15/10, contrat-cadre multi-attributaire, décret 2019-1064 art. 14-17) : la post-qualification décide chaque "

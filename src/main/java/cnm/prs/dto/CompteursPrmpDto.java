@@ -32,5 +32,9 @@ public record CompteursPrmpDto(
         long explicationsSansReponse,
         /** ⚠️ R6c (manuel révisé, lot 2, §B1 règle 8) — marchés notifiés dont l'échéance de 30 jours de l'avis d'attribution est passée sans
          * publication (non bloquant : à traiter). */
-        long avisEnRetard) {
+        long avisEnRetard,
+        /** ⚠️ 2026-10-16 (marchés subséquents, MS-1) — contrats-cadres dont la décision de reconduire approche (30 jours avant la limite
+         * du préavis) sans être prise ; contrats en vigueur à moins de 30 jours de leur échéance sans reconduction. */
+        long reconductionsADecider,
+        long contratsAEcheance) {
 }

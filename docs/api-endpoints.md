@@ -7942,6 +7942,59 @@ rapport complet** (08/10, comme la reprise de 2d-1) ; un délai de validité non
 - ⚠️ **MT-b1 (2026-10-15)** : un contrat-cadre multi-attributaire ne se réattribue **pas**. La route répond 409
   **`REATTRIBUTION_EXCLUE_CONTRAT_CADRE`** : une fois conclu, un contrat-cadre n'est plus ouvert à de nouveaux opérateurs (décret
   n° 2019-1064, art. 18 ; réponse 2 du pilote).
+
+### Les contrats en vigueur — lot MS-1 — V124 ⚠️ 2026-10-16
+
+Demande front `frontend/docs/demande-backend-2026-10-15-marches-subsequents.md`, lot MS-1 (décret n° 2019-1064, art. 8, 18, 19, 34 ; loi
+n° 2016-055, art. 30). Tables **`t_contrat_vigueur`** (un contrat par lot notifié, unique sur `(ID_DMC, LOT)`) et
+**`t_contrat_reconduction`**.
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/contrats-en-vigueur | — | 200, 403 | PRMP et UGPM (leurs procédures) ; Commission et Administrateur (tous) ; 403 candidat, membre de CAO, dépositaire |
+| GET | /api/contrats-en-vigueur/{id} | — | 200, 403, 404 | idem ; PRMP et UGPM au périmètre de la fiche |
+| POST | /api/contrats-en-vigueur/{id}/reconduction | `{ decision, reference, dateDecision }` | 200 ; 400 `DECISION_INVALIDE`, `DECISION_OBLIGATOIRE`, `DATE_INVALIDE` ; 403 ; 409 `CONTRAT_ECHU`, `NON_RECONDUCTIBLE`, `RECONDUCTIONS_EPUISEES`, `DUREE_MAX_ATTEINTE` (`details.finMaximale`), `DEJA_DECIDE` | PRMP de la fiche |
+
+- **Création** : à la **notification** du lot (`POST …/attribution/lots/{lot}/notification`), quand la fiche validée est un
+  **contrat-cadre** ou un **marché à commandes**. Il n'y en a pas pour une autre forme, ni de doublon. Journal
+  `CONTRAT_EN_VIGUEUR`. Ce qui le régit est **figé** depuis la dernière version validée de la fiche, valeur du lot d'abord
+  (`CODE#n`) :
+  - **contrat-cadre** :
+    - période `B02-DC-02` (mois) ;
+    - durée maximale `B02-DC-01` (mois), à défaut `B07-DU-05` × 12, à défaut la période ;
+    - reconductible `B02-DC-03`, reconductions `B07-DU-04`, préavis `B07-DU-07` (mois) ;
+    - montant estimé `B05-MT-01` (HT), minimum `B05-MT-03` (facultatif, art. 34) ;
+    - forme `B07-FS-01`, rythme `B02-PC-02`, calendrier `B02-PC-03` ;
+  - **marché à commandes** :
+    - période `B02-AU-04`, plafonnée à **36 mois** (art. 30), sans reconduction ;
+    - minimum `B05-TP-02` et maximum `B05-TP-03` annuels ;
+    - modalités des commandes `B09-DX-03`.
+
+  La période court de la **date de notification** (`dateEffet`). `dateFin` = effet + période − 1 jour, reportée à chaque
+  reconduction.
+- **`ContratVigueurDto`** : `{ id, idDmc, lot, typeMarche, objet, acheteur, etat, dateEffet, dateFin, periodeMois, dureeMaxMois,
+  finMaximale, reconductible, reconductionsMax, reconductions, preavisMois, dateLimiteDecision, montantEstime, montantMinimum,
+  montantMaximum, formeSubsequents, rythme, calendrier, titulaires[], decisions[], alertes[] }`.
+  - `etat` vaut `EN_VIGUEUR`, ou `ECHU` après `dateFin`.
+  - `titulaires[]` = `{ idOffre, numero, candidat, nif, montant, delai, rang }` : les titulaires **non retirés** de
+    l'attribution (MT), sinon l'attributaire. C'est une liste fermée (art. 18), lue sur l'attribution, jamais saisie.
+  - `decisions[]` = `{ id, decision, reference, dateDecision, finAvant, nouvelleFin, horsPreavis, le, par }`.
+- **Reconduction** (AE-CC, art. 7.3) : décision **écrite** de la PRMP, `RECONDUIRE` ou `NE_PAS_RECONDUIRE`.
+  - La référence est obligatoire, et la date se situe entre l'effet et aujourd'hui.
+  - **Une décision par période** (409 `DEJA_DECIDE`).
+  - Reconduit, la période suivante commence le lendemain de `dateFin`, dans la limite des reconductions prévues et de la durée
+    maximale (`finMaximale` = effet + durée maximale − 1 jour).
+  - Une décision prise après `dateLimiteDecision` (= `dateFin` − préavis) est acceptée et marquée `horsPreavis`. Journal
+    `RECONDUCTION`.
+- **Alertes** (`alertes[]`) :
+  - `RECONDUCTION_A_DECIDER` : reconduction encore possible, sans décision, à partir de 30 jours avant `dateLimiteDecision` ;
+  - `ECHEANCE_PROCHE` : `dateFin` à 30 jours au plus ;
+  - `ECHU`.
+
+  **Badges de la PRMP** (`GET /api/kpis/badges`, `compteurs`) : **`reconductionsADecider`** et **`contratsAEcheance`**.
+- **Après l'échéance**, plus aucune remise en concurrence ni commande : le contrôle `ContratVigueurService.exigerEnVigueur` (409
+  **`CONTRAT_ECHU`**) servira MS-2 et MS-3. Pas de minimum pour le contrat-cadre (art. 34) : l'alerte « minimum non atteint »
+  viendra avec les bons de commande du **marché à commandes** (MS-3).
 - **La validité** : le délai de la fiche (`B04-VO-01`, `B04-VT-01`, `B04-DV-01` ou `B04-DP-01`, le premier saisi), compté depuis la date
   limite de remise ; échu → 409 **`OFFRE_EXPIREE`**. Sans délai saisi, non contrôlée : la note le dit.
 - **L'effet** : une reprise de type **`REATTRIBUTION`** s'ajoute à `lots[].reprises[]` (qui gagne `type` — `REPRISE` |

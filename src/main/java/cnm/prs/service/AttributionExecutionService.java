@@ -99,6 +99,8 @@ public class AttributionExecutionService {
     private final DelaiAttenteCalcul delais;
     /** ⚠️ 2026-10-16 (tranche MT-b2, V122-V123) — les titulaires d'un contrat-cadre multi-attributaire : pièces, retrait, réception. */
     private final cnm.prs.repository.AttributionTitulaireRepository titulaires;
+    /** ⚠️ 2026-10-16 (MS-1, V124) — le contrat en vigueur, créé à la notification (fournisseur paresseux : pas de cycle). */
+    private final org.springframework.beans.factory.ObjectProvider<ContratVigueurService> contrats;
 
     public AttributionExecutionService(AttributionRepository attributions, AttributionRecoursRepository recoursRepository,
             AttributionPieceRepository piecesRepository, AttributionLettreRepository lettres, OffreRepository offres,
@@ -106,7 +108,9 @@ public class AttributionExecutionService {
             NotificationService notifications, CeremonieService ceremonies, EvaluationService evaluation, FicheMarcheService fiches,
             ValeursPpmService valeursPpm, GenerateurDocumentsFiche generateur, ParametreService parametres, Clock horloge,
             org.springframework.beans.factory.ObjectProvider<SansSuiteService> sansSuite, DelaiAttenteCalcul delais,
-            cnm.prs.repository.AttributionTitulaireRepository titulaires) {
+            cnm.prs.repository.AttributionTitulaireRepository titulaires,
+            org.springframework.beans.factory.ObjectProvider<ContratVigueurService> contrats) {
+        this.contrats = contrats;
         this.titulaires = titulaires;
         this.delais = delais;
         this.sansSuite = sansSuite;
@@ -922,6 +926,8 @@ public class AttributionExecutionService {
         }
         a.setEtat(Attribution.NOTIFIE);
         attributions.save(a);
+        // ⚠️ 2026-10-16 (marchés subséquents, MS-1, V124) — un contrat-cadre ou un marché à commandes entre en vigueur à sa notification.
+        contrats.getObject().creerALaNotification(a);
         evaluation.tracerAttribution(idDmc, "NOTIFICATION", "Lot " + lot + " : marché notifié le " + date.format(JOUR)
                 + (reception == null ? "" : ", reçu le " + reception.format(JOUR) + " (réception déclarée)") + " ; avis d'attribution à publier "
                 + "au plus tard le " + echeanceAvis(a).format(JOUR));

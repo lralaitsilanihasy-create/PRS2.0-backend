@@ -608,6 +608,22 @@ lot D*.
     indicatives.
   - La fiche multi-attributaire ne porte plus d'avertissement.
 
+#### Le contrat-cadre ou le marché à commandes en vigueur (2026-10-16)
+
+⚠️ **Notifié, le contrat-cadre ou le marché à commandes entre en vigueur pour sa période de validité**, qui court de la
+notification. Ce qui le régit est repris tel que la fiche validée l'a fixé : durée maximale, reconductions et préavis, montants,
+forme et rythme des marchés subséquents.
+
+- **Ses titulaires forment une liste fermée** : aucun nouvel opérateur n'y entre (décret n° 2019-1064, art. 18). Un titulaire
+  retiré n'en fait plus partie.
+- **La reconduction est une décision écrite de l'autorité contractante**, prise au plus tard au préavis prévu. Une décision
+  tardive est acceptée mais signalée. La reconduction ne dépasse ni le nombre de reconductions prévu ni la durée maximale :
+  deux ans pour le contrat-cadre sauf justification (art. 19), trois ans pour le marché à commandes (loi, art. 30). Le
+  titulaire ne peut la refuser.
+- **La PRMP est alertée** quand la décision de reconduire approche et quand l'échéance est à moins de trente jours.
+- **Passé l'échéance, le contrat est échu** : plus aucune remise en concurrence ni commande. Le contrat-cadre n'a pas de minimum
+  (art. 34).
+
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 
 ⚠️ **Un marché de fournitures, à quantité fixe ou à commande, produit à son tour les documents types de l'ARMP
