@@ -67,5 +67,8 @@ public class ArticleBesoinDto {
     @AllArgsConstructor
     public static class Remplacement {
         private List<ArticleBesoinDto> articles;
+        /** ⚠️ 2026-10-16 (« import-specifications », §B2) — facultatifs : le fichier dont les articles sont repris et son SHA-256. */
+        private String importFichier;
+        private String importEmpreinte;
     }
 }

@@ -1,0 +1,582 @@
+[
+ {
+  "lot": 1,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Ordinateur de bureau complet Core i5 L'unité à ……..Ariary",
+  "designation": "Ordinateur de bureau complet Core i5",
+  "unite": "U",
+  "min": 15,
+  "max": 30,
+  "pageBordereau": 40,
+  "designationSpec": "Ordinateur de bureau complet Core i5",
+  "exigences": [
+   "Ordinateur de bureau complet Core i5, 8 GO",
+   "RAM, SSD 500 GO; Moniteur LCD 22 pouces",
+   "au minimum, Clavier AZERTY, et Souris",
+   "Souris optique USB lecteur / graveur",
+   "DVD,Système d’exploitation : Windows 10 ou",
+   "supérieur Edition Professional 64 bits,",
+   "Français installé"
+  ],
+  "prose": false,
+  "pageSpec": 57,
+  "caracteristiques": [
+   {
+    "libelle": "Ordinateur de bureau complet Core i5, 8 GO",
+    "exigence": ""
+   },
+   {
+    "libelle": "RAM, SSD 500 GO",
+    "exigence": ""
+   },
+   {
+    "libelle": "Moniteur LCD 22 pouces au minimum, Clavier AZERTY, et Souris",
+    "exigence": ""
+   },
+   {
+    "libelle": "Souris optique USB lecteur / graveur",
+    "exigence": ""
+   },
+   {
+    "libelle": "DVD,Système d’exploitation",
+    "exigence": "Windows 10 ou supérieur Edition Professional 64 bits, Français installé"
+   }
+  ]
+ },
+ {
+  "lot": 1,
+  "n": 2,
+  "code": "2",
+  "designationBrute": "Onduleur L'unité à ……..Ariary",
+  "designation": "Onduleur",
+  "unite": "U",
+  "min": 10,
+  "max": 20,
+  "pageBordereau": 40,
+  "designationSpec": "Onduleur",
+  "exigences": [
+   "Onduleur (matériel neuf sous emballage)",
+   "Capacité d'alimentation en sortie : Minimum",
+   "390 Watts/ 1200 VA"
+  ],
+  "prose": false,
+  "pageSpec": 57,
+  "caracteristiques": [
+   {
+    "libelle": "Onduleur (matériel neuf sous emballage)",
+    "exigence": ""
+   },
+   {
+    "libelle": "Capacité d'alimentation en sortie",
+    "exigence": "Minimum"
+   },
+   {
+    "libelle": "390 Watts/ 1200 VA",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 2,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i3 + Onduleur+ imprimante jet d'encre L'unité à ……..Ariary",
+  "designation": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i3 + Onduleur+ imprimante jet d'encre",
+  "unite": "U",
+  "min": 8,
+  "max": 16,
+  "pageBordereau": 41,
+  "designationSpec": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i3 + Onduleur+ imprimante jet d'encre",
+  "exigences": [
+   "Ordinateur de bureau complet Core i3, 8",
+   "GO RAM, SSD 500 GO; Moniteur LCD 19",
+   "pouces au minimum, Clavier et Souris",
+   "Système d’exploitation : Windows 10 ou",
+   "supérieur Edition Professional 64 bits,",
+   "Français installé + Onduleur (matériel neuf",
+   "sous emballage) Capacité d'alimentation",
+   "en sortie : Minimum 390 Watts/ 700 VA +",
+   "Imprimante Couleur 4-en-1 - Impression,",
+   "Numérisation, Copie, Télécopie Imprimez",
+   "depuis PC, MAC, USB"
+  ],
+  "prose": true,
+  "pageSpec": 58,
+  "caracteristiques": [
+   {
+    "libelle": "Ordinateur de bureau complet Core i3",
+    "exigence": ""
+   },
+   {
+    "libelle": "8 GO RAM",
+    "exigence": ""
+   },
+   {
+    "libelle": "SSD 500 GO",
+    "exigence": ""
+   },
+   {
+    "libelle": "Moniteur LCD 19 pouces au minimum",
+    "exigence": ""
+   },
+   {
+    "libelle": "Clavier et Souris Système d’exploitation : Windows 10 ou supérieur Edition Professional 64 bits",
+    "exigence": ""
+   },
+   {
+    "libelle": "Français installé",
+    "exigence": ""
+   },
+   {
+    "libelle": "Onduleur (matériel neuf sous emballage) Capacité d'alimentation en sortie : Minimum 390 Watts/ 700 VA",
+    "exigence": ""
+   },
+   {
+    "libelle": "Imprimante Couleur 4-en-1 - Impression",
+    "exigence": ""
+   },
+   {
+    "libelle": "Numérisation",
+    "exigence": ""
+   },
+   {
+    "libelle": "Copie",
+    "exigence": ""
+   },
+   {
+    "libelle": "Télécopie Imprimez depuis PC",
+    "exigence": ""
+   },
+   {
+    "libelle": "MAC",
+    "exigence": ""
+   },
+   {
+    "libelle": "USB",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 2,
+  "n": 2,
+  "code": "2",
+  "designationBrute": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i5 + Onduleur L'unité à ……..Ariary",
+  "designation": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i5 + Onduleur",
+  "unite": "U",
+  "min": 13,
+  "max": 26,
+  "pageBordereau": 41,
+  "designationSpec": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i5 + Onduleur",
+  "exigences": [
+   "Ordinateur de bureau complet Core i5, 16",
+   "GO RAM, SSD 1 000 GO; Moniteur LCD",
+   "22 pouces au minimum Clavier et Souris",
+   "Système d’exploitation : Windows 10 ou",
+   "supérieur Edition Professional 64 bits,",
+   "Français installé + Onduleur (matériel neuf",
+   "sous emballage) Capacité d'alimentation",
+   "en sortie : Minimum 390 Watts/ 700 VA"
+  ],
+  "prose": true,
+  "pageSpec": 58,
+  "caracteristiques": [
+   {
+    "libelle": "Ordinateur de bureau complet Core i5",
+    "exigence": ""
+   },
+   {
+    "libelle": "16 GO RAM",
+    "exigence": ""
+   },
+   {
+    "libelle": "SSD 1 000 GO",
+    "exigence": ""
+   },
+   {
+    "libelle": "Moniteur LCD 22 pouces au minimum Clavier et Souris Système d’exploitation : Windows 10 ou supérieur Edition Professional 64 bits",
+    "exigence": ""
+   },
+   {
+    "libelle": "Français installé",
+    "exigence": ""
+   },
+   {
+    "libelle": "Onduleur (matériel neuf sous emballage) Capacité d'alimentation en sortie : Minimum 390 Watts/ 700 VA",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 3,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Imprimante Laser noir multifonction A4 L'unité à ……..Ariary",
+  "designation": "Imprimante Laser noir multifonction A4",
+  "unite": "U",
+  "min": 3,
+  "max": 6,
+  "pageBordereau": 42,
+  "designationSpec": "Imprimante Laser noir multifonction A4",
+  "exigences": [
+   "Imprimante Laser noir multifonction A4 :",
+   "Noir et Blanc",
+   "Fonction : Impression, Copie, Scan",
+   "Format : A4",
+   "(Matériel neuf sous emballage)"
+  ],
+  "prose": false,
+  "pageSpec": 59,
+  "caracteristiques": [
+   {
+    "libelle": "Imprimante Laser noir multifonction A4",
+    "exigence": "Noir et Blanc"
+   },
+   {
+    "libelle": "Fonction",
+    "exigence": "Impression, Copie, Scan"
+   },
+   {
+    "libelle": "Format",
+    "exigence": "A4"
+   },
+   {
+    "libelle": "(Matériel neuf sous emballage)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 3,
+  "n": 2,
+  "code": "2",
+  "designationBrute": "Photocopieuse NOIR A4 et A3 L'unité à ……..Ariary",
+  "designation": "Photocopieuse NOIR A4 et A3",
+  "unite": "U",
+  "min": 1,
+  "max": 2,
+  "pageBordereau": 42,
+  "designationSpec": "Photocopieuse NOIR A4 et A3",
+  "exigences": [
+   "Photocopieuse NOIR A4 et A3",
+   "Fonction : Impression, Copie, Scan",
+   "Format : A4 et A3",
+   "Stand avec roulettes",
+   "(Matériel neuf sous emballage)"
+  ],
+  "prose": false,
+  "pageSpec": 59,
+  "caracteristiques": [
+   {
+    "libelle": "Photocopieuse NOIR A4 et A3",
+    "exigence": ""
+   },
+   {
+    "libelle": "Fonction",
+    "exigence": "Impression, Copie, Scan"
+   },
+   {
+    "libelle": "Format",
+    "exigence": "A4 et A3"
+   },
+   {
+    "libelle": "Stand avec roulettes",
+    "exigence": ""
+   },
+   {
+    "libelle": "(Matériel neuf sous emballage)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 3,
+  "n": 3,
+  "code": "3",
+  "designationBrute": "Duplicopieur noir et blanc A4 L'unité à ……..Ariary",
+  "designation": "Duplicopieur noir et blanc A4",
+  "unite": "U",
+  "min": 1,
+  "max": 2,
+  "pageBordereau": 42,
+  "designationSpec": "Duplicopieur noir et blanc A4",
+  "exigences": [
+   "Duplicopieur noir et blanc",
+   "Dimension : A4",
+   "Accessoires : Interface USB 2.0",
+   "(Matériel neuf sous emballage)"
+  ],
+  "prose": false,
+  "pageSpec": 59,
+  "caracteristiques": [
+   {
+    "libelle": "Duplicopieur noir et blanc",
+    "exigence": ""
+   },
+   {
+    "libelle": "Dimension",
+    "exigence": "A4"
+   },
+   {
+    "libelle": "Accessoires",
+    "exigence": "Interface USB 2.0"
+   },
+   {
+    "libelle": "(Matériel neuf sous emballage)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 4,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i3 + Onduleur+ imprimante jet d'encre L'unité à ……..Ariary",
+  "designation": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i3 + Onduleur+ imprimante jet d'encre",
+  "unite": "U",
+  "min": 8,
+  "max": 16,
+  "pageBordereau": 43,
+  "designationSpec": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Ordinateur de bureau complet Core i3 + Onduleur+ imprimante jet d'encre",
+  "exigences": [
+   "Ordinateur de bureau complet Core i3, 8",
+   "GO RAM, SSD 500 GO; Moniteur LCD 19",
+   "pouces au minimum, Clavier et Souris",
+   "Système d’exploitation : Windows 10 ou",
+   "supérieur Edition Professional 64 bits,",
+   "Français installé + Onduleur (matériel neuf",
+   "sous emballage) Capacité d'alimentation",
+   "en sortie : Minimum 390 Watts/ 700 VA +",
+   "Imprimante Couleur 4-en-1 - Impression,",
+   "Numérisation, Copie, Télécopie Imprimez",
+   "depuis PC, MAC, USB"
+  ],
+  "prose": true,
+  "pageSpec": 60,
+  "caracteristiques": [
+   {
+    "libelle": "Ordinateur de bureau complet Core i3",
+    "exigence": ""
+   },
+   {
+    "libelle": "8 GO RAM",
+    "exigence": ""
+   },
+   {
+    "libelle": "SSD 500 GO",
+    "exigence": ""
+   },
+   {
+    "libelle": "Moniteur LCD 19 pouces au minimum",
+    "exigence": ""
+   },
+   {
+    "libelle": "Clavier et Souris Système d’exploitation : Windows 10 ou supérieur Edition Professional 64 bits",
+    "exigence": ""
+   },
+   {
+    "libelle": "Français installé",
+    "exigence": ""
+   },
+   {
+    "libelle": "Onduleur (matériel neuf sous emballage) Capacité d'alimentation en sortie : Minimum 390 Watts/ 700 VA",
+    "exigence": ""
+   },
+   {
+    "libelle": "Imprimante Couleur 4-en-1 - Impression",
+    "exigence": ""
+   },
+   {
+    "libelle": "Numérisation",
+    "exigence": ""
+   },
+   {
+    "libelle": "Copie",
+    "exigence": ""
+   },
+   {
+    "libelle": "Télécopie Imprimez depuis PC",
+    "exigence": ""
+   },
+   {
+    "libelle": "MAC",
+    "exigence": ""
+   },
+   {
+    "libelle": "USB",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 4,
+  "n": 2,
+  "code": "2",
+  "designationBrute": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i5 + Onduleur L'unité à ……..Ariary",
+  "designation": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i5 + Onduleur",
+  "unite": "U",
+  "min": 13,
+  "max": 26,
+  "pageBordereau": 43,
+  "designationSpec": "Kit de matériels informatiques contenant : Ordinateur de bureau complet Core i5 + Onduleur",
+  "exigences": [
+   "Ordinateur de bureau complet Core i5, 16",
+   "GO RAM, SSD 1 000 GO; Moniteur LCD",
+   "22 pouces au minimum Clavier et Souris",
+   "Système d’exploitation : Windows 10 ou",
+   "supérieur Edition Professional 64 bits,",
+   "Français installé + Onduleur (matériel neuf",
+   "sous emballage) Capacité d'alimentation",
+   "en sortie : Minimum 390 Watts/ 700 VA"
+  ],
+  "prose": true,
+  "pageSpec": 60,
+  "caracteristiques": [
+   {
+    "libelle": "Ordinateur de bureau complet Core i5",
+    "exigence": ""
+   },
+   {
+    "libelle": "16 GO RAM",
+    "exigence": ""
+   },
+   {
+    "libelle": "SSD 1 000 GO",
+    "exigence": ""
+   },
+   {
+    "libelle": "Moniteur LCD 22 pouces au minimum Clavier et Souris Système d’exploitation : Windows 10 ou supérieur Edition Professional 64 bits",
+    "exigence": ""
+   },
+   {
+    "libelle": "Français installé",
+    "exigence": ""
+   },
+   {
+    "libelle": "Onduleur (matériel neuf sous emballage) Capacité d'alimentation en sortie : Minimum 390 Watts/ 700 VA",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 5,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Imprimante Laser noir multifonction A4 L'unité à ……..Ariary",
+  "designation": "Imprimante Laser noir multifonction A4",
+  "unite": "U",
+  "min": 3,
+  "max": 6,
+  "pageBordereau": 44,
+  "designationSpec": "Imprimante Laser noir multifonction A4",
+  "exigences": [
+   "Imprimante Laser noir multifonction A4 :",
+   "Noir et Blanc",
+   "Fonction : Impression, Copie, Scan",
+   "Format : A4",
+   "(Matériel neuf sous emballage)"
+  ],
+  "prose": false,
+  "pageSpec": 61,
+  "caracteristiques": [
+   {
+    "libelle": "Imprimante Laser noir multifonction A4",
+    "exigence": "Noir et Blanc"
+   },
+   {
+    "libelle": "Fonction",
+    "exigence": "Impression, Copie, Scan"
+   },
+   {
+    "libelle": "Format",
+    "exigence": "A4"
+   },
+   {
+    "libelle": "(Matériel neuf sous emballage)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 5,
+  "n": 2,
+  "code": "2",
+  "designationBrute": "Photocopieuse NOIR A4 et A3 L'unité à ……..Ariary",
+  "designation": "Photocopieuse NOIR A4 et A3",
+  "unite": "U",
+  "min": 1,
+  "max": 2,
+  "pageBordereau": 44,
+  "designationSpec": "Photocopieuse NOIR A4 et A3",
+  "exigences": [
+   "Photocopieuse NOIR A4 et A3",
+   "Fonction : Impression, Copie, Scan",
+   "Format : A4 et A3",
+   "Stand avec roulettes",
+   "(Matériel neuf sous emballage)"
+  ],
+  "prose": false,
+  "pageSpec": 61,
+  "caracteristiques": [
+   {
+    "libelle": "Photocopieuse NOIR A4 et A3",
+    "exigence": ""
+   },
+   {
+    "libelle": "Fonction",
+    "exigence": "Impression, Copie, Scan"
+   },
+   {
+    "libelle": "Format",
+    "exigence": "A4 et A3"
+   },
+   {
+    "libelle": "Stand avec roulettes",
+    "exigence": ""
+   },
+   {
+    "libelle": "(Matériel neuf sous emballage)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 5,
+  "n": 3,
+  "code": "3",
+  "designationBrute": "Duplicopieur noir et blanc A4 L'unité à ……..Ariary",
+  "designation": "Duplicopieur noir et blanc A4",
+  "unite": "U",
+  "min": 1,
+  "max": 2,
+  "pageBordereau": 44,
+  "designationSpec": "Duplicopieur noir et blanc A4",
+  "exigences": [
+   "Duplicopieur noir et blanc",
+   "Dimension : A4",
+   "Accessoires : Interface USB 2.0",
+   "(Matériel neuf sous emballage)"
+  ],
+  "prose": false,
+  "pageSpec": 61,
+  "caracteristiques": [
+   {
+    "libelle": "Duplicopieur noir et blanc",
+    "exigence": ""
+   },
+   {
+    "libelle": "Dimension",
+    "exigence": "A4"
+   },
+   {
+    "libelle": "Accessoires",
+    "exigence": "Interface USB 2.0"
+   },
+   {
+    "libelle": "(Matériel neuf sous emballage)",
+    "exigence": ""
+   }
+  ]
+ }
+]

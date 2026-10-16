@@ -830,6 +830,13 @@ Décision : ADR-0012. Contrat : `docs/api-endpoints.md`, § *L'import du DAO*.
   nominatif est écarté. Un PDF scanné est refusé, faute d'OCR, et la PRMP saisit sa fiche. Trois règles, tirées du vrai
   dossier 2463, évitent qu'un libellé trop court ou présent dans plusieurs rédactions fasse croire à une valeur sûre. Un
   DAO fortement adapté du document type donne peu de propositions, jamais de fausses valeurs présentées comme sûres.
+- ⚠️ **Depuis le 16/10 : les articles et leurs spécifications aussi.** L'import lit le besoin dans les tableaux du DAO :
+  bordereau des prix ou détail quantitatif, spécifications techniques et, en travaux, définition des prix. Il propose, lot
+  par lot, chaque article avec sa désignation, son unité, ses quantités et ses caractéristiques. La PRMP choisit les lots
+  à reprendre ; rien n'est écrit sans elle. Le plan fait foi pour les lots : un article d'un lot absent du plan n'est pas
+  repris. Quand le bordereau et les spécifications du DAO se contredisent (500 ml contre 100 ml), l'écart est signalé, et
+  non tranché. La trace du fichier repris va au journal, comme pour les champs.
+  - Un tableau sans filets, ou un PDF scanné, n'est pas lu : ses articles restent à saisir.
 
 #### Les documents générés (lot 2a, demande front du 2026-09-23)
 

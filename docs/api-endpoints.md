@@ -6169,6 +6169,58 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
   <fichier> (<12 premiers caractères de l'empreinte>) : n valeurs, m réponses de cadrage ».
 - **Réponse** : `FicheMarcheDto`, comme après une saisie.
 
+#### ⚠️ 2026-10-16 — les articles lus dans les tableaux (demande front « import-specifications »)
+
+`POST …/import` rend aussi **`articles[]`** : le besoin (bloc `B12`) lu dans les **tableaux** du DAO (bordereau des prix ou détail
+quantitatif, spécifications techniques, définition des prix en travaux). C'est toujours de la lecture seule : le front écrit les
+articles retenus par **`PUT …/articles`**, sans nouvelle route. Lecteur : `LectureTableaux`, portage tel quel du prototype du front
+(`scripts/import-dao/PdfGrille.java`, `lire-specs.mjs`), contrôlé contre ses sorties de référence. Aucune dépendance ajoutée
+(PDFBox et POI sont déjà là).
+
+- **`ImportDaoResult.articles[]`** = `{ lot, numero, designation, unite, quantite, quantiteMin, quantiteMax, serie, serieLibelle,
+  caracteristiques[{ libelle, exigence }], confiance{ article, caracteristiques }, pages{ bordereau, specification },
+  designationSpecification, anomalies[] }`.
+  - `lot` : le rang du lot au plan, **nul sur une ligne non allotie**. Un DAO non alloti sur une ligne à un seul lot range ses
+    articles sans lot (H1).
+  - `numero` : tel qu'écrit (« 001 », « 529 » ; le n° de prix en travaux). Les prix ne sont jamais lus.
+  - `confiance.article` : `haute` (lu au bordereau), `moyenne` (seulement aux spécifications). `confiance.caracteristiques` :
+    `moyenne` (le découpage est imparfait), nul sans caractéristique.
+  - `pages` : les pages du PDF ; nul pour un Word.
+  - **Caractéristique sans « libellé : »** (H2) : la validation du besoin exige un libellé **et** une exigence. Le texte va donc en
+    `exigence`, sous le libellé « Spécification ».
+  - En travaux, la **définition du prix** est proposée comme caractéristiques, découpée sur les puces (H3).
+- **Anomalies** (`anomalies[]`, chaque entrée commence par son code ; l'article n'est pas retenable tel quel) :
+  - `LOT_HORS_PLAN` : lot lu absent du plan, ou ligne allotie sans lot lu ;
+  - `QUANTITES_INCOMPATIBLES` : min et max lus sur une fiche à quantité fixe ou contrat-cadre, ou une seule quantité sur une fiche à
+    commande.
+- **Avertissements** (dans `avertissements[]`, l'article reste proposable) :
+  - écart de désignation entre bordereau et spécifications, avec les deux textes (et `designationSpecification`) ;
+  - article du bordereau sans spécification, ou spécification sans article du bordereau ;
+  - contrat-cadre : « les quantités du bordereau sont données à titre indicatif » ;
+  - caractéristique plus longue que la validation n'admet (libellé 300, exigence 500 caractères) ;
+  - tableaux illisibles : « les articles du besoin restent à saisir » (`articles` vide, le reste de l'import inchangé).
+- **Règles de lecture** (§B3, celles du prototype) : grille de mots positionnés et de filets tracés (fonds remplis et filigrane
+  écartés, filets verticaux recollés) ; cellules coupées seulement par un filet réel ; tableaux reconnus par leurs intitulés de
+  colonnes ; lot dans les 70 points au-dessus (« LOT N°3 : »), sinon le dernier vu ; suite de tableau sur la page suivante ; lignes
+  de section (série) ; suffixe de prix retiré ; quantités à virgule et espaces ; rapprochement par lot et numéro ; découpage des
+  caractéristiques.
+  - ⚠️ **Écart au prototype, règle 11** : deux désignations divergent par leurs nombres **seulement si les deux en portent**. Le
+    prototype signalait « Ordinateurs portables » / « Ordinateur portable I3 » (DAO 297), une précision et non une contradiction,
+    contre sa propre mesure (0 écart pour ce DAO).
+- **Word** (§B4) : les tableaux natifs (cellules fusionnées par `gridSpan`, `vMerge`) ; le lot est lu dans les trois paragraphes qui
+  précèdent le tableau ; une cellule d'un seul paragraphe de plus de 80 caractères vaut un texte « d'un seul tenant ». Aucun DAO
+  Word réel n'a pu le mesurer.
+- **Durée** : la lecture des tableaux tourne **en parallèle** de la lecture par modèle. Sur un DAO PDF de cent pages, l'extraction
+  PDFBox coûte une vingtaine de secondes à chacune des deux lectures, qui ne s'additionnent donc pas.
+- **Recette** (`LectureTableauxRecetteTest`, DAO réels du pilote lus dans `PRS_DAO_DIR`, à défaut Téléchargements ; ignorée s'ils
+  manquent) : 2463, 297, 6114, 6213 et MTP Ankily-Mahasoa, **136 articles sur 136** identiques aux sorties de référence (lot,
+  numéro, désignation, unité, quantités, série, nombre de caractéristiques), et les **trois écarts réels seuls** (500 ml / 100 ml,
+  1 l / 950 cl, B2 / B1).
+- **`PUT …/articles`, la trace de l'import** (§B2) : deux champs facultatifs du corps, **`importFichier`** et
+  **`importEmpreinte`** (SHA-256 hexadécimal, celle de la lecture). Ils vont ensemble (400 nominatif sinon). Présents, le journal du
+  dossier de planification reçoit `FICHE_IMPORTEE` « besoin pré-rempli par import de <fichier> (<12 caractères>) : n article(s)[,
+  lot k] ».
+
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 
 Demande front `frontend/docs/demande-backend-2026-09-25-formulaires-du-candidat.md`. Livré : §B1, §B2, §B4, et au §B3

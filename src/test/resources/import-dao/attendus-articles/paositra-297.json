@@ -1,0 +1,1390 @@
+[
+ {
+  "lot": 1,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Ordinateurs portables, l’unité à ….Ariary",
+  "designation": "Ordinateurs portables",
+  "unite": "U",
+  "quantite": 437,
+  "pageBordereau": 49,
+  "designationSpec": "Ordinateur portable I3",
+  "exigences": [
+   "O.S .: WIN 10 ou plus",
+   "Processeur core i3 génération 8100 au min",
+   "RAM 8Go au min",
+   "Disque Dur 500Go min",
+   "Lecteur DVDRW/USB2-3",
+   "Souris optique /filaire (optionnel)",
+   "Clavier azerty",
+   "Ecran 15\" min",
+   "WebCam",
+   "Cable alimentation complet",
+   "Prise alimentation répondant aux normes",
+   "européennes",
+   "Connectivité : RJ45 et Wifi ou livré avec adapteur",
+   "type C/RJ45",
+   "Housse imperméable, antichoc"
+  ],
+  "prose": false,
+  "pageSpec": 82,
+  "caracteristiques": [
+   {
+    "libelle": "O.S .",
+    "exigence": "WIN 10 ou plus"
+   },
+   {
+    "libelle": "Processeur core i3 génération 8100 au min",
+    "exigence": ""
+   },
+   {
+    "libelle": "RAM 8Go au min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Disque Dur 500Go min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Lecteur DVDRW/USB2-3",
+    "exigence": ""
+   },
+   {
+    "libelle": "Souris optique /filaire (optionnel)",
+    "exigence": ""
+   },
+   {
+    "libelle": "Clavier azerty",
+    "exigence": ""
+   },
+   {
+    "libelle": "Ecran 15\" min",
+    "exigence": ""
+   },
+   {
+    "libelle": "WebCam",
+    "exigence": ""
+   },
+   {
+    "libelle": "Cable alimentation complet",
+    "exigence": ""
+   },
+   {
+    "libelle": "Prise alimentation répondant aux normes européennes",
+    "exigence": ""
+   },
+   {
+    "libelle": "Connectivité",
+    "exigence": "RJ45 et Wifi ou livré avec adapteur type C/RJ45"
+   },
+   {
+    "libelle": "Housse imperméable, antichoc",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 1,
+  "n": 2,
+  "code": "2",
+  "designationSpec": "Ordinateur portable I5",
+  "exigences": [
+   "O.S. : WIN 10 ou plus",
+   "Processeur core i5 génération 8400 au min",
+   "RAM 8Go au min",
+   "Disque Dur 500Go min",
+   "Lecteur DVDRW/USB2-3",
+   "Souris optique /filaire (optionnel)",
+   "Clavier azerty",
+   "Ecran 15\" min",
+   "WebCam",
+   "Cable alimentation complet",
+   "Prise alimentation répondant aux normes européennes",
+   "Housse imperméable, antichoc",
+   "Connectivité : RJ45 et Wifi ou livré avec adapteur type",
+   "C/RJ45"
+  ],
+  "prose": false,
+  "pageSpec": 82,
+  "caracteristiques": [
+   {
+    "libelle": "O.S.",
+    "exigence": "WIN 10 ou plus"
+   },
+   {
+    "libelle": "Processeur core i5 génération 8400 au min",
+    "exigence": ""
+   },
+   {
+    "libelle": "RAM 8Go au min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Disque Dur 500Go min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Lecteur DVDRW/USB2-3",
+    "exigence": ""
+   },
+   {
+    "libelle": "Souris optique /filaire (optionnel)",
+    "exigence": ""
+   },
+   {
+    "libelle": "Clavier azerty",
+    "exigence": ""
+   },
+   {
+    "libelle": "Ecran 15\" min",
+    "exigence": ""
+   },
+   {
+    "libelle": "WebCam",
+    "exigence": ""
+   },
+   {
+    "libelle": "Cable alimentation complet",
+    "exigence": ""
+   },
+   {
+    "libelle": "Prise alimentation répondant aux normes européennes",
+    "exigence": ""
+   },
+   {
+    "libelle": "Housse imperméable, antichoc",
+    "exigence": ""
+   },
+   {
+    "libelle": "Connectivité",
+    "exigence": "RJ45 et Wifi ou livré avec adapteur type C/RJ45"
+   }
+  ]
+ },
+ {
+  "lot": 1,
+  "n": 3,
+  "code": "3",
+  "designationSpec": "Ordinateur portable I7",
+  "exigences": [
+   "O.S. : WIN 11 ou plus",
+   "Processeur core i7 génération 11700 au min",
+   "RAM 8Go au min",
+   "Disque Dur 500Go",
+   "Lecteur: DVDRW / USB2-3",
+   "Souris optique /filaire (optionnel)",
+   "Clavier azerty",
+   "Ecran 17\" min",
+   "WebCam",
+   "Connectivité : RJ45 et Wifi ou livré avec adapteur type",
+   "C/RJ45",
+   "Cable alimentation complet",
+   "Prise alimentation répondant aux normes européennes",
+   "Housse imperméable, antichoc"
+  ],
+  "prose": false,
+  "pageSpec": 82,
+  "caracteristiques": [
+   {
+    "libelle": "O.S.",
+    "exigence": "WIN 11 ou plus"
+   },
+   {
+    "libelle": "Processeur core i7 génération 11700 au min",
+    "exigence": ""
+   },
+   {
+    "libelle": "RAM 8Go au min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Disque Dur 500Go",
+    "exigence": ""
+   },
+   {
+    "libelle": "Lecteur",
+    "exigence": "DVDRW / USB2-3"
+   },
+   {
+    "libelle": "Souris optique /filaire (optionnel)",
+    "exigence": ""
+   },
+   {
+    "libelle": "Clavier azerty",
+    "exigence": ""
+   },
+   {
+    "libelle": "Ecran 17\" min",
+    "exigence": ""
+   },
+   {
+    "libelle": "WebCam",
+    "exigence": ""
+   },
+   {
+    "libelle": "Connectivité",
+    "exigence": "RJ45 et Wifi ou livré avec adapteur type C/RJ45"
+   },
+   {
+    "libelle": "Cable alimentation complet",
+    "exigence": ""
+   },
+   {
+    "libelle": "Prise alimentation répondant aux normes européennes",
+    "exigence": ""
+   },
+   {
+    "libelle": "Housse imperméable, antichoc",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 2,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Ordinateurs de bureau, l’unité à ….Ariary",
+  "designation": "Ordinateurs de bureau",
+  "unite": "U",
+  "quantite": 24,
+  "pageBordereau": 50,
+  "designationSpec": "Ordinateur de bureau",
+  "exigences": [
+   "O.S. : WIN 10 min",
+   "Processeur core i5 generation 8400 min",
+   "Connectivité : RJ45 et Wifi (livré avec clé USB Wifi)",
+   "RAM 8Go au min",
+   "Disque Dur 500Go min",
+   "Lecteur : DVDRW et USB 2.0 - 3.0",
+   "Souris USB optique filaire",
+   "Clavier azerty USB filaire",
+   "Ecran 17\" min",
+   "Onduleur 650 VA",
+   "Cable alimentation complet",
+   "Prise alimentation répondant aux normes",
+   "européennes"
+  ],
+  "prose": false,
+  "pageSpec": 84,
+  "caracteristiques": [
+   {
+    "libelle": "O.S.",
+    "exigence": "WIN 10 min"
+   },
+   {
+    "libelle": "Processeur core i5 generation 8400 min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Connectivité",
+    "exigence": "RJ45 et Wifi (livré avec clé USB Wifi)"
+   },
+   {
+    "libelle": "RAM 8Go au min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Disque Dur 500Go min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Lecteur",
+    "exigence": "DVDRW et USB 2.0 - 3.0"
+   },
+   {
+    "libelle": "Souris USB optique filaire",
+    "exigence": ""
+   },
+   {
+    "libelle": "Clavier azerty USB filaire",
+    "exigence": ""
+   },
+   {
+    "libelle": "Ecran 17\" min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Onduleur 650 VA",
+    "exigence": ""
+   },
+   {
+    "libelle": "Cable alimentation complet",
+    "exigence": ""
+   },
+   {
+    "libelle": "Prise alimentation répondant aux normes européennes",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 2,
+  "n": 2,
+  "code": "2",
+  "designationSpec": "Ordinateur de bureau Communication",
+  "exigences": [
+   "O.S. : WIN 10 ou plus",
+   "Processeur core i7 11700 min",
+   "Connectivité : RJ45 et Wifi (livré avec clé USB Wifi)",
+   "RAM 16Go min",
+   "Disque Dur 1To min",
+   "Lecteur : DVDRW et USB 2,0 - 3,0",
+   "Souris optique/ filaire",
+   "Clavier azerty",
+   "Ecran 17\" min",
+   "Onduleur 650 VA",
+   "Cable alimentation complet",
+   "Prise alimentation répondant aux normes",
+   "européennes",
+   "Carte graphique : GPU NVIDIA Geforce GTX",
+   "1080Ti"
+  ],
+  "prose": false,
+  "pageSpec": 84,
+  "caracteristiques": [
+   {
+    "libelle": "O.S.",
+    "exigence": "WIN 10 ou plus"
+   },
+   {
+    "libelle": "Processeur core i7 11700 min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Connectivité",
+    "exigence": "RJ45 et Wifi (livré avec clé USB Wifi)"
+   },
+   {
+    "libelle": "RAM 16Go min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Disque Dur 1To min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Lecteur",
+    "exigence": "DVDRW et USB 2,0 - 3,0"
+   },
+   {
+    "libelle": "Souris optique/ filaire",
+    "exigence": ""
+   },
+   {
+    "libelle": "Clavier azerty",
+    "exigence": ""
+   },
+   {
+    "libelle": "Ecran 17\" min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Onduleur 650 VA",
+    "exigence": ""
+   },
+   {
+    "libelle": "Cable alimentation complet",
+    "exigence": ""
+   },
+   {
+    "libelle": "Prise alimentation répondant aux normes européennes",
+    "exigence": ""
+   },
+   {
+    "libelle": "Carte graphique",
+    "exigence": "GPU NVIDIA Geforce GTX 1080Ti"
+   }
+  ]
+ },
+ {
+  "lot": 3,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Scanner, l’unité à ….Ariary",
+  "designation": "Scanner",
+  "unite": "U",
+  "quantite": 21,
+  "pageBordereau": 51,
+  "designationSpec": "Scanner",
+  "exigences": [
+   "Résolution : 4800 x 4800 dpi",
+   "Profondeur de Couleur :48 bits en entrée, 24 bits en sortie",
+   "Taille de Numérisation : A4",
+   "Vitesse : Variable, mais peut être rapide 20 ppm/40 ipm",
+   "Type : à plat",
+   "OS: Win7, Win8, Win10, WinServer et plus",
+   "Cable USB",
+   "CABLE Alimentation type français",
+   "Driver CD + logiciels SCANNER",
+   "Formats de fichiers : JPEG, PDF, PNG, TIFF, etc."
+  ],
+  "prose": false,
+  "pageSpec": 86,
+  "caracteristiques": [
+   {
+    "libelle": "Résolution",
+    "exigence": "4800 x 4800 dpi"
+   },
+   {
+    "libelle": "Profondeur de Couleur",
+    "exigence": "48 bits en entrée, 24 bits en sortie"
+   },
+   {
+    "libelle": "Taille de Numérisation",
+    "exigence": "A4"
+   },
+   {
+    "libelle": "Vitesse",
+    "exigence": "Variable, mais peut être rapide 20 ppm/40 ipm"
+   },
+   {
+    "libelle": "Type",
+    "exigence": "à plat"
+   },
+   {
+    "libelle": "OS: Win7, Win8, Win10, WinServer et plus",
+    "exigence": ""
+   },
+   {
+    "libelle": "Cable USB",
+    "exigence": ""
+   },
+   {
+    "libelle": "CABLE Alimentation type français",
+    "exigence": ""
+   },
+   {
+    "libelle": "Driver CD + logiciels SCANNER",
+    "exigence": ""
+   },
+   {
+    "libelle": "Formats de fichiers",
+    "exigence": "JPEG, PDF, PNG, TIFF, etc."
+   }
+  ]
+ },
+ {
+  "lot": 4,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Imprimante N&B, l’unité à ….Ariary",
+  "designation": "Imprimante N&B",
+  "unite": "U",
+  "quantite": 50,
+  "pageBordereau": 52,
+  "designationSpec": "Imprimantes N&B",
+  "exigences": [
+   "Technologie: Laser",
+   "Couleur : monochrome",
+   "Format de support: A4",
+   "Connectivité: USB",
+   "Câble alimentation: source française",
+   "Câble imprimante vers PC USB2.0",
+   "Toner compatible avec 285A",
+   "Driver CD/DVD"
+  ],
+  "prose": false,
+  "pageSpec": 88,
+  "caracteristiques": [
+   {
+    "libelle": "Technologie",
+    "exigence": "Laser"
+   },
+   {
+    "libelle": "Couleur",
+    "exigence": "monochrome"
+   },
+   {
+    "libelle": "Format de support",
+    "exigence": "A4"
+   },
+   {
+    "libelle": "Connectivité",
+    "exigence": "USB"
+   },
+   {
+    "libelle": "Câble alimentation",
+    "exigence": "source française"
+   },
+   {
+    "libelle": "Câble imprimante vers PC USB2.0",
+    "exigence": ""
+   },
+   {
+    "libelle": "Toner compatible avec 285A",
+    "exigence": ""
+   },
+   {
+    "libelle": "Driver CD/DVD",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 5,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Imprimante couleur, l’unité à ….Ariary",
+  "designation": "Imprimante couleur",
+  "unite": "U",
+  "quantite": 17,
+  "pageBordereau": 53,
+  "designationSpec": "Imprimantes couleurs",
+  "exigences": [
+   "Vitesse d'impression : jusqu'à 20ppm (noir et couleur)",
+   "Résolution : Jusqu'à 600 x 600 ppp",
+   "Capacité bacs de sortie : 100 feuilles min",
+   "Consommables : 4 cartouches (Noir, Cyan, Magenta, Jaune)",
+   "Tonner compatible CF400-CF401-CF402-CF403",
+   "Connectivité : USB-RJ45-Wifi",
+   "Driver CD/DVD",
+   "Câble imprimante vers PC USB2.0",
+   "Câble alimentation : source française"
+  ],
+  "prose": false,
+  "pageSpec": 90,
+  "caracteristiques": [
+   {
+    "libelle": "Vitesse d'impression",
+    "exigence": "jusqu'à 20ppm (noir et couleur)"
+   },
+   {
+    "libelle": "Résolution",
+    "exigence": "Jusqu'à 600 x 600 ppp"
+   },
+   {
+    "libelle": "Capacité bacs de sortie",
+    "exigence": "100 feuilles min"
+   },
+   {
+    "libelle": "Consommables",
+    "exigence": "4 cartouches (Noir, Cyan, Magenta, Jaune)"
+   },
+   {
+    "libelle": "Tonner compatible CF400-CF401-CF402-CF403",
+    "exigence": ""
+   },
+   {
+    "libelle": "Connectivité",
+    "exigence": "USB-RJ45-Wifi"
+   },
+   {
+    "libelle": "Driver CD/DVD",
+    "exigence": ""
+   },
+   {
+    "libelle": "Câble imprimante vers PC USB2.0",
+    "exigence": ""
+   },
+   {
+    "libelle": "Câble alimentation",
+    "exigence": "source française"
+   }
+  ]
+ },
+ {
+  "lot": 6,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Photocopieuse, l’unité à ….Ariary",
+  "designation": "Photocopieuse",
+  "unite": "U",
+  "quantite": 12,
+  "pageBordereau": 54,
+  "designationSpec": "Photocopieuses",
+  "exigences": [
+   "Vitesse d'impression/copie :20 à 45 ppm",
+   "Résolution : 600 x 1200 ppp ou 1200 x 1200 ppp",
+   "Format et gestion du papier : A4 et A3",
+   "Connectivité : USB - RJ45",
+   "Écran tactile : écrans tactiles couleur pour une navigation et",
+   "une utilisation simplifiée des différentes fonctionnalités.",
+   "Driver CD/DVD + Câble alimentation"
+  ],
+  "prose": false,
+  "pageSpec": 92,
+  "caracteristiques": [
+   {
+    "libelle": "Vitesse d'impression/copie",
+    "exigence": "20 à 45 ppm"
+   },
+   {
+    "libelle": "Résolution",
+    "exigence": "600 x 1200 ppp ou 1200 x 1200 ppp"
+   },
+   {
+    "libelle": "Format et gestion du papier",
+    "exigence": "A4 et A3"
+   },
+   {
+    "libelle": "Connectivité",
+    "exigence": "USB - RJ45"
+   },
+   {
+    "libelle": "Écran tactile",
+    "exigence": "écrans tactiles couleur pour une navigation et une utilisation simplifiée des différentes fonctionnalités."
+   },
+   {
+    "libelle": "Driver CD/DVD + Câble alimentation",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 7,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Dupli copieur, l’unité à ….Ariary",
+  "designation": "Dupli copieur",
+  "unite": "U",
+  "quantite": 1,
+  "pageBordereau": 55,
+  "designationSpec": "Dupli copieur",
+  "exigences": [
+   "Vitesse : entre 60 et 200ppm",
+   "Résolution : 300 à 600 dpi",
+   "Formats des impressions : de A6 (105 x 148mm) au",
+   "A3 (420 x 297mm)",
+   "Chargeur de documents : entre 10 et 200 pages",
+   "Alimentation du bac à papier : entre 1000 et 2500",
+   "impressions",
+   "Grammage de papier: entre 40 et 210g/m²"
+  ],
+  "prose": false,
+  "pageSpec": 94,
+  "caracteristiques": [
+   {
+    "libelle": "Vitesse",
+    "exigence": "entre 60 et 200ppm"
+   },
+   {
+    "libelle": "Résolution",
+    "exigence": "300 à 600 dpi"
+   },
+   {
+    "libelle": "Formats des impressions",
+    "exigence": "de A6 (105 x 148mm) au A3 (420 x 297mm)"
+   },
+   {
+    "libelle": "Chargeur de documents",
+    "exigence": "entre 10 et 200 pages"
+   },
+   {
+    "libelle": "Alimentation du bac à papier",
+    "exigence": "entre 1000 et 2500 impressions"
+   },
+   {
+    "libelle": "Grammage de papier",
+    "exigence": "entre 40 et 210g/m²"
+   }
+  ]
+ },
+ {
+  "lot": 8,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Imprimante code à barre DTRA, l’unité à ….Ariary",
+  "designation": "Imprimante code à barre DTRA",
+  "unite": "U",
+  "quantite": 1,
+  "pageBordereau": 56,
+  "designationSpec": "Imprimantes code à barre DTRA",
+  "exigences": [
+   "Résolution :200 à 300 ppp",
+   "Méthode d'impression : Transfert Thermique / Thermique",
+   "Direct",
+   "Mémoire :8 Mo de RAM / 8 Mo de mémoire Flash",
+   "Largeur d'impression jusqu'à 108 mm",
+   "Vitesse d'impression 100 à 130 mm/s",
+   "Capteurs de médias Capteur de marque noire",
+   "mobile/capteur d'espacement mobile Émulation : TSPL,",
+   "ZPL, EPL, DPL",
+   "Interface : USB, USB+Série , USB+Lan,",
+   "USB+Série+Lan, USB+Parallèle, USB+Parallèle+Lan,",
+   "Autres : RTC en option, emplacement pour carte SD",
+   "standard",
+   "Caractéristiques des supports et des rubans :",
+   "Longueur du support :10 mm ~ 1 778 mm",
+   "Largeur du support : 25,4 mm ~ 118 mm",
+   "Taille du rouleau de support : 127 mm de diamètre",
+   "extérieur",
+   "diamètre intérieur du noyau : 25,4 mm",
+   "Épaisseur du support : 0,06 mm min. ; 0,254 mm Max",
+   "Types de médias : Continu, espace, marque noire, pliage",
+   "en éventail, support perforé",
+   "Diamètre extérieur du ruban : 67 mm Max",
+   "Longueur du ruban : 300 mètres",
+   "Largeur du ruban :25,4 mm ~ 110 mm",
+   "ID du noyau du ruban : 25,4 mm"
+  ],
+  "prose": false,
+  "pageSpec": 96,
+  "caracteristiques": [
+   {
+    "libelle": "Résolution",
+    "exigence": "200 à 300 ppp"
+   },
+   {
+    "libelle": "Méthode d'impression",
+    "exigence": "Transfert Thermique / Thermique"
+   },
+   {
+    "libelle": "Direct",
+    "exigence": ""
+   },
+   {
+    "libelle": "Mémoire",
+    "exigence": "8 Mo de RAM / 8 Mo de mémoire Flash"
+   },
+   {
+    "libelle": "Largeur d'impression jusqu'à 108 mm",
+    "exigence": ""
+   },
+   {
+    "libelle": "Vitesse d'impression 100 à 130 mm/s",
+    "exigence": ""
+   },
+   {
+    "libelle": "Capteurs de médias Capteur de marque noire mobile/capteur d'espacement mobile Émulation : TSPL, ZPL, EPL, DPL",
+    "exigence": ""
+   },
+   {
+    "libelle": "Interface",
+    "exigence": "USB, USB+Série , USB+Lan, USB+Série+Lan, USB+Parallèle, USB+Parallèle+Lan, Autres : RTC en option, emplacement pour carte SD standard"
+   },
+   {
+    "libelle": "Caractéristiques des supports et des rubans : Longueur du support :10 mm ~ 1 778 mm",
+    "exigence": ""
+   },
+   {
+    "libelle": "Largeur du support",
+    "exigence": "25,4 mm ~ 118 mm"
+   },
+   {
+    "libelle": "Taille du rouleau de support",
+    "exigence": "127 mm de diamètre extérieur diamètre intérieur du noyau : 25,4 mm"
+   },
+   {
+    "libelle": "Épaisseur du support",
+    "exigence": "0,06 mm min. ; 0,254 mm Max"
+   },
+   {
+    "libelle": "Types de médias",
+    "exigence": "Continu, espace, marque noire, pliage en éventail, support perforé"
+   },
+   {
+    "libelle": "Diamètre extérieur du ruban",
+    "exigence": "67 mm Max"
+   },
+   {
+    "libelle": "Longueur du ruban",
+    "exigence": "300 mètres"
+   },
+   {
+    "libelle": "Largeur du ruban",
+    "exigence": "25,4 mm ~ 110 mm"
+   },
+   {
+    "libelle": "ID du noyau du ruban",
+    "exigence": "25,4 mm"
+   }
+  ]
+ },
+ {
+  "lot": 9,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Imprimantes étiquettes code à barre, l’unité à ….Ariary",
+  "designation": "Imprimantes étiquettes code à barre",
+  "unite": "U",
+  "quantite": 5,
+  "pageBordereau": 57,
+  "designationSpec": "Imprimantes étiquettes code à barre",
+  "exigences": [
+   "Résolution : 200 à 300 ppp",
+   "Méthode d'impression : Transfert thermique /",
+   "thermique direct",
+   "Vitesse d'impression 150 à 200 mm / seconde",
+   "Largeur d'impression : jusqu'à 104 mm",
+   "Longueur d'impression jusqu'à 1778 mm",
+   "Largeur du support de 25,4 mm à 115 mm",
+   "Épaisseur du support de 0,06 mm à 0,25 mm",
+   "Longueur d'étiquette : 10 à 1778 mm",
+   "Capacité du rouleau d'étiquettes : 127 mm",
+   "(diamètre extérieur)",
+   "Capacité du ruban : 300 m maximum",
+   "Largeur du ruban : 25,4 mm à 110 mm",
+   "Noyau de ruban interne diamètre :25,4 mm",
+   "Rotation 0°, 90°, 180°, 270°",
+   "Entrée : AC 110-240V",
+   "Sortie ： DC 24V"
+  ],
+  "prose": false,
+  "pageSpec": 98,
+  "caracteristiques": [
+   {
+    "libelle": "Résolution",
+    "exigence": "200 à 300 ppp"
+   },
+   {
+    "libelle": "Méthode d'impression",
+    "exigence": "Transfert thermique / thermique direct"
+   },
+   {
+    "libelle": "Vitesse d'impression 150 à 200 mm / seconde",
+    "exigence": ""
+   },
+   {
+    "libelle": "Largeur d'impression",
+    "exigence": "jusqu'à 104 mm"
+   },
+   {
+    "libelle": "Longueur d'impression jusqu'à 1778 mm",
+    "exigence": ""
+   },
+   {
+    "libelle": "Largeur du support de 25,4 mm à 115 mm",
+    "exigence": ""
+   },
+   {
+    "libelle": "Épaisseur du support de 0,06 mm à 0,25 mm",
+    "exigence": ""
+   },
+   {
+    "libelle": "Longueur d'étiquette",
+    "exigence": "10 à 1778 mm"
+   },
+   {
+    "libelle": "Capacité du rouleau d'étiquettes",
+    "exigence": "127 mm"
+   },
+   {
+    "libelle": "(diamètre extérieur)",
+    "exigence": ""
+   },
+   {
+    "libelle": "Capacité du ruban",
+    "exigence": "300 m maximum"
+   },
+   {
+    "libelle": "Largeur du ruban",
+    "exigence": "25,4 mm à 110 mm"
+   },
+   {
+    "libelle": "Noyau de ruban interne diamètre",
+    "exigence": "25,4 mm"
+   },
+   {
+    "libelle": "Rotation 0°, 90°, 180°, 270°",
+    "exigence": ""
+   },
+   {
+    "libelle": "Entrée",
+    "exigence": "AC 110-240V"
+   },
+   {
+    "libelle": "Sortie ： DC 24V",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 10,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Tablette, l’unité à …. Ariary",
+  "designation": "Tablette",
+  "unite": "U",
+  "quantite": 150,
+  "pageBordereau": 58,
+  "designationSpec": "Tablettes",
+  "exigences": [
+   "OS : Android 12 min",
+   "Processeur: quad core",
+   "Carte sim: oui",
+   "Connexion: 4G LTE HSPA GSM",
+   "Partage de connexion oui",
+   "Mémoire interne 32Go min",
+   "RAM 4Go min",
+   "Carte mémoire SD",
+   "Appareil photo AV AR 2MPX 8MPX min",
+   "Bluetooth wifi",
+   "Taille écran 10\"min",
+   "Chargeur et câble source française"
+  ],
+  "prose": false,
+  "pageSpec": 100,
+  "caracteristiques": [
+   {
+    "libelle": "OS",
+    "exigence": "Android 12 min"
+   },
+   {
+    "libelle": "Processeur",
+    "exigence": "quad core"
+   },
+   {
+    "libelle": "Carte sim",
+    "exigence": "oui"
+   },
+   {
+    "libelle": "Connexion",
+    "exigence": "4G LTE HSPA GSM"
+   },
+   {
+    "libelle": "Partage de connexion oui",
+    "exigence": ""
+   },
+   {
+    "libelle": "Mémoire interne 32Go min",
+    "exigence": ""
+   },
+   {
+    "libelle": "RAM 4Go min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Carte mémoire SD",
+    "exigence": ""
+   },
+   {
+    "libelle": "Appareil photo AV AR 2MPX 8MPX min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Bluetooth wifi",
+    "exigence": ""
+   },
+   {
+    "libelle": "Taille écran 10\"min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Chargeur et câble source française",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 11,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Serveur, l’unité à …. Ariary",
+  "designation": "Serveur",
+  "unite": "U",
+  "quantite": 9,
+  "pageBordereau": 59,
+  "designationSpec": "Serveur",
+  "exigences": [
+   "Système d’exploitation compatible Win server 2019-",
+   "2022",
+   "Système d’exploitation installé avec support",
+   "d’installation",
+   "Processeur Intel Xeon 3900-8200",
+   "Noyau processeur disponible 8-22 cœurs",
+   "Mémoire maximale 3To avec 128Go DDR4",
+   "Mémoire cash du processeur 1To LOGEMENTS",
+   "Logements pour la mémoire : DIMM",
+   "Type de mémoire 4à8 lecteurs SFF",
+   "Lecteur : DVDRW/USB2-3",
+   "Disque dur Entreprise 1To X 3 min",
+   "Ecran 17\"",
+   "Clavier USB azerty filaire",
+   "Souris USB optique filaire",
+   "Onduleur 3kva",
+   "Cable alimentation complet source française",
+   "Carte réseau externe compatible",
+   "Ethernet industriel : EtherNet/IP, Profinet, Modbus TCP",
+   "et TCP/IP std",
+   "Cable alimentation"
+  ],
+  "prose": false,
+  "pageSpec": 102,
+  "caracteristiques": [
+   {
+    "libelle": "Système d’exploitation compatible Win server 2019- 2022",
+    "exigence": ""
+   },
+   {
+    "libelle": "Système d’exploitation installé avec support d’installation",
+    "exigence": ""
+   },
+   {
+    "libelle": "Processeur Intel Xeon 3900-8200",
+    "exigence": ""
+   },
+   {
+    "libelle": "Noyau processeur disponible 8-22 cœurs",
+    "exigence": ""
+   },
+   {
+    "libelle": "Mémoire maximale 3To avec 128Go DDR4",
+    "exigence": ""
+   },
+   {
+    "libelle": "Mémoire cash du processeur 1To LOGEMENTS",
+    "exigence": ""
+   },
+   {
+    "libelle": "Logements pour la mémoire",
+    "exigence": "DIMM"
+   },
+   {
+    "libelle": "Type de mémoire 4à8 lecteurs SFF",
+    "exigence": ""
+   },
+   {
+    "libelle": "Lecteur",
+    "exigence": "DVDRW/USB2-3"
+   },
+   {
+    "libelle": "Disque dur Entreprise 1To X 3 min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Ecran 17\"",
+    "exigence": ""
+   },
+   {
+    "libelle": "Clavier USB azerty filaire",
+    "exigence": ""
+   },
+   {
+    "libelle": "Souris USB optique filaire",
+    "exigence": ""
+   },
+   {
+    "libelle": "Onduleur 3kva",
+    "exigence": ""
+   },
+   {
+    "libelle": "Cable alimentation complet source française",
+    "exigence": ""
+   },
+   {
+    "libelle": "Carte réseau externe compatible",
+    "exigence": ""
+   },
+   {
+    "libelle": "Ethernet industriel",
+    "exigence": "EtherNet/IP, Profinet, Modbus TCP et TCP/IP std"
+   },
+   {
+    "libelle": "Cable alimentation",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 12,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Serveurs de stockage en réseau (NAS), l’unité à …. Ariary",
+  "designation": "Serveurs de stockage en réseau (NAS)",
+  "unite": "U",
+  "quantite": 4,
+  "pageBordereau": 60,
+  "designationSpec": "Serveurs de stockage en réseau (NAS)",
+  "exigences": [
+   "USB 2.0 et 3.0",
+   "Connectivité : RJ45",
+   "SSD 2,5 pouce",
+   "RAID",
+   "RAM 8 Go extensibles au min",
+   "CPU core i7 6e génération au minimum",
+   "Système de fichiers pris en charge : NTFS, ext3, ext4",
+   "Baies : 4 amovibles min",
+   "2 PORTS LAN",
+   "Cable alimentation standard"
+  ],
+  "prose": false,
+  "pageSpec": 104,
+  "caracteristiques": [
+   {
+    "libelle": "USB 2.0 et 3.0",
+    "exigence": ""
+   },
+   {
+    "libelle": "Connectivité",
+    "exigence": "RJ45"
+   },
+   {
+    "libelle": "SSD 2,5 pouce",
+    "exigence": ""
+   },
+   {
+    "libelle": "RAID",
+    "exigence": ""
+   },
+   {
+    "libelle": "RAM 8 Go extensibles au min",
+    "exigence": ""
+   },
+   {
+    "libelle": "CPU core i7 6e génération au minimum",
+    "exigence": ""
+   },
+   {
+    "libelle": "Système de fichiers pris en charge",
+    "exigence": "NTFS, ext3, ext4"
+   },
+   {
+    "libelle": "Baies",
+    "exigence": "4 amovibles min"
+   },
+   {
+    "libelle": "2 PORTS LAN",
+    "exigence": ""
+   },
+   {
+    "libelle": "Cable alimentation standard",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 13,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Ecrans développeurs, l’unité à …. Ariary",
+  "designation": "Ecrans développeurs",
+  "unite": "U",
+  "quantite": 10,
+  "pageBordereau": 61,
+  "designationSpec": "Ecrans développeurs",
+  "exigences": [
+   "Ecran : 27\" min",
+   "Type d'affichage : Écran LCD dalle IPS",
+   "Résolution : QHD (2560 x 1440) à 75Hz min",
+   "Anti lumière bleu : optionnel",
+   "Port USB",
+   "HDMI – displayport"
+  ],
+  "prose": false,
+  "pageSpec": 106,
+  "caracteristiques": [
+   {
+    "libelle": "Ecran",
+    "exigence": "27\" min"
+   },
+   {
+    "libelle": "Type d'affichage",
+    "exigence": "Écran LCD dalle IPS"
+   },
+   {
+    "libelle": "Résolution",
+    "exigence": "QHD (2560 x 1440) à 75Hz min"
+   },
+   {
+    "libelle": "Anti lumière bleu",
+    "exigence": "optionnel"
+   },
+   {
+    "libelle": "Port USB",
+    "exigence": ""
+   },
+   {
+    "libelle": "HDMI – displayport",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 14,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Vidéo projecteur, l’unité à ….Ariary",
+  "designation": "Vidéo projecteur",
+  "unite": "U",
+  "quantite": 1,
+  "pageBordereau": 62,
+  "designationSpec": "Vidéo projecteur",
+  "exigences": [
+   "Luminosité (Lumens ANSI): matériel doté au minimum de 1 000 -",
+   "1500 lumens",
+   "Full HD de 1080 pixels.",
+   "Contraste : Un contraste élevé",
+   "Résolution : Full HD et 4K",
+   "LCD (Tri-LCD) : Très lumineux, excellent pour les présentations en",
+   "environnement éclairé.",
+   "Connectique & Fonctions : HDMI (standard), Bluetooth, WiFi pour la",
+   "connexion sans fil."
+  ],
+  "prose": false,
+  "pageSpec": 108,
+  "caracteristiques": [
+   {
+    "libelle": "Luminosité (Lumens ANSI)",
+    "exigence": "matériel doté au minimum de 1 000 - 1500 lumens"
+   },
+   {
+    "libelle": "Full HD de 1080 pixels.",
+    "exigence": ""
+   },
+   {
+    "libelle": "Contraste",
+    "exigence": "Un contraste élevé"
+   },
+   {
+    "libelle": "Résolution",
+    "exigence": "Full HD et 4K"
+   },
+   {
+    "libelle": "LCD (Tri-LCD)",
+    "exigence": "Très lumineux, excellent pour les présentations en environnement éclairé."
+   },
+   {
+    "libelle": "Connectique & Fonctions",
+    "exigence": "HDMI (standard), Bluetooth, WiFi pour la connexion sans fil."
+   }
+  ]
+ },
+ {
+  "lot": 15,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Caméras de surveillance, le pack à ….Ariary",
+  "designation": "Caméras de surveillance",
+  "unite": "pack",
+  "quantite": 10,
+  "pageBordereau": 63,
+  "designationSpec": "Caméras de surveillance",
+  "exigences": [
+   "Design ultra-compact (gain de place)",
+   "4 Cameras intérieur au minimum",
+   "DVR Analogique",
+   "Affichage en Full HD et Compression H.264",
+   "Sortie réseau (LAN)",
+   "Accessible par internet",
+   "Accessible via smartphone (iPhone, Android)",
+   "Enregistrement programmable",
+   "Interface HDMI et VGA",
+   "Connexion PC via port USB 2.0",
+   "Enregistreur numérique NVR 500Go min",
+   "Ecran : 24\" min + souris",
+   "Câble d’alimentation complet",
+   "Câble HDMI ou VGA",
+   "HDD 1To min"
+  ],
+  "prose": false,
+  "pageSpec": 110,
+  "caracteristiques": [
+   {
+    "libelle": "Design ultra-compact (gain de place)",
+    "exigence": ""
+   },
+   {
+    "libelle": "4 Cameras intérieur au minimum",
+    "exigence": ""
+   },
+   {
+    "libelle": "DVR Analogique",
+    "exigence": ""
+   },
+   {
+    "libelle": "Affichage en Full HD et Compression H.264",
+    "exigence": ""
+   },
+   {
+    "libelle": "Sortie réseau (LAN)",
+    "exigence": ""
+   },
+   {
+    "libelle": "Accessible par internet",
+    "exigence": ""
+   },
+   {
+    "libelle": "Accessible via smartphone (iPhone, Android)",
+    "exigence": ""
+   },
+   {
+    "libelle": "Enregistrement programmable",
+    "exigence": ""
+   },
+   {
+    "libelle": "Interface HDMI et VGA",
+    "exigence": ""
+   },
+   {
+    "libelle": "Connexion PC via port USB 2.0",
+    "exigence": ""
+   },
+   {
+    "libelle": "Enregistreur numérique NVR 500Go min",
+    "exigence": ""
+   },
+   {
+    "libelle": "Ecran",
+    "exigence": "24\" min + souris"
+   },
+   {
+    "libelle": "Câble d’alimentation complet",
+    "exigence": ""
+   },
+   {
+    "libelle": "Câble HDMI ou VGA",
+    "exigence": ""
+   },
+   {
+    "libelle": "HDD 1To min",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": 16,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Ecran interactif, le pack à ….Ariary",
+  "designation": "Ecran interactif",
+  "unite": "pack",
+  "quantite": 1,
+  "pageBordereau": 64,
+  "designationSpec": "Ecran interactif",
+  "exigences": [
+   "Ecran : 65\" min Pro Serie écran LCD rétro-éclairé",
+   "par LED, tactile (multi-touch), 4K Ultra HD",
+   "Résolution : 3840 x 2160",
+   "Tableau blanc : interactif intégré,",
+   "caméra 4K, réseau de 6 microphones intégrés",
+   "Système : Android 11 min avec applications",
+   "Support sur pied à roulettes",
+   "Onduleur 1000VA avec protection de décharge",
+   "et de surcharge",
+   "Projection WiFi intégrée,",
+   "possibilité par câble HDMI"
+  ],
+  "prose": false,
+  "pageSpec": 112,
+  "caracteristiques": [
+   {
+    "libelle": "Ecran",
+    "exigence": "65\" min Pro Serie écran LCD rétro-éclairé par LED, tactile (multi-touch), 4K Ultra HD"
+   },
+   {
+    "libelle": "Résolution",
+    "exigence": "3840 x 2160"
+   },
+   {
+    "libelle": "Tableau blanc",
+    "exigence": "interactif intégré, caméra 4K, réseau de 6 microphones intégrés"
+   },
+   {
+    "libelle": "Système",
+    "exigence": "Android 11 min avec applications"
+   },
+   {
+    "libelle": "Support sur pied à roulettes",
+    "exigence": ""
+   },
+   {
+    "libelle": "Onduleur 1000VA avec protection de décharge et de surcharge",
+    "exigence": ""
+   },
+   {
+    "libelle": "Projection WiFi intégrée, possibilité par câble HDMI",
+    "exigence": ""
+   }
+  ]
+ }
+]

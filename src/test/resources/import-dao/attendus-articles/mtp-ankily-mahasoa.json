@@ -1,0 +1,1063 @@
+[
+ {
+  "lot": null,
+  "n": 1,
+  "code": "001",
+  "designationBrute": "Installation et repli de chantier",
+  "designation": "Installation et repli de chantier",
+  "serie": "000",
+  "serieLibelle": "Installation de chantier",
+  "unite": "Fft",
+  "quantite": 1,
+  "pageBordereau": 43,
+  "designationSpec": "Installation et repli de chantier",
+  "exigences": [
+   "Ce prix rémunère au FORFAIT (fft) l’installation et le repli du Titulaire sur les",
+   "chantiers, objet du marché, quel que soit le nombre des sites d'intervention.",
+   "Il est limité à un montant au plus égal à DIX POUR CENT (10%) du montant des",
+   "travaux, inscrit au bordereau détail estimatif du marché.",
+   "•Les installations de chantier comprennent notamment :",
+   "✓ -L’installation et l’aménagement des bases des services généraux du Titulaire,",
+   "✓ -L’installation du laboratoire commun de chantier éventuelle ou les frais",
+   "d’études et de suivi de laboratoire pour toutes les prestations indispensables",
+   "selon l’ingénieur de contrôle ou l’administration,",
+   "✓ L’amenée et le repliement des matériels, Ces matériels comprennent",
+   "L’achat des matériels informatiques tel que : 04 Ordinateurs portables au",
+   "moins : Core 7 13ème génération",
+   "Ce prix sera pris en attachement selon l’échéancier suivant :",
+   "SOIXANTE POUR CENT (60 %) au démarrage du chantier, après",
+   "constatation de l’amenée sur site de tout le matériel nécessaire au chantier, et",
+   "de la conformité des éléments de signalisation.",
+   "QUARANTE POUR CENT (40%) en fin de chantier, après la réception",
+   "provisoire, et sous réserve que le Titulaire ait satisfait toutes ses obligations",
+   "contractuelles."
+  ],
+  "definition": true,
+  "pageSpec": 86,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au FORFAIT (fft) l’installation et le repli du Titulaire sur les chantiers, objet du marché, quel que soit le nombre des sites d'intervention. Il est limité à un montant au plus égal à DIX POUR CENT (10%) du montant des travaux, inscrit au bordereau détail estimatif du marché.",
+    "exigence": ""
+   },
+   {
+    "libelle": "Les installations de chantier comprennent notamment :",
+    "exigence": ""
+   },
+   {
+    "libelle": "-L’installation et l’aménagement des bases des services généraux du Titulaire,",
+    "exigence": ""
+   },
+   {
+    "libelle": "-L’installation du laboratoire commun de chantier éventuelle ou les frais d’études et de suivi de laboratoire pour toutes les prestations indispensables selon l’ingénieur de contrôle ou l’administration,",
+    "exigence": ""
+   },
+   {
+    "libelle": "L’amenée et le repliement des matériels, Ces matériels comprennent L’achat des matériels informatiques tel que : 04 Ordinateurs portables au moins : Core 7 13ème génération Ce prix sera pris en attachement selon l’échéancier suivant : SOIXANTE POUR CENT (60 %) au démarrage du chantier, après constatation de l’amenée sur site de tout le matériel nécessaire au chantier, et de la conformité des éléments de signalisation. QUARANTE POUR CENT (40%) en fin de chantier, après la réception provisoire, et sous réserve que le Titulaire ait satisfait toutes ses obligations contractuelles.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 502,
+  "code": "502",
+  "designationBrute": "Aménagement de déviation",
+  "designation": "Aménagement de déviation",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "Fft",
+  "quantite": 1,
+  "pageBordereau": 43,
+  "designationSpec": "Aménagement de déviation",
+  "exigences": [
+   "Ce prix rémunère au FORFAIT, tous travaux d’aménagements nécessaires pour la réalisation",
+   "d’une déviation pour éviter la coupure de la circulation."
+  ],
+  "definition": true,
+  "pageSpec": 86,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au FORFAIT, tous travaux d’aménagements nécessaires pour la réalisation d’une déviation pour éviter la coupure de la circulation.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 510,
+  "code": "510",
+  "designationBrute": "Démolition maçonnerie",
+  "designation": "Démolition maçonnerie",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "M3",
+  "quantite": 55.2,
+  "pageBordereau": 43,
+  "designationSpec": "Démolition de maçonnerie",
+  "exigences": [
+   "Ce prix rémunère au METRE CUBE (m3) la démolition manuelle ou mécanique, totale ou",
+   "partielle, d’ouvrages existants en maçonnerie d’assainissement, de franchissement, de",
+   "soutènement et divers, quelles que soient leurs dimensions, leur situation (enterrés ou non).",
+   "Il comprend :",
+   "• tous les terrassements utiles, y compris fouilles ;",
+   "• la démolition proprement dite, complète ou en partie, de l’ouvrage y compris têtes,",
+   "puisards, piles, dalle ou plate-forme, etc.. et toutes sujétions d’exécution ;",
+   "• le tri, le nettoyage, la récupération et le stockage des moellons,",
+   "• le chargement, le transport et la mise en dépôt des autres gravois;",
+   "• et toutes autres sujétions.",
+   "Les quantités à métrer sont les volumes de maçonnerie en place avant démolition, hors tout",
+   "vide.",
+   "Les quantités à prendre en compte seront celles résultant de constats contradictoires."
+  ],
+  "definition": true,
+  "pageSpec": 86,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au METRE CUBE (m3) la démolition manuelle ou mécanique, totale ou partielle, d’ouvrages existants en maçonnerie d’assainissement, de franchissement, de soutènement et divers, quelles que soient leurs dimensions, leur situation (enterrés ou non). Il comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "tous les terrassements utiles, y compris fouilles ;",
+    "exigence": ""
+   },
+   {
+    "libelle": "la démolition proprement dite, complète ou en partie, de l’ouvrage y compris têtes, puisards, piles, dalle ou plate-forme, etc.. et toutes sujétions d’exécution ;",
+    "exigence": ""
+   },
+   {
+    "libelle": "le tri, le nettoyage, la récupération et le stockage des moellons,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le chargement, le transport et la mise en dépôt des autres gravois;",
+    "exigence": ""
+   },
+   {
+    "libelle": "et toutes autres sujétions. Les quantités à métrer sont les volumes de maçonnerie en place avant démolition, hors tout vide. Les quantités à prendre en compte seront celles résultant de constats contradictoires.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 520,
+  "code": "520",
+  "designationBrute": "Déblai pour fouille",
+  "designation": "Déblai pour fouille",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "M3",
+  "quantite": 2054.5,
+  "pageBordereau": 43,
+  "designationSpec": "Déblai pour fouille",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE CUBE (m3) l’excavation en terrains de toutes natures, pour",
+   "fondations, puisards, ouvrages d’assainissement, murs etc.",
+   "Il comprend :",
+   "• la préparation du terrain et l'implantation,",
+   "• l’extraction mécanique ou manuelle,",
+   "• les sujétions dues à l'usage éventuel de brise-roche ou d'explosif,",
+   "• tous les étaiements, blindages,",
+   "• le chargement, le transport sur toute distance et la mise en dépôt en un lieu agréé, des",
+   "matériaux extraits,",
+   "• le réglage soigné du fond de fouille ou des surfaces rocheuses,",
+   "• le compactage des fonds de fouille meubles,",
+   "• toutes sujétions d’exécution.",
+   "Ce prix s’applique au mètre cube de fouilles réalisé. Les quantités à prendre en compte seront",
+   "celles issues de constats contradictoires."
+  ],
+  "definition": true,
+  "pageSpec": 87,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE CUBE (m3) l’excavation en terrains de toutes natures, pour fondations, puisards, ouvrages d’assainissement, murs etc. Il comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "la préparation du terrain et l'implantation,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l’extraction mécanique ou manuelle,",
+    "exigence": ""
+   },
+   {
+    "libelle": "les sujétions dues à l'usage éventuel de brise-roche ou d'explosif,",
+    "exigence": ""
+   },
+   {
+    "libelle": "tous les étaiements, blindages,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le chargement, le transport sur toute distance et la mise en dépôt en un lieu agréé, des matériaux extraits,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le réglage soigné du fond de fouille ou des surfaces rocheuses,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le compactage des fonds de fouille meubles,",
+    "exigence": ""
+   },
+   {
+    "libelle": "toutes sujétions d’exécution. Ce prix s’applique au mètre cube de fouilles réalisé. Les quantités à prendre en compte seront celles issues de constats contradictoires.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 529,
+  "code": "529",
+  "designationBrute": "Maçonnerie moellons",
+  "designation": "Maçonnerie moellons",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "M3",
+  "quantite": 2825,
+  "pageBordereau": 43,
+  "designationSpec": "Maçonnerie de moellons",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE CUBE (m3) l'exécution de maçonnerie de moellons pour",
+   "ouvrages divers d’assainissement ou de franchissement, tels que : piédroits, murs de tête, murs",
+   "de soutènement, murs de protection, puisards, regards, tête de buse ou de dalots, réceptacles",
+   "d'eau pluviale, descentes d'eau, fossés revêtus (quelle que soit la section ou le type), rehausse",
+   "de fossés maçonnés existants, escaliers divers, parapets, massifs d'appui, massifs de",
+   "signalisation, etc.",
+   "Il s'applique aux aménagements de faible ou de grand volume, et d'une manière générale,",
+   "quelles que soient les dimensions des ouvrages.",
+   "Ce prix comprend :",
+   "• les terrassements et fouilles en terrain de toute nature pour la réalisation et la préparation",
+   "de la surface d’appui,",
+   "• le chargement, le transport sur toutes distances, le déchargement sur un dépôt agrée,",
+   "• les travaux de reprise utiles sur ouvrages existants tels que piquages à vif, lavage,",
+   "ragréages,",
+   "• l’extraction, la taille des moellons, leur fourniture à pied d’œuvre et leur reprise,",
+   "• la mise en place de tous les gabarits nécessaires pour obtenir les surfaces planes ou",
+   "courbes, horizontales ou inclinées définies aux plans types ou aux plans d'exécution,",
+   "• l’exécution de la maçonnerie au mortier M 300 et de barbacanes régulièrement espacées",
+   "si nécessaire,",
+   "• le façonnage en relief des joints sur toutes les surfaces visibles,",
+   "• l'exécution d'un couronnement lissé (chape) de trois (3) centimètres d'épaisseur sur",
+   "toutes les parties supérieures au moyen d'un mortier M400,",
+   "• la réalisation du bloc technique par couches de 30 cm, ou les remblaiements latéraux en",
+   "matériaux sélectionnés,",
+   "• et toutes les sujétions de mise en œuvre et d'exécution.",
+   "Il ne comprend pas le couronnement en béton B2 armé de huit (8) centimètres d'épaisseur à",
+   "réaliser sur les murs et murettes d'accotement jouxtant une chaussée ou un accotement, ni les",
+   "semelles de fondation en béton B1 ou B2.",
+   "Il s’applique au mètre cube de maçonnerie réellement exécutée et les quantités à prendre en",
+   "compte sont celles prévues aux plans d'exécution approuvés ou de constats contradictoires."
+  ],
+  "definition": true,
+  "pageSpec": 87,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE CUBE (m3) l'exécution de maçonnerie de moellons pour ouvrages divers d’assainissement ou de franchissement, tels que : piédroits, murs de tête, murs de soutènement, murs de protection, puisards, regards, tête de buse ou de dalots, réceptacles d'eau pluviale, descentes d'eau, fossés revêtus (quelle que soit la section ou le type), rehausse de fossés maçonnés existants, escaliers divers, parapets, massifs d'appui, massifs de signalisation, etc. Il s'applique aux aménagements de faible ou de grand volume, et d'une manière générale, quelles que soient les dimensions des ouvrages. Ce prix comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "les terrassements et fouilles en terrain de toute nature pour la réalisation et la préparation de la surface d’appui,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le chargement, le transport sur toutes distances, le déchargement sur un dépôt agrée,",
+    "exigence": ""
+   },
+   {
+    "libelle": "les travaux de reprise utiles sur ouvrages existants tels que piquages à vif, lavage, ragréages,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l’extraction, la taille des moellons, leur fourniture à pied d’œuvre et leur reprise,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la mise en place de tous les gabarits nécessaires pour obtenir les surfaces planes ou courbes, horizontales ou inclinées définies aux plans types ou aux plans d'exécution,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l’exécution de la maçonnerie au mortier M 300 et de barbacanes régulièrement espacées si nécessaire,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le façonnage en relief des joints sur toutes les surfaces visibles,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l'exécution d'un couronnement lissé (chape) de trois (3) centimètres d'épaisseur sur toutes les parties supérieures au moyen d'un mortier M400,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la réalisation du bloc technique par couches de 30 cm, ou les remblaiements latéraux en matériaux sélectionnés,",
+    "exigence": ""
+   },
+   {
+    "libelle": "et toutes les sujétions de mise en œuvre et d'exécution. Il ne comprend pas le couronnement en béton B2 armé de huit (8) centimètres d'épaisseur à réaliser sur les murs et murettes d'accotement jouxtant une chaussée ou un accotement, ni les semelles de fondation en béton B1 ou B2. Il s’applique au mètre cube de maçonnerie réellement exécutée et les quantités à prendre en compte sont celles prévues aux plans d'exécution approuvés ou de constats contradictoires.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 540,
+  "code": "540",
+  "designationBrute": "Béton B2 dosé à 250kg/m3 de ciment",
+  "designation": "Béton B2 dosé à 250kg/m3 de ciment",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "M3",
+  "quantite": 195,
+  "pageBordereau": 43,
+  "designationSpec": "Béton B1 dosé à 250 kg/m3 de ciment",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE CUBE (m3), la confection et la mise en œuvre de béton dosé à",
+   "250 kg de ciment CPJ-CEM II/ B 32,5 par mètre cube, pour ouvrages divers tels que semelles",
+   "de propreté, radiers des fossés maçonnés, béton de calage, etc.",
+   "Ce prix comprend :",
+   "• les fouilles quelles qu’elles soient et en terrain de toute nature,",
+   "• la préparation de la surface,",
+   "• la fourniture et le transport sur toute distance au lieu d'emploi, de tous les matériaux",
+   "nécessaires à la fabrication du béton (sable, agrégats, ciment, eau),",
+   "• le stockage dans de bonnes conditions de ces matériaux,",
+   "• le lavage et le criblage des agrégats si nécessaire,",
+   "• la fabrication par malaxage mécanique, la mise en œuvre, la vibration, le lissage et le",
+   "réglage du béton,",
+   "• la fourniture, la mise en place et l'arrimage des éléments de coffrage qu’ils soient perdus",
+   "ou non,",
+   "• le décoffrage, la cure du béton et les ragréages éventuels.",
+   "et s'applique quelles que soient les dimensions des ouvrages et notamment aux aménagements",
+   "de faible volume.",
+   "Les quantités à prendre en compte sont celles qui sont définis aux plans d'exécution approuvés",
+   "ou celles résultant de constats contradictoires."
+  ],
+  "definition": true,
+  "pageSpec": 88,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE CUBE (m3), la confection et la mise en œuvre de béton dosé à 250 kg de ciment CPJ-CEM II/ B 32,5 par mètre cube, pour ouvrages divers tels que semelles de propreté, radiers des fossés maçonnés, béton de calage, etc. Ce prix comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "les fouilles quelles qu’elles soient et en terrain de toute nature,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la préparation de la surface,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fourniture et le transport sur toute distance au lieu d'emploi, de tous les matériaux nécessaires à la fabrication du béton (sable, agrégats, ciment, eau),",
+    "exigence": ""
+   },
+   {
+    "libelle": "le stockage dans de bonnes conditions de ces matériaux,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le lavage et le criblage des agrégats si nécessaire,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fabrication par malaxage mécanique, la mise en œuvre, la vibration, le lissage et le réglage du béton,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fourniture, la mise en place et l'arrimage des éléments de coffrage qu’ils soient perdus ou non,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le décoffrage, la cure du béton et les ragréages éventuels. et s'applique quelles que soient les dimensions des ouvrages et notamment aux aménagements de faible volume. Les quantités à prendre en compte sont celles qui sont définis aux plans d'exécution approuvés ou celles résultant de constats contradictoires.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 542,
+  "code": "542",
+  "designationBrute": "Béton B3 dosé à 350kg/m3 de ciment",
+  "designation": "Béton B3 dosé à 350kg/m3 de ciment",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "M3",
+  "quantite": 192,
+  "pageBordereau": 43,
+  "designationSpec": "Béton B3 dosé à 350 kg/m3 de ciment",
+  "exigences": [
+   "Dito Prix N° 540, mais dosage de 350 kg de ciment CPA-CEM I 42,5 par mètre cube",
+   "Utilisation : infrastructure d'ouvrages en béton armé (ponts, ouvrages de franchissements),",
+   "ouvrages directement attenants (semelles, radiers, appuis en élévation, hourdis, murs en aile,",
+   "murs en retour, murs suspendus, caissons,); ouvrages divers (chaînettes, bordures, etc. )"
+  ],
+  "definition": true,
+  "pageSpec": 88,
+  "caracteristiques": [
+   {
+    "libelle": "Dito Prix N° 540, mais dosage de 350 kg de ciment CPA-CEM I 42,5 par mètre cube Utilisation : infrastructure d'ouvrages en béton armé (ponts, ouvrages de franchissements), ouvrages directement attenants (semelles, radiers, appuis en élévation, hourdis, murs en aile, murs en retour, murs suspendus, caissons,); ouvrages divers (chaînettes, bordures, etc. )",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 543,
+  "code": "543",
+  "designationBrute": "Béton B4 dosé à 400kg/m3 de ciment",
+  "designation": "Béton B4 dosé à 400kg/m3 de ciment",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "M3",
+  "quantite": 210,
+  "pageBordereau": 43,
+  "designationSpec": "Béton B4 dosé à 400 kg/m3 de ciment",
+  "exigences": [
+   "Dito Prix N° 540, mais pour 400 kg de ciment CPA-CEM I 42,5 par mètre cube.",
+   "Utilisation : superstructures d'ouvrages en béton armé : poutres, tabliers, etc"
+  ],
+  "definition": true,
+  "pageSpec": 88,
+  "caracteristiques": [
+   {
+    "libelle": "Dito Prix N° 540, mais pour 400 kg de ciment CPA-CEM I 42,5 par mètre cube. Utilisation : superstructures d'ouvrages en béton armé : poutres, tabliers, etc",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 545,
+  "code": "545",
+  "designationBrute": "Acier pour armature",
+  "designation": "Acier pour armature",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "KG",
+  "quantite": 48240,
+  "pageBordereau": 43,
+  "designationSpec": "Acier pour béton armé",
+  "exigences": [
+   "Ce prix rémunère au KILOGRAMME (kg) la fourniture et la mise en œuvre d’aciers doux ou à",
+   "haute adhérence pour le ferraillage des ouvrages en béton armé ou de leur reprise.",
+   "Ce prix comprend :",
+   "• la fourniture, l’amenée à pied d’œuvre des aciers nécessaires à la confection des",
+   "armatures, et leur stockage sur des plates-formes à l'abri des intempéries,",
+   "• le façonnage des armatures suivant les dispositions des projets et plans type,",
+   "• les chutes et pertes,",
+   "• la mise en place des armatures façonnées,",
+   "• la fourniture et la mise en place des ligatures, des cales d'espacement entre barres et",
+   "coffrages, et des cavaliers entre nappes d'armatures,",
+   "• et toutes les sujétions de mise en œuvre et d'exécution.",
+   "Les quantités à prendre en compte sont celles qui sont prévues aux plans de ferraillage des",
+   "dessins d'exécution approuvés ou de constats contradictoires."
+  ],
+  "definition": true,
+  "pageSpec": 88,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au KILOGRAMME (kg) la fourniture et la mise en œuvre d’aciers doux ou à haute adhérence pour le ferraillage des ouvrages en béton armé ou de leur reprise. Ce prix comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fourniture, l’amenée à pied d’œuvre des aciers nécessaires à la confection des armatures, et leur stockage sur des plates-formes à l'abri des intempéries,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le façonnage des armatures suivant les dispositions des projets et plans type,",
+    "exigence": ""
+   },
+   {
+    "libelle": "les chutes et pertes,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la mise en place des armatures façonnées,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fourniture et la mise en place des ligatures, des cales d'espacement entre barres et coffrages, et des cavaliers entre nappes d'armatures,",
+    "exigence": ""
+   },
+   {
+    "libelle": "et toutes les sujétions de mise en œuvre et d'exécution. Les quantités à prendre en compte sont celles qui sont prévues aux plans de ferraillage des dessins d'exécution approuvés ou de constats contradictoires.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 550,
+  "code": "550",
+  "designationBrute": "Fossé maçonné 40*40",
+  "designation": "Fossé maçonné 40*40",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "ML",
+  "quantite": 3000,
+  "pageBordereau": 43,
+  "designationSpec": "Fossés maçonnés 40 x 40 cm",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE LINÉAIRE (ml) la réalisation d'un fossé de section intérieure 40",
+   "cm (largeur) par 40 cm (hauteur), en maçonnerie avec paroi de 20 cm d'épaisseur,",
+   "conformément au plan-type.",
+   "Il comprend :",
+   "• les fournitures et leur transport sur toutes distances ;",
+   "• les opérations d'implantation et de mise en place des repères de nivellement,",
+   "• le calage de la crête du piédroit coté chaussée à 5 cm plus bas que le niveau de",
+   "l’accotement adjacent pour les cas de routes en terre,",
+   "• les terrassements et les fouilles correspondants en terrains de toutes natures y compris",
+   "terrain rocheux,;",
+   "• le chargement, le transport sur toutes distances, le déchargement et le réglage des terres",
+   "en excès;",
+   "• le réglage du fond de fouille selon la pente prévue,",
+   "• l'exécution du radier en béton dosé à 300 kg de ciment par m3,",
+   "• la fourniture des moellons et leur hourdage au mortier à 300 kg de ciment/m3 (M300),",
+   "• l'exécution des éventuelles barbacanes,",
+   "• l'exécution des joints rasés sur les deux parements intérieurs du fossé,",
+   "• l'exécution d'un couronnement de trois (3) cm d'épaisseur au mortier M400 ;",
+   "• le remblaiement des fouilles et le remodelage des terrains,",
+   "• le compactage, la remise en état des abords, et toutes sujétions ;",
+   "Les quantités à prendre en compte sont les longueurs réelles des fossés telles qu'elles",
+   "résultent de constats contradictoires."
+  ],
+  "definition": true,
+  "pageSpec": 89,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE LINÉAIRE (ml) la réalisation d'un fossé de section intérieure 40 cm (largeur) par 40 cm (hauteur), en maçonnerie avec paroi de 20 cm d'épaisseur, conformément au plan-type. Il comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "les fournitures et leur transport sur toutes distances ;",
+    "exigence": ""
+   },
+   {
+    "libelle": "les opérations d'implantation et de mise en place des repères de nivellement,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le calage de la crête du piédroit coté chaussée à 5 cm plus bas que le niveau de l’accotement adjacent pour les cas de routes en terre,",
+    "exigence": ""
+   },
+   {
+    "libelle": "les terrassements et les fouilles correspondants en terrains de toutes natures y compris terrain rocheux,;",
+    "exigence": ""
+   },
+   {
+    "libelle": "le chargement, le transport sur toutes distances, le déchargement et le réglage des terres en excès;",
+    "exigence": ""
+   },
+   {
+    "libelle": "le réglage du fond de fouille selon la pente prévue,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l'exécution du radier en béton dosé à 300 kg de ciment par m3,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fourniture des moellons et leur hourdage au mortier à 300 kg de ciment/m3 (M300),",
+    "exigence": ""
+   },
+   {
+    "libelle": "l'exécution des éventuelles barbacanes,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l'exécution des joints rasés sur les deux parements intérieurs du fossé,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l'exécution d'un couronnement de trois (3) cm d'épaisseur au mortier M400 ;",
+    "exigence": ""
+   },
+   {
+    "libelle": "le remblaiement des fouilles et le remodelage des terrains,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le compactage, la remise en état des abords, et toutes sujétions ; Les quantités à prendre en compte sont les longueurs réelles des fossés telles qu'elles résultent de constats contradictoires.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 560,
+  "code": "560",
+  "designationBrute": "Dalot (70 x 80 )",
+  "designation": "Dalot (70 x 80 )",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "ML",
+  "quantite": 30,
+  "pageBordereau": 43,
+  "designationSpec": "Dalot mixte maçonnerie - BA de 70 x 80 cm",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE LINÉAIRE (ml), la construction mixte (maçonnerie et béton",
+   "armé) d'un dalot de 70 cm de hauteur intérieure par 80 cm de largeur intérieure, et",
+   "conformément aux dispositions générales du plan type.",
+   "Il s'applique quels que soient le biais et la longueur du fil d'eau de l'ouvrage,",
+   "Il comprend :",
+   "• les sondages de reconnaissance éventuels ;",
+   "• les accès aux sites,",
+   "• la mise en place et l'entretien des repères topographiques,",
+   "• l'implantation de l'ouvrage et le nivellement de son fil d'eau,",
+   "• si nécessaire, la fourniture et la mise en place des systèmes de détournement,",
+   "d'épuisement et de protection contre les eaux courantes et d'infiltration,",
+   "• les terrassements et fouilles en terrain de toute nature,",
+   "• les fournitures et leur transport sur toute distance,",
+   "• la semelle de propreté en béton dosé à 250 kg de ciment par m3,",
+   "• la fourniture, la mise en œuvre du béton dosé à 350 kg de ciment par m3 pour le radier",
+   "• la fourniture des moellons pour les piédroits,",
+   "• les coffrages soignés et tous les étaiements nécessaires à la dalle de couverture,",
+   "• les armatures en acier prévues au plan type",
+   "• la fourniture, la mise en œuvre du béton dosé à 350 kg de ciment par m3 pour la dalle,",
+   "• le décoffrage",
+   "• tous travaux de reprise utiles tels que piquages à vif, lavage, ragréages,",
+   "• la réalisation du bloc technique par couches de 30 cm,",
+   "• le compactage à 95 % de OPM de ces matériaux,",
+   "• le chargement, le transport vers un dépôt agrée, des terres et gravois en excès,",
+   "• la remise en état des abords.",
+   "• les sujétions de raccordement aux têtes amont et aval, notamment en cas d'ouvrages",
+   "biais,",
+   "• et toutes autres sujétions d'exécution, y compris les divers essais et contrôles de qualité.",
+   "Il ne comprend pas",
+   "• la fouille, la fourniture et la mise en oeuvre du remblai de substitution qui serait",
+   "éventuellement nécessaire, dans le cas d'une portance insuffisante du sol support. La",
+   "réalisation de ces travaux sera rémunérée au moyen des prix du bordereau.",
+   "• les ouvrages de tête ou les puisards, rémunérés au moyen des prix du bordereau.",
+   "La quantité à prendre en compte pour chaque dalot est la longueur du fil d'eau, hors ouvrages",
+   "de tête, figurant au projet d'exécution approuvé."
+  ],
+  "definition": true,
+  "pageSpec": 89,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE LINÉAIRE (ml), la construction mixte (maçonnerie et béton armé) d'un dalot de 70 cm de hauteur intérieure par 80 cm de largeur intérieure, et conformément aux dispositions générales du plan type. Il s'applique quels que soient le biais et la longueur du fil d'eau de l'ouvrage, Il comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "les sondages de reconnaissance éventuels ;",
+    "exigence": ""
+   },
+   {
+    "libelle": "les accès aux sites,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la mise en place et l'entretien des repères topographiques,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l'implantation de l'ouvrage et le nivellement de son fil d'eau,",
+    "exigence": ""
+   },
+   {
+    "libelle": "si nécessaire, la fourniture et la mise en place des systèmes de détournement, d'épuisement et de protection contre les eaux courantes et d'infiltration,",
+    "exigence": ""
+   },
+   {
+    "libelle": "les terrassements et fouilles en terrain de toute nature,",
+    "exigence": ""
+   },
+   {
+    "libelle": "les fournitures et leur transport sur toute distance,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la semelle de propreté en béton dosé à 250 kg de ciment par m3,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fourniture, la mise en œuvre du béton dosé à 350 kg de ciment par m3 pour le radier",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fourniture des moellons pour les piédroits,",
+    "exigence": ""
+   },
+   {
+    "libelle": "les coffrages soignés et tous les étaiements nécessaires à la dalle de couverture,",
+    "exigence": ""
+   },
+   {
+    "libelle": "les armatures en acier prévues au plan type",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fourniture, la mise en œuvre du béton dosé à 350 kg de ciment par m3 pour la dalle,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le décoffrage",
+    "exigence": ""
+   },
+   {
+    "libelle": "tous travaux de reprise utiles tels que piquages à vif, lavage, ragréages,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la réalisation du bloc technique par couches de 30 cm,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le compactage à 95 % de OPM de ces matériaux,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le chargement, le transport vers un dépôt agrée, des terres et gravois en excès,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la remise en état des abords.",
+    "exigence": ""
+   },
+   {
+    "libelle": "les sujétions de raccordement aux têtes amont et aval, notamment en cas d'ouvrages biais,",
+    "exigence": ""
+   },
+   {
+    "libelle": "et toutes autres sujétions d'exécution, y compris les divers essais et contrôles de qualité. Il ne comprend pas",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fouille, la fourniture et la mise en oeuvre du remblai de substitution qui serait éventuellement nécessaire, dans le cas d'une portance insuffisante du sol support. La réalisation de ces travaux sera rémunérée au moyen des prix du bordereau.",
+    "exigence": ""
+   },
+   {
+    "libelle": "les ouvrages de tête ou les puisards, rémunérés au moyen des prix du bordereau. La quantité à prendre en compte pour chaque dalot est la longueur du fil d'eau, hors ouvrages de tête, figurant au projet d'exécution approuvé.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 584,
+  "code": "584",
+  "designationBrute": "Blocage 10/15 KG",
+  "designation": "Blocage 10/15 KG",
+  "serie": "500",
+  "serieLibelle": "OUVRAGES",
+  "unite": "M3",
+  "quantite": 300.6,
+  "pageBordereau": 43,
+  "designationSpec": "Blocage 10/15 kg",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE CUBE (m3) la fourniture et la mise en place de blocs de roche",
+   "d'un poids unitaire compris entre 10 et 15 kilogrammes pour la protection des ouvrages contre",
+   "l'érosion, la constitution de remblais de substitution, etc..",
+   "Il comprend :",
+   "• la fourniture des blocs et leur transport sur toutes distances ;",
+   "• la préparation du lit de pose et l'exécution des terrassements correspondant en terrain de",
+   "toute nature ;",
+   "• la mise en œuvre, l'agencement, le pilonnage ;",
+   "• le réglage et l'arasement des parties supérieures et des parements visibles.",
+   "• Les quantités à prendre en compte sont celles qui sont prévues aux plans d'exécution",
+   "approuvés ou résultants de constats contradictoires."
+  ],
+  "definition": true,
+  "pageSpec": 90,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE CUBE (m3) la fourniture et la mise en place de blocs de roche d'un poids unitaire compris entre 10 et 15 kilogrammes pour la protection des ouvrages contre l'érosion, la constitution de remblais de substitution, etc.. Il comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fourniture des blocs et leur transport sur toutes distances ;",
+    "exigence": ""
+   },
+   {
+    "libelle": "la préparation du lit de pose et l'exécution des terrassements correspondant en terrain de toute nature ;",
+    "exigence": ""
+   },
+   {
+    "libelle": "la mise en œuvre, l'agencement, le pilonnage ;",
+    "exigence": ""
+   },
+   {
+    "libelle": "le réglage et l'arasement des parties supérieures et des parements visibles.",
+    "exigence": ""
+   },
+   {
+    "libelle": "Les quantités à prendre en compte sont celles qui sont prévues aux plans d'exécution approuvés ou résultants de constats contradictoires.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 620,
+  "code": "620",
+  "designationBrute": "Remblai d'emprunt",
+  "designation": "Remblai d'emprunt",
+  "serie": "600",
+  "serieLibelle": "CHAUSSEES",
+  "unite": "M3",
+  "quantite": 1520,
+  "pageBordereau": 43,
+  "designationSpec": "Remblai d’emprunt",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE CUBE (m3), la mise en œuvre de matériaux meubles dans le",
+   "cadre de TRAVAUX DE TERRASSEMENT, pour la construction ou reconstruction de",
+   "remblais, de digues, le remblaiement d'ouvrages, etc, conformément aux Spécifications",
+   "Particulières des Travaux.",
+   "Il comprend :",
+   "• La recherche des matériaux adéquats,",
+   "• l’extraction, le chargement, le transport sur toute distance,",
+   "• le décapage et la préparation de l’assise du remblaiement,",
+   "• le régalage par couches minces,",
+   "• l'arrosage,",
+   "• le compactage selon les prescriptions,",
+   "• et toutes les autres sujétions",
+   "Il s’applique au mètre cube de remblai compacté, mesuré contradictoirement."
+  ],
+  "definition": true,
+  "pageSpec": 90,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE CUBE (m3), la mise en œuvre de matériaux meubles dans le cadre de TRAVAUX DE TERRASSEMENT, pour la construction ou reconstruction de remblais, de digues, le remblaiement d'ouvrages, etc, conformément aux Spécifications Particulières des Travaux. Il comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "La recherche des matériaux adéquats,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l’extraction, le chargement, le transport sur toute distance,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le décapage et la préparation de l’assise du remblaiement,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le régalage par couches minces,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l'arrosage,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le compactage selon les prescriptions,",
+    "exigence": ""
+   },
+   {
+    "libelle": "et toutes les autres sujétions Il s’applique au mètre cube de remblai compacté, mesuré contradictoirement.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 621,
+  "code": "621",
+  "designationBrute": "Réglage de plateforme",
+  "designation": "Réglage de plateforme",
+  "serie": "600",
+  "serieLibelle": "CHAUSSEES",
+  "unite": "M2",
+  "quantite": 17100,
+  "pageBordereau": 43,
+  "designationSpec": "Réglage de plateforme",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE CARRE (m2), le réglage en pleine largeur de la plate-forme des",
+   "terrassements.",
+   "Il s'applique également à la partie supérieure des élargissements de plates-formes contiguës à",
+   "une chaussée revêtue existante et conservée.",
+   "Ce prix comprend :",
+   "• l'homogénéisation des matériaux par scarification,",
+   "• le réglage transversal conformément aux profils en travers,",
+   "• le réglage longitudinal conformément au profil en long,",
+   "• la plus-value pour un compactage des matériaux à 95% de l'OPM sur les trente derniers",
+   "centimètres,",
+   "La surface prise en compte résulte du produit de la largeur théorique de la plate-forme finie ou",
+   "de l'élargissement, par la longueur réalisée.",
+   "Ce prix s'applique aux quantités définies au projet d'exécution approuvé ou résultant de",
+   "constats contradictoires."
+  ],
+  "definition": true,
+  "pageSpec": 91,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE CARRE (m2), le réglage en pleine largeur de la plate-forme des terrassements. Il s'applique également à la partie supérieure des élargissements de plates-formes contiguës à une chaussée revêtue existante et conservée. Ce prix comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "l'homogénéisation des matériaux par scarification,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le réglage transversal conformément aux profils en travers,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le réglage longitudinal conformément au profil en long,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la plus-value pour un compactage des matériaux à 95% de l'OPM sur les trente derniers centimètres, La surface prise en compte résulte du produit de la largeur théorique de la plate-forme finie ou de l'élargissement, par la longueur réalisée. Ce prix s'applique aux quantités définies au projet d'exécution approuvé ou résultant de constats contradictoires.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 630,
+  "code": "630",
+  "designationBrute": "Couche de roulement en MS",
+  "designation": "Couche de roulement en MS",
+  "serie": "600",
+  "serieLibelle": "CHAUSSEES",
+  "unite": "M3",
+  "quantite": 15500,
+  "pageBordereau": 43,
+  "designationSpec": "Couche de roulement en matériaux sélectionnés",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE CUBE (m3), la réalisation généralisée ou ponctuelle d'une",
+   "couche de roulement au moyen de matériaux naturels sélectionnés type \"fondation\".",
+   "Il comprend :",
+   "• la recherche, l’extraction et la sélection des matériaux nécessaires,",
+   "• le chargement, le transport sur toute distance et le déchargement,",
+   "• la préparation de la plate-forme (nettoyage, remise au profil avec arrosage et",
+   "compactage,….);",
+   "• le régalage et le réglage selon les épaisseurs et les profils en travers types applicables,",
+   "• l'arrosage, le malaxage et le compactage énergique,",
+   "• le rétablissement des fossés latéraux si nécessaires,",
+   "• la finition générale de la plate-forme (y compris les accotements),",
+   "• toutes sujétions liées à une exécution sous trafic.",
+   "Il s’applique au mètre cube de matériaux mis en place, après compactage, quelles que soient",
+   "l'étendue et l'épaisseur de la couche. Les quantités à prendre en compte seront celles résultant",
+   "de constats contradictoires."
+  ],
+  "definition": true,
+  "pageSpec": 91,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE CUBE (m3), la réalisation généralisée ou ponctuelle d'une couche de roulement au moyen de matériaux naturels sélectionnés type \"fondation\". Il comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "la recherche, l’extraction et la sélection des matériaux nécessaires,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le chargement, le transport sur toute distance et le déchargement,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la préparation de la plate-forme (nettoyage, remise au profil avec arrosage et compactage,….);",
+    "exigence": ""
+   },
+   {
+    "libelle": "le régalage et le réglage selon les épaisseurs et les profils en travers types applicables,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l'arrosage, le malaxage et le compactage énergique,",
+    "exigence": ""
+   },
+   {
+    "libelle": "le rétablissement des fossés latéraux si nécessaires,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la finition générale de la plate-forme (y compris les accotements),",
+    "exigence": ""
+   },
+   {
+    "libelle": "toutes sujétions liées à une exécution sous trafic. Il s’applique au mètre cube de matériaux mis en place, après compactage, quelles que soient l'étendue et l'épaisseur de la couche. Les quantités à prendre en compte seront celles résultant de constats contradictoires.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 632,
+  "code": "632",
+  "designationBrute": "Pavage",
+  "designation": "Pavage",
+  "serie": "600",
+  "serieLibelle": "CHAUSSEES",
+  "unite": "M2",
+  "quantite": 15200,
+  "pageBordereau": 43,
+  "designationSpec": "Pavage",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE CARRE (m2) la réalisation du pavage d’une chaussée à l'aide de",
+   "pavés sensiblement rectangulaire de 20x14x14 cm.",
+   "Il comprend :",
+   "• la fourniture et le transport sur site des pavés,",
+   "• la préparation de la forme des terrassements,",
+   "• l’apport et la mise en œuvre du sable constituant le lit de pose,",
+   "• la mise en place des pierres et des boutisses, le réglage, le damage, et le sablage des",
+   "joints,",
+   "• l’évacuation des déblais dans une décharge agréée par l'Ingénieur de contrôle.",
+   "Les quantités à prendre en compte seront celles résultant du projet d'exécution approuvé ou de",
+   "constats contradictoires."
+  ],
+  "definition": true,
+  "pageSpec": 91,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE CARRE (m2) la réalisation du pavage d’une chaussée à l'aide de pavés sensiblement rectangulaire de 20x14x14 cm. Il comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "la fourniture et le transport sur site des pavés,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la préparation de la forme des terrassements,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l’apport et la mise en œuvre du sable constituant le lit de pose,",
+    "exigence": ""
+   },
+   {
+    "libelle": "la mise en place des pierres et des boutisses, le réglage, le damage, et le sablage des joints,",
+    "exigence": ""
+   },
+   {
+    "libelle": "l’évacuation des déblais dans une décharge agréée par l'Ingénieur de contrôle. Les quantités à prendre en compte seront celles résultant du projet d'exécution approuvé ou de constats contradictoires.",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 677,
+  "code": "677",
+  "designationBrute": "Chaussée en béton légèrement armé",
+  "designation": "Chaussée en béton légèrement armé",
+  "serie": "600",
+  "serieLibelle": "CHAUSSEES",
+  "unite": "M3",
+  "quantite": 400,
+  "pageBordereau": 43,
+  "designationSpec": "Chaussée en Béton légèrement armé",
+  "exigences": [
+   "Ce prix rémunère au MÈTRE CUBE (m3), la confection et la mise en œuvre de la chaussée en",
+   "béton dosé à 350 kg de ciment CPA-CEM I 42,5 par mètre cube, goujonné et légèrement armé.",
+   "Ce prix comprend :",
+   "• La fourniture et le transport sur toute distance au lieu d’emploi, de tous les matériaux",
+   "nécessaires à la fabrication du béton (sable, agrégats, ciment, eau) et leur stockage dans"
+  ],
+  "definition": true,
+  "pageSpec": 91,
+  "caracteristiques": [
+   {
+    "libelle": "Ce prix rémunère au MÈTRE CUBE (m3), la confection et la mise en œuvre de la chaussée en béton dosé à 350 kg de ciment CPA-CEM I 42,5 par mètre cube, goujonné et légèrement armé. Ce prix comprend :",
+    "exigence": ""
+   },
+   {
+    "libelle": "La fourniture et le transport sur toute distance au lieu d’emploi, de tous les matériaux nécessaires à la fabrication du béton (sable, agrégats, ciment, eau) et leur stockage dans",
+    "exigence": ""
+   }
+  ]
+ }
+]

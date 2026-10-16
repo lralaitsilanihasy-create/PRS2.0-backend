@@ -18,10 +18,35 @@ import java.util.List;
  * @param avertissements « hors gabarit » (moins de 30 % d'un modèle reconnu), réponses de cadrage refusées…
  * @param passages       ⚠️ 2026-10-03 (lecture par clause) — les passages de listes (MATERIEL, PERSONNEL, PIECES) repérés
  *                       dans les données particulières d'un DPAO, à proposer dans « Coller une liste » ; jamais appliqués
+ * @param articles       ⚠️ 2026-10-16 (« import-specifications », §B1) — les articles lus dans les tableaux du DAO (bordereau, détail
+ *                       quantitatif, spécifications, définition des prix) ; lecture seule : le front les écrit par {@code PUT …/articles}
  */
 public record ImportDaoResult(String fichier, String empreinte, List<Modele> modeles, List<Cadrage> cadrage,
         List<Proposition> propositions, List<Ambigu> ambigus, List<Divergence> divergences, List<Conflit> conflits,
-        List<String> nonTrouves, List<String> avertissements, List<Passage> passages) {
+        List<String> nonTrouves, List<String> avertissements, List<Passage> passages, List<Article> articles) {
+
+    /**
+     * ⚠️ 2026-10-16 (§B1, §B5) — un article lu. {@code lot} : le rang du lot au plan, nul sur une ligne non allotie ; {@code numero} :
+     * tel qu'écrit (le n° de prix en travaux) ; {@code designationSpecification} : seulement quand elle diverge de celle du bordereau ;
+     * {@code anomalies} ({@code LOT_HORS_PLAN}, {@code QUANTITES_INCOMPATIBLES}) : l'article ne peut pas être retenu tel quel.
+     */
+    public record Article(Integer lot, String numero, String designation, String unite, java.math.BigDecimal quantite,
+            java.math.BigDecimal quantiteMin, java.math.BigDecimal quantiteMax, String serie, String serieLibelle,
+            List<Caracteristique> caracteristiques, Confiance confiance, Pages pages, String designationSpecification,
+            List<String> anomalies) {
+    }
+
+    public record Caracteristique(String libelle, String exigence) {
+    }
+
+    /** {@code haute} ou {@code moyenne} ; {@code caracteristiques} nul sans caractéristique. */
+    public record Confiance(String article, String caracteristiques) {
+    }
+
+    /** Les pages du PDF où l'article a été lu (nulles pour un Word). */
+    public record Pages(Integer bordereau, Integer specification) {
+    }
+
 
     /** ⚠️ 2026-10-03 — un passage de liste : la liste visée, son texte (lignes séparées par {@code \n}), son paragraphe. */
     public record Passage(String liste, String texte, int paragraphe) {

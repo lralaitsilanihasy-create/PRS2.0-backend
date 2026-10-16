@@ -84,10 +84,108 @@ public class ImportDaoService {
         if (couvertures.isEmpty()) {
             throw ImportRefuseException.modeleAbsent();
         }
+        // ⚠️ 2026-10-16 (« import-specifications », §B1) — les articles se lisent dans les tableaux, en parallèle de la lecture par
+        // modèle : l'extraction PDF est longue (une vingtaine de secondes sur un DAO de cent pages), les deux ne s'additionnent pas.
+        String nom = nomFichier == null ? "" : nomFichier.toLowerCase(Locale.ROOT);
+        boolean besoin = !"PRESTATIONS_INTELLECTUELLES".equals(fiche.getCategorie()) && contenu != null && contenu.length > 0
+                && (nom.endsWith(".pdf") || nom.endsWith(".docx"));
+        java.util.concurrent.CompletableFuture<List<LectureTableaux.Article>> tableaux = besoin
+                ? java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return LectureTableaux.lire(nomFichier, contenu);
+                    } catch (Exception | LinkageError e) {
+                        return null;
+                    }
+                })
+                : java.util.concurrent.CompletableFuture.completedFuture(List.of());
         // ⚠️ Lot D4 (2026-09-30, §B6.3) — les paragraphes tels qu'écrits ; la lecture travaille sur leur forme normalisée.
         List<String> origines = paragraphesDOrigine(nomFichier, contenu);
         List<String> paragraphes = origines.stream().map(LectureDao::norm).toList();
-        return lire(fiche, nomFichier, empreinte(contenu), paragraphes, origines, couvertures);
+        ImportDaoResult r = lire(fiche, nomFichier, empreinte(contenu), paragraphes, origines, couvertures);
+        List<String> avertissements = new ArrayList<>(r.avertissements());
+        List<LectureTableaux.Article> lus = tableaux.join();
+        List<ImportDaoResult.Article> articles;
+        if (lus == null) {
+            avertissements.add("Les tableaux du document n'ont pas pu être lus : les articles du besoin restent à saisir.");
+            articles = List.of();
+        } else {
+            articles = articles(fiche, nom.endsWith(".pdf"), lus, avertissements);
+        }
+        return new ImportDaoResult(r.fichier(), r.empreinte(), r.modeles(), r.cadrage(), r.propositions(), r.ambigus(), r.divergences(),
+                r.conflits(), r.nonTrouves(), avertissements, r.passages(), articles);
+    }
+
+    /**
+     * ⚠️ 2026-10-16 (« import-specifications », §B1, §B5) — les articles lus, rapportés au plan et à la forme de la fiche.
+     *
+     * <ul>
+     *   <li>{@code LOT_HORS_PLAN} : le lot lu n'existe pas au plan (le plan fait foi), ou la ligne est allotie et le document ne dit
+     *       pas le lot. Une ligne non allotie reçoit les articles sans lot (H1).</li>
+     *   <li>{@code QUANTITES_INCOMPATIBLES} : min et max lus sur une fiche à quantité fixe ou contrat-cadre, ou une seule quantité
+     *       sur une fiche à commande.</li>
+     *   <li>Une caractéristique sans « libellé : » (H2) : son texte va en {@code exigence} — la validation du besoin exige les deux —,
+     *       sous le libellé « Spécification ».</li>
+     *   <li>Avertissements : écart de désignation entre bordereau et spécifications, article sans spécification (ou l'inverse),
+     *       quantités indicatives d'un contrat-cadre.</li>
+     * </ul>
+     */
+    static List<ImportDaoResult.Article> articles(FicheMarcheDto fiche, boolean pdf, List<LectureTableaux.Article> lus,
+            List<String> avertissements) {
+        int nbLots = fiche.getNbLots() == null ? 1 : fiche.getNbLots();
+        boolean alloti = LotsFiche.alloti(nbLots);
+        boolean aCommande = "A_COMMANDE".equals(fiche.getTypeMarche());
+        boolean cadre = "CONTRAT_CADRE".equals(fiche.getTypeMarche());
+        List<ImportDaoResult.Article> out = new ArrayList<>();
+        for (LectureTableaux.Article a : lus) {
+            String qui = "Article n° " + a.code + (a.lot == null ? "" : " du lot " + a.lot);
+            List<String> anomalies = new ArrayList<>();
+            Integer lot = null;
+            if (!alloti) {
+                if (a.lot != null && a.lot > 1) {
+                    anomalies.add("LOT_HORS_PLAN : le lot " + a.lot + " lu n'existe pas au plan (la ligne n'est pas allotie).");
+                }
+            } else if (a.lot == null) {
+                anomalies.add("LOT_HORS_PLAN : le document ne dit pas de quel lot il s'agit (la ligne compte " + nbLots + " lots).");
+            } else if (a.lot < 1 || a.lot > nbLots) {
+                anomalies.add("LOT_HORS_PLAN : le lot " + a.lot + " lu n'existe pas au plan (" + nbLots + " lots).");
+            } else {
+                lot = a.lot;
+            }
+            boolean minMax = a.min != null || a.max != null;
+            if (a.bordereau && aCommande && !minMax) {
+                anomalies.add("QUANTITES_INCOMPATIBLES : une seule quantité lue, la fiche est à commande (minimum et maximum attendus).");
+            } else if (a.bordereau && !aCommande && minMax) {
+                anomalies.add("QUANTITES_INCOMPATIBLES : minimum et maximum lus, la fiche n'est pas à commande (une quantité attendue).");
+            }
+            String designationSpecification = null;
+            if (a.designation != null && a.designationSpec != null && LectureTableaux.ecart(a.designation, a.designationSpec)) {
+                designationSpecification = a.designationSpec;
+                avertissements.add(qui + " : le bordereau dit « " + a.designation + " », les spécifications « " + a.designationSpec + " ».");
+            }
+            if (a.bordereau && a.designationSpec == null) {
+                avertissements.add(qui + " : au bordereau, sans spécification.");
+            } else if (!a.bordereau) {
+                avertissements.add(qui + " : spécifié, sans article du bordereau (unité et quantité à saisir).");
+            }
+            List<ImportDaoResult.Caracteristique> caracs = new ArrayList<>();
+            for (LectureTableaux.Caracteristique c : a.caracteristiques) {
+                boolean sansLibelle = c.exigence() == null || c.exigence().isBlank();
+                ImportDaoResult.Caracteristique k = sansLibelle ? new ImportDaoResult.Caracteristique("Spécification", c.libelle())
+                        : new ImportDaoResult.Caracteristique(c.libelle(), c.exigence());
+                if (k.libelle().length() > 300 || k.exigence().length() > 500) {
+                    avertissements.add(qui + " : une caractéristique dépasse la longueur admise (libellé 300, exigence 500 caractères).");
+                }
+                caracs.add(k);
+            }
+            out.add(new ImportDaoResult.Article(lot, a.code, a.designation != null ? a.designation : a.designationSpec, a.unite, a.quantite,
+                    a.min, a.max, a.serie, a.serieLibelle, caracs, new ImportDaoResult.Confiance(a.bordereau ? "haute" : "moyenne",
+                            caracs.isEmpty() ? null : "moyenne"), pdf ? new ImportDaoResult.Pages(a.pageBordereau, a.pageSpec) : null,
+                    designationSpecification, anomalies));
+        }
+        if (cadre && lus.stream().anyMatch(a -> a.bordereau)) {
+            avertissements.add("Contrat-cadre : les quantités du bordereau sont données à titre indicatif.");
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ le fichier
@@ -434,7 +532,7 @@ public class ImportDaoService {
         List<ImportDaoResult.Ambigu> ambigusSortie = ambigus.stream()
                 .map(a -> new ImportDaoResult.Ambigu(a.candidats(), a.texte())).toList();
         return new ImportDaoResult(nomFichier, empreinte, lus, cadrage, sortie, ambigusSortie, divergences, conflits,
-                nonTrouves, avertissements, passages);
+                nonTrouves, avertissements, passages, List.of());
     }
 
     /** Un champ que l'import peut proposer : saisi, actif, de la forme et de la catégorie, ni pièce, ni calculé. */

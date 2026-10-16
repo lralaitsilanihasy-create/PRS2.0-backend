@@ -233,7 +233,8 @@ public class FicheMarcheController {
     @PutMapping("/{idDmc}/articles")
     public List<cnm.prs.dto.ArticleBesoinDto> remplacerArticles(@PathVariable Long idDmc,
             @RequestParam(required = false) Integer lot, @RequestBody cnm.prs.dto.ArticleBesoinDto.Remplacement corps) {
-        return service.remplacerArticles(idDmc, lot, corps == null ? null : corps.getArticles());
+        return service.remplacerArticles(idDmc, lot, corps == null ? null : corps.getArticles(), corps == null ? null : corps.getImportFichier(),
+                corps == null ? null : corps.getImportEmpreinte());
     }
 
     /** ⚠️ V60 (2026-10-03, §B1.1) — le matériel exigé de la version courante (travaux), dans l'ordre. */

@@ -87,6 +87,29 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ 16/10 (« import-specifications », §B2) — les articles repris d'un import gardent sa trace : nom et empreinte "
+            + "ensemble (400 nominatif sinon), au journal FICHE_IMPORTEE ; sans eux, rien de plus")
+    void traceDeLImport() throws Exception {
+        Long idDmc = creerDmc(9902);
+        String corps = "{\"articles\":[" + article(null, "Kit Core i3", 8, 16, "Mémoire vive", "8 Go au minimum") + "]";
+        String empreinte = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/articles?lot=2").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(corps + ",\"importFichier\":\"DAO-2463.pdf\"}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("importEmpreinte"));
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/articles?lot=2").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(corps + ",\"importEmpreinte\":\"" + empreinte + "\"}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("importFichier"));
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/articles?lot=2").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(corps + ",\"importFichier\":\"DAO-2463.pdf\",\"importEmpreinte\":\"" + empreinte.toUpperCase() + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].designation").value("Kit Core i3"));
+        articles(idDmc, 1, article(null, "Ordinateur de bureau", 15, 30, "Processeur", "Core i5")).andExpect(status().isOk());
+        String journal = mvc.perform(get("/api/dossiers/9900/journal").header("Authorization", tokenPresident))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(journal, "$[?(@.typeAction=='FICHE_IMPORTEE')].detail"))
+                .containsExactly("besoin pré-rempli par import de DAO-2463.pdf (0123456789ab) : 1 article(s), lot 2");
+    }
+
+    @Test
     @DisplayName("1 — Besoin d'un lot remplacé en bloc : ordre par position, rédacteur posé, trié par lot ; lot hors plan, lot sur "
             + "une ligne non allotie, quantités d'un marché à commande manquantes → 400 ; prestations intellectuelles → 409 "
             + "BESOIN_HORS_PERIMETRE ; DELETE → 204 puis 404")

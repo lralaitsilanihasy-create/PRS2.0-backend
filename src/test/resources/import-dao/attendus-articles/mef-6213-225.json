@@ -1,0 +1,1171 @@
+[
+ {
+  "lot": null,
+  "n": 1,
+  "code": "01",
+  "designationBrute": "Révision moteur Le forfait à (insérer le prix unitaire en lettre)……….",
+  "designation": "Révision moteur",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Révision moteur",
+  "exigences": [
+   "Révision moteur (Pièces neuves et",
+   "de marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Révision moteur (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 2,
+  "code": "02",
+  "designationBrute": "Vidange Le forfait à … (insérer le prix unitaire en lettre)……….",
+  "designation": "Vidange",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Vidange",
+  "exigences": [
+   "Vidange (Huile et filtre de qualité",
+   "supérieure)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Vidange (Huile et filtre de qualité supérieure)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 3,
+  "code": "03",
+  "designationBrute": "Fourniture et pose transmission AV. G/D l’unité à… (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose transmission AV. G/D",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Transmission AV. G/D",
+  "exigences": [
+   "Transmission AV. G/D (Pièces",
+   "neuves et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Transmission AV. G/D (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 4,
+  "code": "04",
+  "designationBrute": "Fourniture et pose plateau le jeu à (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose plateau",
+  "unite": "Jeu",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Plateau",
+  "exigences": [
+   "Plateau (Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Plateau (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 5,
+  "code": "05",
+  "designationBrute": "Fourniture et pose disque d’embrayage (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose disque d’embrayage",
+  "unite": "Jeu",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Disque d’embrayage",
+  "exigences": [
+   "Disque d’embrayage (Pièces",
+   "neuves et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Disque d’embrayage (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 6,
+  "code": "06",
+  "designationBrute": "Fourniture et pose butée d’embrayage (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose butée d’embrayage",
+  "unite": "Jeu",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Butée d’embrayage",
+  "exigences": [
+   "Butée d’embrayage (Pièces",
+   "neuves et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Butée d’embrayage (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 7,
+  "code": "07",
+  "designationBrute": "Fourniture et pose émetteur (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose émetteur",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Emetteur",
+  "exigences": [
+   "Emetteur (Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Emetteur (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 8,
+  "code": "08",
+  "designationBrute": "Fourniture et pose récepteur (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose récepteur",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Récepteur",
+  "exigences": [
+   "Récepteur (Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Récepteur (Pièces neuves et de marque d’origine du véhicule à réparer",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 9,
+  "code": "09",
+  "designationBrute": "Remplissage huile boîte (insérer le prix unitaire en lettre)……….",
+  "designation": "Remplissage huile boîte",
+  "unite": "Litre",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Remplissage huile boîte",
+  "exigences": [
+   "Remplissage huile boîte (Huile de",
+   "marque supérieure)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Remplissage huile boîte (Huile de marque supérieure)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 10,
+  "code": "10",
+  "designationBrute": "Fourniture et pose servo frein (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose servo frein",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Servo frein",
+  "exigences": [
+   "Servo frein (Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Servo frein (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 11,
+  "code": "11",
+  "designationBrute": "Système ABS (insérer le prix unitaire en lettre)……….",
+  "designation": "Système ABS",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Système ABS",
+  "exigences": [
+   "Système ABS (Pièces neuves et",
+   "de marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Système ABS (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 12,
+  "code": "12",
+  "designationBrute": "Fourniture et pose pompe centrale (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose pompe centrale",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Pompe centrale",
+  "exigences": [
+   "Pompe centrale (Pièces neuves et",
+   "de marque d’origine du véhicule à",
+   "réparer"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Pompe centrale (Pièces neuves et de marque d’origine du véhicule à réparer",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 13,
+  "code": "13",
+  "designationBrute": "Fourniture et pose pompe à vide (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose pompe à vide",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Pompe à vide",
+  "exigences": [
+   "Pompe à vide(Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Pompe à vide(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 14,
+  "code": "14",
+  "designationBrute": "Fourniture et pose disques de freins (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose disques de freins",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Disques de freins",
+  "exigences": [
+   "Disques de freins(Pièces neuves et",
+   "de marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Disques de freins(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 15,
+  "code": "15",
+  "designationBrute": "Fourniture et pose plaquettes de freins AV. G/D (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose plaquettes de freins AV. G/D",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Plaquettes de freins AV. G/D",
+  "exigences": [
+   "Plaquettes de freins AV.",
+   "G/D(Pièces neuves et de marque",
+   "d’origine du véhicule à réparer)"
+  ],
+  "prose": false,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Plaquettes de freins AV.",
+    "exigence": ""
+   },
+   {
+    "libelle": "G/D(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 16,
+  "code": "16",
+  "designationBrute": "Fourniture et pose plaquettes de freins AR G/D (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose plaquettes de freins AR G/D",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Plaquettes de freins AR G/D",
+  "exigences": [
+   "Plaquettes de freins AR",
+   "G/D(Pièces neuves et de marque",
+   "d’origine du véhicule à réparer)"
+  ],
+  "prose": false,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Plaquettes de freins AR",
+    "exigence": ""
+   },
+   {
+    "libelle": "G/D(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 17,
+  "code": "17",
+  "designationBrute": "Fourniture et pose moyeux AV. G/D (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose moyeux AV. G/D",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Moyeux AV. G/D",
+  "exigences": [
+   "Moyeux AV. G/D(Pièces neuves",
+   "et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": false,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Moyeux AV. G/D(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 18,
+  "code": "18",
+  "designationBrute": "Fourniture et pose roulements moyeux AV. G/D (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose roulements moyeux AV. G/D",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Roulements moyeux AV. G/D",
+  "exigences": [
+   "Roulements moyeux AV.",
+   "G/D(Pièces neuves et de marque",
+   "d’origine du véhicule à réparer)"
+  ],
+  "prose": false,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Roulements moyeux AV.",
+    "exigence": ""
+   },
+   {
+    "libelle": "G/D(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 19,
+  "code": "19",
+  "designationBrute": "Fourniture et pose amortisseur AV. G/D (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose amortisseur AV. G/D",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Amortisseur AV. G/D",
+  "exigences": [
+   "Amortisseur AV. G/D(Pièces",
+   "neuves et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Amortisseur AV. G/D(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 20,
+  "code": "20",
+  "designationBrute": "Fourniture et pose remplacement des sillent blocs G/D (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose remplacement des sillent blocs G/D",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Remplacement des sillent blocs G/D",
+  "exigences": [
+   "Remplacement des sillent blocs",
+   "G/D (Pièces neuves et de marque",
+   "d’origine du véhicule à réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Remplacement des sillent blocs G/D (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 21,
+  "code": "21",
+  "designationBrute": "Fourniture et pose rotules bras de suspension (supérieur/inférieur) G/D (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose rotules bras de suspension (supérieur/inférieur) G/D",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Rotules bras de suspension (supérieur/inférieur) G/D",
+  "exigences": [
+   "Rotules bras de suspension",
+   "(supérieur/inférieur) G/D(Pièces",
+   "neuves et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Rotules bras de suspension (supérieur/inférieur) G/D(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 22,
+  "code": "22",
+  "designationBrute": "Fourniture et pose roulements paliers AR. G/D (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose roulements paliers AR. G/D",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Roulements paliers AR. G/D",
+  "exigences": [
+   "Roulements paliers AR.",
+   "G/D(Pièces neuves et de marque",
+   "d’origine du véhicule à réparer)"
+  ],
+  "prose": false,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Roulements paliers AR.",
+    "exigence": ""
+   },
+   {
+    "libelle": "G/D(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 23,
+  "code": "23",
+  "designationBrute": "Fourniture et pose amortisseur AR. G/D (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose amortisseur AR. G/D",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Amortisseur AR. G/D",
+  "exigences": [
+   "Amortisseur AR. G/D(Pièces",
+   "neuves et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Amortisseur AR. G/D(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 24,
+  "code": "24",
+  "designationBrute": "Fourniture et pose ressorts hélicoïdales G/D, (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose ressorts hélicoïdales G/D,",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Ressorts hélicoïdales G/D",
+  "exigences": [
+   "Ressorts hélicoïdales G/D(Pièces",
+   "neuves et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Ressorts hélicoïdales G/D(Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 25,
+  "code": "25",
+  "designationBrute": "Fourniture et pose rotules de direction G/D (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose rotules de direction G/D",
+  "unite": "Jeu",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Rotules de direction G/D",
+  "exigences": [
+   "Rotules de direction G/D(Pièces",
+   "neuves et de marque d’origine du",
+   "véhicule à réparer"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Rotules de direction G/D(Pièces neuves et de marque d’origine du véhicule à réparer",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 26,
+  "code": "26",
+  "designationBrute": "Fourniture et pose crémaillère (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose crémaillère",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Crémaillère",
+  "exigences": [
+   "Crémaillère (Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Crémaillère (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 27,
+  "code": "27",
+  "designationBrute": "Fourniture et pose pompe assisté (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose pompe assisté",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Pompe assisté",
+  "exigences": [
+   "Pompe assisté (Pièces neuves et",
+   "de marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Pompe assisté (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 28,
+  "code": "28",
+  "designationBrute": "Fourniture et pose pompe injection (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose pompe injection",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Pompe injection",
+  "exigences": [
+   "Pompe injection (Pièces neuves et",
+   "de marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Pompe injection (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 29,
+  "code": "29",
+  "designationBrute": "Fourniture et pose injecteurs (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose injecteurs",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Injecteurs",
+  "exigences": [
+   "Injecteurs (Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Injecteurs (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 30,
+  "code": "30",
+  "designationBrute": "Fourniture et pose pompe d’alimentation (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose pompe d’alimentation",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Pompe d’alimentation",
+  "exigences": [
+   "Pompe d’alimentation (Pièces et",
+   "de marque d’origine du véhicule à",
+   "réparer neuves)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Pompe d’alimentation (Pièces et de marque d’origine du véhicule à réparer neuves)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 31,
+  "code": "31",
+  "designationBrute": "Fourniture et pose pompe électrique (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose pompe électrique",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Pompe électrique",
+  "exigences": [
+   "Pompe électrique (Pièces neuves",
+   "et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": false,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Pompe électrique (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 32,
+  "code": "32",
+  "designationBrute": "Fourniture et pose visco coupleur (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose visco coupleur",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Visco coupleur",
+  "exigences": [
+   "Visco coupleur (Pièces neuves et",
+   "de marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Visco coupleur (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 33,
+  "code": "33",
+  "designationBrute": "Fourniture et pose radiateur (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose radiateur",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Radiateur",
+  "exigences": [
+   "Radiateur (Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Radiateur (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 34,
+  "code": "34",
+  "designationBrute": "Fourniture et pose vase d’expansion (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose vase d’expansion",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Vase d’expansion",
+  "exigences": [
+   "Vase d’expansion (Pièces neuves",
+   "et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": false,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Vase d’expansion (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 35,
+  "code": "35",
+  "designationBrute": "Fourniture et pose pompe à eau (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose pompe à eau",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Pompe à eau",
+  "exigences": [
+   "Pompe à eau (Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": false,
+  "pageSpec": 29,
+  "caracteristiques": [
+   {
+    "libelle": "Pompe à eau (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 36,
+  "code": "36",
+  "designationBrute": "Fourniture et pose calculateur (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose calculateur",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Calculateur",
+  "exigences": [
+   "Calculateur (Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Calculateur (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 37,
+  "code": "37",
+  "designationBrute": "Fourniture et pose révision des équipements électriques (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose révision des équipements électriques",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Révision des équipements électriques",
+  "exigences": [
+   "Révision des équipements",
+   "électriques (Pièces neuves et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Révision des équipements électriques (Pièces neuves et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 38,
+  "code": "38",
+  "designationBrute": "Fourniture et pose batterie 12V 100Ah (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose batterie 12V 100Ah",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Batterie 12V 100Ah",
+  "exigences": [
+   "Batterie 12V 100Ah (Neuve et de",
+   "qualité supérieure)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Batterie 12V 100Ah (Neuve et de qualité supérieure)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 39,
+  "code": "39",
+  "designationBrute": "Fourniture et pose alternateur (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose alternateur",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Alternateur",
+  "exigences": [
+   "Alternateur (pièce neuve et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Alternateur (pièce neuve et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 40,
+  "code": "40",
+  "designationBrute": "Fourniture et pose démarreur (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose démarreur",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Démarreur",
+  "exigences": [
+   "Démarreur (pièce neuve et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Démarreur (pièce neuve et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 41,
+  "code": "41",
+  "designationBrute": "Fourniture et pose balaies essuie-glace (insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose balaies essuie-glace",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Balaies essuie-glace",
+  "exigences": [
+   "Balaies essuie-glace (pièce neuve",
+   "et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": false,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Balaies essuie-glace (pièce neuve et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 42,
+  "code": "42",
+  "designationBrute": "Dressage carrosserie (insérer le prix unitaire en lettre)……….",
+  "designation": "Dressage carrosserie",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Dressage carrosserie",
+  "exigences": [
+   "dressage carrosserie (dans les",
+   "règles de l’art)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "dressage carrosserie (dans les règles de l’art)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 43,
+  "code": "43",
+  "designationBrute": "Peintures extérieures et intérieures (insérer le prix unitaire en lettre)……….",
+  "designation": "Peintures extérieures et intérieures",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Peintures extérieures et intérieures",
+  "exigences": [
+   "Peintures extérieures et intérieures",
+   "(dans les règles de l’art et de",
+   "qualité supérieure)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Peintures extérieures et intérieures (dans les règles de l’art et de qualité supérieure)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 44,
+  "code": "44",
+  "designationBrute": "Capitonnage des sièges, plafond et portières (insérer le prix unitaire en lettre)……….",
+  "designation": "Capitonnage des sièges, plafond et portières",
+  "unite": "Forfaitaire",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Capitonnage des sièges, plafond et portières",
+  "exigences": [
+   "Capitonnage des sièges, plafond",
+   "et portières (identique à l’origine)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Capitonnage des sièges",
+    "exigence": ""
+   },
+   {
+    "libelle": "plafond et portières (identique à l’origine)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 45,
+  "code": "45",
+  "designationBrute": "Fourniture et pose globes G/D(insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose globes G/D",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Globes G/D",
+  "exigences": [
+   "Globes G/D (pièce neuve et de",
+   "marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Globes G/D (pièce neuve et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 46,
+  "code": "46",
+  "designationBrute": "Fourniture et pose clignotants AVG/AVD(insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose clignotants AVG/AVD",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Clignotants AVG/AVD",
+  "exigences": [
+   "Clignotants AVG/AVD(pièce",
+   "neuve et de marque d’origine du",
+   "véhicule à réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Clignotants AVG/AVD(pièce neuve et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 47,
+  "code": "47",
+  "designationBrute": "Fourniture et pose feux arrière G/D(insérer le prix unitaire en lettre)……….",
+  "designation": "Fourniture et pose feux arrière G/D",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Feux arrière G/D",
+  "exigences": [
+   "Feux arrière G/D(pièce neuve et",
+   "de marque d’origine du véhicule à",
+   "réparer)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Feux arrière G/D(pièce neuve et de marque d’origine du véhicule à réparer)",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 48,
+  "code": "48",
+  "designationBrute": "Fourniture et pose enveloppes pneumatiques suivant références respectives(insérer le prix",
+  "designation": "Fourniture et pose enveloppes pneumatiques suivant références respectives",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 26,
+  "designationSpec": "Enveloppes suivant références respectives",
+  "exigences": [
+   "Enveloppes suivant références",
+   "respectives (neuve et de qualité",
+   "supérieure)"
+  ],
+  "prose": true,
+  "pageSpec": 30,
+  "caracteristiques": [
+   {
+    "libelle": "Enveloppes suivant références respectives (neuve et de qualité supérieure)",
+    "exigence": ""
+   }
+  ]
+ }
+]

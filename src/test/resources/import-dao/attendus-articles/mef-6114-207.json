@@ -1,0 +1,1038 @@
+[
+ {
+  "lot": null,
+  "n": 1,
+  "code": "1",
+  "designationBrute": "Bac à ordure métallique, l’unité à........ ....(en lettre)..............................................",
+  "designation": "Bac à ordure métallique",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bac à ordure métallique",
+  "exigences": [
+   "Avec couvercle, métallique, 15l,"
+  ],
+  "prose": false,
+  "pageSpec": 26,
+  "caracteristiques": [
+   {
+    "libelle": "Avec couvercle, métallique, 15l,",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 2,
+  "code": "2",
+  "designationBrute": "Bac à ordure plastique, l’unité à...... ....(en lettre)................................................",
+  "designation": "Bac à ordure plastique",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bac à ordure plastique",
+  "exigences": [
+   "Plastique solide durable, 30L avec couvercle",
+   "pivotant, Dim:625×576"
+  ],
+  "prose": true,
+  "pageSpec": 26,
+  "caracteristiques": [
+   {
+    "libelle": "Plastique solide durable",
+    "exigence": ""
+   },
+   {
+    "libelle": "30L avec couvercle pivotant",
+    "exigence": ""
+   },
+   {
+    "libelle": "Dim",
+    "exigence": "625×576"
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 3,
+  "code": "3",
+  "designationBrute": "Bac à ordure en métal, l’unité à. ....(en lettre).....................................................",
+  "designation": "Bac à ordure en métal",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bac à ordure en métal",
+  "exigences": [
+   "Construction tout en métal résistante , 12 L"
+  ],
+  "prose": false,
+  "pageSpec": 26,
+  "caracteristiques": [
+   {
+    "libelle": "Construction tout en métal résistante , 12 L",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 4,
+  "code": "4",
+  "designationBrute": "Balai satrana, l’unité à................ ....(en lettre)......................................",
+  "designation": "Balai satrana",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Balai satrana",
+  "exigences": [
+   "local, ferme et raide"
+  ],
+  "prose": false,
+  "pageSpec": 26,
+  "caracteristiques": [
+   {
+    "libelle": "local, ferme et raide",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 5,
+  "code": "5",
+  "designationBrute": "Balai brosse avec manche, l’unité à...... ....(en lettre)................................................",
+  "designation": "Balai brosse avec manche",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Balai brosse avec manche",
+  "exigences": [
+   "Pratique pour nettoyage de bureaux, brosse en",
+   "fibre pvc 30 cm165x46x9 cm, raide, importé"
+  ],
+  "prose": true,
+  "pageSpec": 26,
+  "caracteristiques": [
+   {
+    "libelle": "Pratique pour nettoyage de bureaux",
+    "exigence": ""
+   },
+   {
+    "libelle": "brosse en fibre pvc 30 cm165x46x9 cm",
+    "exigence": ""
+   },
+   {
+    "libelle": "raide",
+    "exigence": ""
+   },
+   {
+    "libelle": "importé",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 6,
+  "code": "6",
+  "designationBrute": "Balai rasta à manche avec sceau, l’unité à..... ....(en lettre).................................................",
+  "designation": "Balai rasta à manche avec sceau",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Balai rasta à manche avec sceau",
+  "exigences": [
+   "Frange ultra absorbant, amovible et lavable avec",
+   "manche, Seau universel au moins 15lavec panier",
+   "d'essorage avec ouverture large pour insertion",
+   "facile du balai. et lavande avec manche Fils",
+   "torsadés 100% coton, importé, bonne qualité"
+  ],
+  "prose": true,
+  "pageSpec": 26,
+  "caracteristiques": [
+   {
+    "libelle": "Frange ultra absorbant",
+    "exigence": ""
+   },
+   {
+    "libelle": "amovible et lavable avec manche",
+    "exigence": ""
+   },
+   {
+    "libelle": "Seau universel au moins 15lavec panier d'essorage avec ouverture large pour insertion facile du balai. et lavande avec manche Fils torsadés 100% coton",
+    "exigence": ""
+   },
+   {
+    "libelle": "importé",
+    "exigence": ""
+   },
+   {
+    "libelle": "bonne qualité",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 7,
+  "code": "7",
+  "designationBrute": "Balai à micro fibre, l’unité à......... ....(en lettre).............................................",
+  "designation": "Balai à micro fibre",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Balai à micro fibre",
+  "exigences": [
+   "Buanderie Entretien 2 en 1, Seau et manche du",
+   "balai en plastique.- Mop en microfibre.-",
+   "Composé d'un seau essoreur, d'un balai à franges",
+   "mop microfibre, d'un flacon et de d'une recharge",
+   "mop supplémentaire.- Manche extensible et tête",
+   "du balai rotative à 360° pour un nettoyage",
+   "efficace et facilité sans aucune rayure.- Essore"
+  ],
+  "prose": true,
+  "pageSpec": 26,
+  "caracteristiques": [
+   {
+    "libelle": "Buanderie Entretien 2 en 1",
+    "exigence": ""
+   },
+   {
+    "libelle": "Seau et manche du balai en plastique.- Mop en microfibre.- Composé d'un seau essoreur",
+    "exigence": ""
+   },
+   {
+    "libelle": "d'un balai à franges mop microfibre",
+    "exigence": ""
+   },
+   {
+    "libelle": "d'un flacon et de d'une recharge mop supplémentaire.- Manche extensible et tête du balai rotative à 360° pour un nettoyage efficace et facilité sans aucune rayure.- Essore",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 8,
+  "code": "8",
+  "designationBrute": "Balai rigide, l’unité à................ ....(en lettre)......................................",
+  "designation": "Balai rigide",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Balai rigide",
+  "exigences": [
+   "import, contient des fibres rigides"
+  ],
+  "prose": false,
+  "pageSpec": 26,
+  "caracteristiques": [
+   {
+    "libelle": "import, contient des fibres rigides",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 9,
+  "code": "9",
+  "designationBrute": "Bloc désodorisant WC, l’unité à........ ....(en lettre)..............................................",
+  "designation": "Bloc désodorisant WC",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bloc désodorisant wc",
+  "exigences": [
+   "type de produit nettoyant pour WC, avec cage et",
+   "crochet en plastique, triple action, plus de",
+   "produits, nettoie, anti tartre, désodorise ,",
+   "conditionnement: boite, contenance/unité 3",
+   "blocs"
+  ],
+  "prose": false,
+  "pageSpec": 26,
+  "caracteristiques": [
+   {
+    "libelle": "type de produit nettoyant pour WC, avec cage et crochet en plastique, triple action, plus de produits, nettoie, anti tartre, désodorise , conditionnement: boite, contenance/unité 3 blocs",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 10,
+  "code": "10",
+  "designationBrute": "Bombe désodorisante 300ml, l’unité à....... ....(en lettre)...............................................",
+  "designation": "Bombe désodorisante 300ml",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bombe désodorisante 300ml",
+  "exigences": [
+   "bombe désodorisant 300ml parfums : citrus,",
+   "vanille, lavande,… Catégorie Désodorisant",
+   "intérieur"
+  ],
+  "prose": false,
+  "pageSpec": 26,
+  "caracteristiques": [
+   {
+    "libelle": "bombe désodorisant 300ml parfums",
+    "exigence": "citrus, vanille, lavande,… Catégorie Désodorisant intérieur"
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 11,
+  "code": "11",
+  "designationBrute": "Bombe dépoussiérante, l’unité à..... ....(en lettre).................................................",
+  "designation": "Bombe dépoussiérante",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bombe dépoussiérante",
+  "exigences": [
+   "import, de bonne qualité, antistatique 300ml"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "import, de bonne qualité, antistatique 300ml",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 12,
+  "code": "12",
+  "designationBrute": "Bombe désodorisante 400ml, l’unité à..... ....(en lettre).................................................",
+  "designation": "Bombe désodorisante 400ml",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bombe désodorisante 400ml",
+  "exigences": [
+   "bombe désodorisant 400ml parfums : citrus,",
+   "vanille, lavande,…",
+   "Catégorie Désodorisant intérieur"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "bombe désodorisant 400ml parfums",
+    "exigence": "citrus, vanille, lavande,…"
+   },
+   {
+    "libelle": "Catégorie Désodorisant intérieur",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 13,
+  "code": "13",
+  "designationBrute": "Bombe insecticide 400ml, l’unité à........ ....(en lettre)..............................................",
+  "designation": "Bombe insecticide 400ml",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bombe insecticide 400ml",
+  "exigences": [
+   "en bombe aérosol, tue tout insectes",
+   "volant/rampant 400ml"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "en bombe aérosol, tue tout insectes volant/rampant 400ml",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 14,
+  "code": "14",
+  "designationBrute": "Bombe anti rouille, l’unité à................. ....(en lettre).....................................",
+  "designation": "Bombe anti rouille",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bombe anti rouille",
+  "exigences": [
+   "import, de bonne qualité 400ml"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "import, de bonne qualité 400ml",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 15,
+  "code": "15",
+  "designationBrute": "Bombe air comprimé 500ml, l’unité à...... ....(en lettre)................................................",
+  "designation": "Bombe air comprimé 500ml",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bombe air comprimé 100ml",
+  "exigences": [
+   "import, bonne qualité 100ml"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "import, bonne qualité 100ml",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 16,
+  "code": "16",
+  "designationBrute": "Bombe nettoyante meuble bois, l’unité à......... ....(en lettre).............................................",
+  "designation": "Bombe nettoyante meuble bois",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bombe nettoyante meuble bois",
+  "exigences": [
+   "meuble bois 500 ml"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "meuble bois 500 ml",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 17,
+  "code": "17",
+  "designationBrute": "Bombe nettoyante mousse, l’unité à...... ....(en lettre)................................................",
+  "designation": "Bombe nettoyante mousse",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bombe nettoyante mousse",
+  "exigences": [
+   "bombe mousse nettoyante antistatique, couleur :",
+   "incolore, emballage: aérosol de 500ml"
+  ],
+  "prose": true,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "bombe mousse nettoyante antistatique",
+    "exigence": ""
+   },
+   {
+    "libelle": "couleur",
+    "exigence": "incolore"
+   },
+   {
+    "libelle": "emballage",
+    "exigence": "aérosol de 500ml"
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 18,
+  "code": "18",
+  "designationBrute": "Bombe tableau de bord, l’unité à..... ....(en lettre).................................................",
+  "designation": "Bombe tableau de bord",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bombe tableau de bord",
+  "exigences": [
+   "mousse nettoyante parfumée"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "mousse nettoyante parfumée",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 19,
+  "code": "19",
+  "designationBrute": "Bombe tapis moquette 600ml, l’unité à..... ....(en lettre).................................................",
+  "designation": "Bombe tapis moquette 600ml",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 24,
+  "designationSpec": "Bombe tapis moquette 600ml",
+  "exigences": [
+   "Triple actions : nettoie, protège et respecte"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "Triple actions",
+    "exigence": "nettoie, protège et respecte"
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 20,
+  "code": "20",
+  "designationBrute": "Brosse WC avec pot, l’unité à....... ....(en lettre)...............................................",
+  "designation": "Brosse WC avec pot",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Brosse WC avec pot",
+  "exigences": [
+   "Dim. Hauteur env.35cmx10,5cm de diamètre,",
+   "pot, manche et brosse en plastique"
+  ],
+  "prose": true,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "Dim. Hauteur env.35cmx10,5cm de diamètre",
+    "exigence": ""
+   },
+   {
+    "libelle": "pot",
+    "exigence": ""
+   },
+   {
+    "libelle": "manche et brosse en plastique",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 21,
+  "code": "21",
+  "designationBrute": "Brosse coco, l’unité à..................... ....(en lettre).................................",
+  "designation": "Brosse coco",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Brosse coco",
+  "exigences": [
+   "Local"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "Local",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 22,
+  "code": "22",
+  "designationBrute": "Brosse pour lavage carreaux, l’unité à... ....(en lettre)...................................................",
+  "designation": "Brosse pour lavage carreaux",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Brosse pour lavage carreaux",
+  "exigences": [
+   "Importé"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "Importé",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 23,
+  "code": "23",
+  "designationBrute": "Cache bouche FFP3, l’unité à................ ....(en lettre)......................................",
+  "designation": "Cache bouche FFP3",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Cache bouche FFP3",
+  "exigences": [
+   "Cache bouche FFP 3, norme CE"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "Cache bouche FFP 3, norme CE",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 24,
+  "code": "24",
+  "designationBrute": "Cache bouche chirurgical, la boite à...... ....(en lettre)...........................................",
+  "designation": "Cache bouche chirurgical",
+  "unite": "boite",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Cache bouche chirurgical",
+  "exigences": [
+   "Cache bouche chirurgical; boite de 50"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "Cache bouche chirurgical",
+    "exigence": ""
+   },
+   {
+    "libelle": "boite de 50",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 25,
+  "code": "25",
+  "designationBrute": "Cache bouche coton, l’unité à.......... ....(en lettre)............................................",
+  "designation": "Cache bouche coton",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Cache bouche coton",
+  "exigences": [
+   "Cache bouche double viseline;lavable,",
+   "personnalisé"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "Cache bouche double viseline",
+    "exigence": ""
+   },
+   {
+    "libelle": "lavable, personnalisé",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 26,
+  "code": "26",
+  "designationBrute": "Canard WC gel 1l, l’unité à.......... ....(en lettre)............................................",
+  "designation": "Canard WC gel 1l",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Canard WC gel 1l",
+  "exigences": [
+   "importé, de bonne qualité; catégorie nettoyage",
+   "WC; type de produit gel marine 5 en 1;néttoie",
+   "même sous l'eau, élimine les odeurs, actifs sous",
+   "les rebords"
+  ],
+  "prose": true,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "importé",
+    "exigence": ""
+   },
+   {
+    "libelle": "de bonne qualité",
+    "exigence": ""
+   },
+   {
+    "libelle": "catégorie nettoyage WC",
+    "exigence": ""
+   },
+   {
+    "libelle": "type de produit gel marine 5 en 1",
+    "exigence": ""
+   },
+   {
+    "libelle": "néttoie même sous l'eau",
+    "exigence": ""
+   },
+   {
+    "libelle": "élimine les odeurs",
+    "exigence": ""
+   },
+   {
+    "libelle": "actifs sous les rebords",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 27,
+  "code": "27",
+  "designationBrute": "Crème à récurer 1l, l’unité à.......... ....(en lettre)............................................",
+  "designation": "Crème à récurer 1l",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Crème à récurer 950cl",
+  "exigences": [
+   "de bonne qualité, 950cl"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "de bonne qualité, 950cl",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 28,
+  "code": "28",
+  "designationBrute": "Crème lavande, l’unité à............... ....(en lettre).......................................",
+  "designation": "Crème lavande",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Crème lavande",
+  "exigences": [
+   "bonne qualité, 500 ml"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "bonne qualité, 500 ml",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 29,
+  "code": "29",
+  "designationBrute": "Chamoisine paquet de 12, le paquet à...... ....(en lettre)..............................................",
+  "designation": "Chamoisine paquet de 12",
+  "unite": "Paquet",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Chamoisine paquet de 12",
+  "exigences": [
+   "Lavette multi-usage 100% coton, efficace pour",
+   "dépoussiérer, nettoyer à utiliser avec ou sans",
+   "dépoussiérant, paquet de 12"
+  ],
+  "prose": true,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "Lavette multi-usage 100% coton",
+    "exigence": ""
+   },
+   {
+    "libelle": "efficace pour dépoussiérer",
+    "exigence": ""
+   },
+   {
+    "libelle": "nettoyer à utiliser avec ou sans dépoussiérant",
+    "exigence": ""
+   },
+   {
+    "libelle": "paquet de 12",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 30,
+  "code": "30",
+  "designationBrute": "Chiffon couleur antistatique, le paquet à...... ....(en lettre).........................................",
+  "designation": "Chiffon couleur antistatique",
+  "unite": "Paquet",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Chiffon couleur antistatique",
+  "exigences": [
+   "paquet de 06,poids 200 g"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "paquet de 06,poids 200 g",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 31,
+  "code": "31",
+  "designationBrute": "Colle super glue, l’unité à............... ....(en lettre).......................................",
+  "designation": "Colle super glue",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Colle super glue",
+  "exigences": [
+   "colle super glue 75ml"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "colle super glue 75ml",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 32,
+  "code": "32",
+  "designationBrute": "Carton (50*30cm), l’unité à.............. ....(en lettre)........................................",
+  "designation": "Carton (50*30cm)",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Carton (50*30cm)",
+  "exigences": [
+   "Local"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "Local",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 33,
+  "code": "33",
+  "designationBrute": "Dépoussiérant pour meuble, l’unité à....(en lettre).........................",
+  "designation": "Dépoussiérant pour meuble",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Dépoussiérant pour meuble",
+  "exigences": [
+   "dépoussiérant nettoyant pour meuble 300ml"
+  ],
+  "prose": false,
+  "pageSpec": 27,
+  "caracteristiques": [
+   {
+    "libelle": "dépoussiérant nettoyant pour meuble 300ml",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 34,
+  "code": "34",
+  "designationBrute": "Déboucheur liquide 1l, l’unité à.......... ....(en lettre)............................................",
+  "designation": "Déboucheur liquide 1l",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Déboucheur liquide 1l",
+  "exigences": [
+   "1litre de bonne qualité"
+  ],
+  "prose": false,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "1litre de bonne qualité",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 35,
+  "code": "35",
+  "designationBrute": "Désodorisant pour auto, l’unité à......... ....(en lettre).............................................",
+  "designation": "Désodorisant pour auto",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Désodorisant pour auto",
+  "exigences": [
+   "Cascade de fraicheur, fragrance à clipser sur la",
+   "grille d'aération, composé d'un diffuseur et d'une",
+   "recharge de parfum, import"
+  ],
+  "prose": true,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Cascade de fraicheur",
+    "exigence": ""
+   },
+   {
+    "libelle": "fragrance à clipser sur la grille d'aération",
+    "exigence": ""
+   },
+   {
+    "libelle": "composé d'un diffuseur et d'une recharge de parfum",
+    "exigence": ""
+   },
+   {
+    "libelle": "import",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 36,
+  "code": "36",
+  "designationBrute": "Détergent liquide, l’unité à.......... ....(en lettre)............................................",
+  "designation": "Détergent liquide",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Détergent liquide",
+  "exigences": [
+   "de bonne qualité et efficace"
+  ],
+  "prose": false,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "de bonne qualité et efficace",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 37,
+  "code": "37",
+  "designationBrute": "Désodorisant 300ml, l’unité à....... ....(en lettre)...............................................",
+  "designation": "Désodorisant 300ml",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Désodorisant 300ml",
+  "exigences": [
+   "Importé"
+  ],
+  "prose": false,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Importé",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 38,
+  "code": "38",
+  "designationBrute": "Eau de javel 1l, l’unité à.................. ....(en lettre)....................................",
+  "designation": "Eau de javel 1l",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Eau de javel 1l",
+  "exigences": [
+   "pour détacher, blanchir, désinfecter et",
+   "désodoriser"
+  ],
+  "prose": false,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "pour détacher, blanchir, désinfecter et désodoriser",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 39,
+  "code": "39",
+  "designationBrute": "Eponges (15*15*15) cm, l’unité à..... ....(en lettre).................................................",
+  "designation": "Eponges (15*15*15) cm",
+  "unite": "Unité",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Eponges (15*15*15) cm",
+  "exigences": [
+   "Absorbant et résistant, de bonne qualité"
+  ],
+  "prose": false,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "Absorbant et résistant, de bonne qualité",
+    "exigence": ""
+   }
+  ]
+ },
+ {
+  "lot": null,
+  "n": 40,
+  "code": "40",
+  "designationBrute": "Encaustique 1kg , le kilogramme à.......... ....(en lettre).............................................",
+  "designation": "Encaustique 1kg",
+  "unite": "Kg",
+  "quantite": 1,
+  "pageBordereau": 25,
+  "designationSpec": "Encaustique 1kg",
+  "exigences": [
+   "encaustique 1kg"
+  ],
+  "prose": false,
+  "pageSpec": 28,
+  "caracteristiques": [
+   {
+    "libelle": "encaustique 1kg",
+    "exigence": ""
+   }
+  ]
+ }
+]

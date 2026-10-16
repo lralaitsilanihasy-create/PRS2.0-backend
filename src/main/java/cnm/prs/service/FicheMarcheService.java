@@ -514,12 +514,31 @@ public class FicheMarcheService {
      */
     public List<cnm.prs.dto.ArticleBesoinDto> remplacerArticles(Long idDmc, Integer lot,
             List<cnm.prs.dto.ArticleBesoinDto> articles) {
+        return remplacerArticles(idDmc, lot, articles, null, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-16 (« import-specifications », §B2) — le même remplacement, avec la trace facultative de l'import : {@code
+     * importFichier} et {@code importEmpreinte} vont ensemble (400 nominatif sinon) et au journal du dossier de planification
+     * ({@code FICHE_IMPORTEE}), comme pour {@code …/import/appliquer}.
+     */
+    public List<cnm.prs.dto.ArticleBesoinDto> remplacerArticles(Long idDmc, Integer lot,
+            List<cnm.prs.dto.ArticleBesoinDto> articles, String importFichier, String importEmpreinte) {
         Contexte ctx = contexteEcriture(idDmc);
         exigerBesoinDansLePerimetre(ctx);
         List<cnm.prs.dto.ArticleBesoinDto> recus = articles == null ? List.of() : articles;
         int nbLots = LotsFiche.nbLots(valeursPpm.lire(ctx.idDetail()).valeurs());
         boolean alloti = LotsFiche.alloti(nbLots);
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
+        boolean importe = importFichier != null && !importFichier.isBlank() || importEmpreinte != null && !importEmpreinte.isBlank();
+        String emp = importEmpreinte == null ? "" : importEmpreinte.trim().toLowerCase(java.util.Locale.ROOT);
+        if (importe && (importFichier == null || importFichier.isBlank() || importFichier.trim().length() > 255)) {
+            erreurs.add(new ErrorResponse.FieldError("importFichier", "Le nom du fichier importé accompagne son empreinte (255 caractères au plus)."));
+        }
+        if (importe && !emp.matches("[0-9a-f]{64}")) {
+            erreurs.add(new ErrorResponse.FieldError("importEmpreinte",
+                    "L'empreinte SHA-256 du fichier importé accompagne son nom (64 caractères hexadécimaux, celle de la lecture)."));
+        }
         if (lot != null && !alloti) {
             erreurs.add(new ErrorResponse.FieldError("lot", "La ligne n'est pas allotie : le besoin s'écrit sans lot."));
         } else if (lot != null && (lot < 1 || lot > nbLots)) {
@@ -555,6 +574,10 @@ public class FicheMarcheService {
                 CurrentUser.profil().map(Enum::name).orElse(null), travaux);
         fiche.setDateMaj(LocalDateTime.now());
         ficheRepository.save(fiche);
+        if (importe) {
+            journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_IMPORTEE, "besoin pré-rempli par import de " + importFichier.trim()
+                    + " (" + emp.substring(0, 12) + ") : " + recus.size() + " article(s)" + (lot == null ? "" : ", lot " + lot));
+        }
         return besoin.lister(fiche.getIdFiche());
     }
 
