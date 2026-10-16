@@ -624,6 +624,35 @@ forme et rythme des marchés subséquents.
 - **Passé l'échéance, le contrat est échu** : plus aucune remise en concurrence ni commande. Le contrat-cadre n'a pas de minimum
   (art. 34).
 
+#### La remise en concurrence des titulaires et le marché subséquent (2026-10-16)
+
+⚠️ **Un contrat-cadre en vigueur s'exécute par marchés subséquents, chacun précédé d'une remise en concurrence de ses
+titulaires** (décret n° 2019-1064, art. 20-33). Contrat : `docs/api-endpoints.md`, § *La remise en concurrence et le marché
+subséquent — lot MS-2*.
+
+- **La PRMP ou son UGPM lance la remise** à la survenance du besoin ou au calendrier du contrat (art. 24), tant que le contrat est
+  en vigueur. Une remise à la fois par contrat. Le marché à commandes n'en a pas : il s'exécute par bons de commande.
+- **Tous les titulaires sont consultés** (art. 21) : un titulaire écarté pourrait former un recours. Chacun reçoit la **lettre
+  d'invitation** du document type ARMP, qui porte le besoin détaillé, les critères, la date et l'heure limites (art. 26), et en est
+  notifié.
+- **Un seul titulaire** (art. 18) : il est invité à **compléter** son offre initiale, dans le délai du contrat ; une complétude
+  au-delà du plafond d'augmentation des prix est signalée.
+- **Les réponses** — devis, facture pro forma ou document convenu (art. 27) — se déposent en ligne par le titulaire, ou
+  s'enregistrent depuis le papier par la PRMP ou l'UGPM, jusqu'à l'échéance. **Elles restent fermées jusqu'à l'échéance** :
+  personne n'en voit le montant ni le fichier avant.
+- **La CAO évalue en collège restreint** (art. 28) : ⚠️ hypothèse H1, à confirmer par le juriste — c'est la CAO du contrat-cadre,
+  dont le **président** arrête l'évaluation et signe le **rapport simplifié** (art. 33). Chaque réponse est déclarée conforme ou non,
+  une non-conformité est motivée. Le **prix moyen du marché**, déterminé selon les règles du contrat-cadre, est saisi par la
+  commission (⚠️ hypothèse H2 : l'application ne le calcule pas) ; l'écart de chaque offre est montré. La commission propose la
+  moins-disante conforme, ou une autre réponse conforme qu'elle désigne ; sans réponse conforme, rien n'est proposé.
+- **La PRMP attribue le marché subséquent au seul titulaire proposé** (art. 29 ; art. 20 : pas de « saupoudrage »), ou déclare la
+  remise infructueuse, en la motivant. **Chaque titulaire consulté est informé** du résultat, et le non retenu de son motif
+  (art. 30).
+- **Ce que l'application signale, sans rien décider** :
+  - un titulaire sans réponse à **trois** remises consécutives : il s'expose à l'exclusion (art. 22) ;
+  - deux remises consécutives dont la meilleure offre dépasse **de plus de 30 %** le prix moyen : l'acheteur est délié de
+    l'exclusivité pour cet achat et peut le mettre en concurrence hors du contrat-cadre (art. 23).
+
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 
 ⚠️ **Un marché de fournitures, à quantité fixe ou à commande, produit à son tour les documents types de l'ARMP

@@ -7942,6 +7942,22 @@ rapport complet** (08/10, comme la reprise de 2d-1) ; un délai de validité non
 - ⚠️ **MT-b1 (2026-10-15)** : un contrat-cadre multi-attributaire ne se réattribue **pas**. La route répond 409
   **`REATTRIBUTION_EXCLUE_CONTRAT_CADRE`** : une fois conclu, un contrat-cadre n'est plus ouvert à de nouveaux opérateurs (décret
   n° 2019-1064, art. 18 ; réponse 2 du pilote).
+- **La validité** : le délai de la fiche (`B04-VO-01`, `B04-VT-01`, `B04-DV-01` ou `B04-DP-01`, le premier saisi), compté depuis la date
+  limite de remise ; échu → 409 **`OFFRE_EXPIREE`**. Sans délai saisi, non contrôlée : la note le dit.
+- **L'effet** : une reprise de type **`REATTRIBUTION`** s'ajoute à `lots[].reprises[]` (qui gagne `type` — `REPRISE` |
+  `REATTRIBUTION` —, `idOffreRetiree` et `note`, la validité des offres) ; le rapport signé y est archivé et l'évaluation redevient
+  `EN_COURS` (`EVALUATION_REPRISE` aux membres de la CAO). Appel d'offres : l'offre retirée devient **non qualifiée** (« Marché retiré
+  faute de pièces fiscales et sociales », art. 20-I) et la **post-qualification** du lot est rouverte — son tour est au suivant.
+  Prestations intellectuelles : la négociation réussie passe **`RETIREE`** (nouvel état), le suivant devient `prochain` (séance
+  complémentaire d'abord si sa financière est scellée). Puis : nouveau rapport signé, nouveau dossier de marché, attribution,
+  information (nouvelles lettres, dont celle de l'ancien attributaire, au motif du retrait) et nouveau délai d'attente.
+- **Le cycle retiré est archivé** (`ARCHIVE_LE`) : ses pièces de l'attributaire, ses recours et ses lettres ne comptent plus (ni pour
+  la signature, ni pour les alertes, ni pour les lettres du candidat) ; la ligne d'attribution du lot est remplacée.
+- **Après une réattribution**, `…/infructueux` répond 409 `DEJA_ATTRIBUE` (une attribution a eu lieu) ; en PI, si aucun classé ne
+  reste, le rapport le dit (« seule une déclaration sans suite »).
+- **Lecture** : pendant que l'évaluation est rouverte, un **autre lot déjà attribué** garde son état (il n'est plus montré
+  `EN_EVALUATION`). Journal : `REATTRIBUTION`, `NEGOCIATION_RETIREE`, `EVALUATION_REPRISE`.
+
 
 ### Les contrats en vigueur — lot MS-1 — V124 ⚠️ 2026-10-16
 
@@ -7995,21 +8011,84 @@ n° 2016-055, art. 30). Tables **`t_contrat_vigueur`** (un contrat par lot notif
 - **Après l'échéance**, plus aucune remise en concurrence ni commande : le contrôle `ContratVigueurService.exigerEnVigueur` (409
   **`CONTRAT_ECHU`**) servira MS-2 et MS-3. Pas de minimum pour le contrat-cadre (art. 34) : l'alerte « minimum non atteint »
   viendra avec les bons de commande du **marché à commandes** (MS-3).
-- **La validité** : le délai de la fiche (`B04-VO-01`, `B04-VT-01`, `B04-DV-01` ou `B04-DP-01`, le premier saisi), compté depuis la date
-  limite de remise ; échu → 409 **`OFFRE_EXPIREE`**. Sans délai saisi, non contrôlée : la note le dit.
-- **L'effet** : une reprise de type **`REATTRIBUTION`** s'ajoute à `lots[].reprises[]` (qui gagne `type` — `REPRISE` |
-  `REATTRIBUTION` —, `idOffreRetiree` et `note`, la validité des offres) ; le rapport signé y est archivé et l'évaluation redevient
-  `EN_COURS` (`EVALUATION_REPRISE` aux membres de la CAO). Appel d'offres : l'offre retirée devient **non qualifiée** (« Marché retiré
-  faute de pièces fiscales et sociales », art. 20-I) et la **post-qualification** du lot est rouverte — son tour est au suivant.
-  Prestations intellectuelles : la négociation réussie passe **`RETIREE`** (nouvel état), le suivant devient `prochain` (séance
-  complémentaire d'abord si sa financière est scellée). Puis : nouveau rapport signé, nouveau dossier de marché, attribution,
-  information (nouvelles lettres, dont celle de l'ancien attributaire, au motif du retrait) et nouveau délai d'attente.
-- **Le cycle retiré est archivé** (`ARCHIVE_LE`) : ses pièces de l'attributaire, ses recours et ses lettres ne comptent plus (ni pour
-  la signature, ni pour les alertes, ni pour les lettres du candidat) ; la ligne d'attribution du lot est remplacée.
-- **Après une réattribution**, `…/infructueux` répond 409 `DEJA_ATTRIBUE` (une attribution a eu lieu) ; en PI, si aucun classé ne
-  reste, le rapport le dit (« seule une déclaration sans suite »).
-- **Lecture** : pendant que l'évaluation est rouverte, un **autre lot déjà attribué** garde son état (il n'est plus montré
-  `EN_EVALUATION`). Journal : `REATTRIBUTION`, `NEGOCIATION_RETIREE`, `EVALUATION_REPRISE`.
+
+
+### La remise en concurrence et le marché subséquent — lot MS-2 — V125 ⚠️ 2026-10-16
+
+Demande front `frontend/docs/demande-backend-2026-10-15-marches-subsequents.md`, lot MS-2 (décret n° 2019-1064, art. 20-33 ; loi
+n° 2016-055, art. 33). Tables **`t_remise_concurrence`** (une remise par contrat, numérotée, unique sur `(ID_CONTRAT, NUMERO)`),
+**`t_remise_consulte`** (les titulaires consultés) et **`t_remise_reponse`** (une réponse par titulaire, remplaçable jusqu'à
+l'échéance). Aucune dépendance ajoutée.
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| POST | /api/contrats-en-vigueur/{id}/remises | `{ objet, specifications, criteres, lieuLivraison, delaiExecution, validiteJours, visite, echeance }` | 201 ; 400 `CHAMP_OBLIGATOIRE` (`details.champ`), `ECHEANCE_INVALIDE` ; 403 ; 409 `CONTRAT_ECHU`, `FORME_SANS_REMISE`, `SANS_TITULAIRE`, `REMISE_EN_COURS` | PRMP ou UGPM de la fiche |
+| GET | /api/contrats-en-vigueur/{id}/remises | → `RemiseDto[]` | 200, 403, 404 | lecteurs (ci-dessous) |
+| GET | /api/remises | → `RemiseDto[]` (échéance décroissante) | 200, 403 | lecteurs, à leur périmètre |
+| GET | /api/remises/{id} | → `RemiseDto` | 200, 403, 404 | lecteurs |
+| GET | /api/remises/{id}/lettre[?format=docx] | → la lettre d'invitation (PDF ou Word) | 200, 403, 404 | lecteurs |
+| GET | /api/remises/{id}/rapport[?format=docx] | → le rapport simplifié | 200, 403, 404 avant l'évaluation | lecteurs |
+| GET | /api/remises/{id}/reponses/{idReponse}/fichier | → le fichier de la réponse | 200, 403, 404 ; 409 `REPONSES_FERMEES` avant l'échéance | lecteurs |
+| POST | /api/remises/{id}/reponses | multipart `idOffre`, `nature`, `montantHt`, `montantTtc`, `delai`, `dateReception` (ISO), `fichier` | 201 ; 400 `NATURE_INVALIDE`, `MONTANT_INVALIDE`, `DATE_INVALIDE`, `FICHIER_OBLIGATOIRE`, `FORMAT_INVALIDE` ; 403 ; 404 (offre non consultée) ; 409 `REMISE_CLOSE` | PRMP ou UGPM (réponse papier) |
+| POST | /api/remises/{id}/evaluation | `{ prixMoyen, decisions[{ idOffre, conforme, motif }], idOffreProposee, observations }` | 200 ; 400 `PRIX_MOYEN_INVALIDE`, `DECISIONS_INCOMPLETES` (`details.offres`), `MOTIF_OBLIGATOIRE` ; 403 ; 409 `DEJA_EVALUEE`, `ECHEANCE_NON_PASSEE`, `OFFRE_NON_CONFORME` | ⚠️ H1 : président de la CAO de la procédure |
+| POST | /api/remises/{id}/attribution | `{ motif }` (facultatif) | 200 ; 403 ; 409 `NON_EVALUEE`, `AUCUNE_PROPOSITION` | PRMP de la fiche |
+| POST | /api/remises/{id}/infructueuse | `{ motif }` | 200 ; 400 `MOTIF_OBLIGATOIRE` ; 403 ; 409 `NON_EVALUEE` | PRMP de la fiche |
+| GET | /api/candidat/remises | → `PourTitulaire[]` | 200 | CANDIDAT : les remises où l'une de ses offres est consultée |
+| GET | /api/candidat/remises/{id}/lettre[?format=docx] | → sa lettre d'invitation | 200, 404 | CANDIDAT consulté |
+| POST | /api/candidat/remises/{id}/reponse | multipart `nature`, `montantHt`, `montantTtc`, `delai`, `fichier` | 201 → `PourTitulaire` ; 400 comme la réponse papier ; 404 ; 409 `ECHEANCE_PASSEE`, `REMISE_CLOSE` | CANDIDAT consulté |
+
+- **Lecteurs** : PRMP et UGPM au périmètre de la fiche ; membres de la CAO de la procédure ; Commission et Administrateur. 403 pour
+  le candidat et le dépositaire. SecurityConfig ouvre `/api/remises/**` et `/api/contrats-en-vigueur/*/remises` au membre de CAO.
+- **Lancement** (art. 21, 24, 26) :
+  - le contrat est **en vigueur** (409 `CONTRAT_ECHU`) et est un **contrat-cadre** : un marché à commandes s'exécute par bons de
+    commande (409 `FORME_SANS_REMISE`, MS-3) ;
+  - **tous** les titulaires non retirés sont consultés, la liste fermée de MS-1 (409 `SANS_TITULAIRE` s'il n'en reste aucun) ;
+  - une seule remise ouverte à la fois par contrat (409 `REMISE_EN_COURS` tant qu'une remise n'est ni attribuée ni infructueuse) ;
+  - `objet`, `specifications` et `delaiExecution` sont obligatoires ; `echeance` se situe entre maintenant et la fin du contrat ;
+  - **un seul titulaire** (mono-attributaire, art. 18) : `mode = COMPLETUDE`, il complète son offre initiale ; l'échéance absente vaut
+    lancement + `B07-MA-01` jours ;
+  - la **lettre d'invitation** (PDF et Word) suit l'annexe 1 du document type ARMP : n° du contrat-cadre (référence d'enregistrement
+    de l'attribution, à défaut procédure et lot), date (signature), objet, date et heure limites, articles 1 à 9 (objet, références
+    au contrat-cadre, délai d'exécution, réception, règlement, pièces constitutives, prix, validité des offres, attribution), puis
+    l'annexe 2 (spécifications). En complétude, elle s'intitule « Demande de complétude de l'offre » ;
+  - notification **`REMISE_CONCURRENCE`** à chaque titulaire ; journal `REMISE_EN_CONCURRENCE`.
+- **Réponses** (art. 27 ; loi art. 33) : `nature` ∈ `DEVIS`, `FACTURE_PRO_FORMA`, `DOCUMENT_CONVENU` ; `montantHt` positif ; fichier
+  PDF, JPEG ou PNG (type lu sur le contenu, taille plafonnée comme les pièces du candidat). En ligne par le titulaire jusqu'à
+  l'échéance (une nouvelle réponse remplace la précédente), ou **papier** par la PRMP ou l'UGPM (`voie = PAPIER`, `dateReception`
+  entre le lancement et l'échéance). Notification **`REMISE_REPONSE_RECUE`** à la PRMP ; journal `REMISE_REPONSE`.
+  **Fermées jusqu'à l'échéance** : `montantHt`, `montantTtc`, `delai`, `fichier` et `ecartPrixMoyen` sont nuls avant.
+- **Évaluation** (art. 28, 33), une fois l'échéance passée :
+  - ⚠️ **H1** (à confirmer par le juriste) : la CAO « en collège restreint » est la CAO du contrat-cadre ; son **président** arrête
+    l'évaluation et signe le rapport ; aucun quorum propre n'est encore contrôlé ;
+  - une décision par réponse (`conforme`), la non-conformité motivée ;
+  - `prixMoyen` (facultatif) : le prix moyen du marché déterminé selon les règles du contrat-cadre (`B07-MA-07`), **saisi par la
+    commission** (⚠️ H2 : l'application ne le calcule pas) ; `ecartPrixMoyen` = (montant − prix moyen) / prix moyen, en %, au dixième ;
+  - la proposition est `idOffreProposee` (conforme, sinon 409 `OFFRE_NON_CONFORME`), à défaut la **moins-disante conforme** ; aucune
+    conforme : aucune proposition (l'infructuosité) ;
+  - les consultés sans réponse sont marqués `sansReponse` ;
+  - le **rapport simplifié** (PDF et Word) est produit ; `etat = EVALUEE` ; notification `REMISE_RESULTAT` à la PRMP ; journal
+    `REMISE_EVALUEE`.
+- **Décision** (art. 29-30) : la PRMP attribue au **seul** proposé (art. 20 : pas de « saupoudrage ») → `ATTRIBUEE`, `idOffreRetenue`,
+  `montantRetenu` ; ou déclare la remise **infructueuse**, motivée → `INFRUCTUEUSE`. Chaque consulté reçoit **`REMISE_RESULTAT`** :
+  retenu (et le montant), non retenu avec son motif (aucune réponse, réponse non conforme et son motif, ou « une offre conforme
+  moins-disante est retenue »), ou l'infructuosité. Journal `MARCHE_SUBSEQUENT` ou `REMISE_INFRUCTUEUSE`.
+- **`RemiseDto`** : `{ id, idContrat, idDmc, lot, numero, mode, etat, objet, specifications, criteres, lieuLivraison, delaiExecution,
+  validiteJours, visite, echeance, echeancePassee, lanceeLe, lanceePar, lettreDisponible, consultes[], reponses[], prixMoyen,
+  idOffreProposee, observations, evalueeLe, evalueePar, rapportDisponible, idOffreRetenue, montantRetenu, motifDecision, decideeLe,
+  decideePar, alertes[] }`.
+  - `consultes[]` = `{ idOffre, numero, candidat, notifieLe, reponseRecue, sansReponse, absencesConsecutives }` ;
+  - `reponses[]` = `{ id, idOffre, numero, candidat, nature, voie, montantHt, montantTtc, delai, recueLe, fichier, conforme, motif,
+    ecartPrixMoyen, rang, plafondDepasse }` (`rang` parmi les conformes, par montant HT) ;
+  - `alertes[]` (la décision reste à la PRMP) :
+    - `EXCLUSION_POSSIBLE` : un titulaire sans réponse à **trois** remises évaluées consécutives (DPAC-CC, art. 9 ; décret art. 22) ;
+    - `DELIEMENT_POSSIBLE` : cette remise et la précédente ont leur meilleure offre conforme (à défaut, la meilleure reçue) **à plus
+      de 30 %** du prix moyen : l'acheteur est délié de l'exclusivité pour cet achat (art. 23) ;
+    - `PLAFOND_DEPASSE` : une complétude au-delà de l'offre indicative × (1 + `B05-PM-04` %).
+- **`PourTitulaire`** : `{ id, numero, idOffre, objet, objetContrat, echeance, echeancePassee, delaiExecution, lieuLivraison,
+  maReponse, resultat, motif, dateContrat }` ; `resultat` ∈ `EN_COURS`, `RETENU`, `NON_RETENU`, `INFRUCTUEUSE`.
+- **Pas encore** : la remise **par lot** d'un contrat alloti (art. 31 : chaque contrat en vigueur est déjà un lot ; une remise
+  commune à plusieurs lots n'est pas outillée) ; la jonction des pièces du marché subséquent aux pièces de dépense (art. 33 :
+  lettre, rapport et réponses sont téléchargeables) ; le bon de commande du retenu (MS-3).
 
 
 ### L'attribution, lot 2, tranche 2d-3 : la déclaration sans suite — V93 ⚠️ 2026-10-08

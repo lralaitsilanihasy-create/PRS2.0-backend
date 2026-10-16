@@ -218,6 +218,11 @@ public class SecurityConfig {
                             "/api/fiches-marche/*/attribution/**", "/api/fiches-marche/*/sans-suite", "/api/fiches-marche/*/sans-suite/**", "/api/fiches-marche/*/ami", "/api/fiches-marche/*/ami/**").hasAnyRole("MEMBRE_CAO", "PRMP",
                             "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");
+                    // ⚠️ 2026-10-16 (marchés subséquents, lot MS-2) — la remise en concurrence des titulaires : la CAO du contrat-cadre
+                    // l'évalue (président, garde par identité dans le service), la PRMP et l'UGPM la conduisent, la Commission lit.
+                    auth.requestMatchers("/api/remises", "/api/remises/**", "/api/contrats-en-vigueur/*/remises").hasAnyRole("MEMBRE_CAO", "PRMP",
+                            "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
+                            "CHARGE_PUBLICATION", "ADMINISTRATEUR");
                     auth.requestMatchers("/api/fiches-marche/*/ceremonie/**").hasAnyRole("MEMBRE_CAO", "DEPOSITAIRE", "PRMP", "UGPM",
                             "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");

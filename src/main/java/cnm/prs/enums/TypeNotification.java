@@ -199,6 +199,12 @@ public enum TypeNotification {
     AMI_RESULTAT,
     /** ⚠️ 2026-10-07 (AMI-b, §B4) — la lettre d'invitation à remettre une proposition : vers chaque candidat de la liste restreinte. */
     LETTRE_INVITATION,
+    /** ⚠️ 2026-10-16 (marchés subséquents, MS-2) — la remise en concurrence d'un contrat-cadre : vers chaque titulaire consulté (lettre d'invitation). */
+    REMISE_CONCURRENCE,
+    /** ⚠️ MS-2 — une réponse de titulaire reçue : vers la PRMP. */
+    REMISE_REPONSE_RECUE,
+    /** ⚠️ MS-2 (art. 29-30) — le résultat de la remise : vers chaque titulaire consulté (retenu, non retenu et son motif, ou infructueuse). */
+    REMISE_RESULTAT,
     /** ⚠️ 2026-10-08 (lot 3 PI, PI-d1, §B3) — la seconde séance est ouverte : vers chaque candidat dont l'enveloppe financière s'ouvre (invité à y assister). */
     SEANCE_FINANCIERE,
     /** ⚠️ 2026-10-08 (lot 3 PI, PI-d2a, §B6) — la PRMP ouvre une négociation : vers le candidat classé invité à négocier (date, lieu). */

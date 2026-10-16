@@ -1287,6 +1287,161 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONTRAT_ECHU"));
     }
 
+    @Autowired private cnm.prs.repository.AttributionTitulaireRepository titulaireRepository;
+    @Autowired private cnm.prs.repository.RemiseConcurrenceRepository remiseRepository;
+
+    @Test
+    @DisplayName("MS-2 (16/10, remise en concurrence, V125, décret 2019-1064 art. 20-30) : tous les titulaires sont consultés et notifiés ; "
+            + "les réponses, en ligne ou papier, restent fermées jusqu'à l'échéance ; le président de la CAO évalue (écart au prix moyen, "
+            + "moins-disante conforme) ; la PRMP attribue au seul proposé et chacun est informé ; sans réponse, l'infructuosité")
+    void remiseEnConcurrence() throws Exception {
+        String a = offre("C900000051", "1111222333", "BTP Alpha", 1, "INTACTE", null, "12500000");
+        String b = offre("C900000052", "4444555666", "BTP Beta", 2, "INTACTE", null, "11900000");
+        cnm.prs.entity.Attribution notifiee = new cnm.prs.entity.Attribution();
+        notifiee.setIdDmc(idDmc);
+        notifiee.setLot(1);
+        notifiee.setEtat("NOTIFIE");
+        notifiee.setReferenceEnregistrement("CC-2026/017");
+        notifiee.setDateSignature(aujourdhui.minusMonths(1));
+        attributionRepository.save(notifiee);
+        for (String[] t : List.of(new String[] { a, "1", "12500000" }, new String[] { b, "2", "11900000" })) {
+            cnm.prs.entity.AttributionTitulaire tit = new cnm.prs.entity.AttributionTitulaire();
+            tit.setIdDmc(idDmc);
+            tit.setLot(1);
+            tit.setIdOffre(t[0]);
+            tit.setRang(Integer.valueOf(t[1]));
+            tit.setMontant(new java.math.BigDecimal(t[2]));
+            tit.setRetenuLe(LocalDateTime.now());
+            titulaireRepository.save(tit);
+        }
+        cnm.prs.entity.ContratVigueur c = new cnm.prs.entity.ContratVigueur();
+        c.setIdDmc(idDmc);
+        c.setLot(1);
+        c.setTypeMarche("CONTRAT_CADRE");
+        c.setDateEffet(aujourdhui.minusMonths(1));
+        c.setPeriodeMois(12);
+        c.setDateFin(aujourdhui.plusMonths(11));
+        c.setDureeMaxMois(12);
+        c.setReconductible(false);
+        c.setCreeLe(LocalDateTime.now());
+        long idContrat = contratRepository.save(c).getId();
+        String url = "/api/contrats-en-vigueur/" + idContrat + "/remises";
+        String echeance = LocalDateTime.now().plusDays(5).withNano(0).withSecond(0).toString();
+        String corps = "{\"objet\":\"Fourniture de 40 ordinateurs portables\",\"specifications\":\"Processeur 8 cœurs, 16 Go\",\"delaiExecution\":\"30 jours\","
+                + "\"validiteJours\":90,\"lieuLivraison\":\"Antananarivo\",\"echeance\":\"" + echeance + "\"}";
+
+        // Le lancement : PRMP ou UGPM ; tous les titulaires consultés et notifiés ; la lettre d'invitation de l'annexe 1.
+        mvc.perform(post(url).header("Authorization", jetonM1).contentType(JSON).content(corps)).andExpect(status().isForbidden());
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content("{\"objet\":\"x\",\"delaiExecution\":\"30 jours\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CHAMP_OBLIGATOIRE"));
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(corps.replace(echeance, LocalDateTime.now().minusHours(1)
+                .withNano(0).toString()))).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("ECHEANCE_INVALIDE"));
+        String lancee = mvc.perform(post(url).header("Authorization", tokenUgpm).contentType(JSON).content(corps)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.mode").value("REMISE_EN_CONCURRENCE")).andExpect(jsonPath("$.etat").value("LANCEE"))
+                .andExpect(jsonPath("$.numero").value(1)).andExpect(jsonPath("$.lettreDisponible").value(true))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(lancee, "$.consultes[*].idOffre")).containsExactlyInAnyOrder(a, b);
+        long id = JsonPath.<Number>read(lancee, "$.id").longValue();
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(corps)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REMISE_EN_COURS"));
+        String lettre = texteDuPdf(mvc.perform(get("/api/remises/" + id + "/lettre").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(lettre).contains("CONTRAT-CADRE N° CC-2026/017", "LETTRE D'INVITATION", "Fourniture de 40 ordinateurs portables",
+                "dont vous êtes titulaire", "ANNEXE 1", "ARTICLE 9. ATTRIBUTION DU MARCHÉ", "Le délai d'exécution est fixé à 30 jours",
+                "90 jours", "Processeur 8 cœurs");
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "REMISE_CONCURRENCE".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireRef).containsExactlyInAnyOrder("C900000051", "C900000052");
+
+        // Les réponses : en ligne par le titulaire (un non-consulté ne voit rien), sur papier par la PRMP ; fermées jusqu'à l'échéance.
+        String jetonC = bearer("c@eval.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000053", null);
+        MockMultipartFile devis = new MockMultipartFile("fichier", "devis.pdf", "application/pdf", "%PDF-1.4 x".getBytes(StandardCharsets.ISO_8859_1));
+        mvc.perform(get("/api/candidat/remises").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(id)).andExpect(jsonPath("$[0].resultat").value("EN_COURS"));
+        mvc.perform(get("/api/candidat/remises/" + id + "/lettre").header("Authorization", jetonA)).andExpect(status().isOk());
+        mvc.perform(multipart("/api/candidat/remises/" + id + "/reponse").file(devis).param("nature", "DEVIS").param("montantHt", "9000000")
+                .header("Authorization", jetonC)).andExpect(status().isNotFound());
+        mvc.perform(multipart("/api/candidat/remises/" + id + "/reponse").file(devis).param("nature", "OFFRE").param("montantHt", "9000000")
+                .header("Authorization", jetonA)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("NATURE_INVALIDE"));
+        mvc.perform(multipart("/api/candidat/remises/" + id + "/reponse").file(devis).param("nature", "DEVIS").param("montantHt", "9000000")
+                .param("delai", "20 jours").header("Authorization", jetonA)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.maReponse.montantHt").value(9000000));
+        mvc.perform(multipart("/api/remises/" + id + "/reponses").file(devis).param("idOffre", b).param("nature", "FACTURE_PRO_FORMA")
+                .param("montantHt", "8000000").header("Authorization", tokenPrmp)).andExpect(status().isCreated());
+        String fermee = mvc.perform(get("/api/remises/" + id).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.echeancePassee").value(false)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(fermee, "$.reponses[*].montantHt")).containsOnlyNulls().hasSize(2);
+        assertThat(notificationRepository.findAll()).extracting(Notification::getTypeNotif).contains("REMISE_REPONSE_RECUE");
+        long idReponse = JsonPath.<Number>read(fermee, "$.reponses[0].id").longValue();
+        mvc.perform(get("/api/remises/" + id + "/reponses/" + idReponse + "/fichier").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("REPONSES_FERMEES"));
+        mvc.perform(post("/api/remises/" + id + "/evaluation").header("Authorization", jetonM1).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ECHEANCE_NON_PASSEE"));
+
+        // L'échéance passée : les réponses s'ouvrent, le dépôt se ferme.
+        cnm.prs.entity.RemiseConcurrence x = remiseRepository.findById(id).orElseThrow();
+        x.setEcheance(LocalDateTime.now().minusMinutes(1).withNano(0));
+        remiseRepository.save(x);
+        mvc.perform(multipart("/api/candidat/remises/" + id + "/reponse").file(devis).param("nature", "DEVIS").param("montantHt", "8500000")
+                .header("Authorization", jetonA)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ECHEANCE_PASSEE"));
+        mvc.perform(get("/api/remises/" + id + "/reponses/" + idReponse + "/fichier").header("Authorization", jetonM1)).andExpect(status().isOk());
+
+        // L'évaluation : le président seul ; une décision par réponse ; la non-conformité motivée ; la moins-disante conforme proposée.
+        String evaluation = "/api/remises/" + id + "/evaluation";
+        String decisions = "{\"prixMoyen\":6000000,\"decisions\":[{\"idOffre\":\"" + a + "\",\"conforme\":true},{\"idOffre\":\"" + b
+                + "\",\"conforme\":false%s}]}";
+        mvc.perform(post(evaluation).header("Authorization", jetonM2).contentType(JSON).content(String.format(decisions, "")))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(evaluation).header("Authorization", jetonM1).contentType(JSON).content("{\"decisions\":[{\"idOffre\":\"" + a + "\",\"conforme\":true}]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DECISIONS_INCOMPLETES")).andExpect(jsonPath("$.details.offres[0]").value(b));
+        mvc.perform(post(evaluation).header("Authorization", jetonM1).contentType(JSON).content(String.format(decisions, "")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        mvc.perform(post(evaluation).header("Authorization", jetonM1).contentType(JSON)
+                .content(String.format(decisions, ",\"motif\":\"Spécifications non respectées\"").replace("]}", "],\"idOffreProposee\":\"" + b + "\"}")))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("OFFRE_NON_CONFORME"));
+        String evaluee = mvc.perform(post(evaluation).header("Authorization", jetonM1).contentType(JSON)
+                .content(String.format(decisions, ",\"motif\":\"Spécifications non respectées\""))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("EVALUEE")).andExpect(jsonPath("$.idOffreProposee").value(a))
+                .andExpect(jsonPath("$.rapportDisponible").value(true)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Number>>read(evaluee, "$.reponses[?(@.idOffre == '" + a + "')].ecartPrixMoyen")).extracting(Number::doubleValue)
+                .containsExactly(50.0);
+        assertThat(JsonPath.<List<String>>read(evaluee, "$.alertes")).isEmpty();   // une seule remise au-delà de 30 % : pas encore délié
+        String rapport = texteDuPdf(mvc.perform(get("/api/remises/" + id + "/rapport").header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(rapport).contains("RAPPORT D'ÉVALUATION SIMPLIFIÉ", "La commission propose d'attribuer le marché subséquent à BTP Alpha",
+                "non conforme — Spécifications non respectées", "6 000 000 Ariary hors taxes");
+
+        // La décision de la PRMP : au seul proposé ; chacun est informé.
+        mvc.perform(post("/api/remises/" + id + "/attribution").header("Authorization", tokenUgpm).contentType(JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/remises/" + id + "/attribution").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("ATTRIBUEE")).andExpect(jsonPath("$.idOffreRetenue").value(a))
+                .andExpect(jsonPath("$.montantRetenu").value(9000000));
+        mvc.perform(get("/api/candidat/remises").header("Authorization", jetonA)).andExpect(jsonPath("$[0].resultat").value("RETENU"));
+        mvc.perform(get("/api/candidat/remises").header("Authorization", jetonB)).andExpect(jsonPath("$[0].resultat").value("NON_RETENU"))
+                .andExpect(jsonPath("$[0].motif").value(org.hamcrest.Matchers.containsString("Spécifications non respectées")));
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "REMISE_RESULTAT".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireRef).contains("C900000051", "C900000052");
+
+        // Une seconde remise sans réponse : rien à proposer, l'infructuosité motivée ; l'absence comptée.
+        long id2 = JsonPath.<Number>read(mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(corps))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.numero").value(2)).andReturn().getResponse().getContentAsString(), "$.id").longValue();
+        cnm.prs.entity.RemiseConcurrence x2 = remiseRepository.findById(id2).orElseThrow();
+        x2.setEcheance(LocalDateTime.now().minusMinutes(1).withNano(0));
+        remiseRepository.save(x2);
+        String vide = mvc.perform(post("/api/remises/" + id2 + "/evaluation").header("Authorization", jetonM1).contentType(JSON).content("{}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.idOffreProposee").value(org.hamcrest.Matchers.nullValue()))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(vide, "$.consultes[*].absencesConsecutives")).containsExactly(1, 1);
+        mvc.perform(post("/api/remises/" + id2 + "/attribution").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AUCUNE_PROPOSITION"));
+        mvc.perform(post("/api/remises/" + id2 + "/infructueuse").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        mvc.perform(post("/api/remises/" + id2 + "/infructueuse").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"Aucune réponse reçue\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("INFRUCTUEUSE"));
+        mvc.perform(get(url).header("Authorization", jetonM1)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
+        mvc.perform(get("/api/remises").header("Authorization", jetonA)).andExpect(status().isForbidden());
+    }
+
     @Test
     @DisplayName("Tranche MT (15/10, contrat-cadre multi-attributaire, décret 2019-1064 art. 14-17) : la post-qualification décide chaque "
             + "offre classée sans s'arrêter à la première qualifiée ; un seul titulaire qualifié est proposé avec le constat de l'art. 17 ; "
