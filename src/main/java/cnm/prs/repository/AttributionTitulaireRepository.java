@@ -11,4 +11,7 @@ public interface AttributionTitulaireRepository extends JpaRepository<Attributio
 
     /** Les titulaires du lot, dans l'ordre du classement. */
     List<AttributionTitulaire> findByIdDmcAndLotOrderByRangAscIdOffreAsc(Long idDmc, Integer lot);
+
+    /** ⚠️ MT-b2 — le titulaire d'une offre (une offre n'est titulaire que d'un lot). */
+    List<AttributionTitulaire> findByIdOffre(String idOffre);
 }

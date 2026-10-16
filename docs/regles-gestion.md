@@ -578,7 +578,7 @@ lot D*.
   notification. L'attribution à **plusieurs titulaires** et la proposition d'infructuosité quand l'évaluation n'en dégage
   qu'un (art. 17) attendent l'évaluation propre au contrat-cadre multi-attributaire. C'est la tranche « plusieurs
   titulaires », placée par le pilote avant les marchés subséquents. D'ici là, une fiche multi-attributaire se valide avec
-  un **avertissement** : l'application ne désignera qu'un titulaire par lot.
+  un **avertissement** : l'application ne désignera qu'un titulaire par lot (⚠️ retiré le 16/10, la tranche étant livrée).
 - ⚠️ **Plusieurs titulaires, première partie : l'évaluation (2026-10-15).** Pour un contrat-cadre multi-attributaire, la
   commission vérifie la qualification de **chaque** offre classée, sans s'arrêter à la première qualifiée.
   - Elle propose comme titulaires toutes les offres qualifiées, dans l'ordre du classement, et le rapport les énumère.
@@ -597,6 +597,16 @@ lot D*.
     titulaire.
   - Restent à étendre à chaque titulaire : les pièces fiscales et sociales (exigées de chacun), la signature par tous, la
     notification et l'avis d'attribution.
+- ⚠️ **Plusieurs titulaires, troisième partie : chaque titulaire jusqu'à l'avis (2026-10-16).**
+  - **Chaque titulaire produit ses propres pièces** fiscales et sociales, et, pour une procédure en ligne, l'original de son
+    acte d'engagement. Le contrat-cadre n'est signé que lorsque ceux de **tous** sont reconnus conformes : il est signé par la
+    PRMP et chacun des titulaires.
+  - **Un titulaire défaillant** (pièces non conformes à l'échéance) **est retiré seul** : le contrat-cadre continue avec les
+    autres. Si un seul reste avant la signature, la PRMP peut déclarer la procédure infructueuse (art. 17). S'il n'en reste
+    aucun, le lot est retiré, et un contrat-cadre ne se réattribue pas (art. 18).
+  - **Chaque titulaire est notifié** et accuse sa propre réception. L'avis d'attribution liste les titulaires et leurs offres
+    indicatives.
+  - La fiche multi-attributaire ne porte plus d'avertissement.
 
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 

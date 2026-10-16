@@ -182,7 +182,7 @@ public class AttributionService {
             Attribution engage = attributions.findById(new Attribution.Cle(idDmc, l.lot())).filter(x -> x.getAttribueLe() != null).orElse(null);
             if (!Evaluation.CLOSE.equals(ev.etat()) && engage == null) {
                 lots.add(new AttributionDto.LotAttribution(l.lot(), EN_EVALUATION, null, null, false, null, null, null, List.of(), null, List.of(),
-                        null, null, null, null, null, null, null, reprises(idDmc, l.lot()), null, List.of()));
+                        null, null, null, null, null, null, null, reprises(idDmc, l.lot()), null, List.of(), List.of()));
                 continue;
             }
             Attribution a = attributions.findById(new Attribution.Cle(idDmc, l.lot())).orElse(null);
@@ -202,7 +202,7 @@ public class AttributionService {
                     s.recours(), s.signature(), s.enregistrement(), s.notification(), s.avis(), s.pieces(), s.retrait(),
                     a == null || a.getInfructueuxLe() == null ? null : new AttributionDto.Infructuosite(a.getInfructueuxLe(), a.getInfructueuxPar(),
                             a.getMotifInfructuosite(), a.getDecisionReference(), a.getDecisionDate(), a.getSuite()),
-                    reprises(idDmc, l.lot()), s.approbation(), titulairesDto(idDmc, l.lot())));
+                    reprises(idDmc, l.lot()), s.approbation(), titulairesDto(idDmc, l.lot()), execution.suiviTitulaires(a)));
         }
         return new AttributionDto(idDmc, lots);
     }
@@ -465,8 +465,10 @@ public class AttributionService {
             return new AttributionDto.Resultat(idOffre, o.getNumero(), x.getLot(), AttributionLettre.ATTRIBUTION.equals(x.getType()), x.getMotif(),
                     nomsTitulaires(tit), sienne == null ? null : sienne.getMontant(), sienne == null ? null : sienne.getMontantTtc(),
                     sienne == null ? null : sienne.getDelai(), x.getPdf() != null, a.getInformeLe(), a.getDateAffichage(), d == null ? null : d.fin(),
-                    d == null ? null : d.signableLe(), a.getDateSignature(), a.getDateNotification(), retenueParMoi ? a.getNotificationRecueLe() : null,
-                    sienne != null && a.getSigneLe() != null, execution.piecesPourCandidat(a, idOffre), retenueParMoi && a.getRetireLe() != null);
+                    d == null ? null : d.signableLe(), a.getDateSignature(), a.getDateNotification(),
+                    sienne == null ? null : sienne.getNotificationRecueLe(),   // ⚠️ MT-b2 : sa propre réception
+                    sienne != null && sienne.getRetireLe() == null && a.getSigneLe() != null, execution.piecesPourCandidat(a, idOffre),
+                    sienne != null && sienne.getRetireLe() != null);   // ⚠️ MT-b2 : son propre retrait
         }
         return new AttributionDto.Resultat(idOffre, o.getNumero(), x.getLot(), AttributionLettre.ATTRIBUTION.equals(x.getType()), x.getMotif(),
                 retenue == null ? null : retenue.getRaisonSociale(), a.getMontant(), a.getMontantTtc(), a.getDelai(), x.getPdf() != null,
@@ -510,9 +512,9 @@ public class AttributionService {
         }).toList();
     }
 
-    /** ⚠️ MT-b1 — « Alpha ; Beta » : les raisons sociales des titulaires, dans l'ordre du classement. */
+    /** ⚠️ MT-b1 — « Alpha ; Beta » : les raisons sociales des titulaires, dans l'ordre du classement ; ⚠️ MT-b2 : les retirés en sortent. */
     private String nomsTitulaires(List<cnm.prs.entity.AttributionTitulaire> tit) {
-        return tit.stream().map(t -> offres.findById(t.getIdOffre()).map(Offre::getRaisonSociale).orElse(t.getIdOffre()))
+        return AttributionExecutionService.actifs(tit).stream().map(t -> offres.findById(t.getIdOffre()).map(Offre::getRaisonSociale).orElse(t.getIdOffre()))
                 .collect(Collectors.joining(" ; "));
     }
 
@@ -545,13 +547,16 @@ public class AttributionService {
         // ⚠️ 2d-2 — une réattribution suit une attribution retirée : l'infructuosité reste exclue (art. 56-VI).
         boolean dejaAttribue = reprises.findByIdDmcAndLotOrderByIdAsc(idDmc, lot).stream()
                 .anyMatch(x -> cnm.prs.entity.AttributionReprise.REATTRIBUTION.equals(x.getType()));
-        if (a != null && a.getAttribueLe() != null || dejaAttribue) {
+        // ⚠️ 2026-10-16 (tranche MT-b2, réponse 2 du pilote ; décret n° 2019-1064, art. 17) — un contrat-cadre multi-attributaire dont les
+        // retraits ne laissent qu'un titulaire, avant la signature : la PRMP peut encore le déclarer infructueux.
+        boolean article17 = a != null && execution.seulTitulaireRestant(a);
+        if ((a != null && a.getAttribueLe() != null || dejaAttribue) && !article17) {
             throw new BusinessRuleException("Le lot est attribué : l'infructuosité ne peut en aucun cas intervenir après la décision d'attribution "
                     + "(art. 56-VI).", "DEJA_ATTRIBUE");
         }
         // ⚠️ 2026-10-15 (tranche MT) — un contrat-cadre multi-attributaire qui ne dégage qu'un titulaire : la PRMP peut aussi le déclarer
         // infructueux (décret n° 2019-1064, art. 17).
-        boolean propose = l.proposition() != null && (l.proposition().infructueux() || l.proposition().seulTitulaireQualifie());
+        boolean propose = article17 || l.proposition() != null && (l.proposition().infructueux() || l.proposition().seulTitulaireQualifie());
         AttributionDto.DossierMarche dm = a == null || a.getIdDossier() == null ? null : dossierMarche(a);
         boolean defavorable = dm != null && AVIS_DEFAVORABLE.equals(dm.avis());
         if (!propose && !defavorable) {

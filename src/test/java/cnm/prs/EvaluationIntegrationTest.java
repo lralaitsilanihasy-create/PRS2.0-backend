@@ -1350,6 +1350,81 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/candidat/offres/" + b + "/resultat").header("Authorization", jetonB)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.retenu").value(false)).andExpect(jsonPath("$.attributaire").value("BTP Gamma ; BTP Alpha"))
                 .andExpect(jsonPath("$.montant").value(org.hamcrest.Matchers.nullValue()));
+
+        // ⚠️ MT-b2 (V123, réponse 1 du pilote) — les pièces de CHAQUE titulaire : C les produit conformes, A une fiscale non conforme.
+        String jetonC = bearer("c@eval.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000053", null);
+        MockMultipartFile piece = new MockMultipartFile("fichier", "piece.pdf", "application/pdf", "%PDF-1.4 x".getBytes(StandardCharsets.ISO_8859_1));
+        for (String[] t : List.of(new String[] {c, jetonC}, new String[] {a, jetonA})) {
+            for (String type : List.of("FISCALE", "SOCIALE", "ACTE_ENGAGEMENT_ORIGINAL")) {
+                mvc.perform(multipart("/api/candidat/offres/" + t[0] + "/pieces-attributaire").file(piece).param("type", type)
+                        .param("dateDelivrance", aujourdhui.toString()).header("Authorization", t[1])).andExpect(status().isCreated());
+            }
+        }
+        mvc.perform(get("/api/candidat/offres/" + a + "/pieces-attributaire").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.pieces.length()").value(3));   // les siennes seulement
+        String suivi = mvc.perform(get(att).header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(suivi, "$.lots[0].suiviTitulaires[*].idOffre")).containsExactly(c, a);
+        for (Number id : JsonPath.<List<Number>>read(suivi, "$.lots[0].suiviTitulaires[0].pieces.pieces[*].id")) {
+            mvc.perform(post(att + "/lots/1/pieces/" + id.longValue() + "/verifier").header("Authorization", tokenPrmp).contentType(JSON)
+                    .content("{\"conforme\":true}")).andExpect(status().isOk());
+        }
+        Number fiscaleA = JsonPath.<List<Number>>read(suivi, "$.lots[0].suiviTitulaires[1].pieces.pieces[?(@.type == 'FISCALE')].id").get(0);
+        mvc.perform(post(att + "/lots/1/pieces/" + fiscaleA.longValue() + "/verifier").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"conforme\":false,\"motif\":\"Attestation illisible\"}")).andExpect(status().isOk());
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "C900000051".equals(n.getDestinataireRef()))
+                .extracting(Notification::getTypeNotif).contains("PIECE_ATTRIBUTAIRE_VERIFIEE");
+
+        // Le délai d'attente écoulé et l'échéance des pièces passée : A bloque la signature ; deux titulaires, pas d'infructuosité.
+        cnm.prs.entity.Attribution attr = attributionRepository.findById(new cnm.prs.entity.Attribution.Cle(idDmc, 1)).orElseThrow();
+        attr.setInformeLe(attr.getInformeLe().minusDays(16));
+        attr.setDateAffichage(attr.getDateAffichage().minusDays(16));
+        attributionRepository.save(attr);
+        mvc.perform(multipart(att + "/lots/1/signature").file(piece).param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PIECES_NON_CONFORMES"))
+                .andExpect(jsonPath("$.details.offres[0]").value(1));
+        String infructueux = "{\"motif\":\"Un seul titulaire\",\"decision\":{\"reference\":\"D-1\",\"date\":\"" + aujourdhui + "\"}}";
+        mvc.perform(post(att + "/lots/1/infructueux").header("Authorization", tokenPrmp).contentType(JSON).content(infructueux))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_ATTRIBUE"));
+
+        // Le retrait d'un titulaire (réponse 2) : nommé, sans pièces conformes ; le contrat-cadre continue avec C.
+        mvc.perform(post(att + "/lots/1/retirer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"Pièce fiscale non conforme\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("TITULAIRE_OBLIGATOIRE"));
+        mvc.perform(post(att + "/lots/1/retirer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"x\",\"idOffre\":\"" + c + "\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PIECES_CONFORMES"));
+        mvc.perform(post(att + "/lots/1/retirer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"Pièce fiscale non conforme\",\"idOffre\":\"" + a + "\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].etat").value(org.hamcrest.Matchers.not("RETIRE")))
+                .andExpect(jsonPath("$.lots[0].suiviTitulaires[1].retrait.motif").value("Pièce fiscale non conforme"))
+                .andExpect(jsonPath("$.lots[0].attributaire.idOffre").value(c));
+        mvc.perform(get("/api/candidat/offres/" + a + "/resultat").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.retire").value(true)).andExpect(jsonPath("$.attributaire").value("BTP Gamma"));
+        // Un seul titulaire reste : l'infructuosité redevient possible (art. 17) — le geste va jusqu'à sa validation (ici, le motif).
+        mvc.perform(post(att + "/lots/1/infructueux").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+
+        // La signature par la PRMP et le titulaire restant, l'approbation, l'enregistrement, la notification et l'avis.
+        mvc.perform(multipart(att + "/lots/1/signature").file(piece).param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etat").value("SIGNE"));
+        mvc.perform(multipart(att + "/lots/1/approbation").file(piece).param("autorite", "Le Ministre").param("dateApprobation", aujourdhui.toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(multipart(att + "/lots/1/enregistrement").file(piece).param("dateEnregistrement", aujourdhui.toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(post(att + "/lots/1/notification").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateNotification\":\"" + aujourdhui + "\"}")).andExpect(status().isOk());
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "C900000053".equals(n.getDestinataireRef()))
+                .extracting(Notification::getTypeNotif).contains("MARCHE_NOTIFIE");
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "C900000051".equals(n.getDestinataireRef()))
+                .extracting(Notification::getTypeNotif).doesNotContain("MARCHE_NOTIFIE");
+        mvc.perform(get("/api/candidat/offres/" + c + "/resultat").header("Authorization", jetonC)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.notificationRecueLe").isNotEmpty()).andExpect(jsonPath("$.marcheDisponible").value(true));
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].suiviTitulaires[0].notificationRecueLe").isNotEmpty())
+                .andExpect(jsonPath("$.lots[0].notification.recueLe").isNotEmpty());
+        mvc.perform(post(att + "/lots/1/avis").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"datePublication\":\"" + aujourdhui + "\"}")).andExpect(status().isOk());
+        String avis = texteDuPdf(mvc.perform(get(att + "/lots/1/avis").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(avis).contains("Contrat-cadre attribué à 1 titulaire(s)", "BTP Gamma, NIF 7777888999 : offre indicative de 9 000 000 Ariary",
+                "décret n° 2019-1064, art. 16").doesNotContain("BTP Alpha", "Attributaire :");
     }
 
     private ResultActions arreter(String etape) throws Exception {

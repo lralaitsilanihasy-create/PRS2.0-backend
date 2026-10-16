@@ -34,7 +34,9 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
              * ⚠️ 2026-10-15 (tranche MT-b1, V122) — les titulaires retenus par la PRMP d'un contrat-cadre multi-attributaire, dans l'ordre du
              * classement ; vide hors multi-attributaire et avant l'attribution.
              */
-            List<EvaluationDto.Titulaire> titulaires) {
+            List<EvaluationDto.Titulaire> titulaires,
+            /** ⚠️ 2026-10-16 (tranche MT-b2, V123) — le suivi de chaque titulaire retenu (pièces, réception, retrait) ; vide hors multi-attributaire. */
+            List<SuiviTitulaire> suiviTitulaires) {
     }
 
     /** Le dossier de marché du lot : {@code avis} ∈ {@code FAV} · {@code FAVR} · {@code DEF}, nul tant que le PV n'est pas signé. */
@@ -162,8 +164,23 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
     public record VerificationRequest(Boolean conforme, String motif) {
     }
 
-    /** {@code POST …/lots/{lot}/retirer}. */
-    public record RetraitRequest(String motif) {
+    /**
+     * {@code POST …/lots/{lot}/retirer}. ⚠️ 2026-10-16 (tranche MT-b2) — {@code idOffre} : pour un contrat-cadre multi-attributaire, le
+     * titulaire retiré (obligatoire) ; le contrat-cadre continue avec les autres.
+     */
+    public record RetraitRequest(String motif, String idOffre) {
+
+        public RetraitRequest(String motif) {
+            this(motif, null);
+        }
+    }
+
+    /**
+     * ⚠️ 2026-10-16 (tranche MT-b2, V123) — le suivi d'un titulaire d'un contrat-cadre multi-attributaire : ses pièces (fiscale, sociale,
+     * original de l'acte d'engagement), la réception de la notification, et son retrait éventuel.
+     */
+    public record SuiviTitulaire(String idOffre, Integer numero, String candidat, Integer rang, PiecesAttributaire pieces,
+            LocalDateTime notificationRecueLe, Retrait retrait) {
     }
 
     // ------------------------------------------------------------------ corps des requêtes

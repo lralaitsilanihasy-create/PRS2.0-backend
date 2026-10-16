@@ -53,6 +53,13 @@ public class AttributionPiece {
     @Column(name = "NATURE", nullable = false, length = 30)
     private String nature;
 
+    /**
+     * ⚠️ V123 (2026-10-16, tranche MT-b2) — l'offre qui produit une pièce de l'attributaire (fiscale, sociale, original de l'acte
+     * d'engagement) : chaque titulaire d'un contrat-cadre multi-attributaire a les siennes. Nulle pour les autres natures.
+     */
+    @Column(name = "ID_OFFRE", length = 36)
+    private String idOffre;
+
     @Column(name = "ID_RECOURS")
     private Long idRecours;
 

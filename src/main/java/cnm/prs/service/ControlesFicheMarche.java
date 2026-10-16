@@ -48,7 +48,6 @@ import cnm.prs.enums.TypeChampFiche;
  * <tr><td>PIECES_EN_DOUBLE (⚠️ V61, retiré le 2026-10-07 : constat E1)</td><td>—</td><td>—</td></tr>
  * <tr><td>MATERIEL_EXIGE (⚠️ V60)</td><td>TEXTE (B03-QT-09) — ou la liste du matériel ; travaux seulement</td><td>bloquant</td></tr>
  * <tr><td>DUREE_CONTRAT_CADRE_MAX (⚠️ 2026-10-15)</td><td>MOIS, PERIODE (mois), ANS (années), JUSTIFICATION (texte)</td><td>bloquant</td></tr>
- * <tr><td>MULTI_ATTRIBUTAIRE_NON_OUTILLE (⚠️ 2026-10-15)</td><td>— (cadrage {@code attributaires = MULTI})</td><td>avertissement</td></tr>
  * </table>
  */
 public final class ControlesFicheMarche {
@@ -69,12 +68,6 @@ public final class ControlesFicheMarche {
      */
     public static final String DUREE_CONTRAT_CADRE_MAX = "DUREE_CONTRAT_CADRE_MAX";
     static final int DUREE_CONTRAT_CADRE_MOIS = 24;
-    /**
-     * ⚠️ 2026-10-15 (demande front « marchés subséquents », arbitrage du pilote sur B0 n° 3-4) — tant que la tranche MT (plusieurs
-     * titulaires) n'est pas livrée, l'évaluation et l'attribution ne retiennent qu'un titulaire par lot : un cadrage multi-attributaire
-     * est signalé, jamais bloqué.
-     */
-    public static final String MULTI_ATTRIBUTAIRE_NON_OUTILLE = "MULTI_ATTRIBUTAIRE_NON_OUTILLE";
     /**
      * ⚠️ 2026-10-02 (demande front « référentiel des travaux routiers », §B2) — l'assurance décennale, exigée pour des
      * travaux de bâtiment seulement : le CCAP-T ne l'imprime que sous {@code BATIMENT}.
@@ -281,7 +274,6 @@ public final class ControlesFicheMarche {
         interetsMoratoires(roles.get(INTERETS_MORATOIRES_TAUX), valeurs, avertissements, ok);
         delaiPaiement(roles.get(DELAI_PAIEMENT_75), valeurs, avertissements, ok);
         dureeContratCadre(roles.get(DUREE_CONTRAT_CADRE_MAX), valeurs, bloquants, ok);
-        multiAttributaire(cadrage, avertissements);
         assuranceDecennale(roles.get(ASSURANCE_DECENNALE), valeurs, bloquants, ok);
         liquiditeDouble(roles.get(LIQUIDITE_DOUBLE), valeurs, nbLots, bloquants, ok);
         caMoyenne(roles.get(CA_MOYENNE), valeurs, nbLots, bloquants, ok);
@@ -1254,17 +1246,7 @@ public final class ControlesFicheMarche {
                     + "(objet, investissements amortissables sur plus de deux ans)."));
         }
     }
-    /** ⚠️ 2026-10-15 — l'avertissement du cadrage multi-attributaire, en attendant la tranche MT (bloc B07, aucun champ). */
-    private static void multiAttributaire(Map<String, ?> cadrage, List<Controle> avertissements) {
-        if (cadrage == null || !"MULTI".equalsIgnoreCase(String.valueOf(cadrage.get("attributaires")))) {
-            return;
-        }
-        // ⚠️ MT-a (15/10) — l'évaluation retient tous les titulaires qualifiés ; MT-b1 — l'attribution et l'information aussi ; restent
-        // les pièces, la signature, la notification et l'avis de chaque titulaire (MT-b2).
-        avertissements.add(new Controle(MULTI_ATTRIBUTAIRE_NON_OUTILLE, List.of(), "B07", "Contrat-cadre multi-attributaire : "
-                + "l'évaluation, l'attribution et l'information des candidats portent sur tous les titulaires, mais les pièces, la signature, "
-                + "la notification et l'avis d'attribution ne suivent encore que le premier titulaire (suite de la tranche « plusieurs titulaires »)."));
-    }
+
     // ------------------------------------------------------------------ lectures
 
     /** Un nombre depuis une valeur normalisée ; {@code null} si absent ou illisible. */

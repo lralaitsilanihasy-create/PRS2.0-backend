@@ -57,6 +57,20 @@ public class AttributionTitulaire {
     @Column(name = "RETENU_PAR", length = 100)
     private String retenuPar;
 
+    /** ⚠️ V123 (tranche MT-b2, réponse 2 du pilote) — le titulaire retiré seul, faute de pièces : le contrat-cadre continue avec les autres. */
+    @Column(name = "RETIRE_LE")
+    private LocalDateTime retireLe;
+
+    @Column(name = "RETIRE_PAR", length = 100)
+    private String retirePar;
+
+    @Column(name = "MOTIF_RETRAIT")
+    private String motifRetrait;
+
+    /** ⚠️ V123 — l'accusé de réception de la notification par ce titulaire (la première consultation de son résultat ou du contrat signé). */
+    @Column(name = "NOTIFICATION_RECUE_LE")
+    private LocalDateTime notificationRecueLe;
+
     @Getter
     @Setter
     @NoArgsConstructor

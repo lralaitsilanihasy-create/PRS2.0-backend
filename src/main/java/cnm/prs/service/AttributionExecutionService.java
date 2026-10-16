@@ -97,13 +97,17 @@ public class AttributionExecutionService {
     private final org.springframework.beans.factory.ObjectProvider<SansSuiteService> sansSuite;
     /** ⚠️ R6c (règle 6, QB1 ; V108) — le délai d'attente part de la réception présumée de l'information. */
     private final DelaiAttenteCalcul delais;
+    /** ⚠️ 2026-10-16 (tranche MT-b2, V122-V123) — les titulaires d'un contrat-cadre multi-attributaire : pièces, retrait, réception. */
+    private final cnm.prs.repository.AttributionTitulaireRepository titulaires;
 
     public AttributionExecutionService(AttributionRepository attributions, AttributionRecoursRepository recoursRepository,
             AttributionPieceRepository piecesRepository, AttributionLettreRepository lettres, OffreRepository offres,
             CompteCandidatRepository candidats, PrmpRepository prmpRepository, DossierMecRepository dmcRepository,
             NotificationService notifications, CeremonieService ceremonies, EvaluationService evaluation, FicheMarcheService fiches,
             ValeursPpmService valeursPpm, GenerateurDocumentsFiche generateur, ParametreService parametres, Clock horloge,
-            org.springframework.beans.factory.ObjectProvider<SansSuiteService> sansSuite, DelaiAttenteCalcul delais) {
+            org.springframework.beans.factory.ObjectProvider<SansSuiteService> sansSuite, DelaiAttenteCalcul delais,
+            cnm.prs.repository.AttributionTitulaireRepository titulaires) {
+        this.titulaires = titulaires;
         this.delais = delais;
         this.sansSuite = sansSuite;
         this.attributions = attributions;
@@ -169,11 +173,73 @@ public class AttributionExecutionService {
         return new Suite(map, recours, sig, enr, notif, avis, piecesAttributaire(a, toutes), ret, app);
     }
 
-    /** Les pièces fiscales et sociales, une fois les candidats informés ; nul avant. */
+    /** Les pièces fiscales et sociales, une fois les candidats informés ; nul avant. Celles de l'attributaire de tête. */
     AttributionDto.PiecesAttributaire piecesAttributaire(Attribution a, List<AttributionPiece> toutes) {
+        return piecesAttributaire(a, toutes, a.getIdOffreAttribuee());
+    }
+
+    /**
+     * ⚠️ 2026-10-16 (tranche MT-b2, V123, réponse 1 du pilote) — les pièces que produit une offre : chaque titulaire d'un contrat-cadre
+     * multi-attributaire a les siennes. Une pièce sans offre (posée avant V123 et non reprise) est celle de l'attributaire de tête.
+     */
+    static List<AttributionPiece> piecesDe(Attribution a, List<AttributionPiece> toutes, String idOffre) {
+        return toutes.stream().filter(p -> !NATURES_ATTRIBUTAIRE.contains(p.getNature()) || Objects.equals(idOffre, p.getIdOffre())
+                || p.getIdOffre() == null && Objects.equals(idOffre, a.getIdOffreAttribuee())).toList();
+    }
+
+    /** ⚠️ MT-b2 — les titulaires du lot, dans l'ordre du classement ; vide hors multi-attributaire. */
+    List<cnm.prs.entity.AttributionTitulaire> titulairesDe(Attribution a) {
+        return titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(a.getIdDmc(), a.getLot());
+    }
+
+    /** ⚠️ MT-b2 — les titulaires qui ne sont pas retirés. */
+    static List<cnm.prs.entity.AttributionTitulaire> actifs(List<cnm.prs.entity.AttributionTitulaire> t) {
+        return t.stream().filter(x -> x.getRetireLe() == null).toList();
+    }
+
+    /** ⚠️ MT-b2 — le suivi de chaque titulaire (pièces, réception, retrait), pour la vue du lot ; vide hors multi-attributaire. */
+    @Transactional(readOnly = true)
+    List<AttributionDto.SuiviTitulaire> suiviTitulaires(Attribution a) {
+        if (a == null) {
+            return List.of();
+        }
+        List<cnm.prs.entity.AttributionTitulaire> tit = titulairesDe(a);
+        if (tit.isEmpty()) {
+            return List.of();
+        }
+        List<AttributionPiece> toutes = piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot());
+        return tit.stream().map(t -> {
+            Offre o = offres.findById(t.getIdOffre()).orElse(null);
+            return new AttributionDto.SuiviTitulaire(t.getIdOffre(), o == null ? null : o.getNumero(), o == null ? null : o.getRaisonSociale(),
+                    t.getRang(), piecesAttributaire(a, toutes, t.getIdOffre()), t.getNotificationRecueLe(),
+                    t.getRetireLe() == null ? null : new AttributionDto.Retrait(t.getRetireLe(), t.getRetirePar(), t.getMotifRetrait()));
+        }).toList();
+    }
+
+    /**
+     * ⚠️ MT-b2 — l'attribution dont une offre est l'attributaire de tête ou un titulaire, retenue par {@code filtre} (informée,
+     * signée…) ; vide sinon.
+     */
+    private java.util.Optional<Attribution> attributionDeLOffre(String idOffre, java.util.function.Predicate<Attribution> filtre) {
+        java.util.Optional<Attribution> tete = attributions.findByIdOffreAttribuee(idOffre).stream().filter(filtre).findFirst();
+        if (tete.isPresent()) {
+            return tete;
+        }
+        return titulaires.findByIdOffre(idOffre).stream().map(t -> attributions.findById(new Attribution.Cle(t.getIdDmc(), t.getLot())).orElse(null))
+                .filter(Objects::nonNull).filter(filtre).findFirst();
+    }
+
+    /** ⚠️ MT-b2 — le titulaire d'une offre dans ce lot, ou {@code null} (hors multi-attributaire, ou offre non titulaire). */
+    private cnm.prs.entity.AttributionTitulaire titulaire(Attribution a, String idOffre) {
+        return titulairesDe(a).stream().filter(t -> t.getIdOffre().equals(idOffre)).findFirst().orElse(null);
+    }
+
+    /** ⚠️ MT-b2 — les pièces d'une offre, une fois les candidats informés ; nul avant. */
+    AttributionDto.PiecesAttributaire piecesAttributaire(Attribution a, List<AttributionPiece> lot, String idOffre) {
         if (a.getInformeLe() == null) {
             return null;
         }
+        List<AttributionPiece> toutes = piecesDe(a, lot, idOffre);
         LocalDate echeance = echeancePieces(a);
         List<AttributionDto.PieceAttributaire> l = toutes.stream()
                 .filter(p -> NATURES_ATTRIBUTAIRE.contains(p.getNature()))
@@ -247,12 +313,32 @@ public class AttributionExecutionService {
     /** Les pièces de l'attributaire, pour le candidat (son résultat) : nul pour un candidat non retenu. */
     @Transactional(readOnly = true)
     AttributionDto.PiecesAttributaire piecesPourCandidat(Attribution a, String idOffre) {
-        return idOffre.equals(a.getIdOffreAttribuee()) ? piecesAttributaire(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()))
-                : null;
+        // ⚠️ MT-b2 — un titulaire d'un contrat-cadre multi-attributaire voit les siennes.
+        return idOffre.equals(a.getIdOffreAttribuee()) || titulaire(a, idOffre) != null
+                ? piecesAttributaire(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()), idOffre) : null;
     }
 
-    /** L'accusé de lecture de la notification : la première consultation par l'attributaire, une fois le marché notifié. */
+    /**
+     * L'accusé de lecture de la notification : la première consultation par l'attributaire, une fois le marché notifié. ⚠️ MT-b2 — chaque
+     * titulaire accuse la sienne ; la première réception fait partir l'échéance de l'avis d'attribution du lot.
+     */
     void accuserNotification(Attribution a, String idOffre) {
+        cnm.prs.entity.AttributionTitulaire t = titulaire(a, idOffre);
+        if (t != null) {
+            if (a.getNotifieLe() != null && t.getNotificationRecueLe() == null && t.getRetireLe() == null) {
+                t.setNotificationRecueLe(maintenant());
+                titulaires.save(t);
+                Offre o = offres.findById(idOffre).orElse(null);
+                evaluation.tracerAttribution(a.getIdDmc(), "NOTIFICATION_RECUE", "Lot " + a.getLot() + " : notification reçue par le titulaire "
+                        + (o == null ? idOffre : "offre n° " + o.getNumero() + " (" + o.getRaisonSociale() + ")") + " (accusé de lecture de la plateforme)");
+                if (a.getNotificationRecueLe() == null) {
+                    a.setNotificationRecueLe(t.getNotificationRecueLe());
+                    a.setReceptionDeclaree(false);
+                    attributions.save(a);
+                }
+            }
+            return;
+        }
         if (a.getNotifieLe() != null && a.getNotificationRecueLe() == null && idOffre.equals(a.getIdOffreAttribuee())) {
             a.setNotificationRecueLe(maintenant());
             a.setReceptionDeclaree(false);
@@ -393,9 +479,11 @@ public class AttributionExecutionService {
     public AttributionDto.PiecesAttributaire deposerPiece(String idCandidat, String idOffre, String type, LocalDate dateDelivrance,
             MultipartFile fichier) {
         Offre o = sienne(idCandidat, idOffre);
-        Attribution a = attributions.findByIdOffreAttribuee(idOffre).stream().filter(x -> x.getInformeLe() != null)
-                .findFirst().orElseThrow(() -> new BusinessRuleException("Votre offre n'est pas attributaire d'un marché.", "NON_ATTRIBUTAIRE"));
-        if (a.getRetireLe() != null) {
+        // ⚠️ MT-b2 — l'attributaire de tête, ou un titulaire d'un contrat-cadre multi-attributaire.
+        Attribution a = attributionDeLOffre(idOffre, x -> x.getInformeLe() != null)
+                .orElseThrow(() -> new BusinessRuleException("Votre offre n'est pas attributaire d'un marché.", "NON_ATTRIBUTAIRE"));
+        cnm.prs.entity.AttributionTitulaire tit = titulaire(a, idOffre);
+        if (a.getRetireLe() != null || tit != null && tit.getRetireLe() != null) {
             throw new BusinessRuleException("Le marché vous a été retiré.", "LOT_RETIRE");
         }
         if (a.getSigneLe() != null) {
@@ -404,11 +492,11 @@ public class AttributionExecutionService {
         String t = type == null ? null : type.trim().toUpperCase(Locale.ROOT);
         if (AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL.equals(t)) {
             // ⚠️ R10 (§B5, H2) — l'original de l'acte d'engagement : sans échéance (il précède la signature), daté de sa remise.
-            deposerOriginal(a, dateDelivrance, fichier, "par l'attributaire, offre n° " + o.getNumero());
+            deposerOriginal(a, dateDelivrance, fichier, "par l'attributaire, offre n° " + o.getNumero(), idOffre);
             ceremonies.notifierPrmp(a.getIdDmc(), TypeNotification.PIECES_ATTRIBUTAIRE_DEPOSEES, "Pièce de l'attributaire déposée",
                     "L'attributaire du lot " + a.getLot() + " (procédure " + a.getIdDmc() + ") a déposé l'original signé de son acte d'engagement ;"
                             + " vérifiez-le sur la plateforme.");
-            return piecesAttributaire(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()));
+            return piecesAttributaire(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()), idOffre);
         }
         if (aujourdhui().isAfter(echeancePieces(a))) {
             throw new BusinessRuleException("Le délai de dépôt des pièces est dépassé (" + echeancePieces(a).format(JOUR) + ").", "DELAI_DEPASSE");
@@ -428,13 +516,14 @@ public class AttributionExecutionService {
         Televerse f = lire(fichier, true);
         AttributionPiece p = enregistrerFichier(a, t, null, f);
         p.setDateDelivrance(dateDelivrance);
+        p.setIdOffre(idOffre);   // ⚠️ MT-b2 (V123) : la pièce de cette offre
         piecesRepository.save(p);
         evaluation.tracerAttribution(a.getIdDmc(), "PIECE_ATTRIBUTAIRE", "Lot " + a.getLot() + ", offre n° " + o.getNumero() + " : pièce "
                 + t.toLowerCase(Locale.FRENCH) + " déposée (délivrée le " + dateDelivrance.format(JOUR) + ")");
         ceremonies.notifierPrmp(a.getIdDmc(), TypeNotification.PIECES_ATTRIBUTAIRE_DEPOSEES, "Pièce de l'attributaire déposée",
-                "L'attributaire du lot " + a.getLot() + " (procédure " + a.getIdDmc() + ") a déposé sa pièce " + t.toLowerCase(Locale.FRENCH)
-                        + " ; vérifiez-la sur la plateforme.");
-        return piecesAttributaire(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()));
+                (tit == null ? "L'attributaire" : "Le titulaire " + o.getRaisonSociale()) + " du lot " + a.getLot() + " (procédure " + a.getIdDmc()
+                        + ") a déposé sa pièce " + t.toLowerCase(Locale.FRENCH) + " ; vérifiez-la sur la plateforme.");
+        return piecesAttributaire(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()), idOffre);
     }
 
     /**
@@ -443,6 +532,14 @@ public class AttributionExecutionService {
      * {@code NON_INFORME}, {@code DEJA_SIGNE}, {@code LOT_RETIRE}. Il se vérifie ensuite comme les autres pièces.
      */
     public void deposerOriginalParPrmp(Long idDmc, Integer lot, LocalDate dateRemise, MultipartFile fichier) {
+        deposerOriginalParPrmp(idDmc, lot, dateRemise, fichier, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-16 (tranche MT-b2) — {@code idOffre} : pour un contrat-cadre multi-attributaire, le titulaire dont l'original est remis
+     * (400 {@code TITULAIRE_OBLIGATOIRE} ; 409 {@code NON_TITULAIRE} hors des titulaires non retirés) ; ignoré sinon.
+     */
+    public void deposerOriginalParPrmp(Long idDmc, Integer lot, LocalDate dateRemise, MultipartFile fichier, String idOffre) {
         exigerPrmp(idDmc);
         Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).filter(x -> x.getInformeLe() != null)
                 .orElseThrow(() -> new BusinessRuleException("Les candidats de ce lot ne sont pas informés.", "NON_INFORME"));
@@ -450,11 +547,30 @@ public class AttributionExecutionService {
             throw new BusinessRuleException("Le marché de ce lot est retiré.", "LOT_RETIRE");
         }
         exigerNonSigne(a);
-        deposerOriginal(a, dateRemise, fichier, "par la PRMP");
+        deposerOriginal(a, dateRemise, fichier, "par la PRMP", titulaireActifDemande(a, idOffre));
+    }
+
+    /**
+     * ⚠️ MT-b2 — l'offre visée par un geste de la PRMP sur un titulaire : hors multi-attributaire, l'attributaire de tête ; sinon
+     * {@code idOffre}, obligatoire (400 {@code TITULAIRE_OBLIGATOIRE}) et titulaire non retiré du lot (409 {@code NON_TITULAIRE}).
+     */
+    private String titulaireActifDemande(Attribution a, String idOffre) {
+        List<cnm.prs.entity.AttributionTitulaire> tit = titulairesDe(a);
+        if (tit.isEmpty()) {
+            return a.getIdOffreAttribuee();
+        }
+        String id = nettoyer(idOffre);
+        if (id == null) {
+            throw new BadRequestException("Contrat-cadre multi-attributaire : précisez le titulaire visé (idOffre).", "TITULAIRE_OBLIGATOIRE");
+        }
+        if (actifs(tit).stream().noneMatch(t -> t.getIdOffre().equals(id))) {
+            throw new BusinessRuleException("Cette offre n'est pas un titulaire en cours du contrat-cadre.", "NON_TITULAIRE");
+        }
+        return id;
     }
 
     /** Le dépôt de l'original de l'acte d'engagement, quel qu'en soit l'auteur : date de remise au plus aujourd'hui, fichier obligatoire. */
-    private void deposerOriginal(Attribution a, LocalDate dateRemise, MultipartFile fichier, String par) {
+    private void deposerOriginal(Attribution a, LocalDate dateRemise, MultipartFile fichier, String par, String idOffre) {
         LocalDate remise = dateRemise == null ? aujourdhui() : dateRemise;
         if (remise.isAfter(aujourdhui())) {
             throw new BadRequestException("La date de remise de l'original ne peut être à venir.", "DATE_INVALIDE");
@@ -462,6 +578,7 @@ public class AttributionExecutionService {
         Televerse f = lire(fichier, true);
         AttributionPiece p = enregistrerFichier(a, AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL, null, f);
         p.setDateDelivrance(remise);
+        p.setIdOffre(idOffre);   // ⚠️ MT-b2 (V123)
         piecesRepository.save(p);
         evaluation.tracerAttribution(a.getIdDmc(), "PIECE_ATTRIBUTAIRE", "Lot " + a.getLot() + " : original signé de l'acte d'engagement déposé "
                 + par + " (remis le " + remise.format(JOUR) + ")");
@@ -471,9 +588,9 @@ public class AttributionExecutionService {
     @Transactional(readOnly = true)
     public AttributionDto.PiecesAttributaire piecesDuCandidat(String idCandidat, String idOffre) {
         sienne(idCandidat, idOffre);
-        Attribution a = attributions.findByIdOffreAttribuee(idOffre).stream().filter(x -> x.getInformeLe() != null)
-                .findFirst().orElseThrow(() -> new BusinessRuleException("Votre offre n'est pas attributaire d'un marché.", "NON_ATTRIBUTAIRE"));
-        return piecesAttributaire(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()));
+        Attribution a = attributionDeLOffre(idOffre, x -> x.getInformeLe() != null)   // ⚠️ MT-b2 : ou un titulaire
+                .orElseThrow(() -> new BusinessRuleException("Votre offre n'est pas attributaire d'un marché.", "NON_ATTRIBUTAIRE"));
+        return piecesAttributaire(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()), idOffre);
     }
 
     /**
@@ -519,7 +636,8 @@ public class AttributionExecutionService {
         piecesRepository.save(p);
         evaluation.tracerAttribution(idDmc, "PIECE_VERIFIEE", "Lot " + lot + " : " + libellePiece(p.getNature()) + " "
                 + (v.conforme() ? "conforme" : "non conforme — " + p.getMotif()));
-        notifierAttributaire(a, TypeNotification.PIECE_ATTRIBUTAIRE_VERIFIEE, "Vérification de votre pièce",
+        notifierOffre(a, p.getIdOffre() != null ? p.getIdOffre() : a.getIdOffreAttribuee(), TypeNotification.PIECE_ATTRIBUTAIRE_VERIFIEE,
+                "Vérification de votre pièce",
                 "Votre " + libellePiece(p.getNature()) + " est reconnu(e) " + (v.conforme() ? "conforme."
                         : "non conforme : " + p.getMotif() + ". Vous pouvez en déposer une nouvelle " + (AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL.equals(p.getNature()) ? "avant la signature du marché." : "jusqu'au " + echeancePieces(a).format(JOUR) + ".")));
     }
@@ -544,6 +662,10 @@ public class AttributionExecutionService {
         if (motif == null) {
             throw new BadRequestException("Le retrait exige un motif.", "MOTIF_OBLIGATOIRE");
         }
+        if (!titulairesDe(a).isEmpty()) {
+            retirerTitulaire(a, titulaireActifDemande(a, r.idOffre()), motif);
+            return;
+        }
         List<AttributionPiece> toutes = piecesRepository.findByIdDmcAndLotOrderByIdAsc(idDmc, lot);
         if (conforme(toutes, AttributionPiece.FISCALE) && conforme(toutes, AttributionPiece.SOCIALE)) {
             throw new BusinessRuleException("Les pièces fiscale et sociale de l'attributaire sont conformes.", "PIECES_CONFORMES");
@@ -559,6 +681,85 @@ public class AttributionExecutionService {
         evaluation.tracerAttribution(idDmc, "RETRAIT", "Lot " + lot + " : marché retiré à l'attributaire — " + motif);
         notifierAttributaire(a, TypeNotification.MARCHE_RETIRE, "Retrait du marché", "Faute de pièces fiscales et sociales conformes "
                 + "produites dans le délai, le marché du lot " + lot + " (procédure " + idDmc + ") vous est retiré (art. 20-I) : " + motif + ".");
+    }
+
+    /**
+     * ⚠️ 2026-10-16 (tranche MT-b2, réponse 2 du pilote ; décret n° 2019-1064, art. 17-18) — le retrait d'un titulaire d'un contrat-cadre
+     * multi-attributaire, faute de ses pièces conformes à l'échéance : le contrat-cadre continue avec les autres (le suivant prend la
+     * tête s'il le faut) ; s'il n'en reste qu'un, la PRMP peut déclarer la procédure infructueuse (art. 17) ; s'il n'en reste aucun, le lot
+     * est retiré. 409 {@code PIECES_CONFORMES}, {@code DELAI_EN_COURS}.
+     */
+    private void retirerTitulaire(Attribution a, String idOffre, String motif) {
+        List<AttributionPiece> siennes = piecesDe(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()), idOffre);
+        if (conforme(siennes, AttributionPiece.FISCALE) && conforme(siennes, AttributionPiece.SOCIALE)) {
+            throw new BusinessRuleException("Les pièces fiscale et sociale de ce titulaire sont conformes.", "PIECES_CONFORMES");
+        }
+        if (!aujourdhui().isAfter(echeancePieces(a))) {
+            throw new BusinessRuleException("Le titulaire peut déposer ses pièces jusqu'au " + echeancePieces(a).format(JOUR) + ".", "DELAI_EN_COURS");
+        }
+        cnm.prs.entity.AttributionTitulaire t = titulaire(a, idOffre);
+        t.setRetireLe(maintenant());
+        t.setRetirePar(acteur());
+        t.setMotifRetrait(motif);
+        titulaires.save(t);
+        List<cnm.prs.entity.AttributionTitulaire> restants = actifs(titulairesDe(a));
+        Offre o = offres.findById(idOffre).orElse(null);
+        String qui = o == null ? idOffre : "offre n° " + o.getNumero() + " (" + o.getRaisonSociale() + ")";
+        if (restants.isEmpty()) {
+            a.setRetireLe(t.getRetireLe());
+            a.setRetirePar(t.getRetirePar());
+            a.setMotifRetrait(motif);
+            a.setEtat(Attribution.RETIRE);
+        } else if (idOffre.equals(a.getIdOffreAttribuee())) {
+            cnm.prs.entity.AttributionTitulaire tete = restants.get(0);
+            a.setIdOffreAttribuee(tete.getIdOffre());
+            a.setMontant(tete.getMontant());
+            a.setMontantTtc(tete.getMontantTtc());
+            a.setDelai(tete.getDelai());
+        }
+        attributions.save(a);
+        evaluation.tracerAttribution(a.getIdDmc(), "RETRAIT", "Lot " + a.getLot() + " : titulaire " + qui + " retiré du contrat-cadre — " + motif
+                + " ; " + (restants.isEmpty() ? "plus aucun titulaire, le lot est retiré"
+                        : restants.size() + " titulaire(s) restant(s)" + (restants.size() == 1
+                                ? " : la PRMP peut déclarer la procédure infructueuse (décret n° 2019-1064, art. 17)" : "")));
+        notifierOffre(a, idOffre, TypeNotification.MARCHE_RETIRE, "Retrait du contrat-cadre", "Faute de pièces fiscales et sociales conformes "
+                + "produites dans le délai, vous êtes retiré des titulaires du contrat-cadre du lot " + a.getLot() + " (procédure " + a.getIdDmc()
+                + ", art. 20-I) : " + motif + ".");
+    }
+
+    /**
+     * ⚠️ MT-b2 — avant la signature d'un contrat-cadre multi-attributaire : 409 {@code PIECES_NON_CONFORMES} ou {@code AE_ORIGINAL_MANQUANT},
+     * {@code details.offres} = les numéros des titulaires en défaut.
+     */
+    private void exigerPiecesTitulaires(Attribution a, List<AttributionPiece> toutes, List<cnm.prs.entity.AttributionTitulaire> tit) {
+        List<Integer> sansPieces = new ArrayList<>();
+        List<Integer> sansOriginal = new ArrayList<>();
+        boolean original = aeOriginalExige(a.getIdDmc());
+        for (cnm.prs.entity.AttributionTitulaire t : tit) {
+            List<AttributionPiece> siennes = piecesDe(a, toutes, t.getIdOffre());
+            Integer numero = offres.findById(t.getIdOffre()).map(Offre::getNumero).orElse(null);
+            if (!conforme(siennes, AttributionPiece.FISCALE) || !conforme(siennes, AttributionPiece.SOCIALE)) {
+                sansPieces.add(numero);
+            } else if (original && !conforme(siennes, AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL)) {
+                sansOriginal.add(numero);
+            }
+        }
+        if (!sansPieces.isEmpty()) {
+            throw new BusinessRuleException("Les pièces fiscale et sociale de chaque titulaire doivent être reconnues conformes avant la signature "
+                    + "du contrat-cadre (art. 20-I) : offre(s) n° " + sansPieces.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(", "))
+                    + ".", "PIECES_NON_CONFORMES", null, Map.of("offres", sansPieces));
+        }
+        if (!sansOriginal.isEmpty()) {
+            throw new BusinessRuleException("Chaque titulaire remet l'original signé de son acte d'engagement, reconnu conforme, avant la signature "
+                    + "du contrat-cadre (art. 31) : offre(s) n° " + sansOriginal.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(", "))
+                    + ".", "AE_ORIGINAL_MANQUANT", null, Map.of("offres", sansOriginal));
+        }
+    }
+
+    /** ⚠️ MT-b2 (art. 17) — un contrat-cadre multi-attributaire dont un seul titulaire reste après les retraits, avant la signature. */
+    boolean seulTitulaireRestant(Attribution a) {
+        List<cnm.prs.entity.AttributionTitulaire> tit = titulairesDe(a);
+        return tit.size() > 1 && actifs(tit).size() == 1 && a.getSigneLe() == null;
     }
 
     // ------------------------------------------------------------------ §B4.3 signature, enregistrement, notification (art. 54)
@@ -591,6 +792,22 @@ public class AttributionExecutionService {
                     + "au plus tard le " + r.getDateReception().plusDays(JOURS_SUSPENSION).format(JOUR) + ".", "RECOURS_EN_COURS");
         }
         List<AttributionPiece> toutes = piecesRepository.findByIdDmcAndLotOrderByIdAsc(idDmc, lot);
+        // ⚠️ 2026-10-16 (tranche MT-b2, réponse 1 du pilote ; décret n° 2019-1064, art. 15) — un contrat-cadre multi-attributaire est
+        // signé par la PRMP et tous les titulaires : les pièces de CHACUN, et son original de l'acte d'engagement, sont exigés.
+        List<cnm.prs.entity.AttributionTitulaire> tit = actifs(titulairesDe(a));
+        if (!tit.isEmpty()) {
+            exigerPiecesTitulaires(a, toutes, tit);
+            Televerse f = lire(fichier, true);
+            a.setDateSignature(dateSignature);
+            a.setSigneLe(maintenant());
+            a.setSignePar(acteur());
+            a.setEtat(Attribution.SIGNE);
+            attributions.save(a);
+            enregistrerFichier(a, AttributionPiece.MARCHE_SIGNE, null, f);
+            evaluation.tracerAttribution(idDmc, "SIGNATURE_MARCHE", "Lot " + lot + " : contrat-cadre signé le " + dateSignature.format(JOUR)
+                    + " par la PRMP et ses " + tit.size() + " titulaire(s)");
+            return;
+        }
         if (!conforme(toutes, AttributionPiece.FISCALE) || !conforme(toutes, AttributionPiece.SOCIALE)) {
             throw new BusinessRuleException("Les pièces fiscale et sociale de l'attributaire doivent être reconnues conformes avant la signature "
                     + "(art. 20-I).", "PIECES_NON_CONFORMES");
@@ -708,6 +925,17 @@ public class AttributionExecutionService {
         evaluation.tracerAttribution(idDmc, "NOTIFICATION", "Lot " + lot + " : marché notifié le " + date.format(JOUR)
                 + (reception == null ? "" : ", reçu le " + reception.format(JOUR) + " (réception déclarée)") + " ; avis d'attribution à publier "
                 + "au plus tard le " + echeanceAvis(a).format(JOUR));
+        // ⚠️ 2026-10-16 (tranche MT-b2 ; décret n° 2019-1064, art. 15) — le contrat-cadre est notifié à chacun de ses titulaires.
+        List<cnm.prs.entity.AttributionTitulaire> tit = actifs(titulairesDe(a));
+        if (!tit.isEmpty()) {
+            for (cnm.prs.entity.AttributionTitulaire t : tit) {
+                notifierOffre(a, t.getIdOffre(), TypeNotification.MARCHE_NOTIFIE, "Notification du contrat-cadre", "Le contrat-cadre du lot " + lot
+                        + " (procédure " + idDmc + "), signé le " + a.getDateSignature().format(JOUR) + " par la PRMP et ses " + tit.size()
+                        + " titulaire(s), approuvé le " + a.getApprobationDate().format(JOUR) + " et enregistré, vous est notifié. Il prend effet à "
+                        + "sa réception ; le contrat-cadre signé est disponible dans votre espace (Mes offres).");
+            }
+            return;
+        }
         notifierAttributaire(a, TypeNotification.MARCHE_NOTIFIE, "Notification du marché", "Le marché du lot " + lot + " (procédure " + idDmc
                 + "), signé le " + a.getDateSignature().format(JOUR) + ", approuvé le " + a.getApprobationDate().format(JOUR) + " et enregistré, vous est notifié. Il prend effet à sa réception ; le marché "
                 + "signé est disponible dans votre espace (Mes offres).");
@@ -783,10 +1011,25 @@ public class AttributionExecutionService {
         para(el, "Autorité contractante : " + autorite + (plan.get("PRMP") == null ? "" : " ; Personne responsable des marchés publics : "
                 + plan.get("PRMP")) + ".");
         para(el, "Nombre d'offres ouvertes en séance : " + ouvertes + ".");
-        para(el, "Attributaire : " + o.getRaisonSociale() + ", NIF " + o.getNif() + ".");
-        para(el, "Montant du marché : " + (a.getMontant() == null ? "—" : FormulairesEnLigne.lisible(a.getMontant()) + " Ariary hors taxes")
-                + (a.getMontantTtc() == null ? "" : " (offre lue : " + FormulairesEnLigne.lisible(a.getMontantTtc()) + " Ariary toutes taxes comprises)")
-                + (a.getDelai() == null ? "" : " ; délai d'exécution : " + a.getDelai()) + ".");
+        List<cnm.prs.entity.AttributionTitulaire> tit = actifs(titulairesDe(a));
+        if (!tit.isEmpty()) {
+            // ⚠️ 2026-10-16 (tranche MT-b2 ; décret n° 2019-1064, art. 15) — l'avis du contrat-cadre liste ses titulaires et leurs offres
+            // indicatives ; le montant à payer est défini dans chaque marché subséquent (art. 16).
+            para(el, "Contrat-cadre attribué à " + tit.size() + " titulaire(s) :");
+            for (cnm.prs.entity.AttributionTitulaire t : tit) {
+                Offre x = offres.findById(t.getIdOffre()).orElse(null);
+                para(el, "– " + (x == null ? t.getIdOffre() : x.getRaisonSociale() + ", NIF " + x.getNif()) + " : offre indicative de "
+                        + (t.getMontant() == null ? "—" : FormulairesEnLigne.lisible(t.getMontant()) + " Ariary hors taxes")
+                        + (t.getDelai() == null ? "" : ", délai : " + t.getDelai()) + ".");
+            }
+            para(el, "Le montant à payer est défini dans chaque marché subséquent, après remise en concurrence des titulaires (décret n° 2019-1064, "
+                    + "art. 16).");
+        } else {
+            para(el, "Attributaire : " + o.getRaisonSociale() + ", NIF " + o.getNif() + ".");
+            para(el, "Montant du marché : " + (a.getMontant() == null ? "—" : FormulairesEnLigne.lisible(a.getMontant()) + " Ariary hors taxes")
+                    + (a.getMontantTtc() == null ? "" : " (offre lue : " + FormulairesEnLigne.lisible(a.getMontantTtc()) + " Ariary toutes taxes comprises)")
+                    + (a.getDelai() == null ? "" : " ; délai d'exécution : " + a.getDelai()) + ".");
+        }
         para(el, "Marché signé le " + a.getDateSignature().format(JOUR)
                 + (a.getApprobationDate() == null ? "" : ", approuvé le " + a.getApprobationDate().format(JOUR))   // ⚠️ R9a : nul avant V111
                 + ", enregistré le " + a.getDateEnregistrement().format(JOUR)
@@ -835,7 +1078,9 @@ public class AttributionExecutionService {
         sienne(idCandidat, idOffre);
         AttributionPiece p = piecesRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Fichier introuvable : " + id + "."));
         Attribution a = attributions.findById(new Attribution.Cle(p.getIdDmc(), p.getLot())).orElseThrow();
-        if (!idOffre.equals(a.getIdOffreAttribuee()) || !(AttributionPiece.FISCALE.equals(p.getNature()) || AttributionPiece.SOCIALE.equals(p.getNature()))) {
+        // ⚠️ MT-b2 — la pièce de son offre (un titulaire d'un contrat-cadre multi-attributaire voit les siennes).
+        boolean sienne = idOffre.equals(p.getIdOffre()) || p.getIdOffre() == null && idOffre.equals(a.getIdOffreAttribuee());
+        if (!sienne || !(AttributionPiece.FISCALE.equals(p.getNature()) || AttributionPiece.SOCIALE.equals(p.getNature()))) {
             throw new ResourceNotFoundException("Fichier introuvable : " + id + ".");
         }
         return p;
@@ -844,7 +1089,8 @@ public class AttributionExecutionService {
     /** Le marché signé, pour l'attributaire ; le lire après la notification vaut accusé de réception. 404 avant la signature. */
     public AttributionPiece marcheDuCandidat(String idCandidat, String idOffre) {
         sienne(idCandidat, idOffre);
-        Attribution a = attributions.findByIdOffreAttribuee(idOffre).stream().filter(x -> x.getSigneLe() != null).findFirst()
+        Attribution a = attributionDeLOffre(idOffre, x -> x.getSigneLe() != null)   // ⚠️ MT-b2 : ou un titulaire non retiré
+                .filter(x -> titulaire(x, idOffre) == null || titulaire(x, idOffre).getRetireLe() == null)
                 .orElseThrow(() -> new ResourceNotFoundException("Aucun marché signé pour cette offre."));
         accuserNotification(a, idOffre);
         AttributionDto.Fichier f = derniere(piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()), AttributionPiece.MARCHE_SIGNE);
@@ -945,7 +1191,12 @@ public class AttributionExecutionService {
     }
 
     private void notifierAttributaire(Attribution a, TypeNotification type, String titre, String corps) {
-        Offre o = offres.findById(a.getIdOffreAttribuee()).orElse(null);
+        notifierOffre(a, a.getIdOffreAttribuee(), type, titre, corps);
+    }
+
+    /** ⚠️ MT-b2 — la notification du candidat d'une offre précise (un titulaire d'un contrat-cadre multi-attributaire). */
+    private void notifierOffre(Attribution a, String idOffre, TypeNotification type, String titre, String corps) {
+        Offre o = idOffre == null ? null : offres.findById(idOffre).orElse(null);
         if (o == null) {
             return;
         }

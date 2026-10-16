@@ -107,8 +107,10 @@ public class AttributionExecutionController {
     @PostMapping(value = "/lots/{lot}/acte-engagement-original", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public AttributionDto deposerOriginal(@PathVariable Long idDmc, @PathVariable Integer lot,
             @RequestParam(value = "dateRemise", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateRemise,
-            @RequestPart(value = "fichier", required = false) MultipartFile fichier) {
-        execution.deposerOriginalParPrmp(idDmc, lot, dateRemise, fichier);
+            @RequestPart(value = "fichier", required = false) MultipartFile fichier,
+            /* ⚠️ MT-b2 — contrat-cadre multi-attributaire : le titulaire dont l'original est remis (obligatoire alors). */
+            @RequestParam(value = "idOffre", required = false) String idOffre) {
+        execution.deposerOriginalParPrmp(idDmc, lot, dateRemise, fichier, idOffre);
         return attribution.lire(idDmc);
     }
 

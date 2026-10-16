@@ -230,15 +230,9 @@ class ModelesDaoTest {
         // §B0.2 — le rappel des supports du décret (art. 9), servi en contrat-cadre seulement.
         assertThat(AvisSpecifiqueService.supportsMinimaux("CONTRAT_CADRE")).hasSize(5).contains("Bureau du contrôle financier");
         assertThat(AvisSpecifiqueService.supportsMinimaux("QUANTITE_FIXE")).isEmpty();
-        // Arbitrage du pilote sur B0 n° 3-4 : le cadrage multi-attributaire est signalé tant que la tranche MT n'est pas livrée.
-        String multi = ControlesFicheMarche.MULTI_ATTRIBUTAIRE_NON_OUTILLE;
+        // ⚠️ 16/10 (tranche MT livrée) — l'avertissement du cadrage multi-attributaire est retiré : l'application suit tous les titulaires.
         assertThat(ControlesFicheMarche.bilan(champs, Map.of(), Map.of("attributaires", "MULTI"), Map.of()).avertissements())
-                .filteredOn(c -> multi.equals(c.regle())).singleElement()
-                .satisfies(c -> assertThat(c.bloc()).isEqualTo("B07"))
-                .satisfies(c -> assertThat(c.message()).contains("ne suivent encore que le premier titulaire"));   // MT-b1
-        cnm.prs.dto.BilanControlesDto mono = ControlesFicheMarche.bilan(champs, Map.of(), Map.of("attributaires", "MONO"), Map.of());
-        assertThat(mono.avertissements()).extracting(c -> c.regle()).doesNotContain(multi);
-        assertThat(mono.bloquants()).extracting(c -> c.regle()).doesNotContain(multi);
+                .extracting(c -> c.regle()).doesNotContain("MULTI_ATTRIBUTAIRE_NON_OUTILLE");
     }
 
     private static ChampFicheMarche controle(String code, String type, String regle) {

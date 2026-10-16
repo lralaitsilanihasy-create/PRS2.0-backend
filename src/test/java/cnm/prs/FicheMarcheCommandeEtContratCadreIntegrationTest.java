@@ -368,8 +368,8 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         String b08 = mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B08").header("Authorization", tokenPrmp)
                 .contentType(JSON).content("{\"valeurs\":{\"B08-FP-03\":90}}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(b08, "$.bilanControles.avertissements[*].regle")).contains("DELAI_PAIEMENT_75",
-                "MULTI_ATTRIBUTAIRE_NON_OUTILLE");   // 15/10 : cadrage MULTI signalé tant que la tranche MT n'est pas livrée
+        assertThat(JsonPath.<List<String>>read(b08, "$.bilanControles.avertissements[*].regle")).contains("DELAI_PAIEMENT_75")
+                .doesNotContain("MULTI_ATTRIBUTAIRE_NON_OUTILLE");   // 16/10 : tranche MT livrée, l'avertissement est retiré
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B08").header("Authorization", tokenPrmp)
                 .contentType(JSON).content("{\"valeurs\":{}}")).andExpect(status().isOk());
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", "FOURNITURES_SERVICES", Map.of("B05-MT-01", "250000000"));

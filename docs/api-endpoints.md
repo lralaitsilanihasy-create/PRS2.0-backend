@@ -5276,7 +5276,7 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
   bloc `B07`, sans champ, et **ne bloque jamais**. Son message : l'évaluation et l'attribution de l'application ne désignent
   encore qu'un titulaire par lot. Il disparaîtra avec la tranche **MT** (plusieurs titulaires), qui précède MS-1. ⚠️ MT-a
   (15/10) : le message dit désormais que l'évaluation propose tous les titulaires qualifiés, et que seule l'attribution n'en
-  désigne encore qu'un.
+  désigne encore qu'un. ⚠️ **MT-b2 (16/10) : l'avertissement est retiré**, la tranche MT étant livrée.
 - **Refus au démarrage**, fichier nommé (`ModelesDao`, et désormais `ModelesCandidat`) : condition illisible ou déclarée
   deux fois, section utilisée sans être déclarée (hors noms historiques pour le candidat), `FINSI` qui ne ferme pas la
   dernière section ouverte, section non refermée, jeton `{{INT-…}}`.
@@ -7419,6 +7419,31 @@ tardive** de l'information des candidats et de l'affichage du résultat. Migrati
     qui consulte (nul pour un non-retenu). **Page publique** : les titulaires, montant nul.
   - **Pas encore étendu à chaque titulaire (MT-b2)** : pièces de l'attributaire, signature, notification, avis d'attribution et
     retrait. Ils suivent le titulaire de tête.
+- ⚠️ **2026-10-16 — tranche MT-b2, chaque titulaire du contrat-cadre** (réponses 1 et 2 du pilote ; décret n° 2019-1064, art. 15,
+  17, 18 ; **V123** : `t_attribution_piece.ID_OFFRE`, reprise des pièces existantes sur l'attributaire du lot ;
+  `t_attribution_titulaire` gagne `RETIRE_LE`, `RETIRE_PAR`, `MOTIF_RETRAIT`, `NOTIFICATION_RECUE_LE`).
+  - **Les pièces de chaque titulaire** (fiscale, sociale, original de l'acte d'engagement) se rattachent à son offre :
+    - `POST /api/candidat/offres/{idOffre}/pieces-attributaire` est ouvert à tout titulaire non retiré (409 `LOT_RETIRE` pour
+      un titulaire retiré), et `GET` rend les pièces de l'offre seule ;
+    - l'original remis à la PRMP (`POST …/lots/{lot}/acte-engagement-original`) prend **`idOffre`**, obligatoire en
+      multi-attributaire (400 `TITULAIRE_OBLIGATOIRE`, 409 `NON_TITULAIRE`) ;
+    - la vérification notifie le titulaire de la pièce.
+  - **`lots[].suiviTitulaires`** : `[{ idOffre, numero, candidat, rang, pieces (même forme que piecesAttributaire),
+    notificationRecueLe, retrait { le, par, motif } }]`. Vide hors multi-attributaire.
+  - **Signature** : le contrat-cadre est signé par la PRMP et **tous** les titulaires non retirés. 409 **`PIECES_NON_CONFORMES`**
+    ou **`AE_ORIGINAL_MANQUANT`** quand un titulaire n'a pas ses pièces conformes ; `details.offres` donne leurs numéros.
+  - **Retrait** (`POST …/lots/{lot}/retirer`, `{ motif, idOffre }`) : en multi-attributaire, **un titulaire** est retiré.
+    `idOffre` est obligatoire (400 `TITULAIRE_OBLIGATOIRE`, 409 `NON_TITULAIRE`) ; 409 `PIECES_CONFORMES` / `DELAI_EN_COURS`
+    pour ses propres pièces. **Le contrat-cadre continue avec les autres** : si le retiré était en tête, le suivant prend la tête.
+    Le lot n'est `RETIRE` que s'il ne reste aucun titulaire. Le titulaire retiré est notifié (`MARCHE_RETIRE`), son résultat
+    porte `retire = true`, et il sort des noms publiés. **S'il ne reste qu'un titulaire avant la signature, la déclaration
+    d'infructuosité redevient possible** (art. 17), malgré l'attribution ; sinon 409 `DEJA_ATTRIBUE` comme avant.
+  - **Notification** : `MARCHE_NOTIFIE` part à chaque titulaire non retiré. Chacun accuse sa réception (première consultation
+    de son résultat ou du contrat signé) dans `suiviTitulaires[].notificationRecueLe` et dans le `notificationRecueLe` de son
+    résultat. La première réception fait partir l'échéance de l'avis du lot.
+  - **Avis d'attribution** : « Contrat-cadre attribué à n titulaire(s) », puis chaque titulaire non retiré (raison sociale, NIF,
+    offre indicative, délai). Le montant à payer est renvoyé aux marchés subséquents (art. 16).
+  - **`MULTI_ATTRIBUTAIRE_NON_OUTILLE` est retiré** du bilan de la fiche : l'application suit désormais tous les titulaires.
 - **Le délai d'attente** : `JOURS_FRANCS = 10` ; le report d'une échéance tombant un jour férié ou un week-end n'est **pas** appliqué
   (la loi ne le prévoit pas dans le texte relu ; à confirmer par le juriste). La signature (tranche 2c) sera refusée avant
   `signableLe` (409 `DELAI_ATTENTE`).
