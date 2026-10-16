@@ -1442,6 +1442,144 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/remises").header("Authorization", jetonA)).andExpect(status().isForbidden());
     }
 
+    /** Un contrat en vigueur du lot 1, effet {@code effet}, fin un an moins un jour après. */
+    private long contrat(String type, LocalDate effet, String estime, String minimum, String maximum) {
+        cnm.prs.entity.ContratVigueur c = new cnm.prs.entity.ContratVigueur();
+        c.setIdDmc(idDmc);
+        c.setLot(1);
+        c.setTypeMarche(type);
+        c.setDateEffet(effet);
+        c.setPeriodeMois(12);
+        c.setDateFin(effet.plusYears(1).minusDays(1));
+        c.setDureeMaxMois(12);
+        c.setMontantEstime(estime == null ? null : new java.math.BigDecimal(estime));
+        c.setMontantMinimum(minimum == null ? null : new java.math.BigDecimal(minimum));
+        c.setMontantMaximum(maximum == null ? null : new java.math.BigDecimal(maximum));
+        c.setCreeLe(LocalDateTime.now());
+        return contratRepository.save(c).getId();
+    }
+
+    @Test
+    @DisplayName("MS-3 (16/10, bons de commande, V126, décret 2019-1064 art. 8 et 33) : le bon du contrat-cadre suit le marché subséquent "
+            + "attribué, au titulaire retenu, dans son montant ; émis par la PRMP, lu par le titulaire (accusé) ; annulé, il sort des cumuls ; "
+            + "la valeur estimée dépassée est signalée")
+    void bonsCommandeContratCadre() throws Exception {
+        String a = offre("C900000051", "1111222333", "BTP Alpha", 1, "INTACTE", null, "12500000");
+        cnm.prs.entity.Attribution notifiee = new cnm.prs.entity.Attribution();
+        notifiee.setIdDmc(idDmc);
+        notifiee.setLot(1);
+        notifiee.setEtat("NOTIFIE");
+        notifiee.setReferenceEnregistrement("CC-2026/017");
+        attributionRepository.save(notifiee);
+        long idContrat = contrat("CONTRAT_CADRE", aujourdhui.minusMonths(1), "5000000", null, null);
+        cnm.prs.entity.RemiseConcurrence x = new cnm.prs.entity.RemiseConcurrence();
+        x.setIdContrat(idContrat);
+        x.setNumero(1);
+        x.setMode(cnm.prs.entity.RemiseConcurrence.REMISE_EN_CONCURRENCE);
+        x.setEtat(cnm.prs.entity.RemiseConcurrence.LANCEE);
+        x.setObjet("Fourniture de 40 ordinateurs portables");
+        x.setSpecifications("16 Go");
+        x.setDelaiExecution("30 jours");
+        x.setLieuLivraison("Antananarivo");
+        x.setEcheance(LocalDateTime.now().minusDays(1));
+        x.setLanceeLe(LocalDateTime.now().minusDays(10));
+        long idRemise = remiseRepository.save(x).getId();
+        String url = "/api/contrats-en-vigueur/" + idContrat + "/bons-commande";
+        String ligne = "{\"designation\":\"Ordinateur portable\",\"unite\":\"u\",\"quantite\":%s,\"prixUnitaire\":200000}";
+        String bon = "{\"idRemise\":" + idRemise + ",\"lignes\":[" + String.format(ligne, 20) + "]}";
+
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content("{\"lignes\":[" + String.format(ligne, 1) + "]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("REMISE_OBLIGATOIRE"));
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(bon)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REMISE_NON_ATTRIBUEE"));
+        x = remiseRepository.findById(idRemise).orElseThrow();
+        x.setEtat(cnm.prs.entity.RemiseConcurrence.ATTRIBUEE);
+        x.setIdOffreRetenue(a);
+        x.setMontantRetenu(new java.math.BigDecimal("9000000"));
+        x.setDecideeLe(LocalDateTime.now().minusDays(1));
+        remiseRepository.save(x);
+        mvc.perform(post(url).header("Authorization", tokenUgpm).contentType(JSON).content(bon)).andExpect(status().isForbidden());
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content("{\"idRemise\":" + idRemise + ",\"lignes\":[]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("LIGNES_OBLIGATOIRES"));
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content("{\"idRemise\":" + idRemise
+                + ",\"lignes\":[{\"designation\":\"x\",\"quantite\":1}]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PRIX_OBLIGATOIRE"));
+        // Le bon : objet, délai et lieu repris du marché subséquent ; 20 × 200 000 = 4 000 000.
+        String emis = mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(bon)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.numero").value(1)).andExpect(jsonPath("$.idOffre").value(a)).andExpect(jsonPath("$.montantHt").value(4000000))
+                .andExpect(jsonPath("$.objet").value("Fourniture de 40 ordinateurs portables")).andExpect(jsonPath("$.delaiLivraison").value("30 jours"))
+                .andExpect(jsonPath("$.numeroRemise").value(1)).andReturn().getResponse().getContentAsString();
+        long id1 = JsonPath.<Number>read(emis, "$.id").longValue();
+        String pdf = texteDuPdf(mvc.perform(get("/api/bons-commande/" + id1 + "/document").header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(pdf).contains("BON DE COMMANDE N° 1", "Contrat-cadre n° CC-2026/017", "Marché subséquent « Fourniture de 40 ordinateurs portables »",
+                "BTP Alpha, NIF 1111222333", "4 000 000", "Délai de livraison : 30 jours");
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "BON_COMMANDE".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireRef).containsExactly("C900000051");
+        // Au-delà du montant retenu : refusé.
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(bon.replace(String.format(ligne, 20), String.format(ligne, 30))))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MONTANT_SUBSEQUENT_DEPASSE"))
+                .andExpect(jsonPath("$.details.dejaCommande").value(4000000));
+        // Le titulaire lit son bon : l'accusé de réception.
+        mvc.perform(get("/api/candidat/bons-commande").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(id1)).andExpect(jsonPath("$[0].accuseLe").value(org.hamcrest.Matchers.nullValue()));
+        mvc.perform(get("/api/candidat/bons-commande/" + id1 + "/document").header("Authorization", jetonB)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/candidat/bons-commande/" + id1 + "/document").header("Authorization", jetonA)).andExpect(status().isOk());
+        mvc.perform(get("/api/bons-commande/" + id1).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.accuseLe").isNotEmpty());
+        assertThat(notificationRepository.findAll()).extracting(Notification::getTypeNotif).contains("BON_COMMANDE_ACCUSE");
+        // L'annulation, motivée, sort le bon des cumuls ; le bon de 6 000 000 passe alors.
+        mvc.perform(post("/api/bons-commande/" + id1 + "/annulation").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        mvc.perform(post("/api/bons-commande/" + id1 + "/annulation").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"Quantités erronées\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("ANNULE"));
+        mvc.perform(post("/api/bons-commande/" + id1 + "/annulation").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"x\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_ANNULE"));
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(bon.replace(String.format(ligne, 20), String.format(ligne, 30))))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.numero").value(2));
+        // La consommation : le marché subséquent et son reste ; la valeur estimée (5 000 000) dépassée, signalée.
+        mvc.perform(get(url).header("Authorization", tokenUgpm)).andExpect(status().isOk()).andExpect(jsonPath("$.cumulHt").value(6000000))
+                .andExpect(jsonPath("$.subsequents[0].commande").value(6000000)).andExpect(jsonPath("$.subsequents[0].reste").value(3000000))
+                .andExpect(jsonPath("$.bons.length()").value(2)).andExpect(jsonPath("$.alertes[0]").value("MONTANT_ESTIME_DEPASSE"));
+        mvc.perform(get("/api/contrats-en-vigueur/" + idContrat).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.alertes").value(org.hamcrest.Matchers.hasItem("MONTANT_ESTIME_DEPASSE")));
+        mvc.perform(get(url).header("Authorization", jetonM1)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("MS-3 (16/10, marché à commandes, loi 2016-055 art. 30) : les bons à l'attributaire, au plus le maximum de l'année "
+            + "contractuelle ; le minimum non atteint à l'approche de la fin d'année est signalé ; plus de bon après l'échéance")
+    void bonsCommandeMarcheACommandes() throws Exception {
+        String a = offre("C900000051", "1111222333", "BTP Alpha", 1, "INTACTE", null, "12500000");
+        cnm.prs.entity.Attribution notifiee = new cnm.prs.entity.Attribution();
+        notifiee.setIdDmc(idDmc);
+        notifiee.setLot(1);
+        notifiee.setEtat("NOTIFIE");
+        notifiee.setIdOffreAttribuee(a);
+        attributionRepository.save(notifiee);
+        long idContrat = contrat("A_COMMANDE", aujourdhui.minusYears(1).plusDays(20), null, "8000000", "10000000");
+        String url = "/api/contrats-en-vigueur/" + idContrat + "/bons-commande";
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content("{\"objet\":\"Ramettes\",\"delaiLivraison\":\"10 jours\","
+                + "\"lignes\":[{\"idArticle\":999999,\"quantite\":1,\"prixUnitaire\":1}]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ARTICLE_INCONNU"));
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content("{\"objet\":\"Ramettes\",\"lignes\":[{\"designation\":\"Ramette\","
+                + "\"quantite\":1,\"prixUnitaire\":1}]}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CHAMP_OBLIGATOIRE"));
+        String bon = "{\"objet\":\"Ramettes de papier\",\"delaiLivraison\":\"10 jours\",\"lignes\":[{\"designation\":\"Ramette A4\",\"unite\":\"ramette\","
+                + "\"quantite\":%s,\"prixUnitaire\":20000}]}";
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(String.format(bon, 300))).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idOffre").value(a)).andExpect(jsonPath("$.idRemise").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.montantHt").value(6000000)).andExpect(jsonPath("$.lignes[0].prixDuBordereau").value(false));
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(String.format(bon, 250))).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MAXIMUM_DEPASSE")).andExpect(jsonPath("$.details.maximum").value(10000000));
+        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.cumulAnnee").value(6000000))
+                .andExpect(jsonPath("$.resteMaximum").value(4000000)).andExpect(jsonPath("$.anneeFin").value(aujourdhui.plusDays(19).toString()))
+                .andExpect(jsonPath("$.alertes[0]").value("MINIMUM_NON_ATTEINT"));
+        cnm.prs.entity.ContratVigueur c = contratRepository.findById(idContrat).orElseThrow();
+        c.setDateFin(aujourdhui.minusDays(1));
+        contratRepository.save(c);
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(String.format(bon, 1))).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONTRAT_ECHU"));
+    }
+
     @Test
     @DisplayName("Tranche MT (15/10, contrat-cadre multi-attributaire, décret 2019-1064 art. 14-17) : la post-qualification décide chaque "
             + "offre classée sans s'arrêter à la première qualifiée ; un seul titulaire qualifié est proposé avec le constat de l'art. 17 ; "

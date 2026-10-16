@@ -8088,7 +8088,61 @@ l'échéance). Aucune dépendance ajoutée.
   maReponse, resultat, motif, dateContrat }` ; `resultat` ∈ `EN_COURS`, `RETENU`, `NON_RETENU`, `INFRUCTUEUSE`.
 - **Pas encore** : la remise **par lot** d'un contrat alloti (art. 31 : chaque contrat en vigueur est déjà un lot ; une remise
   commune à plusieurs lots n'est pas outillée) ; la jonction des pièces du marché subséquent aux pièces de dépense (art. 33 :
-  lettre, rapport et réponses sont téléchargeables) ; le bon de commande du retenu (MS-3).
+  lettre, rapport et réponses sont téléchargeables) ; le bon de commande du retenu : lot MS-3, ci-dessous.
+
+
+### Les bons de commande — lot MS-3 — V126 ⚠️ 2026-10-16
+
+Demande front `frontend/docs/demande-backend-2026-10-15-marches-subsequents.md`, lot MS-3 (loi n° 2016-055, définition de
+l'accord-cadre et art. 30 ; décret n° 2019-1064, art. 8, 33, 34). Arbitrage du pilote : **un seul module pour les deux formes**.
+Tables **`t_bon_commande`** (numérotée par contrat, unique sur `(ID_CONTRAT, NUMERO)`, `ETAT` `EMIS` | `ANNULE`) et
+**`t_bon_commande_ligne`**. Aucune dépendance ajoutée.
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| POST | /api/contrats-en-vigueur/{id}/bons-commande | `{ idRemise, objet, lieuLivraison, delaiLivraison, observations, lignes[{ idArticle, designation, unite, quantite, prixUnitaire }] }` | 201 ; 400 `CHAMP_OBLIGATOIRE` (`details.champ`), `REMISE_OBLIGATOIRE`, `LIGNES_OBLIGATOIRES`, `QUANTITE_INVALIDE`, `PRIX_OBLIGATOIRE`, `ARTICLE_INCONNU`, `PRIX_HORS_BORDEREAU` (`details.rang`, `details.prixBordereau`) ; 403 ; 404 (remise d'un autre contrat) ; 409 `CONTRAT_ECHU`, `REMISE_NON_ATTRIBUEE`, `SANS_TITULAIRE`, `MONTANT_SUBSEQUENT_DEPASSE`, `MAXIMUM_DEPASSE` (`details.dejaCommande`, `details.montant`, `details.montantRetenu` ou `details.maximum`) | PRMP de la fiche |
+| GET | /api/contrats-en-vigueur/{id}/bons-commande | → `Consommation` | 200, 403, 404 | PRMP et UGPM de la fiche ; Commission et Administrateur ; 403 candidat, membre de CAO, dépositaire |
+| GET | /api/bons-commande/{id} | → `BonCommandeDto` | 200, 403, 404 | idem |
+| GET | /api/bons-commande/{id}/document[?format=docx] | → le bon (PDF ou Word) | 200, 403, 404 | idem |
+| POST | /api/bons-commande/{id}/annulation | `{ motif }` | 200 ; 400 `MOTIF_OBLIGATOIRE` ; 403 ; 409 `DEJA_ANNULE` | PRMP de la fiche |
+| GET | /api/candidat/bons-commande | → `BonCommandeDto[]` (les plus récents d'abord) | 200 | CANDIDAT : les bons de ses offres |
+| GET | /api/candidat/bons-commande/{id}/document[?format=docx] | → son bon ; la première lecture vaut **accusé de réception** | 200, 404 | CANDIDAT titulaire du bon |
+
+- **Émission** par la **PRMP** seule (le bon l'engage), tant que le contrat est en vigueur (409 `CONTRAT_ECHU`) :
+  - **contrat-cadre** : `idRemise` obligatoire (400 `REMISE_OBLIGATOIRE`), une remise **attribuée** du contrat (409
+    `REMISE_NON_ATTRIBUEE`) ; le titulaire est son **retenu** (décret art. 33). `objet`, `delaiLivraison` et `lieuLivraison` absents
+    reprennent ceux de la remise. Les prix sont **saisis** (ceux de l'offre retenue : le devis n'est pas structuré). Les bons d'un même
+    marché subséquent ne dépassent pas son `montantRetenu` (409 `MONTANT_SUBSEQUENT_DEPASSE`) ;
+  - **marché à commandes** : le titulaire est l'attributaire (`idRemise` ignorée). Un article du besoin (`idArticle`, 400
+    `ARTICLE_INCONNU` sinon) reprend sa désignation et son unité ; son prix unitaire est **celui du bordereau scellé de l'offre**
+    quand il est lisible (`prixDuBordereau = true` ; un autre prix saisi → 400 `PRIX_HORS_BORDEREAU`), sinon il est saisi (offre
+    déposée par pièces, contenu purgé). Le cumul des bons de l'**année contractuelle** ne dépasse pas le maximum annuel
+    (`B05-TP-03`, figé au contrat : 409 `MAXIMUM_DEPASSE`) ;
+  - chaque article : désignation (ou `idArticle`), `quantite` positive, prix unitaire HT positif ; montant = quantité × prix, arrondi
+    au centime ; `montantHt` = leur somme ;
+  - le **bon** (PDF et Word) : n° du bon, du contrat (référence d'enregistrement de l'attribution) et du marché subséquent, titulaire
+    et NIF, tableau des articles, total HT, délai « à compter du lendemain de la notification », lieu ;
+  - notification **`BON_COMMANDE`** au titulaire ; journal `BON_COMMANDE`.
+- **Accusé de réception** : la première lecture du document par le titulaire pose `accuseLe`, notifie la PRMP
+  (**`BON_COMMANDE_ACCUSE`**) et se trace (journal `BON_COMMANDE_ACCUSE`). Un bon annulé ne s'accuse plus.
+- **Annulation** par la PRMP, motivée : le bon passe `ANNULE` et **sort des cumuls** ; notification **`BON_COMMANDE_ANNULE`** au
+  titulaire ; journal `BON_COMMANDE_ANNULE`.
+- **`BonCommandeDto`** : `{ id, idContrat, idDmc, lot, typeMarche, numero, idRemise, numeroRemise, idOffre, numeroOffre, titulaire,
+  etat, objet, lieuLivraison, delaiLivraison, observations, lignes[{ rang, idArticle, designation, unite, quantite, prixUnitaire,
+  montant, prixDuBordereau }], montantHt, emisLe, emisPar, accuseLe, annuleLe, annulePar, motifAnnulation }`.
+- **`Consommation`** : `{ idContrat, typeMarche, cumulHt, anneeDebut, anneeFin, cumulAnnee, minimum, maximum, resteMaximum,
+  montantEstime, subsequents[{ idRemise, numero, objet, idOffre, titulaire, montantRetenu, commande, reste }], alertes[], bons[] }`.
+  - `cumulHt` : les bons émis du contrat, sur toute sa durée ;
+  - marché à commandes : `anneeDebut` / `anneeFin` = l'année contractuelle en cours (effet + k ans, bornée par la fin du contrat),
+    `cumulAnnee`, `minimum` / `maximum` (annuels, `B05-TP-02/03`), `resteMaximum` ;
+  - contrat-cadre : `subsequents[]`, les marchés subséquents attribués et ce que leurs bons ont commandé.
+- **Alertes de consommation** (`Consommation.alertes`, et ajoutées à **`ContratVigueurDto.alertes`**) :
+  - `MINIMUM_NON_ATTEINT` : marché à commandes, minimum annuel non atteint à **30 jours** au plus de la fin de l'année contractuelle
+    (loi art. 30-II) ;
+  - `MONTANT_ESTIME_DEPASSE` : contrat-cadre, cumul au-delà de la valeur maximale estimée (décret art. 8) — signalé, jamais refusé.
+    Pas de minimum pour le contrat-cadre (art. 34).
+- **Pas encore** : un plafond **en quantité** par article (seul le montant est contrôlé) ; le TTC (le bon porte le hors taxes) ;
+  la réception des livraisons (MS-4).
 
 
 ### L'attribution, lot 2, tranche 2d-3 : la déclaration sans suite — V93 ⚠️ 2026-10-08

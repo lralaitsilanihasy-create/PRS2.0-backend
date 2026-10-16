@@ -78,11 +78,12 @@ public class ContratVigueurService {
     private final ValeursPpmService valeursPpm;
     private final EvaluationService evaluation;
     private final Clock horloge;
+    private final cnm.prs.repository.BonCommandeRepository bons;
 
     public ContratVigueurService(ContratVigueurRepository contrats, ContratReconductionRepository reconductions,
             AttributionRepository attributions, AttributionTitulaireRepository titulaires, OffreRepository offres,
             DossierMecRepository dmcRepository, FicheMarcheService fiches, ValeursPpmService valeursPpm, EvaluationService evaluation,
-            Clock horloge) {
+            Clock horloge, cnm.prs.repository.BonCommandeRepository bons) {
         this.contrats = contrats;
         this.reconductions = reconductions;
         this.attributions = attributions;
@@ -93,6 +94,7 @@ public class ContratVigueurService {
         this.valeursPpm = valeursPpm;
         this.evaluation = evaluation;
         this.horloge = horloge;
+        this.bons = bons;
     }
 
     // ------------------------------------------------------------------ création à la notification
@@ -336,6 +338,8 @@ public class ContratVigueurService {
         if (ChronoUnit.DAYS.between(aujourdhui, c.getDateFin()) <= JOURS_ECHEANCE_PROCHE) {
             al.add(ECHEANCE_PROCHE);
         }
+        // ⚠️ MS-3 (V126) — la consommation : minimum annuel du marché à commandes, valeur estimée du contrat-cadre.
+        al.addAll(BonCommandeService.alertes(c, bons.findByIdContratOrderByNumeroAsc(c.getId()), aujourdhui));
         return al;
     }
 

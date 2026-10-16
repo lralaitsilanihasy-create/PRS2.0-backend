@@ -818,6 +818,36 @@ public class SeanceService {
         return FormulairesEnLigne.specifications(formulaires.lot(idDmc, o.getLot()).orElse(null), f);
     }
 
+    /**
+     * ⚠️ 2026-10-16 (marchés subséquents, lot MS-3) — les prix unitaires HT du bordereau scellé d'une offre, par article du besoin :
+     * les bons du marché à commandes s'émettent à ces prix (loi n° 2016-055, art. 30). Sans garde et sans exception, comme
+     * {@link #specificationsLues} : vide pour une offre inconnue, purgée, illisible ou déposée par pièces.
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, java.math.BigDecimal> prixLus(Long idDmc, String idOffre) {
+        Offre o = offres.findById(idOffre).filter(x -> idDmc.equals(x.getIdDmc())).orElse(null);
+        JsonNode f;
+        try {
+            byte[] clair = o == null ? null : stockage.lireClair(o.getIdOffre());
+            byte[] manifeste = clair == null ? null : dezipper(clair).get(MANIFESTE);
+            f = manifeste == null ? null : mapper.readTree(manifeste).path("formulaires");
+        } catch (IOException | java.io.UncheckedIOException | tools.jackson.core.JacksonException e) {
+            return Map.of();
+        }
+        if (f == null || !f.path("bordereau").isArray()) {
+            return Map.of();
+        }
+        Map<Integer, java.math.BigDecimal> prix = new LinkedHashMap<>();
+        for (JsonNode x : f.path("bordereau")) {
+            JsonNode v = x.path("prixUnitaireHt");
+            java.math.BigDecimal pu = montant(v.isNumber() ? v.decimalValue() : v.isNull() || v.isMissingNode() ? null : v.asString(null));
+            if (x.path("idArticle").isNumber() && pu != null) {
+                prix.put(x.path("idArticle").asInt(), pu);
+            }
+        }
+        return prix;
+    }
+
     private Offre offreOuverte(Long idDmc, String idOffre) {
         exigerMembreCao(idDmc);
         exigerDechiffree(idDmc);

@@ -44,7 +44,8 @@ class ContratVigueurServiceTest {
     private final LocalDate aujourdhui = LocalDate.of(2026, 10, 16);
     private final ContratVigueurService service = new ContratVigueurService(contrats, reconductions, mock(AttributionRepository.class),
             mock(AttributionTitulaireRepository.class), mock(OffreRepository.class), mock(DossierMecRepository.class), fiches,
-            mock(ValeursPpmService.class), evaluation, Clock.fixed(aujourdhui.atStartOfDay(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault()));
+            mock(ValeursPpmService.class), evaluation, Clock.fixed(aujourdhui.atStartOfDay(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault()),
+            mock(cnm.prs.repository.BonCommandeRepository.class));
 
     private static FicheMarcheService.EtatVersion etat(String type, Map<String, String> valeurs) {
         FicheMarcheDto d = new FicheMarcheDto();

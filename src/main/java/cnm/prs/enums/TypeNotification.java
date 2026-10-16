@@ -205,6 +205,12 @@ public enum TypeNotification {
     REMISE_REPONSE_RECUE,
     /** ⚠️ MS-2 (art. 29-30) — le résultat de la remise : vers chaque titulaire consulté (retenu, non retenu et son motif, ou infructueuse). */
     REMISE_RESULTAT,
+    /** ⚠️ 2026-10-16 (marchés subséquents, MS-3) — un bon de commande émis : vers son titulaire. */
+    BON_COMMANDE,
+    /** ⚠️ MS-3 — un bon de commande annulé : vers son titulaire. */
+    BON_COMMANDE_ANNULE,
+    /** ⚠️ MS-3 — l'accusé de réception du bon par le titulaire : vers la PRMP. */
+    BON_COMMANDE_ACCUSE,
     /** ⚠️ 2026-10-08 (lot 3 PI, PI-d1, §B3) — la seconde séance est ouverte : vers chaque candidat dont l'enveloppe financière s'ouvre (invité à y assister). */
     SEANCE_FINANCIERE,
     /** ⚠️ 2026-10-08 (lot 3 PI, PI-d2a, §B6) — la PRMP ouvre une négociation : vers le candidat classé invité à négocier (date, lieu). */

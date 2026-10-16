@@ -653,6 +653,27 @@ subséquent — lot MS-2*.
   - deux remises consécutives dont la meilleure offre dépasse **de plus de 30 %** le prix moyen : l'acheteur est délié de
     l'exclusivité pour cet achat et peut le mettre en concurrence hors du contrat-cadre (art. 23).
 
+#### Les bons de commande (2026-10-16)
+
+⚠️ **Un seul module de bons de commande sert les deux formes** (arbitrage du pilote du 15/10). Contrat : `docs/api-endpoints.md`,
+§ *Les bons de commande — lot MS-3*.
+
+- **Le bon engage l'autorité contractante : seule la PRMP l'émet**, et seulement tant que le contrat est en vigueur. L'UGPM et la
+  Commission le lisent.
+- **Contrat-cadre** : le bon « réglementaire » suit l'attribution du marché subséquent. Il est passé avec le titulaire retenu, aux
+  prix de son offre (décret n° 2019-1064, art. 33). Les bons d'un marché subséquent ne dépassent pas son montant retenu. Le cumul
+  du contrat au-delà de sa valeur maximale estimée est **signalé**, jamais refusé (art. 8). Le contrat-cadre n'a pas de minimum
+  (art. 34).
+- **Marché à commandes** : les bons s'émettent au fil des besoins, avec l'attributaire, **aux prix du bordereau de son offre** (loi
+  n° 2016-055, art. 30). Un prix différent du bordereau scellé est refusé. Le minimum et le maximum s'entendent **par année
+  contractuelle**, comptée de la notification :
+  - le cumul de l'année ne dépasse pas le maximum ;
+  - un minimum non atteint à trente jours de la fin de l'année est signalé à la PRMP.
+- **Le titulaire est notifié** du bon, qu'il lit dans son espace ; **sa première lecture vaut accusé de réception**, tracé et
+  notifié à la PRMP.
+- **Un bon s'annule par une décision motivée** de la PRMP. Le titulaire en est notifié, et un bon annulé ne compte plus dans les
+  cumuls.
+
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 
 ⚠️ **Un marché de fournitures, à quantité fixe ou à commande, produit à son tour les documents types de l'ARMP
