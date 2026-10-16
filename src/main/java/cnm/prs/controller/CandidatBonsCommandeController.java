@@ -25,9 +25,11 @@ import cnm.prs.service.BonCommandeService;
 public class CandidatBonsCommandeController {
 
     private final BonCommandeService service;
+    private final cnm.prs.service.ReceptionCommandeService receptions;
 
-    public CandidatBonsCommandeController(BonCommandeService service) {
+    public CandidatBonsCommandeController(BonCommandeService service, cnm.prs.service.ReceptionCommandeService receptions) {
         this.service = service;
+        this.receptions = receptions;
     }
 
     @GetMapping
@@ -41,6 +43,27 @@ public class CandidatBonsCommandeController {
         boolean docx = "docx".equalsIgnoreCase(format);
         return Telechargements.fichier("bon-commande-" + id + (docx ? ".docx" : ".pdf"), docx ? "docx" : "pdf",
                 service.documentDuTitulaire(moi(), id, docx));
+    }
+
+    /** ⚠️ MS-4 (V127) — le titulaire déclare sa livraison : 201 ; 400 {@code DATE_INVALIDE} ; 409 {@code BON_ANNULE}, {@code RECEPTION_EN_COURS}, {@code DEJA_RECU}. */
+    @org.springframework.web.bind.annotation.PostMapping("/{id}/livraison")
+    public ResponseEntity<cnm.prs.dto.ReceptionCommandeDto.DuBon> livraison(@PathVariable Long id,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) cnm.prs.dto.ReceptionCommandeDto.LivraisonRequest r) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(receptions.declarerLivraisonTitulaire(moi(), id, r));
+    }
+
+    /** ⚠️ MS-4 — les réceptions de son bon. */
+    @GetMapping("/{id}/receptions")
+    public cnm.prs.dto.ReceptionCommandeDto.DuBon receptions(@PathVariable Long id) {
+        return receptions.duBonDuTitulaire(moi(), id);
+    }
+
+    /** ⚠️ MS-4 — le PV signé (PDF, ou Word) ; 404 avant la signature. */
+    @GetMapping("/{id}/receptions/{idReception}/pv")
+    public ResponseEntity<byte[]> pv(@PathVariable Long id, @PathVariable Long idReception, @RequestParam(required = false) String format) {
+        boolean docx = "docx".equalsIgnoreCase(format);
+        return Telechargements.fichier("pv-reception-" + idReception + (docx ? ".docx" : ".pdf"), docx ? "docx" : "pdf",
+                receptions.pvDuTitulaire(moi(), id, idReception, docx));
     }
 
     private static String moi() {

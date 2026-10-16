@@ -8142,7 +8142,71 @@ Tables **`t_bon_commande`** (numérotée par contrat, unique sur `(ID_CONTRAT, N
   - `MONTANT_ESTIME_DEPASSE` : contrat-cadre, cumul au-delà de la valeur maximale estimée (décret art. 8) — signalé, jamais refusé.
     Pas de minimum pour le contrat-cadre (art. 34).
 - **Pas encore** : un plafond **en quantité** par article (seul le montant est contrôlé) ; le TTC (le bon porte le hors taxes) ;
-  la réception des livraisons (MS-4).
+  la réception des livraisons : lot MS-4, ci-dessous.
+
+
+### La réception des commandes — lot MS-4 — V127 ⚠️ 2026-10-16
+
+Demande front `frontend/docs/demande-backend-2026-10-15-marches-subsequents.md`, lot MS-4 (loi n° 2016-055, art. 13 ; CCAG
+fournitures, art. 22 ; réponse Q1 du pilote). Tables **`t_commission_reception`** (une par contrat en vigueur),
+**`t_commission_reception_membre`**, **`t_reception_commande`** (une ligne par réception d'un bon : `TYPE` `PROVISOIRE` |
+`DEFINITIVE`, `ETAT` `A_ETABLIR` → `PV_ETABLI` → `SIGNE`) et **`t_reception_signature`**. Aucune dépendance ajoutée. Distinct de
+`/api/receptions` (la réception des dossiers par la Commission).
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/contrats-en-vigueur/{id}/commission-reception | → `Commission` | 200, 403, 404 | PRMP et UGPM de la fiche, Commission, Administrateur |
+| PUT | /api/contrats-en-vigueur/{id}/commission-reception | `{ decision{ reference, date }, presideeParPrmp, membres[{ nom, prenom, email, fonction, president }] }` | 200 ; 400 champs invalides (`erreurs[]`) ; 403 ; 409 `PV_EN_SIGNATURE` | PRMP ou UGPM de la fiche |
+| POST | /api/receptions-commandes/bons/{idBon}/livraison | `{ dateLivraison, observations }` | 201 → `DuBon` ; 400 `DATE_INVALIDE` ; 403 ; 409 `BON_ANNULE`, `RECEPTION_EN_COURS`, `DEJA_RECU` | PRMP ou UGPM de la fiche |
+| POST | /api/candidat/bons-commande/{id}/livraison | idem | idem ; 404 hors de ses bons | CANDIDAT titulaire du bon |
+| GET | /api/receptions-commandes/bons/{idBon} | → `DuBon` | 200, 403, 404 | PRMP, UGPM, Commission, Administrateur ; membres de la commission de réception du contrat |
+| GET | /api/candidat/bons-commande/{id}/receptions | → `DuBon` | 200, 404 | CANDIDAT titulaire |
+| GET | /api/receptions-commandes/miennes | → `Mienne[]` | 200, 403 | membre d'une commission de réception (compte K…) |
+| GET | /api/receptions-commandes/{id} | → `ReceptionCommandeDto` | 200, 403, 404 | lecteurs du bon |
+| POST | /api/receptions-commandes/{id}/pv | `{ decision, dateReception, motif, reserves, montantRefaction, tauxJournalier }` | 200 ; 400 `DECISION_INVALIDE`, `MOTIF_OBLIGATOIRE`, `REFACTION_INVALIDE`, `DATE_INVALIDE`, `TAUX_INVALIDE` ; 403 ; 409 `COMMISSION_NON_DESIGNEE`, `PV_SIGNE` | le **président** de la commission |
+| POST | /api/receptions-commandes/{id}/signature | — | 200 ; 403 ; 409 `PV_NON_ETABLI`, `DEJA_SIGNE` | chaque signataire attendu |
+| GET | /api/receptions-commandes/{id}/pv[?format=docx] | → le PV (PDF ou Word) | 200, 403, 404 avant l'établissement | lecteurs du bon |
+| GET | /api/candidat/bons-commande/{id}/receptions/{idReception}/pv[?format=docx] | → le PV **signé** | 200, 404 avant la signature | CANDIDAT titulaire |
+| POST | /api/receptions-commandes/bons/{idBon}/definitive | — | 201 → `DuBon` ; 403 ; 409 `COMMISSION_NON_DESIGNEE`, `NON_RECU`, `GARANTIE_EN_COURS`, `SANS_GARANTIE`, `RECEPTION_EN_COURS` | le président |
+
+- **La commission** (Q1) : la décision de la PRMP (référence, date au plus tard aujourd'hui), saisie par la PRMP ou l'UGPM.
+  - `presideeParPrmp` (vrai par défaut) : la PRMP préside, aucun membre n'est président. Sinon, **un** membre préside et représente la
+    PRMP (loi art. 13-IV).
+  - Au moins deux personnes, la PRMP comprise quand elle préside ; adresses uniques.
+  - Chaque membre reçoit un **compte K…** (le même mécanisme que les comptes de la CAO : `CompteCaoService`, invitation par courriel
+    s'il n'est pas actif ; activation `POST /api/cao/activation`) et la notification **`COMMISSION_RECEPTION`**.
+  - Recomposée librement, sauf quand un PV attend ses signatures (409 `PV_EN_SIGNATURE`). Journal `COMMISSION_RECEPTION`.
+- **La livraison** : déclarée par le titulaire, ou par la PRMP ou l'UGPM. `dateLivraison` se situe entre l'émission du bon et
+  aujourd'hui (défaut : aujourd'hui). Elle ouvre une réception **provisoire** `A_ETABLIR` ; une seule réception à la fois. Notification
+  **`LIVRAISON_DECLAREE`** aux membres (et à la PRMP quand le titulaire déclare) ; journal `LIVRAISON`.
+- **Le PV** (président seul ; rétabli tant qu'il n'est pas signé, les signatures repartent alors de zéro) :
+  - `decision` : `RECEPTION`, `AJOURNEMENT`, `REFACTION` ou `REJET` (CCAG fournitures, art. 22). La réception définitive n'admet que
+    `RECEPTION` ou `AJOURNEMENT`. Tout sauf `RECEPTION` se motive. Une réfaction porte un `montantRefaction` positif, inférieur au
+    montant du bon ; `montantReceptionne` = montant du bon − réfaction.
+  - `dateReception` : entre la livraison (ou l'ouverture de la définitive) et aujourd'hui ; défaut aujourd'hui.
+  - **Retard** : `echeanceLivraison` = émission du bon (sa notification) + le délai du bon, lu en jours, semaines ou mois (« 10 jours ») ;
+    `joursRetard` = livraison − échéance. Illisible : non calculé (`penaliteNote` le dit).
+  - **Pénalité indicative**, jamais retenue : montant du bon × `tauxJournalier` (‰, **⚠️ hypothèse : 1 ‰ à défaut**, la pénalité
+    journalière du CCAP courant) × jours, plafonnée à `B09-PR-02` (marché à commandes, s'il est saisi), sinon au plafond légal de la
+    catégorie (15 %, 10 % en prestations intellectuelles). Contrat-cadre aux pénalités « Non applicables » (`B07-PE-01`) : aucune.
+    Seulement pour une livraison acceptée (réception ou réfaction).
+  - Notification **`RECEPTION_A_SIGNER`** à chaque signataire ; journal `PV_RECEPTION`.
+- **Les signatures** : `attendus[]` = chaque membre, et `PRMP` quand elle préside (la PRMP de la fiche signe avec son compte). La
+  dernière signature passe le PV `SIGNE`, régénère le PV (signatures datées) et notifie **`RECEPTION_PRONONCEE`** au titulaire et à
+  la PRMP ; journal `RECEPTION`.
+- **L'état de réception du bon** (`DuBon.etatReception`) : `A_LIVRER`, `EN_RECEPTION`, `AJOURNE` et `REJETE` (une nouvelle livraison
+  est attendue), `RECU_PROVISOIRE` (la garantie court), `EN_RECEPTION_DEFINITIVE`, `RECU_DEFINITIF`, `ANNULE`.
+  - Délai de garantie : `B09-GP-03` (contrat-cadre) ou `B09-DG-01` (marché à commandes), en mois, depuis la réception provisoire
+    prononcée (`garantieJusquau`). **Sans délai de garantie, la réception provisoire vaut définitive** (`RECU_DEFINITIF`).
+  - Garantie écoulée : alerte **`RECEPTION_DEFINITIVE_A_PRONONCER`** ; le président ouvre alors la réception définitive
+    (`…/definitive`), qui suit le même circuit (PV, signatures). Une définitive ajournée laisse le bon `RECU_PROVISOIRE`.
+- **`ReceptionCommandeDto`** : `{ id, idBon, numeroBon, idContrat, idDmc, lot, type, etat, dateLivraison, livraisonObservations,
+  declareeLe, declareePar, decision, dateReception, motif, reserves, montantBon, montantRefaction, montantReceptionne,
+  echeanceLivraison, joursRetard, tauxPenalite, plafondPenalite, penaliteIndicative, penaliteNote, etabliLe, etabliPar, pvDisponible,
+  attendus[{ signataire, nom, president, signeLe }], signeLe }`.
+- **`DuBon`** : `{ idBon, numero, objet, titulaire, etatReception, garantieMois, garantieJusquau, alertes[], receptions[] }` ;
+  **`Mienne`** : `{ reception, objetBon, titulaire, president, aEtablir, aSigner }`.
+- **Pas encore** : la réception partielle (par article) ; la retenue effective des pénalités (hors de l'application, H4).
 
 
 ### L'attribution, lot 2, tranche 2d-3 : la déclaration sans suite — V93 ⚠️ 2026-10-08

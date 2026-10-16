@@ -211,6 +211,14 @@ public enum TypeNotification {
     BON_COMMANDE_ANNULE,
     /** ⚠️ MS-3 — l'accusé de réception du bon par le titulaire : vers la PRMP. */
     BON_COMMANDE_ACCUSE,
+    /** ⚠️ 2026-10-16 (marchés subséquents, MS-4) — désigné membre d'une commission de réception : vers le membre. */
+    COMMISSION_RECEPTION,
+    /** ⚠️ MS-4 — une livraison déclarée, la réception à établir : vers la PRMP et les membres de la commission. */
+    LIVRAISON_DECLAREE,
+    /** ⚠️ MS-4 — le PV de réception établi : vers chaque signataire. */
+    RECEPTION_A_SIGNER,
+    /** ⚠️ MS-4 — la réception prononcée (PV signé) : vers le titulaire et la PRMP. */
+    RECEPTION_PRONONCEE,
     /** ⚠️ 2026-10-08 (lot 3 PI, PI-d1, §B3) — la seconde séance est ouverte : vers chaque candidat dont l'enveloppe financière s'ouvre (invité à y assister). */
     SEANCE_FINANCIERE,
     /** ⚠️ 2026-10-08 (lot 3 PI, PI-d2a, §B6) — la PRMP ouvre une négociation : vers le candidat classé invité à négocier (date, lieu). */

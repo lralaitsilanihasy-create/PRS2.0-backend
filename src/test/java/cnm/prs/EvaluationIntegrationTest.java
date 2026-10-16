@@ -1580,6 +1580,116 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("CONTRAT_ECHU"));
     }
 
+    @Autowired private cnm.prs.repository.BonCommandeRepository bonRepository;
+    @Autowired private cnm.prs.repository.ReceptionCommandeRepository receptionCommandeRepository;
+
+    @Test
+    @DisplayName("MS-4 (16/10, réception, V127, loi 2016-055 art. 13) : la commission de réception désignée par la PRMP ; la livraison "
+            + "déclarée par le titulaire ; le PV établi par le président (retard et pénalité indicative), signé par chacun ; sans garantie, la "
+            + "réception provisoire vaut définitive")
+    void receptionCommandes() throws Exception {
+        String a = offre("C900000051", "1111222333", "BTP Alpha", 1, "INTACTE", null, "12500000");
+        cnm.prs.entity.Attribution notifiee = new cnm.prs.entity.Attribution();
+        notifiee.setIdDmc(idDmc);
+        notifiee.setLot(1);
+        notifiee.setEtat("NOTIFIE");
+        notifiee.setIdOffreAttribuee(a);
+        attributionRepository.save(notifiee);
+        long idContrat = contrat("A_COMMANDE", aujourdhui.minusMonths(1), null, null, null);
+        String bon = mvc.perform(post("/api/contrats-en-vigueur/" + idContrat + "/bons-commande").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"objet\":\"Ramettes de papier\",\"delaiLivraison\":\"10 jours\",\"lignes\":[{\"designation\":\"Ramette A4\",\"quantite\":100,"
+                        + "\"prixUnitaire\":20000}]}")).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        long idBon = JsonPath.<Number>read(bon, "$.id").longValue();
+        cnm.prs.entity.BonCommande b = bonRepository.findById(idBon).orElseThrow();
+        b.setEmisLe(LocalDateTime.now().minusDays(20));   // notifié il y a 20 jours, délai de 10 jours : 10 jours de retard
+        bonRepository.save(b);
+
+        // La commission (Q1) : décision de la PRMP, saisie par l'UGPM ; la PRMP préside.
+        String url = "/api/contrats-en-vigueur/" + idContrat + "/commission-reception";
+        String membres = "\"membres\":[{\"nom\":\"Rabe\",\"prenom\":\"Hery\",\"email\":\"r1@rec.mg\",\"fonction\":\"Magasinier\"%s},"
+                + "{\"nom\":\"Rasoa\",\"prenom\":\"Nirina\",\"email\":\"r2@rec.mg\"}]";
+        String decision = "\"decision\":{\"reference\":\"DEC-REC-01\",\"date\":\"" + aujourdhui + "\"}";
+        mvc.perform(put(url).header("Authorization", tokenUgpm).contentType(JSON).content("{" + decision + "," + String.format(membres, ",\"president\":true") + "}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(put(url).header("Authorization", jetonA).contentType(JSON).content("{}")).andExpect(status().isForbidden());
+        String com = mvc.perform(put(url).header("Authorization", tokenUgpm).contentType(JSON).content("{" + decision + "," + String.format(membres, "") + "}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.presideeParPrmp").value(true)).andExpect(jsonPath("$.membres.length()").value(2))
+                .andReturn().getResponse().getContentAsString();
+        List<String> idComptes = JsonPath.read(com, "$.membres[*].idCompte");
+        String jetonR1 = bearer("r1@rec.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, idComptes.get(0), null);
+        String jetonR2 = bearer("r2@rec.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, idComptes.get(1), null);
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "COMMISSION_RECEPTION".equals(n.getTypeNotif())).hasSize(2);
+
+        // La livraison, déclarée par le titulaire ; une seule réception en cours.
+        String livraison = "/api/candidat/bons-commande/" + idBon + "/livraison";
+        String livree = mvc.perform(post(livraison).header("Authorization", jetonA).contentType(JSON).content("{\"observations\":\"Livré au magasin\"}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.etatReception").value("EN_RECEPTION")).andReturn().getResponse().getContentAsString();
+        long idReception = JsonPath.<Number>read(livree, "$.receptions[0].id").longValue();
+        mvc.perform(post(livraison).header("Authorization", jetonA).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RECEPTION_EN_COURS"));
+        mvc.perform(get("/api/receptions-commandes/miennes").header("Authorization", jetonR1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].reception.id").value(idReception)).andExpect(jsonPath("$[0].aSigner").value(false));
+
+        // Le PV : par le président (la PRMP) ; le retard et la pénalité indicative (2 000 000 × 1 ‰ × 10 jours).
+        String pv = "/api/receptions-commandes/" + idReception;
+        mvc.perform(post(pv + "/pv").header("Authorization", jetonR1).contentType(JSON).content("{\"decision\":\"RECEPTION\"}")).andExpect(status().isForbidden());
+        mvc.perform(post(pv + "/pv").header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"REJET\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        mvc.perform(post(pv + "/pv").header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"RECEPTION\",\"reserves\":\"Deux ramettes abîmées\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("PV_ETABLI")).andExpect(jsonPath("$.joursRetard").value(10))
+                .andExpect(jsonPath("$.penaliteIndicative").value(20000)).andExpect(jsonPath("$.attendus.length()").value(3));
+        String texte = texteDuPdf(mvc.perform(get(pv + "/pv").header("Authorization", jetonR2)).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(texte).contains("PROCÈS-VERBAL DE RÉCEPTION PROVISOIRE", "décision n° DEC-REC-01", "Retard constaté : 10 jour(s)", "20 000",
+                "Réserves : Deux ramettes abîmées", "en attente de signature");
+        mvc.perform(get("/api/candidat/bons-commande/" + idBon + "/receptions/" + idReception + "/pv").header("Authorization", jetonA))
+                .andExpect(status().isNotFound());   // pas avant la signature
+
+        // Les signatures : chacun la sienne ; la dernière prononce la réception.
+        mvc.perform(post(pv + "/signature").header("Authorization", jetonR1)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("PV_ETABLI"));
+        mvc.perform(post(pv + "/signature").header("Authorization", jetonR1)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_SIGNE"));
+        mvc.perform(post(pv + "/signature").header("Authorization", tokenUgpm)).andExpect(status().isForbidden());
+        mvc.perform(post(pv + "/signature").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(post(pv + "/signature").header("Authorization", jetonR2)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("SIGNE"))
+                .andExpect(jsonPath("$.montantReceptionne").value(2000000));
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "RECEPTION_PRONONCEE".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireRef).contains("C900000051");
+        // Le délai de garantie de la fiche (B09-DG-01) court : réception provisoire seulement.
+        String recu = mvc.perform(get("/api/candidat/bons-commande/" + idBon + "/receptions").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etatReception").value("RECU_PROVISOIRE")).andReturn().getResponse().getContentAsString();
+        int garantie = JsonPath.<Integer>read(recu, "$.garantieMois");
+        assertThat(JsonPath.<String>read(recu, "$.garantieJusquau")).isEqualTo(aujourdhui.plusMonths(garantie).toString());
+        mvc.perform(get("/api/candidat/bons-commande/" + idBon + "/receptions/" + idReception + "/pv").header("Authorization", jetonA))
+                .andExpect(status().isOk());
+        mvc.perform(post(livraison).header("Authorization", jetonA).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DEJA_RECU"));
+        String definitive = "/api/receptions-commandes/bons/" + idBon + "/definitive";
+        mvc.perform(post(definitive).header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("GARANTIE_EN_COURS"));
+        mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", jetonM1)).andExpect(status().isForbidden());
+
+        // La garantie écoulée : l'alerte, puis la réception définitive, établie et signée.
+        cnm.prs.entity.ReceptionCommande provisoire = receptionCommandeRepository.findById(idReception).orElseThrow();
+        provisoire.setDateReception(aujourdhui.minusMonths(garantie).minusDays(1));
+        receptionCommandeRepository.save(provisoire);
+        mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", jetonR1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.alertes[0]").value("RECEPTION_DEFINITIVE_A_PRONONCER"));
+        mvc.perform(post(definitive).header("Authorization", jetonR1)).andExpect(status().isForbidden());
+        long idDefinitive = JsonPath.<Number>read(mvc.perform(post(definitive).header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.etatReception").value("EN_RECEPTION_DEFINITIVE")).andReturn().getResponse().getContentAsString(),
+                "$.receptions[1].id").longValue();
+        String pvd = "/api/receptions-commandes/" + idDefinitive;
+        mvc.perform(post(pvd + "/pv").header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"REJET\",\"motif\":\"x\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DECISION_INVALIDE"));
+        mvc.perform(post(pvd + "/pv").header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"RECEPTION\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.penaliteIndicative").value(org.hamcrest.Matchers.nullValue()));
+        for (String j : List.of(tokenPrmp, jetonR1, jetonR2)) {
+            mvc.perform(post(pvd + "/signature").header("Authorization", j)).andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etatReception").value("RECU_DEFINITIF")).andExpect(jsonPath("$.alertes.length()").value(0));
+    }
+
     @Test
     @DisplayName("Tranche MT (15/10, contrat-cadre multi-attributaire, décret 2019-1064 art. 14-17) : la post-qualification décide chaque "
             + "offre classée sans s'arrêter à la première qualifiée ; un seul titulaire qualifié est proposé avec le constat de l'art. 17 ; "

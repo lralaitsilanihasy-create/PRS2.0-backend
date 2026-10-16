@@ -674,6 +674,25 @@ subséquent — lot MS-2*.
 - **Un bon s'annule par une décision motivée** de la PRMP. Le titulaire en est notifié, et un bon annulé ne compte plus dans les
   cumuls.
 
+#### La réception des commandes (2026-10-16)
+
+⚠️ **Toute commande livrée est reçue par une commission de réception** (loi n° 2016-055, art. 13). Contrat : `docs/api-endpoints.md`,
+§ *La réception des commandes — lot MS-4*.
+
+- **La commission est désignée par décision de la PRMP**, par contrat en vigueur, comme la CAO (réponse Q1 du pilote). La décision
+  est saisie par la PRMP ou son UGPM. La commission est **présidée par la PRMP ou par un membre qui la représente**, et compte au
+  moins deux personnes. Chaque membre reçoit un compte pour signer.
+- **La livraison se déclare** par le titulaire dans son espace, ou par la PRMP ou l'UGPM. Une seule réception est en cours à la fois.
+- **Le président établit le PV** : réception, ajournement, réfaction ou rejet (CCAG fournitures, art. 22). Tout autre choix que la
+  réception se motive ; la réfaction réduit le montant reçu. **Chaque membre signe le PV avec son compte**, et la PRMP aussi quand
+  elle préside. La dernière signature prononce la décision, qui est notifiée au titulaire et à la PRMP.
+- **Un ajournement ou un rejet appelle une nouvelle livraison**, puis une nouvelle réception.
+- **Le retard et la pénalité sont montrés à titre indicatif, jamais retenus.** Le retard court du terme du délai du bon (sa
+  notification + le délai). ⚠️ Hypothèse : la pénalité journalière vaut 1 ‰ du montant du bon, modifiable par le président, plafonnée
+  comme le prévoit le marché (à défaut, au plafond légal). La retenue relève de la PRMP, hors de l'application.
+- **La réception provisoire, puis la définitive au terme du délai de garantie** du contrat. Sans délai de garantie, la réception
+  provisoire vaut définitive. Le délai écoulé, la réception définitive est signalée comme à prononcer.
+
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 
 ⚠️ **Un marché de fournitures, à quantité fixe ou à commande, produit à son tour les documents types de l'ARMP
