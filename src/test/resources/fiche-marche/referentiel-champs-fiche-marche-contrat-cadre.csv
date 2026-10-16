@@ -139,6 +139,7 @@ B06-AN-03;Voies et délais de recours (instance chargée des recours);TEXTE_LONG
 B02-SG-04;Personne habilitée à signer le contrat-cadre (nom, délégation, date de la décision);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B07-MA-06;Critères et sous-critères pondérés de la remise en concurrence;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B07-MA-07;Règles de détermination du prix moyen du marché (décret n° 2019-1064, article 23);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
+B07-MA-08;Nombre maximal de titulaires du contrat-cadre (laisser vide : tous les qualifiés peuvent être retenus);NOMBRE;SAISIE;AUCUN;;CONTRAT_CADRE;attributaires = MULTI;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B05-PM-04;Plafond d'augmentation des prix à chaque complétude ou remise en concurrence (%);POURCENTAGE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B05-PM-05;Catalogue joint au contrat-cadre;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B05-PM-06;Indice d'actualisation des prix des marchés subséquents (laisser vide sans actualisation);TEXTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;

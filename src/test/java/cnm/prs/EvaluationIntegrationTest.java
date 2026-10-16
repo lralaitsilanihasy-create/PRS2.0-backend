@@ -1291,6 +1291,65 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(pdf).contains("La commission propose de retenir comme titulaires du contrat-cadre les 2 candidat(s) qualifié(s)",
                 "– rang 1 : BTP Gamma (offre n° 3)", "– rang 3 : BTP Alpha (offre n° 1)")
                 .doesNotContain("La commission propose d'attribuer le marché à", "qu'un seul titulaire");
+
+        // ⚠️ MT-b1 (V122) — l'attribution à plusieurs titulaires : le rapport signé, le dossier de marché et son projet de contrat-cadre.
+        mvc.perform(post(base + "/rapport/signer").header("Authorization", jetonM1).contentType(JSON).content("{}")).andExpect(status().isOk());
+        mvc.perform(post(base + "/rapport/empechement").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"im\":\"" + comptes.get(1) + "\",\"motif\":\"En mission\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("CLOSE"));
+        typeDossierRepository.save(new cnm.prs.entity.TypeDossier("DDM", "Dossier de Marché"));
+        sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier("MAOO", "Marché sur Appel d'Offres Ouvert", "DDM"));
+        for (String[] t : List.of(new String[] { "Projet de marché signé", "PROJET_MARCHE" }, new String[] { "Cahier des charges", "CAHIER_CHARGES" },
+                new String[] { "Devis estimatif détaillé", "DEVIS_ESTIMATIF" }, new String[] { "Procès-verbal d'ouverture des offres", "PV_OUVERTURE" },
+                new String[] { "Rapport d'analyse des offres", "RAPPORT_ANALYSE" })) {
+            cnm.prs.entity.TypePieceJointe tp = typePieceJointeRepository.findById(seedTypePiece(t[0], true, "DDM", 1)).orElseThrow();
+            tp.setCode(t[1]);
+            typePieceJointeRepository.save(tp);
+        }
+        String att = base.replace("/evaluation", "/attribution");
+        int idDossier = JsonPath.read(mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString(), "$.lots[0].dossierMarche.idDossier");
+        String projet = texteDuPdf(mvc.perform(get(att + "/lots/1/projet").header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(projet).contains("PROJET DE CONTRAT-CADRE", "et les 2 titulaire(s) suivant(s)", "BTP Gamma, NIF 7777888999", "BTP Alpha, NIF 1111222333",
+                "BTP Gamma : offre indicative de 9 000 000 Ariary hors taxes", "décret n° 2019-1064, art. 16", "Pour BTP Gamma :", "Pour BTP Alpha :")
+                .doesNotContain("PROJET DE MARCHÉ");
+        receptionRepository.save(reception(9950, idDossier, "CTRCC1", true));
+        dispatchRepository.save(dispatch(9950, 9950, "CTRCC1", "CTRMEM", "CTRPRE"));
+        examenRepository.save(examen(9950, 9950, "CTRMEM"));
+        seedPvSigne(9950, 9950);
+
+        // La PRMP retient parmi les proposés seulement (art. 14) ; une partie seulement se motive ; sans corps : tous les proposés.
+        mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"titulaires\":[\"" + b + "\"]}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("OFFRE_NON_PROPOSEE"))
+                .andExpect(jsonPath("$.details.offres[0]").value(b));
+        mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"titulaires\":[\"" + c + "\"]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].etat").value("ATTRIBUE")).andExpect(jsonPath("$.lots[0].attributaire.idOffre").value(c))
+                .andExpect(jsonPath("$.lots[0].titulaires.length()").value(2))
+                .andExpect(jsonPath("$.lots[0].titulaires[0].idOffre").value(c)).andExpect(jsonPath("$.lots[0].titulaires[1].idOffre").value(a))
+                .andExpect(jsonPath("$.lots[0].titulaires[1].montant").value(12500000));
+
+        // L'information : une lettre d'attribution à chaque titulaire, la liste des titulaires au candidat non retenu.
+        String info = mvc.perform(post(att + "/lots/1/informer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateAffichage\":\"" + aujourdhui + "\"}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(info, "$.lots[0].information.lettres[?(@.type == 'ATTRIBUTION')].idOffre")).containsExactlyInAnyOrder(a, c);
+        assertThat(JsonPath.<List<String>>read(info, "$.lots[0].information.lettres[?(@.type == 'NON_RETENU')].idOffre")).containsExactly(b);
+        String lettreA = texteDuPdf(mvc.perform(get(att + "/lots/1/lettres/" + a).header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(lettreA).contains("LETTRE D'ATTRIBUTION DU CONTRAT-CADRE", "Le contrat-cadre compte 2 titulaire(s) : BTP Gamma (offre n° 3) ; "
+                + "BTP Alpha (offre n° 1)", "offre indicative est de 12 500 000 Ariary hors taxes", "par chacun des titulaires");
+        String lettreB = texteDuPdf(mvc.perform(get("/api/candidat/offres/" + b + "/resultat/lettre").header("Authorization", jetonB))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(lettreB).contains("LETTRE D'INFORMATION DU REJET DE L'OFFRE", "Le contrat-cadre est attribué aux 2 titulaire(s) suivant(s) : "
+                + "BTP Gamma (offre n° 3) ; BTP Alpha (offre n° 1)", "décret n° 2019-1064, art. 15");
+        mvc.perform(get("/api/candidat/offres/" + a + "/resultat").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.retenu").value(true)).andExpect(jsonPath("$.attributaire").value("BTP Gamma ; BTP Alpha"))
+                .andExpect(jsonPath("$.montant").value(12500000));
+        mvc.perform(get("/api/candidat/offres/" + b + "/resultat").header("Authorization", jetonB)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.retenu").value(false)).andExpect(jsonPath("$.attributaire").value("BTP Gamma ; BTP Alpha"))
+                .andExpect(jsonPath("$.montant").value(org.hamcrest.Matchers.nullValue()));
     }
 
     private ResultActions arreter(String etape) throws Exception {

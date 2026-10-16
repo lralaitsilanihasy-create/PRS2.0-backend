@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -116,6 +118,10 @@ public class AttributionService {
     private final DelaiAttenteCalcul delais;
     /** ⚠️ R7 (§B2 ; V109) — la pièce « Questions et réponses » du dossier de marché (fournisseur paresseux : pas de cycle). */
     private final org.springframework.beans.factory.ObjectProvider<QuestionsCandidatService> questionsCandidats;
+    /** ⚠️ 2026-10-15 (tranche MT-b1, V122) — les titulaires retenus d'un contrat-cadre multi-attributaire. */
+    private final cnm.prs.repository.AttributionTitulaireRepository titulaires;
+    /** ⚠️ MT-b1 (réponse 4 du pilote) — le nombre maximal facultatif de titulaires du contrat-cadre, saisi au DAO. */
+    static final String MAXIMUM_TITULAIRES = "B07-MA-08";
 
     public AttributionService(AttributionRepository attributions, EvaluationService evaluation, SeanceService seance, SaisieService saisie,
             ValeursPpmService valeursPpm, FicheMarcheService fiches, EntrepriseCandidatService entreprises, GenerateurDocumentsFiche generateur,
@@ -126,7 +132,9 @@ public class AttributionService {
             cnm.prs.repository.PrmpRepository prmpRepository, NotificationService notifications, CeremonieService ceremonies,
             ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution, ResultatsPi resultatsPi,
             cnm.prs.repository.AttributionRepriseRepository reprises, SansSuiteService sansSuite, ProjetMarcheService projetMarche,
-            DelaiAttenteCalcul delais, org.springframework.beans.factory.ObjectProvider<QuestionsCandidatService> questionsCandidats) {
+            DelaiAttenteCalcul delais, org.springframework.beans.factory.ObjectProvider<QuestionsCandidatService> questionsCandidats,
+            cnm.prs.repository.AttributionTitulaireRepository titulaires) {
+        this.titulaires = titulaires;
         this.questionsCandidats = questionsCandidats;
         this.delais = delais;
         this.projetMarche = projetMarche;
@@ -174,7 +182,7 @@ public class AttributionService {
             Attribution engage = attributions.findById(new Attribution.Cle(idDmc, l.lot())).filter(x -> x.getAttribueLe() != null).orElse(null);
             if (!Evaluation.CLOSE.equals(ev.etat()) && engage == null) {
                 lots.add(new AttributionDto.LotAttribution(l.lot(), EN_EVALUATION, null, null, false, null, null, null, List.of(), null, List.of(),
-                        null, null, null, null, null, null, null, reprises(idDmc, l.lot()), null));
+                        null, null, null, null, null, null, null, reprises(idDmc, l.lot()), null, List.of()));
                 continue;
             }
             Attribution a = attributions.findById(new Attribution.Cle(idDmc, l.lot())).orElse(null);
@@ -194,9 +202,28 @@ public class AttributionService {
                     s.recours(), s.signature(), s.enregistrement(), s.notification(), s.avis(), s.pieces(), s.retrait(),
                     a == null || a.getInfructueuxLe() == null ? null : new AttributionDto.Infructuosite(a.getInfructueuxLe(), a.getInfructueuxPar(),
                             a.getMotifInfructuosite(), a.getDecisionReference(), a.getDecisionDate(), a.getSuite()),
-                    reprises(idDmc, l.lot()), s.approbation()));
+                    reprises(idDmc, l.lot()), s.approbation(), titulairesDto(idDmc, l.lot())));
         }
         return new AttributionDto(idDmc, lots);
+    }
+
+    /** ⚠️ MT-b1 — les titulaires retenus du lot, pour la vue : offre, numéro, candidat et valeurs figées, dans l'ordre du classement. */
+    private List<EvaluationDto.Titulaire> titulairesDto(Long idDmc, Integer lot) {
+        return titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(idDmc, lot).stream().map(t -> {
+            Offre o = offres.findById(t.getIdOffre()).orElse(null);
+            return new EvaluationDto.Titulaire(t.getIdOffre(), o == null ? null : o.getNumero(), o == null ? null : o.getRaisonSociale(),
+                    t.getMontant(), t.getMontantTtc(), t.getDelai(), t.getRang());
+        }).toList();
+    }
+
+    /**
+     * ⚠️ MT-b1 — les offres retenues du lot : les titulaires d'un contrat-cadre multi-attributaire, sinon l'attributaire seul (vide avant
+     * l'attribution).
+     */
+    private List<String> offresRetenues(Attribution a) {
+        List<String> ids = titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(a.getIdDmc(), a.getLot()).stream()
+                .map(cnm.prs.entity.AttributionTitulaire::getIdOffre).toList();
+        return !ids.isEmpty() ? ids : a.getIdOffreAttribuee() == null ? List.of() : List.of(a.getIdOffreAttribuee());
     }
 
     // ------------------------------------------------------------------ ⚠️ tranche 2b, §B3 le choix de l'attributaire (art. 35-VII)
@@ -228,6 +255,10 @@ public class AttributionService {
             throw new BusinessRuleException("La Commission a rendu un avis défavorable sur le dossier de marché : le lot ne s'attribue pas.",
                     "AVIS_DEFAVORABLE");
         }
+        EvaluationDto.Proposition proposee = lotEvalue(idDmc, lot).proposition();
+        if (proposee != null && proposee.titulaires() != null && !proposee.titulaires().isEmpty()) {
+            return attribuerTitulaires(idDmc, lot, a, dm, proposee, r);
+        }
         String demandee = r == null ? null : nettoyer(r.idOffre());
         if (demandee != null && !demandee.equals(a.getIdOffreProposee())) {
             throw new BusinessRuleException("Le marché s'attribue à l'offre proposée par la commission d'appel d'offres, et à elle seule.",
@@ -248,6 +279,73 @@ public class AttributionService {
                 + offre.getRaisonSociale() + ")" + (a.getMontant() == null ? "" : ", " + FormulairesEnLigne.lisible(a.getMontant()) + " Ariary HT")
                 + ", avis " + dm.avis() + " de la Commission" + (a.getMotifAttribution() == null ? "" : " — " + a.getMotifAttribution()));
         return lire(idDmc);
+    }
+
+    /**
+     * ⚠️ 2026-10-15 (tranche MT-b1 ; décret n° 2019-1064, art. 13-14 ; réponses du pilote du 15/10) — un contrat-cadre multi-attributaire :
+     * la PRMP retient les titulaires parmi ceux que la commission propose, tout ou partie ({@code titulaires} absent : tous). 409
+     * {@code OFFRE_NON_PROPOSEE} ({@code details.offres}) ; 400 {@code TITULAIRES_TROP_NOMBREUX} (au-delà du maximum du DAO,
+     * {@code B07-MA-08}), {@code MOTIF_OBLIGATOIRE} (une partie seulement retenue). Une ligne par titulaire (V122) ; le lot garde le
+     * premier titulaire comme attributaire de tête.
+     */
+    private AttributionDto attribuerTitulaires(Long idDmc, Integer lot, Attribution a, AttributionDto.DossierMarche dm,
+            EvaluationDto.Proposition p, AttributionDto.AttribuerRequest r) {
+        Map<String, EvaluationDto.Titulaire> proposes = new LinkedHashMap<>();
+        p.titulaires().forEach(t -> proposes.put(t.idOffre(), t));
+        List<String> demandes = r != null && r.titulaires() != null && !r.titulaires().isEmpty()
+                ? r.titulaires().stream().map(AttributionService::nettoyer).filter(Objects::nonNull).distinct().toList()
+                : r != null && nettoyer(r.idOffre()) != null ? List.of(nettoyer(r.idOffre())) : new ArrayList<>(proposes.keySet());
+        List<String> inconnues = demandes.stream().filter(x -> !proposes.containsKey(x)).toList();
+        if (!inconnues.isEmpty() || demandes.isEmpty()) {
+            throw new BusinessRuleException("Les titulaires se retiennent parmi les candidats qualifiés que la commission propose (décret n° "
+                    + "2019-1064, art. 14).", "OFFRE_NON_PROPOSEE", null, Map.of("offres", inconnues));
+        }
+        Integer maximum = maximumTitulaires(idDmc);
+        if (maximum != null && demandes.size() > maximum) {
+            throw new BadRequestException("Le dossier d'appel d'offres limite le contrat-cadre à " + maximum + " titulaire(s) : " + demandes.size()
+                    + " retenu(s).", "TITULAIRES_TROP_NOMBREUX");
+        }
+        String motif = r == null ? null : nettoyer(r.motif());
+        if (demandes.size() < proposes.size() && motif == null) {
+            throw new BadRequestException("Retenir une partie seulement des candidats qualifiés se motive.", "MOTIF_OBLIGATOIRE");
+        }
+        List<EvaluationDto.Titulaire> retenus = proposes.values().stream().filter(t -> demandes.contains(t.idOffre())).toList();
+        LocalDateTime le = maintenant();
+        String par = acteur();
+        EvaluationDto.Titulaire tete = retenus.get(0);
+        a.setIdOffreAttribuee(tete.idOffre());
+        a.setAttribueLe(le);
+        a.setAttribuePar(par);
+        a.setMotifAttribution(motif);
+        a.setMontant(tete.montant());
+        a.setMontantTtc(tete.montantTtc());
+        a.setDelai(tete.delai());
+        a.setEtat(Attribution.ATTRIBUE);
+        attributions.save(a);
+        for (EvaluationDto.Titulaire t : retenus) {
+            cnm.prs.entity.AttributionTitulaire x = new cnm.prs.entity.AttributionTitulaire();
+            x.setIdDmc(idDmc);
+            x.setLot(lot);
+            x.setIdOffre(t.idOffre());
+            x.setRang(t.rang());
+            x.setMontant(t.montant());
+            x.setMontantTtc(t.montantTtc());
+            x.setDelai(t.delai());
+            x.setRetenuLe(le);
+            x.setRetenuPar(par);
+            titulaires.save(x);
+        }
+        evaluation.tracerAttribution(idDmc, "ATTRIBUTION", "Lot " + lot + " : contrat-cadre attribué à " + retenus.size() + " titulaire(s) — "
+                + retenus.stream().map(t -> "offre n° " + t.numero() + " (" + t.candidat() + ")").collect(Collectors.joining(", "))
+                + (retenus.size() < proposes.size() ? ", sur " + proposes.size() + " qualifié(s) proposé(s)" : "") + ", avis " + dm.avis()
+                + " de la Commission" + (motif == null ? "" : " — " + motif));
+        return lire(idDmc);
+    }
+
+    /** ⚠️ MT-b1 — le nombre maximal de titulaires du DAO ({@code B07-MA-08}), ou {@code null} (non saisi : tous les qualifiés). */
+    private Integer maximumTitulaires(Long idDmc) {
+        return fiches.etatValide(idDmc).map(v -> ControlesFicheMarche.nombre(v.valeur(MAXIMUM_TITULAIRES)))
+                .filter(n -> n.signum() > 0).map(java.math.BigDecimal::intValue).orElse(null);
     }
 
     // ------------------------------------------------------------------ ⚠️ tranche 2b, §B4.1 l'information des candidats (art. 52-I, 78)
@@ -293,9 +391,12 @@ public class AttributionService {
         boolean pi = evaluation.estPi(idDmc);
         Offre attributaire = offres.findById(a.getIdOffreAttribuee()).orElseThrow();
         AttributionDto.DelaiAttente delai = delaiAttente(a);
+        // ⚠️ MT-b1 — un contrat-cadre multi-attributaire : chaque titulaire retenu reçoit la lettre d'attribution.
+        List<cnm.prs.entity.AttributionTitulaire> tit = titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(idDmc, lot);
+        List<String> retenues = offresRetenues(a);
         int n = 0;
         for (EvaluationDto.OffreEvaluee o : l.offres()) {
-            boolean retenue = o.idOffre().equals(a.getIdOffreAttribuee());
+            boolean retenue = retenues.contains(o.idOffre());
             Offre offre = offres.findById(o.idOffre()).orElse(null);
             if (offre == null) {
                 continue;
@@ -308,7 +409,7 @@ public class AttributionService {
             // ⚠️ PI-d2b — une proposition PI retenue à l'examen préliminaire : sa note technique et son classement.
             x.setMotif(retenue ? null : pi && o.ecartee() == null ? resultatsPi.motifRejet(idDmc, lot, o.idOffre()) : motifRejet(o));
             x.setProduiteLe(maintenant);
-            for (GenerateurDocumentsFiche.Fichier f : generateur.generer(lettre(entete, a, x, offre, attributaire, delai))) {
+            for (GenerateurDocumentsFiche.Fichier f : generateur.generer(lettre(entete, a, x, offre, attributaire, delai, tit))) {
                 if ("pdf".equals(f.extension())) {
                     x.setPdf(f.contenu());
                 } else if ("docx".equals(f.extension())) {
@@ -321,7 +422,8 @@ public class AttributionService {
             lettres.save(x);
             notifications.emettreCandidat(retenue ? TypeNotification.ATTRIBUTION : TypeNotification.RESULTAT_DISPONIBLE, offre.getIdCandidat(),
                     email, idDmc.intValue(), TypeObjet.PROCEDURE, retenue ? "Attribution du marché" : "Résultat de l'appel d'offres",
-                    retenue ? "Votre offre n° " + offre.getNumero() + " est retenue" + entete.surLot() + " de la procédure « " + entete.objet()
+                    retenue ? "Votre offre n° " + offre.getNumero() + " est retenue" + (tit.isEmpty() ? "" : " : vous êtes titulaire du contrat-cadre")
+                            + entete.surLot() + " de la procédure « " + entete.objet()
                             + " ». La lettre d'attribution, signée de la PRMP, est disponible dans votre espace (Mes offres)."
                             : "Votre offre n° " + offre.getNumero() + entete.surLot() + " de la procédure « " + entete.objet() + " » n'est pas "
                                     + "retenue. La lettre et ses motifs sont disponibles dans votre espace (Mes offres) ; vous pouvez y demander "
@@ -356,6 +458,16 @@ public class AttributionService {
         boolean retenueParMoi = idOffre.equals(a.getIdOffreAttribuee());
         execution.accuserNotification(a, idOffre);
         AttributionDto.DelaiAttente d = delaiAttente(a);
+        // ⚠️ MT-b1 — un contrat-cadre multi-attributaire : les titulaires nommés ; le montant est celui de l'offre du titulaire qui consulte.
+        List<cnm.prs.entity.AttributionTitulaire> tit = titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(a.getIdDmc(), a.getLot());
+        if (!tit.isEmpty()) {
+            cnm.prs.entity.AttributionTitulaire sienne = tit.stream().filter(t -> t.getIdOffre().equals(idOffre)).findFirst().orElse(null);
+            return new AttributionDto.Resultat(idOffre, o.getNumero(), x.getLot(), AttributionLettre.ATTRIBUTION.equals(x.getType()), x.getMotif(),
+                    nomsTitulaires(tit), sienne == null ? null : sienne.getMontant(), sienne == null ? null : sienne.getMontantTtc(),
+                    sienne == null ? null : sienne.getDelai(), x.getPdf() != null, a.getInformeLe(), a.getDateAffichage(), d == null ? null : d.fin(),
+                    d == null ? null : d.signableLe(), a.getDateSignature(), a.getDateNotification(), retenueParMoi ? a.getNotificationRecueLe() : null,
+                    sienne != null && a.getSigneLe() != null, execution.piecesPourCandidat(a, idOffre), retenueParMoi && a.getRetireLe() != null);
+        }
         return new AttributionDto.Resultat(idOffre, o.getNumero(), x.getLot(), AttributionLettre.ATTRIBUTION.equals(x.getType()), x.getMotif(),
                 retenue == null ? null : retenue.getRaisonSociale(), a.getMontant(), a.getMontantTtc(), a.getDelai(), x.getPdf() != null,
                 a.getInformeLe(), a.getDateAffichage(), d == null ? null : d.fin(), d == null ? null : d.signableLe(), a.getDateSignature(),
@@ -386,10 +498,22 @@ public class AttributionService {
                 return new AttributionDto.ResultatPublic(a.getLot(), null, null, null, null, null, false, true, a.getMotifInfructuosite(),
                         a.getDecisionDate(), false, null);
             }
+            // ⚠️ MT-b1 — un contrat-cadre multi-attributaire : ses titulaires, sans montant (chaque marché subséquent fixe le sien).
+            List<cnm.prs.entity.AttributionTitulaire> tit = titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(a.getIdDmc(), a.getLot());
+            if (!tit.isEmpty()) {
+                return new AttributionDto.ResultatPublic(a.getLot(), nomsTitulaires(tit), null, a.getInformeLe(), a.getDateAffichage(),
+                        a.getDatePublicationAvis(), a.getAvisPublieLe() != null, false, null, null, false, null);
+            }
             Offre o = offres.findById(a.getIdOffreAttribuee()).orElse(null);
             return new AttributionDto.ResultatPublic(a.getLot(), o == null ? null : o.getRaisonSociale(), a.getMontant(), a.getInformeLe(),
                     a.getDateAffichage(), a.getDatePublicationAvis(), a.getAvisPublieLe() != null, false, null, null, false, null);
         }).toList();
+    }
+
+    /** ⚠️ MT-b1 — « Alpha ; Beta » : les raisons sociales des titulaires, dans l'ordre du classement. */
+    private String nomsTitulaires(List<cnm.prs.entity.AttributionTitulaire> tit) {
+        return tit.stream().map(t -> offres.findById(t.getIdOffre()).map(Offre::getRaisonSociale).orElse(t.getIdOffre()))
+                .collect(Collectors.joining(" ; "));
     }
 
     // ------------------------------------------------------------------ ⚠️ tranche 2d-1, §B6 l'infructuosité (art. 56), Q3 la reprise
@@ -536,6 +660,7 @@ public class AttributionService {
         x.setPar(acteur());
         evaluation.reprendre(idDmc, x);
         reprises.save(x);
+        titulaires.deleteAll(titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(idDmc, lot));   // ⚠️ MT-b1 (V122) : avant la clé étrangère
         attributions.delete(a);
         evaluation.tracerAttribution(idDmc, "REPRISE", "Lot " + lot + " : le dossier de marché n° " + dm.idDossier() + " (avis défavorable) est "
                 + "clos pour l'attribution ; l'évaluation reprend — " + motif);
@@ -562,6 +687,12 @@ public class AttributionService {
         Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElse(null);
         if (a == null || a.getRetireLe() == null) {
             throw new BusinessRuleException("Le marché de ce lot n'est pas retiré : la réattribution suit un retrait faute de pièces.", "NON_RETIRE");
+        }
+        // ⚠️ 2026-10-15 (tranche MT-b1, réponse 2 du pilote ; décret n° 2019-1064, art. 18) — un contrat-cadre conclu n'est plus ouvert à
+        // de nouveaux opérateurs : pas de réattribution à un candidat non titulaire.
+        if (!titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(idDmc, lot).isEmpty()) {
+            throw new BusinessRuleException("Un contrat-cadre n'est plus ouvert à de nouveaux opérateurs économiques une fois conclu : il ne se "
+                    + "réattribue pas à un candidat non titulaire (décret n° 2019-1064, art. 18).", "REATTRIBUTION_EXCLUE_CONTRAT_CADRE");
         }
         EvaluationDto ev = evaluation.vueSansGarde(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
@@ -968,7 +1099,26 @@ public class AttributionService {
     private DocumentLibre projet(Long idDmc, Integer lot, EvaluationDto.Proposition p, Offre offre, Map<String, String> plan, boolean allotie,
             String idPrmp, java.time.LocalDate dateNotification) {
         return projetMarche.document(new ProjetMarcheService.Entree(idDmc, lot, p, offre, plan, allotie, evaluation.estPi(idDmc), idPrmp,
-                dateNotification, execution.aeOriginalExige(idDmc), execution.aeOriginalRemisLe(idDmc, lot)));
+                dateNotification, execution.aeOriginalExige(idDmc), execution.aeOriginalRemisLe(idDmc, lot), titulairesDuProjet(idDmc, lot, p)));
+    }
+
+    /**
+     * ⚠️ MT-b1 (réponse 3 du pilote) — les titulaires que nomme le projet d'un contrat-cadre multi-attributaire : ceux que la PRMP a
+     * retenus, sinon ceux que la commission propose ; vide hors multi-attributaire.
+     */
+    private List<ProjetMarcheService.Titulaire> titulairesDuProjet(Long idDmc, Integer lot, EvaluationDto.Proposition p) {
+        List<cnm.prs.entity.AttributionTitulaire> retenus = titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(idDmc, lot);
+        if (!retenus.isEmpty()) {
+            return retenus.stream().map(t -> offres.findById(t.getIdOffre())
+                    .map(o -> new ProjetMarcheService.Titulaire(o, t.getMontant(), t.getMontantTtc(), t.getDelai())).orElse(null))
+                    .filter(Objects::nonNull).toList();
+        }
+        if (p == null || p.titulaires() == null) {
+            return List.of();
+        }
+        return p.titulaires().stream().map(t -> offres.findById(t.idOffre())
+                .map(o -> new ProjetMarcheService.Titulaire(o, t.montant(), t.montantTtc(), t.delai())).orElse(null))
+                .filter(Objects::nonNull).toList();
     }
 
     /**
@@ -1112,10 +1262,14 @@ public class AttributionService {
      * le résultat (attribution, ou rejet et motifs), l'attributaire et le montant, le délai d'attente et le droit de demander des
      * explications ; la signature électronique simple de la PRMP, horodatée (Q9).
      */
-    private DocumentLibre lettre(Entete en, Attribution a, AttributionLettre x, Offre offre, Offre attributaire, AttributionDto.DelaiAttente d) {
+    private DocumentLibre lettre(Entete en, Attribution a, AttributionLettre x, Offre offre, Offre attributaire, AttributionDto.DelaiAttente d,
+            List<cnm.prs.entity.AttributionTitulaire> tit) {
         boolean retenue = AttributionLettre.ATTRIBUTION.equals(x.getType());
         String montant = a.getMontant() == null ? "……" : FormulairesEnLigne.lisible(a.getMontant()) + " Ariary hors taxes"
                 + (a.getMontantTtc() == null ? "" : " (" + FormulairesEnLigne.lisible(a.getMontantTtc()) + " Ariary toutes taxes comprises, prix lu)");
+        if (tit != null && !tit.isEmpty()) {
+            return lettreContratCadre(en, a, x, offre, d, tit);
+        }
         List<DocumentLibre.Element> el = new ArrayList<>();
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, en.ministere() == null ? en.autorite() : en.ministere() + " — " + en.autorite()));
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "La Personne responsable des marchés publics"));
@@ -1150,6 +1304,58 @@ public class AttributionService {
         return new DocumentLibre(retenue ? "LETTRE_ATTRIBUTION" : "LETTRE_REJET", en.allotie() ? en.lot() : null, el,
                 "Procédure " + a.getIdDmc() + (en.allotie() ? ", lot " + en.lot() : "") + " — " + (retenue ? "lettre d'attribution" : "lettre au candidat non retenu")
                         + " (modèle provisoire)");
+    }
+
+    /**
+     * ⚠️ 2026-10-15 (tranche MT-b1 ; décret n° 2019-1064, art. 15) — la lettre d'un contrat-cadre multi-attributaire (modèle provisoire,
+     * comme les autres) : au titulaire, sa désignation avec les autres titulaires et le montant de sa propre offre indicative ; au
+     * candidat non retenu, ses motifs et la liste des titulaires. Le délai de contestation de dix jours francs est le même.
+     */
+    private DocumentLibre lettreContratCadre(Entete en, Attribution a, AttributionLettre x, Offre offre, AttributionDto.DelaiAttente d,
+            List<cnm.prs.entity.AttributionTitulaire> tit) {
+        boolean retenue = AttributionLettre.ATTRIBUTION.equals(x.getType());
+        List<String> noms = tit.stream().map(t -> offres.findById(t.getIdOffre()).map(o -> o.getRaisonSociale() + " (offre n° " + o.getNumero() + ")")
+                .orElse(t.getIdOffre())).toList();
+        cnm.prs.entity.AttributionTitulaire sienne = tit.stream().filter(t -> t.getIdOffre().equals(offre.getIdOffre())).findFirst().orElse(null);
+        List<DocumentLibre.Element> el = new ArrayList<>();
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, en.ministere() == null ? en.autorite() : en.ministere() + " — " + en.autorite()));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "La Personne responsable des marchés publics"));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        para(el, "Le " + x.getProduiteLe().format(JOUR));
+        para(el, "À " + offre.getRaisonSociale() + ", NIF " + offre.getNif());
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, retenue ? "LETTRE D'ATTRIBUTION DU CONTRAT-CADRE"
+                : "LETTRE D'INFORMATION DU REJET DE L'OFFRE"));
+        para(el, "Objet : appel d'offres" + (en.numero() == null ? "" : " n° " + en.numero()) + " — " + en.objet() + (en.allotie() ? ", lot " + en.lot() : "")
+                + " ; votre offre n° " + offre.getNumero() + ".");
+        if (retenue) {
+            para(el, "J'ai l'honneur de vous informer que votre offre est retenue et que vous êtes désigné titulaire du contrat-cadre, sur la "
+                    + "proposition de la commission d'appel d'offres et après l'avis de l'organe de contrôle. Le contrat-cadre compte "
+                    + tit.size() + " titulaire(s) : " + String.join(" ; ", noms) + ".");
+            if (sienne != null && sienne.getMontant() != null) {
+                para(el, "Le montant de votre offre indicative est de " + FormulairesEnLigne.lisible(sienne.getMontant()) + " Ariary hors taxes"
+                        + (sienne.getDelai() == null ? "" : ", délai d'exécution : " + sienne.getDelai()) + ". Les montants des marchés subséquents "
+                        + "seront définis à chaque remise en concurrence des titulaires (décret n° 2019-1064, art. 16).");
+            }
+            para(el, "Le contrat-cadre ne peut être signé qu'à l'expiration d'un délai de " + JOURS_FRANCS + " jours francs à compter de la plus "
+                    + "tardive de l'information des candidats et de l'affichage du résultat (le " + a.getDateAffichage().format(JOUR) + "), soit à "
+                    + "partir du " + d.signableLe().format(JOUR) + " (art. 15 du décret n° 2019-1064, art. 78 de la loi n° 2016-055). Il sera signé "
+                    + "par la Personne responsable des marchés publics et par chacun des titulaires.");
+            para(el, "Je vous rappelle que vous aurez à produire, dans les quinze jours de la notification de l'attribution, les pièces attestant "
+                    + "de votre situation fiscale (de moins de six mois) et sociale (de moins de trois mois) régulière (art. 20).");
+        } else {
+            para(el, "J'ai le regret de vous informer que votre offre n'est pas retenue, pour le motif suivant : " + x.getMotif());
+            para(el, "Le contrat-cadre est attribué aux " + tit.size() + " titulaire(s) suivant(s) : " + String.join(" ; ", noms) + ".");
+            para(el, "Vous pouvez me demander par écrit, sur la plateforme, des explications sur les motifs du rejet de votre offre (art. 52-II). "
+                    + "Vous disposez de " + JOURS_FRANCS + " jours francs pour une contestation éventuelle (décret n° 2019-1064, art. 15) : le "
+                    + "contrat-cadre ne sera pas signé avant le " + d.signableLe().format(JOUR) + ".");
+        }
+        para(el, "Veuillez agréer l'expression de ma considération distinguée.");
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        para(el, "La Personne responsable des marchés publics, " + a.getSignataire() + " — signé électroniquement sur la plateforme le "
+                + a.getInformeLe().format(HORODATAGE) + ".");
+        return new DocumentLibre(retenue ? "LETTRE_ATTRIBUTION" : "LETTRE_REJET", en.allotie() ? en.lot() : null, el,
+                "Procédure " + a.getIdDmc() + (en.allotie() ? ", lot " + en.lot() : "") + " — " + (retenue ? "lettre d'attribution du contrat-cadre"
+                        : "lettre au candidat non retenu") + " (modèle provisoire)");
     }
 
     private EvaluationDto.Lot lotEvalue(Long idDmc, Integer lot) {

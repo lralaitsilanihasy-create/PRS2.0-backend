@@ -1259,10 +1259,11 @@ public final class ControlesFicheMarche {
         if (cadrage == null || !"MULTI".equalsIgnoreCase(String.valueOf(cadrage.get("attributaires")))) {
             return;
         }
-        // ⚠️ MT-a (15/10) — l'évaluation retient désormais tous les titulaires qualifiés ; l'attribution, pas encore.
+        // ⚠️ MT-a (15/10) — l'évaluation retient tous les titulaires qualifiés ; MT-b1 — l'attribution et l'information aussi ; restent
+        // les pièces, la signature, la notification et l'avis de chaque titulaire (MT-b2).
         avertissements.add(new Controle(MULTI_ATTRIBUTAIRE_NON_OUTILLE, List.of(), "B07", "Contrat-cadre multi-attributaire : "
-                + "l'évaluation propose tous les titulaires qualifiés, mais l'attribution de l'application ne désigne encore qu'un titulaire "
-                + "par lot. L'attribution à plusieurs titulaires viendra avec la suite de la tranche « plusieurs titulaires »."));
+                + "l'évaluation, l'attribution et l'information des candidats portent sur tous les titulaires, mais les pièces, la signature, "
+                + "la notification et l'avis d'attribution ne suivent encore que le premier titulaire (suite de la tranche « plusieurs titulaires »)."));
     }
     // ------------------------------------------------------------------ lectures
 

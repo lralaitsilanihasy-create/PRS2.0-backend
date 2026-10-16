@@ -7394,6 +7394,31 @@ tardive** de l'information des candidats et de l'affichage du résultat. Migrati
   qui a écarté l'offre, sa qualification, son motif, sa clause ; à défaut, son rang), l'attributaire, le montant, le délai d'attente et
   le droit de demander des explications. Les offres non ouvertes en séance (hors délai, retirées, remplacées) n'ont pas de lettre.
   Notification et courriel : `ATTRIBUTION` à l'attributaire, `RESULTAT_DISPONIBLE` aux autres. **Modèle provisoire** (Q7), à remplacer.
+- ⚠️ **2026-10-15 — tranche MT-b1, contrat-cadre multi-attributaire** (demande front « marches-subsequents », réponses du pilote du
+  15/10 ; décret n° 2019-1064, art. 13-15 et 18 ; **V122** `t_attribution_titulaire`). S'applique quand la proposition du lot porte
+  des `titulaires` (MT-a).
+  - **Attribuer** (`{ titulaires?, motif?, idOffre? }`) : la PRMP **retient** les titulaires parmi ceux que la commission propose
+    (art. 13-14), en tout ou en partie. `titulaires` absent ou vide : tous les proposés ; `idOffre` seul : un titulaire unique.
+    - 409 `OFFRE_NON_PROPOSEE` (`details.offres` = les offres hors proposition) ;
+    - 400 **`MOTIF_OBLIGATOIRE`** quand une partie seulement est retenue ;
+    - 400 **`TITULAIRES_TROP_NOMBREUX`** au-delà du nombre maximal du DAO, **`B07-MA-08`** (champ facultatif, contrat-cadre
+      multi-attributaire seul, imprimé par aucun document ; vide : pas de plafond).
+
+    Une ligne par titulaire retenu (offre, rang, montant, montant TTC, délai, date, auteur). Le lot garde le **premier** titulaire
+    comme `attributaire` de tête. Journal `ATTRIBUTION` : « contrat-cadre attribué à n titulaire(s) — … ».
+  - **`lots[].titulaires`** : `[{ idOffre, numero, candidat, montant, montantTtc, delai, rang }]`, les titulaires retenus dans
+    l'ordre du classement ; vide hors multi-attributaire et avant l'attribution.
+  - **Projet de marché** : un **projet de contrat-cadre**. Il nomme comme parties l'Autorité contractante et **tous** les
+    titulaires (les retenus, sinon les proposés), donne l'offre indicative de chacun, renvoie les prix aux marchés subséquents
+    (art. 16) et prévoit une signature par titulaire.
+  - **Informer** : la lettre d'attribution du contrat-cadre part à **chaque** titulaire retenu. Elle nomme les autres titulaires et
+    donne le montant de sa propre offre indicative ; la signature se fera par la PRMP et chacun des titulaires. Le candidat non
+    retenu reçoit ses motifs et la liste des titulaires (dix jours francs de contestation, art. 15). Notification `ATTRIBUTION` à
+    chaque titulaire.
+  - **Résultat du candidat** : `attributaire` = « Gamma ; Alpha » (les titulaires), et `montant` = celui de l'offre du titulaire
+    qui consulte (nul pour un non-retenu). **Page publique** : les titulaires, montant nul.
+  - **Pas encore étendu à chaque titulaire (MT-b2)** : pièces de l'attributaire, signature, notification, avis d'attribution et
+    retrait. Ils suivent le titulaire de tête.
 - **Le délai d'attente** : `JOURS_FRANCS = 10` ; le report d'une échéance tombant un jour férié ou un week-end n'est **pas** appliqué
   (la loi ne le prévoit pas dans le texte relu ; à confirmer par le juriste). La signature (tranche 2c) sera refusée avant
   `signableLe` (409 `DELAI_ATTENTE`).
@@ -7889,6 +7914,9 @@ rapport complet** (08/10, comme la reprise de 2d-1) ; un délai de validité non
 
 - **Le suivant** : appel d'offres, la première offre du classement qui n'est ni non qualifiée ni celle retirée ; prestations
   intellectuelles, le premier classé avec qui aucune négociation n'a été menée. Aucun → 409 **`AUCUN_SUIVANT_ELIGIBLE`**.
+- ⚠️ **MT-b1 (2026-10-15)** : un contrat-cadre multi-attributaire ne se réattribue **pas**. La route répond 409
+  **`REATTRIBUTION_EXCLUE_CONTRAT_CADRE`** : une fois conclu, un contrat-cadre n'est plus ouvert à de nouveaux opérateurs (décret
+  n° 2019-1064, art. 18 ; réponse 2 du pilote).
 - **La validité** : le délai de la fiche (`B04-VO-01`, `B04-VT-01`, `B04-DV-01` ou `B04-DP-01`, le premier saisi), compté depuis la date
   limite de remise ; échu → 409 **`OFFRE_EXPIREE`**. Sans délai saisi, non contrôlée : la note le dit.
 - **L'effet** : une reprise de type **`REATTRIBUTION`** s'ajoute à `lots[].reprises[]` (qui gagne `type` — `REPRISE` |

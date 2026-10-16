@@ -585,6 +585,18 @@ lot D*.
   - Si un seul titulaire se dégage, le rapport le constate, et la PRMP peut déclarer la procédure infructueuse (art. 17 du
     décret, art. 56 de la loi).
   - L'attribution à plusieurs titulaires (lettres, signature, notification, avis) est la seconde partie.
+- ⚠️ **Plusieurs titulaires, deuxième partie : l'attribution et l'information (2026-10-15, réponses du pilote).**
+  - **La PRMP choisit les titulaires** parmi les qualifiés que la commission propose (art. 13-14), en tout ou en partie. En retenir
+    une partie seulement se motive.
+  - Le dossier d'appel d'offres peut fixer un **nombre maximal** de titulaires. C'est facultatif, car le décret n'en prévoit pas.
+  - **Il n'y a qu'un contrat-cadre**, conclu avec tous les titulaires : le projet soumis à la Commission les nomme tous, avec
+    l'offre indicative de chacun.
+  - **Chaque titulaire reçoit sa lettre d'attribution** ; chaque candidat non retenu reçoit ses motifs et la liste des titulaires,
+    avec dix jours francs pour contester (art. 15).
+  - **Un contrat-cadre conclu n'est plus ouvert à de nouveaux opérateurs** (art. 18) : il ne se réattribue pas à un candidat non
+    titulaire.
+  - Restent à étendre à chaque titulaire : les pièces fiscales et sociales (exigées de chacun), la signature par tous, la
+    notification et l'avis d'attribution.
 
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 

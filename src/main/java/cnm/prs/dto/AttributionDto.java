@@ -29,7 +29,12 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
             /** ⚠️ 2d-1 (§B6, Q3) — la déclaration d'infructuosité (nulle sans elle) ; les reprises de l'évaluation après un avis défavorable. */
             Infructuosite infructuosite, List<Reprise> reprises,
             /** ⚠️ R9a (§B4 n° 14) — l'approbation du marché, nulle avant son geste. */
-            Approbation approbation) {
+            Approbation approbation,
+            /**
+             * ⚠️ 2026-10-15 (tranche MT-b1, V122) — les titulaires retenus par la PRMP d'un contrat-cadre multi-attributaire, dans l'ordre du
+             * classement ; vide hors multi-attributaire et avant l'attribution.
+             */
+            List<EvaluationDto.Titulaire> titulaires) {
     }
 
     /** Le dossier de marché du lot : {@code avis} ∈ {@code FAV} · {@code FAVR} · {@code DEF}, nul tant que le PV n'est pas signé. */
@@ -163,8 +168,17 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
 
     // ------------------------------------------------------------------ corps des requêtes
 
-    /** {@code POST …/lots/{lot}/attribuer} : {@code idOffre} facultatif (l'offre proposée), {@code motif} facultatif. */
-    public record AttribuerRequest(String idOffre, String motif) {
+    /**
+     * {@code POST …/lots/{lot}/attribuer} : {@code idOffre} facultatif (l'offre proposée), {@code motif} facultatif. ⚠️ 2026-10-15 (tranche
+     * MT-b1) — {@code titulaires} : pour un contrat-cadre multi-attributaire, les offres que la PRMP retient parmi les titulaires proposés
+     * (art. 13-14 du décret n° 2019-1064) ; absent ou vide : tous les proposés ({@code idOffre} seul vaut un titulaire unique). Le motif est
+     * obligatoire quand une partie seulement est retenue.
+     */
+    public record AttribuerRequest(String idOffre, String motif, List<String> titulaires) {
+
+        public AttribuerRequest(String idOffre, String motif) {
+            this(idOffre, motif, null);
+        }
     }
 
     /** {@code POST …/lots/{lot}/informer} : la date d'affichage du résultat au siège de l'autorité contractante. */

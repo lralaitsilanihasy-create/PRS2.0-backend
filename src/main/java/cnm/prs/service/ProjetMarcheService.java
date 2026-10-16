@@ -73,10 +73,28 @@ public class ProjetMarcheService {
     public record Entree(Long idDmc, Integer lot, EvaluationDto.Proposition proposition, Offre offre, Map<String, String> plan, boolean allotie,
             boolean pi, String idPrmp, LocalDate dateNotification,
             /** ⚠️ R10 (§B5, H2) — l'offre déposée en ligne : l'original de l'acte d'engagement est exigé ; sa date de remise une fois reconnu conforme. */
-            boolean aeOriginalExige, LocalDate aeOriginalRemisLe) {
+            boolean aeOriginalExige, LocalDate aeOriginalRemisLe,
+            /**
+             * ⚠️ 2026-10-15 (tranche MT-b1, réponse 3 du pilote ; décret n° 2019-1064, art. 15) — un contrat-cadre multi-attributaire : les
+             * offres de tous ses titulaires (proposés, puis retenus), dans l'ordre du classement ; vide sinon. Il n'y a qu'un contrat-cadre,
+             * signé par la PRMP et tous les titulaires.
+             */
+            List<Titulaire> titulaires) {
+
+        public Entree(Long idDmc, Integer lot, EvaluationDto.Proposition proposition, Offre offre, Map<String, String> plan, boolean allotie,
+                boolean pi, String idPrmp, LocalDate dateNotification, boolean aeOriginalExige, LocalDate aeOriginalRemisLe) {
+            this(idDmc, lot, proposition, offre, plan, allotie, pi, idPrmp, dateNotification, aeOriginalExige, aeOriginalRemisLe, List.of());
+        }
+    }
+
+    /** ⚠️ MT-b1 — un titulaire du contrat-cadre : son offre et les valeurs de son offre indicative. */
+    public record Titulaire(Offre offre, java.math.BigDecimal montant, java.math.BigDecimal montantTtc, String delai) {
     }
 
     public DocumentLibre document(Entree in) {
+        if (in.titulaires() != null && !in.titulaires().isEmpty()) {
+            return contratCadre(in);
+        }
         FicheMarcheService.EtatVersion v = fiches.etatValide(in.idDmc()).orElse(null);
         Valeurs val = new Valeurs(v, in.lot());
         String offreMot = in.pi() ? "la proposition" : "l'offre";
@@ -159,6 +177,69 @@ public class ProjetMarcheService {
         para(el, "Pour l'Autorité contractante, la Personne responsable des marchés publics : ……………………………………  (date et signature)");
         return new DocumentLibre("PROJET_MARCHE", in.allotie() ? in.lot() : null, el,
                 "Procédure " + in.idDmc() + " — projet de marché" + (in.allotie() ? ", lot " + in.lot() : ""));
+    }
+
+    /**
+     * ⚠️ 2026-10-15 (tranche MT-b1, réponse 3 du pilote) — le projet d'un contrat-cadre multi-attributaire : un seul contrat, entre
+     * l'Autorité contractante et <strong>tous</strong> les titulaires (décret n° 2019-1064, art. 15) ; l'offre indicative de chacun ; les
+     * montants des marchés subséquents définis à chaque remise en concurrence (art. 16) ; une signature par titulaire.
+     */
+    private DocumentLibre contratCadre(Entree in) {
+        FicheMarcheService.EtatVersion v = fiches.etatValide(in.idDmc()).orElse(null);
+        Valeurs val = new Valeurs(v, in.lot());
+        String objet = objetDuMarche(v == null ? in.plan().get("OBJET") : v.etat().getDesignationMarche(), in.allotie() ? lotLibelle(in) : null);
+        String numero = val.get(NUMERO_AO);
+        List<DocumentLibre.Element> el = new ArrayList<>();
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "PROJET DE CONTRAT-CADRE"));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, objet));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        para(el, "Entre :");
+        para(el, Objects.toString(in.plan().get("ENTITE"), "l'Autorité contractante")
+                + (in.plan().get("MINISTERE") == null ? "" : " (" + in.plan().get("MINISTERE") + ")")
+                + ", représentée par sa Personne responsable des marchés publics, " + signataire(in) + ", ci-après « l'Autorité contractante »,");
+        para(el, "et les " + in.titulaires().size() + " titulaire(s) suivant(s), ci-après « les Titulaires » :");
+        for (Titulaire t : in.titulaires()) {
+            EntrepriseCandidatDto.Entreprise e = entreprise(t.offre());
+            para(el, "– " + t.offre().getRaisonSociale() + ", NIF " + t.offre().getNif() + (e == null || e.adresse() == null ? "" : ", " + e.adresse())
+                    + (e == null || e.representant() == null ? ", représentée par " + A_COMPLETER + " (nom et qualité du signataire)"
+                            : ", représentée par " + e.representant().prenom() + " " + e.representant().nom()
+                                    + (e.representant().fonction() == null ? "" : ", " + e.representant().fonction()))
+                    + " (offre n° " + t.offre().getNumero() + ") ;");
+        }
+
+        sous(el, "Article 1 — Objet");
+        para(el, "Le présent contrat-cadre a pour objet de définir les termes régissant les marchés subséquents à passer au cours de sa période "
+                + "de validité : " + objet + ", issu de l'appel d'offres" + (numero == null ? "" : " n° " + numero) + ". Il n'est pas ouvert à de "
+                + "nouveaux opérateurs économiques (décret n° 2019-1064, art. 18).");
+
+        sous(el, "Article 2 — Base légale");
+        para(el, baseLegale(in.plan().get("MODE"), in.pi()) + " Article 67 de " + LOI + " et décret n° 2019-1064 du 28 mai 2019.");
+
+        sous(el, "Article 3 — Pièces constitutives");
+        para(el, "Le contrat-cadre est constitué, par ordre de priorité : le contrat-cadre valant acte d'engagement et cahier des clauses "
+                + "administratives particulières ; les spécifications techniques ; l'offre de chacun des Titulaires, dont le bordereau des prix "
+                + "indicatif ; le cahier des clauses administratives générales — tels qu'ils figurent au dossier et aux offres retenues.");
+
+        sous(el, "Article 4 — Offres indicatives et prix des marchés subséquents");
+        for (Titulaire t : in.titulaires()) {
+            para(el, "– " + t.offre().getRaisonSociale() + " : offre indicative de " + (t.montant() == null ? A_COMPLETER + " (montant hors taxes)"
+                    : FormulairesEnLigne.lisible(t.montant()) + " Ariary hors taxes") + (t.delai() == null ? "" : ", délai : " + t.delai()) + ".");
+        }
+        para(el, "Le montant à payer est défini, après remise en concurrence des Titulaires, dans chaque marché subséquent attribué sur la base "
+                + "du présent contrat-cadre (décret n° 2019-1064, art. 16).");
+
+        sous(el, "Article 5 — Notification et entrée en vigueur");
+        para(el, "Date de notification du contrat-cadre : " + (in.dateNotification() == null ? A_COMPLETER : DATE.format(in.dateNotification())) + ".");
+        para(el, "Le contrat-cadre, signé par la Personne responsable des marchés publics et par chacun des Titulaires, prend effet à sa "
+                + "notification aux Titulaires (décret n° 2019-1064, art. 15).");
+
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        for (Titulaire t : in.titulaires()) {
+            para(el, "Pour " + t.offre().getRaisonSociale() + " : ……………………………………  (nom, qualité, date et signature)");
+        }
+        para(el, "Pour l'Autorité contractante, la Personne responsable des marchés publics : ……………………………………  (date et signature)");
+        return new DocumentLibre("PROJET_MARCHE", in.allotie() ? in.lot() : null, el,
+                "Procédure " + in.idDmc() + " — projet de contrat-cadre" + (in.allotie() ? ", lot " + in.lot() : ""));
     }
 
     // ------------------------------------------------------------------ art. 28 : l'objet du lot

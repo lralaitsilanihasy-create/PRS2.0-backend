@@ -235,7 +235,7 @@ class ModelesDaoTest {
         assertThat(ControlesFicheMarche.bilan(champs, Map.of(), Map.of("attributaires", "MULTI"), Map.of()).avertissements())
                 .filteredOn(c -> multi.equals(c.regle())).singleElement()
                 .satisfies(c -> assertThat(c.bloc()).isEqualTo("B07"))
-                .satisfies(c -> assertThat(c.message()).contains("qu'un titulaire par lot"));
+                .satisfies(c -> assertThat(c.message()).contains("ne suivent encore que le premier titulaire"));   // MT-b1
         cnm.prs.dto.BilanControlesDto mono = ControlesFicheMarche.bilan(champs, Map.of(), Map.of("attributaires", "MONO"), Map.of());
         assertThat(mono.avertissements()).extracting(c -> c.regle()).doesNotContain(multi);
         assertThat(mono.bloquants()).extracting(c -> c.regle()).doesNotContain(multi);
