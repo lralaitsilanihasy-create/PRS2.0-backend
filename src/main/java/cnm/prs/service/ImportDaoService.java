@@ -509,6 +509,17 @@ public class ImportDaoService {
                 attendus.add(nu);
             }
         }
+        // ⚠️ 2026-10-17 (« champs-deduits-du-dao », §B2) — B04-CD-01 : les fiches de renseignements A1 à A4 dont le DAO porte le
+        // titre, quand aucun modèle ne l'a déjà dit. Une clause, jamais sûre.
+        if (!lusParModele.contains("B04-CD-01") && !enConflit.contains("B04-CD-01")) {
+            CadrageParClause.Fiches f = CadrageParClause.fiches(origines);
+            if (!f.codes().isEmpty()) {
+                String v = String.join(",", f.codes());
+                fusionner(propositions, new LectureDao.Proposition("B04-CD-01", v, v, LectureDao.Confiance.MOYENNE, f.extrait(),
+                        LectureDao.SOURCE_CLAUSE), conflits, enConflit);
+                attendus.add("B04-CD-01");
+            }
+        }
 
         // ⚠️ 2026-10-17 (« cadrage-depuis-dao », §B1, §B1.2) — les questions qu'aucune section ne tranche : avance par le reflet de
         // B08-AV-02, puis la lecture par clause. Une section l'emporte ; deux réponses contraires (clause contre clause ou contre le

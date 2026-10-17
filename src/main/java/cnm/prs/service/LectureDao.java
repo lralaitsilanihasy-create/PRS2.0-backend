@@ -534,6 +534,74 @@ public final class LectureDao {
         return aDistinctif;
     }
 
+    /**
+     * ⚠️ 2026-10-17 (règle 10) — les sections attestées par encadrement : toutes leurs unités sont du texte fixe sans jeton ni
+     * paragraphe distinctif, contiguës ; la dernière unité reconnue avant elles et la première après sont reconnues, et le document
+     * porte entre les deux exactement leurs textes (normalisés, ponctuation finale ignorée).
+     */
+    static Set<String> encadrees(List<Unite> us, Profil profil, Map<Integer, Integer> trouves, List<String> doc, Set<String> dejaVues) {
+        Map<String, List<Integer>> parSection = new LinkedHashMap<>();
+        for (int k = 0; k < us.size(); k++) {
+            for (String s : us.get(k).sections()) {
+                parSection.computeIfAbsent(s, x -> new ArrayList<>()).add(k);
+            }
+        }
+        Set<String> out = new LinkedHashSet<>();
+        for (Map.Entry<String, List<Integer>> e : parSection.entrySet()) {
+            List<Integer> ks = e.getValue();
+            if (dejaVues.contains(e.getKey()) || ks.isEmpty()) {
+                continue;
+            }
+            int k1 = ks.get(0);
+            int km = ks.get(ks.size() - 1);
+            boolean courte = km - k1 + 1 == ks.size();
+            for (int k : ks) {
+                courte &= !us.get(k).texte().contains("{{") && !profil.distinctif[k] && !cleCourte(us.get(k).texte()).isEmpty();
+            }
+            if (!courte) {
+                continue;
+            }
+            int avant = -1;
+            for (int k = k1 - 1; k >= 0 && avant < 0; k--) {
+                if (trouves.containsKey(k)) {
+                    avant = k;
+                }
+            }
+            int apres = -1;
+            for (int k = km + 1; k < us.size() && apres < 0; k++) {
+                if (trouves.containsKey(k)) {
+                    apres = k;
+                }
+            }
+            if (avant < 0 || apres < 0) {
+                continue;
+            }
+            // Entre les deux, les paragraphes du document ; un reste de ponctuation (« Sans objet » / « . » redécoupés à l'étape 1) ne
+            // compte pas.
+            List<String> entre = new ArrayList<>();
+            for (int j = trouves.get(avant) + 1; j < trouves.get(apres); j++) {
+                if (!cleCourte(doc.get(j)).isEmpty()) {
+                    entre.add(cleCourte(doc.get(j)));
+                }
+            }
+            if (entre.size() != ks.size()) {
+                continue;
+            }
+            boolean memes = true;
+            for (int i = 0; i < ks.size() && memes; i++) {
+                memes = entre.get(i).equals(cleCourte(us.get(ks.get(i)).texte()));
+            }
+            if (memes) {
+                out.add(e.getKey());
+            }
+        }
+        return out;
+    }
+
+    private static String cleCourte(String texte) {
+        return norm(texte).toLowerCase(Locale.ROOT).replaceAll("[\\s.;:,!]+$", "");
+    }
+
     private static String cleTexte(Unite u) {
         return norm(JETON.matcher(u.texte()).replaceAll("{}")).toLowerCase(Locale.ROOT);
     }
@@ -1003,6 +1071,12 @@ public final class LectureDao {
                 manques++;
             }
         }
+
+        // ⚠️ 2026-10-17 (demande front « champs-deduits-du-dao », §B1, règle 10) — ATTESTATION PAR ENCADREMENT. Une section faite
+        // seulement de texte court et non distinctif (« Sans objet. » : ASSURANCE-NON, EXECUTION-SANS de l'AE-CC) n'était jamais
+        // attestée (règle 7 : 20 lettres propres à la section). Elle l'est quand les unités qui l'encadrent sont reconnues et
+        // qu'entre elles le document porte exactement son texte, paragraphe pour paragraphe.
+        sectionsVues.addAll(encadrees(us, profil, trouves, doc, sectionsVues));
 
         // 2. Les paragraphes faits d'un seul jeton : ce qui sépare leurs voisins reconnus.
         List<Ambigu> ambigus = new ArrayList<>();

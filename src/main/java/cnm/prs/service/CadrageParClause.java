@@ -156,6 +156,97 @@ final class CadrageParClause {
         return new Resultat(reponses, conflits);
     }
 
+    // ------------------------------------------------------------------ ⚠️ 2026-10-17 (« champs-deduits-du-dao », §B2) — B04-CD-01
+
+    /** Les fiches de renseignements, par code : le mot qui doit suivre « A<i>k</i> » dans le titre. */
+    private static final Map<String, Pattern> FICHES = new LinkedHashMap<>();
+
+    static {
+        FICHES.put("A1", Pattern.compile("\\bIDENTIFICATION\\b"));
+        FICHES.put("A2", Pattern.compile("\\bCAPACITES?\\s+TECHNIQUES?\\b"));
+        FICHES.put("A3", Pattern.compile("\\bCAPACITES?\\s+FINANCIERES?\\b"));
+        FICHES.put("A4", Pattern.compile("\\bANTECEDENTS?\\b"));
+    }
+
+    private static final Pattern TITRE_FICHE = Pattern.compile("^[-–•▪*\\s]*(A[1-4])\\s*[-–:.)]?\\s*[-–:]?\\s*(.+)$");
+    private static final Pattern TITRE_GENERAL = Pattern.compile(NUMERO + "(?:INSTRUCTIONS?\\s+AUX\\s+(?:CANDIDATS|SOUMISSIONNAIRES|CONSULTANTS)"
+            + "|CAHIER\\s+DES\\s+CLAUSES\\s+ADMINISTRATIVES\\s+GENERALES|CCAG\\b|SOMMAIRE|TABLE\\s+DES\\s+MATIERES)");
+    private static final Pattern FICHE_DEDANS = Pattern.compile("(?<![A-Z0-9])(A[1-4])\\s*:\\s*([A-Z].{0,40})");
+    private static final Pattern AUTRE_CODE = Pattern.compile("(?<![A-Z0-9])A[1-4](?![0-9])");
+    private static final Pattern FORMULAIRES = Pattern.compile(NUMERO + "FORMULAIRES?\\b");
+    private static final Pattern MODELES = Pattern.compile(NUMERO + "MODELES?\\s+D");
+    private static final Pattern ENTETE =Pattern.compile("^(?:\\d+(?:\\.\\d+)*\\.?\\s*[-–]|[A-H]\\s*[.\\-–]|.*\\bPARTIE\\b)");
+
+    /** Les fiches trouvées et le titre de la première. */
+    record Fiches(List<String> codes, String extrait) {
+    }
+
+    /**
+     * Les fiches de renseignements A1 à A4 que le DAO contient, par leur <strong>titre</strong> : un paragraphe court « A1 … IDENTIFICATION
+     * DU CANDIDAT » (le mot de la fiche exigé : « A4 » seul peut être un format de papier), suivi d'un contenu et non d'un autre titre
+     * (une ligne de sommaire est suivie de la suivante), hors des instructions aux candidats, du CCAG et du sommaire.
+     */
+    static Fiches fiches(List<String> paragraphes) {
+        List<String> codes = new ArrayList<>();
+        String extrait = null;
+        boolean generale = false;
+        boolean formulaires = false;
+        for (int i = 0; i < paragraphes.size(); i++) {
+            String texte = paragraphes.get(i) == null ? "" : paragraphes.get(i);
+            String c = IdentiteDao.cle(texte);
+            // Dans la partie des formulaires, un titre « A1 : IDENTIFICATION… » vaut où qu'il soit : l'extraction colle parfois
+            // plusieurs titres en un paragraphe (DAO de 303337). Les deux-points le distinguent d'une ligne de sommaire (« A1 - … »).
+            if (formulaires && !generale) {
+                Matcher dedans = FICHE_DEDANS.matcher(c);
+                while (dedans.find()) {
+                    if (FICHES.get(dedans.group(1)).matcher(dedans.group(2)).lookingAt() && !codes.contains(dedans.group(1))) {
+                        codes.add(dedans.group(1));
+                        extrait = extrait == null ? extrait(texte) : extrait;
+                    }
+                }
+            }
+            if (c.length() > LONGUEUR_TITRE) {
+                continue;
+            }
+            if (TITRE_GENERAL.matcher(c).find()) {
+                generale = true;
+                formulaires = false;
+                continue;
+            }
+            Matcher m = TITRE_FICHE.matcher(c);
+            if (!m.matches()) {
+                if (TITRE_EXCLU.matcher(c).find() || TITRE_ADMIS.matcher(c).find()) {
+                    generale = false;
+                    formulaires = FORMULAIRES.matcher(c).find() || formulaires && MODELES.matcher(c).find();
+                }
+                continue;
+            }
+            Pattern mot = FICHES.get(m.group(1));
+            // Un paragraphe qui porte le code d'une autre fiche est une ligne de sommaire collée (« A1IDENTIFICATION… A2 - … »).
+            boolean autreCode = false;
+            for (Matcher a = AUTRE_CODE.matcher(m.group(2)); a.find() && !autreCode; ) {
+                autreCode = !a.group().equals(m.group(1));
+            }
+            if (generale || codes.contains(m.group(1)) || !mot.matcher(m.group(2)).find() || autreCode || i + 1 >= paragraphes.size()) {
+                continue;
+            }
+            // Une ligne de sommaire est suivie du titre d'une AUTRE fiche ; un titre de fiche, de son contenu ou de son sous-titre
+            // (« A1 - a) FICHE DE RENSEIGNEMENTS… »).
+            String suivant = IdentiteDao.cle(paragraphes.get(i + 1));
+            Matcher autre = TITRE_FICHE.matcher(suivant);
+            if (suivant.isEmpty() || autre.matches() && !autre.group(1).equals(m.group(1)) || !autre.matches() && ENTETE.matcher(suivant).find()) {
+                continue;
+            }
+            codes.add(m.group(1));
+            if (extrait == null) {
+                extrait = extrait(texte);
+            }
+        }
+        List<String> ordre = new ArrayList<>(FICHES.keySet());
+        codes.sort(java.util.Comparator.comparingInt(ordre::indexOf));
+        return new Fiches(codes, extrait);
+    }
+
     /** Les clés que l'import cherche par clause pour une fiche : le contrat-cadre n'en pose que deux (§B2). */
     static Set<String> clesPour(String typeMarche, String categorie) {
         if ("CONTRAT_CADRE".equals(typeMarche)) {

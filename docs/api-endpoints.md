@@ -6385,6 +6385,53 @@ inchangé). Une migration : V128, `t_import_verdict`.
   - Sur le DAO de 303339 lu pour un contrat-cadre : `avance = OUI` par reflet, rien d'autre par clause. `garantieSoumission` n'y
     est pas dite et reste à la PRMP.
 
+#### ⚠️ 2026-10-17 — les valeurs de champ que le DAO dit par une rédaction choisie (demande front « champs-deduits-du-dao »)
+
+Le contrat d'`ImportDaoResult` ne change pas. Pas de migration, pas de dépendance ajoutée.
+
+- **§B1 existait déjà**. Une section reconnue propose déjà les termes de champ de sa condition, en confiance `moyenne`, avec l'extrait
+  « rédaction retenue (section … de …) » : par exemple `B07-FS-01` depuis `FS-FRACTIONNE`.
+  - **La cause réelle** : `ASSURANCE-NON` et `EXECUTION-SANS` ne contiennent que « Sans objet ». Or une section n'était attestée que
+    par un paragraphe d'au moins 20 lettres fixes qui lui soit propre (règle 7).
+  - **Règle 10 de `LectureDao`, l'attestation par encadrement** : une section faite seulement de texte court, sans jeton ni
+    paragraphe distinctif, est attestée quand deux conditions sont réunies :
+    - la dernière unité reconnue avant elle et la première après elle sont reconnues ;
+    - entre les deux, le document porte exactement son texte, paragraphe pour paragraphe : normalisé, ponctuation finale ignorée,
+      reste de ponctuation seul écarté.
+
+    Un paragraphe de plus suffit à l'écarter. Par exemple, au 6114 : « Sans objet » est suivi de « Les dispositions de l'article
+    17 du CCAG Fournitures sont applicables ».
+  - **À reporter dans `lire.mjs`** pour garder la parité.
+- **§B2, `B04-CD-01` déduit des fiches de renseignements** (`CadrageParClause.fiches`), en `source: "clause"` et confiance
+  `moyenne`. Il n'est proposé que si aucun modèle ne l'a dit. La valeur est la liste des fiches trouvées, dans l'ordre A1 à A4.
+  - **Ce qui compte comme titre** :
+    - un paragraphe court « A1 … IDENTIFICATION », « A2 … CAPACITÉS TECHNIQUES », « A3 … CAPACITÉS FINANCIÈRES » ou « A4 …
+      ANTÉCÉDENTS » : le mot de la fiche est exigé, car « A4 » seul peut être un format de papier ;
+    - suivi de son contenu ou de son sous-titre (« A1 - a) … »).
+  - **Ce qui n'en est pas un** :
+    - une ligne de sommaire, suivie du titre d'une autre fiche ou d'un en-tête de partie ;
+    - un paragraphe qui porte le code d'une autre fiche ;
+    - toute mention dans les instructions aux candidats, le CCAG ou le sommaire.
+  - **Dans la partie « Formulaires »**, un titre « A1 : IDENTIFICATION… » vaut aussi au milieu d'un paragraphe, où l'extraction
+    colle parfois plusieurs titres (DAO de 303337). Les deux-points le distinguent d'une ligne de sommaire (« A1 - … »).
+- **§B3, Q1** : `B07-DE-01` ne peut pas porter la condition `B07-FS-01 = Marchés uniques non fractionnés`.
+  - La grammaire des conditions d'affichage, la même au serveur (`ConditionCadrage`) et au front (`evaluerCondition`), n'admet
+    qu'une clé de cadrage et une valeur sans espaces. Un code de champ à tiret y rend le terme illisible, donc faux, et le champ ne
+    s'afficherait plus jamais.
+  - **Retenu (option 2)** : le champ reste affiché, mais il ne bloque plus le bilan (`ControlesFicheMarche.sansObjet`) quand
+    `B07-FS-01` dit d'autres marchés que des marchés uniques non fractionnés. Il bloque toujours quand `B07-FS-01` est vide.
+- **Mesure** (`ChampsDeduitsRecetteTest`) : **11 propositions sur sept DAO réels, aucune fausse.**
+  - **B1** :
+    - `B09-AU-01 = NON` sur 6213, 303337 et 303339 ;
+    - `B09-EA-01 = NON` sur 6114 et 303339 ;
+    - `B05-MO-01 = Ariary` sur 297 (section `ARIARY` du DPAO-F).
+  - **B2**, `B04-CD-01 = A1,A2,A3,A4` sur 2463 (la valeur du jeu vérifié), Ankily-Mahasoa, 303337 et 303339.
+  - **Écartées en cours de mesure, des listes partielles fausses** :
+    - A1 seul, sur 297 : une ligne de sommaire collée ;
+    - A2 à A4 sans A1, sur 303337 : les titres collés en un paragraphe.
+  - Le DAO de 303339 lu pour un contrat-cadre donne les trois valeurs attendues par la demande
+    (`ImportDaoIntegrationTest.cadrageDuDao303339`).
+
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 
 Demande front `frontend/docs/demande-backend-2026-09-25-formulaires-du-candidat.md`. Livré : §B1, §B2, §B4, et au §B3

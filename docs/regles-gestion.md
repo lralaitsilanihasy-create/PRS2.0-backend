@@ -875,6 +875,13 @@ Décision : ADR-0012. Contrat : `docs/api-endpoints.md`, § *L'import du DAO*.
   - Un taux d'avance lu vaut réponse « avance : oui ».
   - Au contrat-cadre, les variantes, la forme du groupement, la provenance et la révision des prix ne servent à rien et ne sont
     pas demandées ; la garantie de soumission et l'avance restent.
+- ⚠️ **Depuis le 17/10 : les choix que le DAO fait par sa rédaction.**
+  - Un article réduit à « Sans objet » (assurance, modalités d'exécution communes) vaut réponse « non » quand il est à sa place,
+    entre les articles qui l'entourent dans le document type.
+  - Les fiches de renseignements A1 à A4 que le DAO contient sont proposées comme fiches jointes.
+  - Ces propositions sont à vérifier par la PRMP.
+- ⚠️ **Délais des marchés subséquents (17/10)** : la question des délais n'est plus exigée à la validation quand les marchés
+  subséquents sont fractionnés par bons de commande : elle ne vaut que pour des marchés subséquents uniques.
 - ⚠️ **Depuis le 17/10 : le DAO importé doit être celui de la ligne** (ADR-0015).
   - **Le contrôle** : l'import cherche dans le document l'objet, l'autorité contractante, le mode de passation et, selon le
     cas, la forme du contrat-cadre et les lots de la ligne du plan.

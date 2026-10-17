@@ -380,15 +380,23 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
         Path fichier = Path.of(System.getProperty("user.home"), "frontendprs2", "PDF_generes",
                 "DAO_CC_303339_consomptibles_informatiques_charte_application.pdf");
         org.junit.jupiter.api.Assumptions.assumeTrue(java.nio.file.Files.isRegularFile(fichier), "DAO de 303339 absent : cas ignoré.");
+        importer("referentiel-champs-fiche-dao-travaux.csv");   // B04-CD-01 (toutes catégories) n'est défini que là
         Long cible = creerDmc(9914);
         String r = importer(cible, fichier.getFileName().toString(), java.nio.file.Files.readAllBytes(fichier)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
+        System.out.println("CHAMPS-DEBUG " + JsonPath.read(r, "$.propositions[?(@.code =~ /B09-(AU|EA)-01|B04-CD-01|B07-(FS|DE)-01/)]") + " | NT " + JsonPath.read(r, "$.nonTrouves") + " | CF " + JsonPath.read(r, "$.conflits") + " | AMB " + JsonPath.read(r, "$.ambigus"));
         assertThat(JsonPath.<List<String>>read(r, "$.cadrage[?(@.cle=='avance')].valeur")).containsExactly("OUI");
         assertThat(JsonPath.<List<String>>read(r, "$.cadrage[?(@.cle=='avance')].source")).containsExactly("reflet");
         assertThat(JsonPath.<List<String>>read(r, "$.cadrage[?(@.source=='clause')].cle")).allMatch(c -> c.equals("garantieSoumission")
                 || c.equals("avance"));
         assertThat(JsonPath.<List<String>>read(r, "$.cadrage[*].cle")).doesNotContain("variantes", "formeGroupement", "provenance",
                 "prixRevisable", "garantieSoumission");
+        // ⚠️ 17/10 (« champs-deduits-du-dao ») — B1 : les sections « Sans objet » attestées par encadrement ; B2 : les fiches A1 à A4.
+        assertThat(JsonPath.<List<String>>read(r, "$.propositions[?(@.code=='B09-AU-01')].valeur")).containsExactly("NON");
+        assertThat(JsonPath.<List<String>>read(r, "$.propositions[?(@.code=='B09-EA-01')].valeur")).containsExactly("NON");
+        assertThat(JsonPath.<List<String>>read(r, "$.propositions[?(@.code=='B09-AU-01')].confiance")).containsExactly("moyenne");
+        assertThat(JsonPath.<List<String>>read(r, "$.propositions[?(@.code=='B04-CD-01')].valeur")).containsExactly("A1,A2,A3,A4");
+        assertThat(JsonPath.<List<String>>read(r, "$.propositions[?(@.code=='B04-CD-01')].source")).containsExactly("clause");
     }
 
     // ------------------------------------------------------------------ lot D2 (2026-09-29) — PDF et fournitures

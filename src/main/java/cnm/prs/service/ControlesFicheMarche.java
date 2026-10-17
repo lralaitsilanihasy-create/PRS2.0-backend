@@ -191,6 +191,24 @@ public final class ControlesFicheMarche {
         }
     }
 
+    /**
+     * ⚠️ 2026-10-17 (demande front « champs-deduits-du-dao », §B3, option 2 de la réponse à Q1) — un champ obligatoire qui ne sert à
+     * rien ne bloque pas : {@code B07-DE-01} (délais des marchés subséquents uniques) ne vaut que si {@code B07-FS-01} = « Marchés
+     * uniques non fractionnés » (sections DELAI-* de l'AE-CC, liste des fournitures et calendrier du DAO complet). La grammaire des
+     * conditions d'affichage n'admet ni code de champ ni valeur à espaces : la règle vit ici, le champ reste affiché.
+     */
+    static boolean sansObjet(String code, String cle, Map<String, String> valeurs) {
+        if (!"B07-DE-01".equals(code)) {
+            return false;
+        }
+        int diese = cle.indexOf(LotsFiche.SEPARATEUR);
+        String forme = valeurs.get(diese < 0 ? "B07-FS-01" : "B07-FS-01" + cle.substring(diese));
+        if (forme == null) {
+            forme = valeurs.get("B07-FS-01");
+        }
+        return forme != null && !forme.isBlank() && !"Marchés uniques non fractionnés".equals(forme.trim());
+    }
+
     /** Les contrôles d'un champ, {@code {règle, rôle}} par contrôle ({@code REGLE} seule : rôle vide) ; V50 : plusieurs, séparés par des virgules. */
     static List<String[]> controles(ChampFicheMarche c) {
         List<String[]> out = new ArrayList<>();
@@ -245,7 +263,7 @@ public final class ControlesFicheMarche {
                     if (!vide) {
                         nbSaisis++;
                     }
-                    if (Boolean.TRUE.equals(c.getObligatoire()) && vide) {
+                    if (Boolean.TRUE.equals(c.getObligatoire()) && vide && !sansObjet(c.getCode(), cle, valeurs)) {
                         bloquants.add(new Controle(OBLIGATOIRE, List.of(cle), c.codeBloc(),
                                 "« " + c.getLibelle() + " »" + lot + " est obligatoire."));
                     }
