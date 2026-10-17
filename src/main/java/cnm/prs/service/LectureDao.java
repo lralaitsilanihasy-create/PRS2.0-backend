@@ -564,6 +564,186 @@ public final class LectureDao {
     }
 
     private record Motif(Pattern entier, Pattern tete, List<String> jetons, boolean finitParFixe) {
+
+        boolean reconnait(String paragraphe) {
+            return entier.matcher(paragraphe).find() || tete != null && tete.matcher(paragraphe).find();
+        }
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (« lecture-valeurs-voisines », §B1-B2) — les deux valeurs d'un paragraphe fait de deux jetons et de
+     * ponctuation (« {{B02-OB-03}} — {{B02-OB-01}} », « {{B02-LT-06}} ; {{B02-LT-07}} », « {{X}} ({{Y}}) »), ou {@code null} :
+     * <ul>
+     *   <li>B1 — une valeur déjà connue (reprise du plan, ou lue en confiance haute ailleurs dans le document) se retrouve, après
+     *       normalisation, au bord du texte lu (au début pour le premier jeton, à la fin pour le second) : l'autre est le reste,
+     *       séparateur ôté ;</li>
+     *   <li>B2 — sinon, le texte fixe qui les sépare apparaît une seule fois dans le texte lu ; une parenthèse ouvrante n'est
+     *       retenue que si la parenthèse fermante du modèle termine le texte.</li>
+     * </ul>
+     * Chaque part est non vide et se lit selon le type de son champ.
+     */
+    static List<String> voisines(String modele, String brut, Map<String, String> connues, List<Lue> lues,
+            Function<String, InfoChamp> champs) {
+        Matcher m = JETON.matcher(modele);
+        List<String> jetons = new ArrayList<>();
+        List<int[]> places = new ArrayList<>();
+        while (m.find()) {
+            jetons.add(m.group(1));
+            places.add(new int[] { m.start(), m.end() });
+        }
+        if (jetons.size() != 2) {
+            return null;
+        }
+        String sep = norm(modele.substring(places.get(0)[1], places.get(1)[0]));
+        String apres = norm(modele.substring(places.get(1)[1]));
+        String v = trim(norm(brut));
+        // La fin du modèle (« ). ») que sansTexteFixe n'a pas ôtée parce que le point manquait.
+        if (apres.startsWith(")") && v.endsWith(")")) {
+            v = trim(v.substring(0, v.length() - 1));
+        } else if (apres.startsWith(")") && v.endsWith(").")) {
+            v = trim(v.substring(0, v.length() - 2));
+        }
+        String[] parts = null;
+        // B1 — une valeur connue au bord.
+        String k1 = connue(jetons.get(0), connues, lues);
+        String k2 = connue(jetons.get(1), connues, lues);
+        if (k2 != null && v.endsWith(k2) && v.length() > k2.length()) {
+            parts = new String[] { sansSeparateur(v.substring(0, v.length() - k2.length()), sep, true), k2 };
+        } else if (k1 != null && v.startsWith(k1) && v.length() > k1.length()) {
+            parts = new String[] { k1, sansSeparateur(v.substring(k1.length()), sep, false) };
+        } else if (!sep.isEmpty()) {
+            // B2 — un séparateur présent une seule fois ; « ( » seulement refermé par le modèle.
+            String s = sep.trim();
+            boolean parenthese = s.endsWith("(");
+            int i = v.indexOf(s);
+            if (i > 0 && i == v.lastIndexOf(s) && (!parenthese || apres.startsWith(")"))) {
+                parts = new String[] { v.substring(0, i), v.substring(i + s.length()) };
+            }
+        }
+        if (parts == null) {
+            return null;
+        }
+        List<String> out = new ArrayList<>();
+        for (int n = 0; n < 2; n++) {
+            String p = trim(parts[n]);
+            String[] jt = jetons.get(n).split("\\.", -1);
+            InfoChamp info = champs == null ? null : champs.apply(jt[0].split("#", -1)[0]);
+            if (p.isEmpty() || valeurSaisie(p, info == null ? null : info.type(), jt.length > 1 ? jt[1] : null) == null) {
+                return null;
+            }
+            out.add(p);
+        }
+        return out;
+    }
+
+    /** Une valeur connue d'un jeton : la reprise du plan, sinon une lecture de confiance haute du même document ; normalisée. */
+    private static String connue(String jeton, Map<String, String> connues, List<Lue> lues) {
+        String code = jeton.split("\\.", -1)[0];
+        String v = connues == null ? null : connues.get(code.split("#", -1)[0]);
+        if (v != null && !v.isBlank()) {
+            return trim(norm(v));
+        }
+        return lues.stream().filter(l -> l.jeton().equals(jeton) && l.confiance() == Confiance.HAUTE).map(l -> trim(norm(l.brut())))
+                .filter(x -> !x.isEmpty()).findFirst().orElse(null);
+    }
+
+    /** Le reste d'une coupe, sans le séparateur qui le bordait (à sa fin pour la première part, à son début pour la seconde). */
+    private static String sansSeparateur(String reste, String sep, boolean fin) {
+        String r = trim(reste);
+        String s = sep.trim();
+        if (s.isEmpty()) {
+            return r;
+        }
+        if (fin && r.endsWith(s)) {
+            return trim(r.substring(0, r.length() - s.length()));
+        }
+        if (!fin && r.startsWith(s)) {
+            return trim(r.substring(s.length()));
+        }
+        return r;
+    }
+
+    private static final Pattern TROU_SEUL = Pattern.compile("^<[^<>]+>$");
+    private static final Pattern TITRE_ARTICLE = Pattern.compile("^ARTICLE(?:\\d|PREMIER|1ER)");
+    private static final Pattern CLAUSE_NUMEROTEE = Pattern.compile("^\\d+\\.\\d+(?:\\.\\d+)*\\s*-\\s*\\p{L}");
+
+    /** Un titre d'article (lettres espacées comprises : « AR TIC L E4.- ») ou une clause numérotée (« 1.1-Lots ») ; normalisé. */
+    static boolean titreDeClause(String ligne) {
+        String l = trim(ligne);
+        return TITRE_ARTICLE.matcher(l.replaceAll("\\s+", "").toUpperCase(Locale.ROOT)).find() || CLAUSE_NUMEROTEE.matcher(l).find();
+    }
+
+    /** Les paragraphes du modèle examinés pour la première accroche, et ceux qui doivent la confirmer. */
+    static final int ACCROCHES = 5;
+    static final int CONFIRMATIONS = 8;
+
+    /**
+     * ⚠️ 2026-10-17 (« lecture-valeurs-voisines ») — le paragraphe du document où la lecture commence. Parmi les
+     * {@value #ACCROCHES} premiers paragraphes du modèle qui portent du texte fixe, chaque occurrence n'est retenue que si deux
+     * au moins des {@value #CONFIRMATIONS} paragraphes suivants du modèle se retrouvent dans les {@value #FENETRE} paragraphes
+     * qui la suivent (un seul s'il n'en reste qu'un). La plus précoce l'emporte. Sans occurrence confirmée : 0, comme avant.
+     */
+    static int premiereAccroche(List<Unite> us, List<String> doc) {
+        List<Integer> avecTexte = new ArrayList<>();
+        for (int k = 0; k < us.size(); k++) {
+            if (!seulJeton(us.get(k)) && lettresFixes(us.get(k).texte()) >= ANCRE_HAUTE) {
+                avecTexte.add(k);
+            }
+        }
+        // L'accroche d'avant : le premier paragraphe du modèle présent dans le document, à sa première occurrence.
+        int aAvant = -1;
+        int jAvant = -1;
+        for (int a = 0; a < avecTexte.size() && aAvant < 0; a++) {
+            Motif mo = motifParagraphe(us.get(avecTexte.get(a)).texte());
+            for (int j = 0; j < doc.size(); j++) {
+                if (mo.reconnait(doc.get(j))) {
+                    aAvant = a;
+                    jAvant = j;
+                    break;
+                }
+            }
+        }
+        // Confirmée, elle reste : la lecture ne change pas. Sinon, la plus précoce des occurrences confirmées qui la suivent.
+        if (aAvant < 0 || confirmee(us, doc, avecTexte, aAvant, jAvant)) {
+            return 0;
+        }
+        int meilleur = -1;
+        for (int a = aAvant; a < Math.min(avecTexte.size(), aAvant + ACCROCHES); a++) {
+            Motif mo = motifParagraphe(us.get(avecTexte.get(a)).texte());
+            for (int j = jAvant + 1; j < doc.size() && (meilleur < 0 || j < meilleur); j++) {
+                if (mo.reconnait(doc.get(j)) && confirmee(us, doc, avecTexte, a, j)) {
+                    meilleur = j;
+                    break;
+                }
+            }
+        }
+        return Math.max(0, meilleur);
+    }
+
+    /** Deux au moins des paragraphes suivants du modèle (un seul s'il n'en reste qu'un) se retrouvent dans la fenêtre qui suit. */
+    private static boolean confirmee(List<Unite> us, List<String> doc, List<Integer> avecTexte, int a, int j) {
+        List<Motif> suivants = new ArrayList<>();
+        for (int b = a + 1; b < Math.min(avecTexte.size(), a + 1 + CONFIRMATIONS); b++) {
+            suivants.add(motifParagraphe(us.get(avecTexte.get(b)).texte()));
+        }
+        if (suivants.isEmpty()) {
+            return false;   // rien pour la confirmer : une accroche ne se déplace pas sur le dernier paragraphe du modèle
+        }
+        int requis = Math.min(2, suivants.size());
+        int confirmes = 0;
+        int fin = Math.min(doc.size(), j + 1 + FENETRE);
+        for (Motif s : suivants) {
+            for (int i = j + 1; i < fin; i++) {
+                if (s.reconnait(doc.get(i))) {
+                    confirmes++;
+                    break;
+                }
+            }
+            if (confirmes >= requis) {
+                return true;
+            }
+        }
+        return confirmes >= requis;
     }
 
     /** ⚠️ 2026-10-03 (règle 9, suite) — un jeton suivi d'une unité de quantité attend un nombre. */
@@ -638,6 +818,9 @@ public final class LectureDao {
         if (POINTILLES.matcher(v).matches()) {
             return null;   // un jeton vide s'imprime en pointillés (R2)
         }
+        if (TROU_SEUL.matcher(v).matches()) {
+            return null;   // ⚠️ 2026-10-17 — un trou du modèle laissé dans le DAO (« <insérer l'adresse complète> ») n'est pas une valeur
+        }
         // ⚠️ 2026-10-01 (front eed6bc4, AE du MEN : « Jours …. ») — une unité seule devant ou derrière des pointillés est une
         // case laissée en blanc ; les caractères d'usage privé n'y comptent pas.
         if (DEUX_POINTILLES.matcher(v).find() && POINTILLES.matcher(
@@ -701,6 +884,15 @@ public final class LectureDao {
      */
     public static Resultat lire(String sigle, FichierCommande.Modele modele, List<String> docLu,
             Function<String, InfoChamp> champs, List<String> origines) {
+        return lire(sigle, modele, docLu, champs, origines, Map.of());
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (demande front « lecture-valeurs-voisines », §B1) — avec {@code connues} : les valeurs déjà connues par code de
+     * champ (les reprises du plan), qui découpent un paragraphe de deux jetons (§B1).
+     */
+    public static Resultat lire(String sigle, FichierCommande.Modele modele, List<String> docLu,
+            Function<String, InfoChamp> champs, List<String> origines, Map<String, String> connues) {
         List<Unite> us = unites(modele.elements());
         Profil profil = new Profil(us);
         List<String> doc = new ArrayList<>(docLu);   // copie : un paragraphe fusionné y est redécoupé
@@ -717,7 +909,9 @@ public final class LectureDao {
         }
 
         // 1. Les paragraphes reconnus, dans l'ordre (un curseur empêche un texte répété de se lire deux fois).
-        int curseur = 0;
+        // ⚠️ 2026-10-17 (« lecture-valeurs-voisines ») — la première accroche est CONFIRMÉE : l'AE-CC commence par le même bloc
+        // d'autorité que le DPAC, qui le précède dans le DAO ; accroché au DPAC, il sautait tout son préambule (B02-SG-01 à 03).
+        int curseur = premiereAccroche(us, doc);
         // ⚠️ 2026-10-02 (règle 8, front f04418a, DAO routier du MTP) — RÉANCRAGE. La première accroche se cherche dans tout le
         // document : elle peut tomber sur le SOMMAIRE, et la fenêtre de 60 paragraphes ne rejoignait jamais le vrai texte
         // (1 paragraphe reconnu sur 161). Après REANCRAGE paragraphes distinctifs (non répétés) manqués d'affilée, un
@@ -838,6 +1032,8 @@ public final class LectureDao {
         // n'en reste qu'un, il est lu en confiance basse (CCAP-T : « {{B02-OT-02}}. » suivi de la liste des lots, sous
         // ALLOTI, sur un marché non alloti).
         Set<String> filtres = new java.util.HashSet<>();
+        // ⚠️ 2026-10-17 — les jetons dont un intervalle a été écarté (titre de clause) : plus proposés, même lus ailleurs.
+        Set<String> douteux = new LinkedHashSet<>();
         for (Map.Entry<String, List<Jeton>> e : intervalles.entrySet()) {
             List<Jeton> presents = e.getValue().stream()
                     .filter(j -> j.sections().stream().noneMatch(s -> absente(s, us, profil, trouves, sectionsVues))).toList();
@@ -858,6 +1054,13 @@ public final class LectureDao {
             List<String> entre = doc.subList(de, a);
             if (jetons.size() > 1) {
                 ambigus.add(new Ambigu(jetons.stream().map(Jeton::nom).toList(), String.join("\n", entre)));
+                continue;
+            }
+            // ⚠️ 2026-10-17 (« lecture-valeurs-voisines », mesure) — un intervalle qui contient un titre d'article ou de clause
+            // numérotée du document (« ARTICLE 4.- GROUPEMENTS », « 1.1-Lots ») n'est pas une valeur : le modèle et le DAO réel
+            // n'ont pas le même plan à cet endroit.
+            if (entre.stream().anyMatch(LectureDao::titreDeClause)) {
+                jetons.forEach(x -> douteux.add(x.nom()));
                 continue;
             }
             if (ressembleAuModele(entre.get(0), debuts)) {
@@ -883,6 +1086,19 @@ public final class LectureDao {
                 nbJetons++;
             }
             if (nbJetons > 1) {
+                // ⚠️ 2026-10-17 (« lecture-valeurs-voisines », §B1-B3) — deux jetons se séparent quand la coupe est SÛRE : une
+                // valeur déjà connue au bord du texte lu (B1), ou un séparateur présent une seule fois (B2). Confiance moyenne.
+                List<String> deux = nbJetons == 2 ? voisines(us.get(j.k()).texte(), brut, connues, lues, champs) : null;
+                if (deux != null) {
+                    List<String> noms = new ArrayList<>();
+                    Matcher jt = JETON.matcher(us.get(j.k()).texte());
+                    while (jt.find()) {
+                        noms.add(jt.group(1));
+                    }
+                    for (int n = 0; n < 2; n++) {
+                        lues.add(new Lue(noms.get(n), deux.get(n), Confiance.MOYENNE, String.join("\n", entre), false, de));
+                    }
+                }
                 continue;
             }
             lues.add(new Lue(j.nom(), brut, confiance, String.join("\n", entre), false, de));
@@ -983,7 +1199,7 @@ public final class LectureDao {
         // détection des conflits (qui reste sur le texte normalisé : pas de faux conflit). Une ligne introuvable garde la
         // valeur normalisée.
         Reprojection reprojection = origines == null ? null : new Reprojection(origines);
-        List<Proposition> finales = parCode.values().stream().filter(p -> !enConflit.contains(p.code()))
+        List<Proposition> finales = parCode.values().stream().filter(p -> !enConflit.contains(p.code()) && !douteux.contains(p.code()))
                 .map(p -> reprojection == null || !sources.containsKey(p.code()) ? p
                         : new Proposition(p.code(), reprojection.valeur(p.valeur(), sources.get(p.code())), p.brut(),
                                 p.confiance(), p.extrait()))

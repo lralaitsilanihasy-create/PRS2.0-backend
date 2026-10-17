@@ -6221,6 +6221,44 @@ articles retenus par **`PUT …/articles`**, sans nouvelle route. Lecteur : `Lec
   dossier de planification reçoit `FICHE_IMPORTEE` « besoin pré-rempli par import de <fichier> (<12 caractères>) : n article(s)[,
   lot k] ».
 
+#### ⚠️ 2026-10-17 — deux valeurs voisines d'un même paragraphe (demande front « lecture-valeurs-voisines »)
+
+Le contrat d'`ImportDaoResult` ne change pas. `LectureDao` change en trois points, et le front les reporte dans `lire.mjs`
+pour garder la parité.
+
+- **La cause réelle de `B02-SG-01` à `SG-03` non relus** n'est pas la règle du lot D3 (§B4.3) : leurs paragraphes portent du
+  texte fixe, et la lecture par motif les découpe déjà, en confiance haute. Le problème est l'**accroche**. L'AE-CC commence par
+  le même bloc d'autorité que le DPAC (« Personne responsable des marchés publics : … », courriel), et le DPAC le précède dans le
+  DAO. La lecture de l'AE-CC s'accrochait au DPAC, ne retrouvait pas ses paragraphes suivants, et ne se réancrait que loin
+  après le préambule : il était sauté en bloc. Sur le DAO complet de la fiche 2 (v3), l'AE-CC reconnaissait 157 paragraphes ;
+  il en reconnaît 184.
+  - **Accroche confirmée** (`premiereAccroche`) : l'accroche d'avant est gardée si deux au moins des huit paragraphes suivants
+    du modèle se retrouvent dans les 60 paragraphes qui la suivent. Sinon, la lecture part de la plus précoce des occurrences
+    confirmées qui la suivent, parmi les cinq premiers paragraphes du modèle. Un paragraphe sans suivant ne confirme rien.
+- **§B1 et §B2, dans un paragraphe fait de deux jetons et de ponctuation** (`voisines`), là où la règle §B4.3 ne proposait
+  rien (« {{B02-OB-03}} — {{B02-OB-01}} », « {{B02-LT-06}} ; {{B02-LT-07}} », « {{X}} ({{Y}}) ») :
+  - B1 : une valeur **connue** se retrouve, normalisée, **au bord** du texte lu ; l'autre valeur est le reste, sans le
+    séparateur. Est connue une reprise du plan (l'import passe `valeursPpm` à la lecture) ou une valeur lue en confiance haute
+    dans le même document.
+  - B2 : sinon, le séparateur figure **une seule fois** ; une parenthèse ouvrante n'est retenue que si le modèle la referme.
+  - Chaque part est non vide et se lit selon son type. Les deux valeurs sont proposées en **confiance moyenne**, jamais cochées
+    d'office (§B3). Plus de deux jetons : rien, comme avant.
+- **Deux gardes, ajoutées à la mesure** :
+  - un intervalle de jeton seul qui contient un **titre d'article ou de clause numérotée** du document (« AR TIC L E4.- … »,
+    « 1.1-Lots ») n'est pas une valeur ; ce jeton n'est alors plus proposé du tout, même lu ailleurs ;
+  - un **trou du modèle** laissé tel quel dans le DAO (« <insérer l'adresse complète> ») n'est pas une valeur.
+- **Mesure sur les cinq DAO réels et le DAO de la fiche 2**, en comptant les valeurs proposées (les reprises du plan sont
+  comparées, jamais proposées) :
+  - **valeurs nouvelles, toutes justes** : `B09-OM-01` = « cinq (05) » (297, confiance haute) ; sur la fiche 2, `B02-SG-01`,
+    `SG-02` et `SG-03`, et `SG-04` passe en confiance haute ;
+  - **aucune valeur nouvelle fausse** ;
+  - **sept valeurs fausses retirées** : des titres d'article (297 : `B05-VP-03`, `B09-DX-03`, `B09-AS-02`), deux débordements sur
+    l'article suivant (MTP : `B09-VQ-01`, `B10-PC-01`), et `B02-SG-04` = « <insérer les nom et prénom(s) du signataire> » (6114,
+    6213) ;
+  - parité de la lecture des tableaux inchangée (136 articles).
+- Les deux DAO de démonstration (`ExemplesDAO`) n'étaient plus sur le poste lors de la mesure : leur recette revient au front.
+  Les cas B1 et B2 sont couverts par `LectureDaoVoisinesTest`, et la lecture de l'AE-CC à la suite d'un DPAC aussi.
+
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 
 Demande front `frontend/docs/demande-backend-2026-09-25-formulaires-du-candidat.md`. Livré : §B1, §B2, §B4, et au §B3

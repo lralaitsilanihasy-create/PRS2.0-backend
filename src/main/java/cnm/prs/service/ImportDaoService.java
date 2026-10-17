@@ -391,7 +391,8 @@ public class ImportDaoService {
         List<LectureDao.Proposition> parClause = new ArrayList<>();
         List<ImportDaoResult.Passage> passages = new ArrayList<>();
         for (ModelesDao.Couverture c : couvertures) {
-            LectureDao.Resultat lu = LectureDao.lire(c.sigle(), modeles.modele(c.sigle()), paragraphes, infos, origines);
+            LectureDao.Resultat lu = LectureDao.lire(c.sigle(), modeles.modele(c.sigle()), paragraphes, infos, origines,
+                    fiche.getValeursPpm() == null ? Map.of() : fiche.getValeursPpm());
             LectureDao.Resultat r = LectureDao.completerParClause(lu, paragraphes, c.sigle(), infos);
             r.propositions().stream().filter(p -> LectureDao.SOURCE_CLAUSE.equals(p.source())).forEach(parClause::add);
             r.passages().forEach(p -> passages.add(new ImportDaoResult.Passage(p.liste(), p.texte(), p.paragraphe())));
