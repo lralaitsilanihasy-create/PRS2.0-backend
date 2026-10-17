@@ -510,7 +510,8 @@ en un seul document*.
   - Un en-tête et un pied communs à toutes les pages courantes.
   - **Les tableaux du besoin sont imprimés dans le dossier** : le cadre du bordereau des prix, les spécifications techniques
     et la liste des fournitures avec leur calendrier de livraison ; en travaux, le bordereau des prix unitaires puis le détail
-    quantitatif et estimatif. Les classeurs restent fournis pour la saisie des candidats. Le contrat-cadre n'imprime ni liste
+    quantitatif et estimatif. Les classeurs restent fournis pour la saisie des candidats (⚠️ **17/10 : plus produits**, arbitrage
+    du pilote ; le DAO complet porte les mêmes tableaux, les versions déjà validées gardent les leurs). Le contrat-cadre n'imprime ni liste
     ni calendrier, renvoyés à chaque bon de commande ou marché subséquent, sauf quand ses marchés subséquents uniques ont un
     délai fixé par l'autorité.
   - **Le dossier se relit** : un DAO produit par l'application, réimporté dans sa fiche, rend ses articles.

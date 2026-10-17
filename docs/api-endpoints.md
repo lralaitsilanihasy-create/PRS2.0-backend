@@ -9647,6 +9647,20 @@ dossier, le serveur assemble un **`DAO_COMPLET`** en `.docx` et en `.pdf` (deux 
 - Le **contrat-cadre** suit le même plan (son DPAC en section II) avec l'IC et le CCAG de sa catégorie.
 - **Hors du DAO complet** : les classeurs `xlsx` (bordereau des prix, DQE, tableau de conformité), que Word ne sait pas insérer,
   restent servis à part ; l'avis spécifique et les lettres d'invitation aussi.
+  - ⚠️ **17/10 (demande front « retirer-classeurs-bp-tc », arbitrage du pilote)** : les classeurs `BP` et `TC` ne sont **plus
+    produits** à la validation, dans toutes les catégories. Le DAO complet porte les mêmes tableaux depuis la charte du 16/10 :
+    cadre du bordereau des prix, spécifications techniques, et en travaux BPU et DQE.
+    - **Supprimé** : `GenerateurClasseursFiche`.
+    - **Inchangé** :
+      - les versions déjà validées gardent leurs classeurs et les servent, titre compris ;
+      - le bordereau estimatif (`BORDEREAU_ESTIMATIF`) et le DQE estimatif (`DQE_ESTIMATIF`) restent produits.
+    - **Q1, réponse : ils ne servaient qu'à la production et à la liste `GET …/documents`**, donc au retrait du DAO par les
+      candidats.
+      - Ils ne sont jamais devenus une pièce de dossier : la jointure et le cahier des charges de l'attribution ne prennent que
+        les PDF.
+      - Ni la soumission en ligne, ni l'évaluation, ni le journal ne les lisent.
+      - Sur une nouvelle version, un candidat qui retire le DAO reçoit le DAO complet (`.docx` et `.pdf`), sans tableur.
+    - **Q2, réponse : aucun dossier ne les porte** comme pièces, puisqu'un `.xlsx` n'a jamais été joint.
 - **Production** : `DaoCompletWord` écrit les parties dans un dossier temporaire et lance `word/assembler-dao.ps1` (Word en
   automation COM) dans **son propre processus**, avec un délai (`app.dao-complet.delai-secondes`, 300) ; un assemblage à la fois ;
   environ 30 s pour un DAO de 90 pages. `app.dao-complet.actif` (vrai par défaut ; **faux dans les tests**) et système Windows

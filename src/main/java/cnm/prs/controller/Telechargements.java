@@ -41,7 +41,8 @@ final class Telechargements {
             case "PNG", "IMAGE/PNG" -> MediaType.IMAGE_PNG;
             // ⚠️ Lot 2a (2026-09-23) — documents générés par la fiche marché (jamais un fichier téléversé).
             case "DOCX" -> DOCX;
-            // ⚠️ V45 (2026-09-25) — classeurs du candidat produits par la fiche (bordereau, conformité).
+            // ⚠️ V45 (2026-09-25) — classeurs du candidat produits par la fiche (bordereau, conformité) ; plus produits depuis le 17/10,
+            // mais ceux des versions validées avant restent servis.
             case "XLSX" -> XLSX;
             default -> MediaType.APPLICATION_OCTET_STREAM;
         };

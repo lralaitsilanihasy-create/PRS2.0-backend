@@ -56,7 +56,7 @@ public class DocumentsFicheMarcheService {
 
     /** ⚠️ V59 — la catégorie dont le besoin est un DQE (bordereau des prix et DQE, ni LF ni TC). */
     private static final String TRAVAUX = cnm.prs.enums.CategorieDao.TRAVAUX.name();
-    /** ⚠️ 2026-10-03 — le numéro du dossier d'appel d'offres, imprimé en tête des classeurs. */
+    /** ⚠️ 2026-10-03 — le numéro du dossier d'appel d'offres (B02-OB-03), imprimé en tête des documents. */
     static final String CHAMP_NUMERO_DAO = "B02-OB-03";
 
     /** Code stable du type de pièce « Dossier d'appel d'offres complet » (V38). */
@@ -140,8 +140,7 @@ public class DocumentsFicheMarcheService {
     private final DossierRepository dossierRepository;
     private final PieceJointeDossierRepository pieceRepository;
     private final TypePieceJointeRepository typePieceRepository;
-    /** ⚠️ V45 (2026-09-25) — classeurs du candidat et taux de TVA administrable. */
-    private final GenerateurClasseursFiche classeurs;
+    /** ⚠️ V45 (2026-09-25) — taux de TVA administrable, compte de l'ARMP, pied des avis. */
     private final ParametreService parametres;
     /** ⚠️ V47 (2026-09-26) — les modèles officiels des formulaires du candidat, lus au démarrage. */
     private final ModelesCandidat modelesCandidat;
@@ -157,13 +156,12 @@ public class DocumentsFicheMarcheService {
             BlocFicheMarcheRepository blocRepository, RubriqueFicheMarcheRepository rubriqueRepository,
             FicheMarcheRepository ficheRepository, DossierRepository dossierRepository,
             PieceJointeDossierRepository pieceRepository, TypePieceJointeRepository typePieceRepository,
-            GenerateurClasseursFiche classeurs, ParametreService parametres, ModelesCandidat modelesCandidat,
+            ParametreService parametres, ModelesCandidat modelesCandidat,
             cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository, ModelesDao modelesDao, ValeursPpmService valeursPpm) {
         this.valeursPpm = valeursPpm;
         this.modelesDao = modelesDao;
         this.lettreRenvoiRepository = lettreRenvoiRepository;
         this.modelesCandidat = modelesCandidat;
-        this.classeurs = classeurs;
         this.parametres = parametres;
         this.documentRepository = documentRepository;
         this.generateur = generateur;
@@ -193,7 +191,7 @@ public class DocumentsFicheMarcheService {
     /**
      * ⚠️ V45 (2026-09-25, formulaires du candidat, §B3) — avec le besoin d'une fiche de fournitures ({@code articles},
      * vide sinon) : la liste des fournitures et calendrier ({@code LF}, docx et pdf) et, par lot, le bordereau des prix
-     * ({@code BP}) et le tableau de conformité ({@code TC}) en classeurs {@code xlsx}.
+     * ({@code BP}) et le tableau de conformité ({@code TC}) en classeurs {@code xlsx} — ⚠️ plus produits depuis le 17/10 (« retirer-classeurs-bp-tc »).
      */
     public List<Produit> produire(FicheMarcheDto etat, List<BesoinFiche.Article> articles, LocalDateTime validation) {
         return produire(etat, articles, validation, Map.of());
@@ -252,7 +250,7 @@ public class DocumentsFicheMarcheService {
             }
         }
         modeles.removeIf(m -> remplaces.contains(m.type()));
-        // ⚠️ V59 — pas de liste des fournitures aux travaux : leur besoin est le DQE, chiffré dans le classeur BP.
+        // ⚠️ V59 — pas de liste des fournitures aux travaux : leur besoin est le DQE (⚠️ 17/10 : au DAO complet, plus en classeur).
         DocumentFicheModele liste = TRAVAUX.equals(etat.getCategorie()) ? null
                 : SelectionDocumentsFiche.listeFournitures(etat, articles, validation);
         if (liste != null) {
@@ -289,57 +287,8 @@ public class DocumentsFicheMarcheService {
                         etat.getIdDetail(), modele.lot(), etat.getVersion(), f.extension()), f.contenu(), modele.lot()));
             }
         }
-        produits.addAll(classeurs(etat, articles));
-        return produits;
-    }
-
-    /** ⚠️ V45 — bordereau des prix et tableau de conformité de chaque lot qui a des articles. */
-    private List<Produit> classeurs(FicheMarcheDto etat, List<BesoinFiche.Article> articles) {
-        List<Produit> produits = new ArrayList<>();
-        if (articles == null || articles.isEmpty()) {
-            return produits;
-        }
-        boolean aCommande = "A_COMMANDE".equals(etat.getTypeMarche());
-        int nbLots = Boolean.TRUE.equals(etat.getSaisieParLot()) && etat.getNbLots() != null ? etat.getNbLots() : 0;
-        java.math.BigDecimal tva = parametres.tauxTva();
-        List<Integer> lots = new ArrayList<>();
-        if (LotsFiche.alloti(nbLots)) {
-            for (int n = 1; n <= nbLots; n++) {
-                lots.add(n);
-            }
-        } else {
-            lots.add(null);
-        }
-        // ⚠️ V59 (2026-10-02, §B1.3) — travaux : le bordereau des prix et DQE seul (pas de tableau de conformité).
-        boolean travaux = TRAVAUX.equals(etat.getCategorie());
-        Object typePrix = etat.getCadrage() == null ? null : etat.getCadrage().get("typePrix");
-        // ⚠️ 2026-10-03 — l'en-tête dit le numéro du DAO (B02-OB-03), pas seulement la référence du plan de passation.
-        String dossier = GenerateurClasseursFiche.ligneDossier(
-                etat.getValeurs() == null ? null : etat.getValeurs().get(CHAMP_NUMERO_DAO), etat.getRefeDossier());
-        for (String type : travaux ? List.of("BP") : List.of("BP", "TC")) {
-            for (Integer lot : lots) {
-                List<BesoinFiche.Article> duLot = articles.stream().filter(a -> java.util.Objects.equals(a.lot(), lot)).toList();
-                if (duLot.isEmpty()) {
-                    continue;
-                }
-                byte[] contenu;
-                try {
-                    contenu = travaux
-                            ? classeurs.bordereauTravaux(dossier, etat.getDesignationMarche(), lot, duLot,
-                                    aCommande, typePrix == null ? null : String.valueOf(typePrix), tva)
-                            : "BP".equals(type)
-                            ? classeurs.bordereau(dossier, etat.getDesignationMarche(), lot, duLot, aCommande, tva)
-                            : classeurs.conformite(dossier, etat.getDesignationMarche(), lot, duLot);
-                } catch (RuntimeException e) {
-                    throw new GenerationDocumentsException("La génération du document « "
-                            + SelectionDocumentsFiche.titre(type, lot, etat.getTypeMarche(), etat.getCategorie())
-                            + " » a échoué : la version n'est pas validée. "
-                            + e.getMessage(), e);
-                }
-                produits.add(new Produit(type, "xlsx", nomFichier(type, etat.getRefeDossier(), etat.getIdDetail(), lot,
-                        etat.getVersion(), "xlsx"), contenu, lot));
-            }
-        }
+        // ⚠️ 2026-10-17 (demande front « retirer-classeurs-bp-tc », arbitrage du pilote) — plus de classeurs BP ni TC : le DAO complet
+        // porte les mêmes tableaux (charte du 16/10). Les versions déjà validées gardent les leurs.
         return produits;
     }
 

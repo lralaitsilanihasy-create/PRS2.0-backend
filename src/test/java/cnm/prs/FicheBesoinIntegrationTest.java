@@ -13,9 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.poi.ss.usermodel.CellType;
-import org.apache.poi.xssf.usermodel.XSSFSheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.BeforeEach;
@@ -186,8 +183,8 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("3 — Validation : liste des fournitures (un tableau par lot, lieu et délai du lot), bordereau des prix et "
-            + "tableau de conformité par lot en xlsx protégés (prix unitaire seul déverrouillé, montants en formules, TVA) ; "
+    @DisplayName("3 — Validation : liste des fournitures (un tableau par lot, lieu et délai du lot) ; ⚠️ 17/10 : plus de classeur "
+            + "BP ni TC ; "
             + "la révision copie le besoin ; fiche validée → 409")
     void generation() throws Exception {
         Long idDmc = creerDmc(9902);
@@ -205,38 +202,13 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
 
         String documents = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(documents, "$[?(@.extension=='xlsx')].type"))
-                .containsExactly("BP", "BP", "BP", "TC", "TC", "TC");
-        assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='BP')].nomFichier"))
-                .allMatch(n -> n.matches("BP_.*_9902_lot[123]_v1\\.xlsx"));
-        assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='TC')].libelle"))
-                .contains("Spécifications techniques — tableau de conformité — lot 2");
+        // ⚠️ 17/10 (« retirer-classeurs-bp-tc ») — plus de classeur BP ni TC : le DAO complet porte les mêmes tableaux.
+        assertThat(JsonPath.<List<String>>read(documents, "$[?(@.extension=='xlsx')].type")).isEmpty();
+        assertThat(JsonPath.<List<String>>read(documents, "$[*].type")).doesNotContain("BP", "TC");
 
         String lf = texteDocx(contenu(documents, "LF", "docx", null));
         assertThat(lf).contains("Liste des fournitures et calendrier de livraison", "Lot 1", "Lot 3", "Ordinateur lot 2",
                 "Lieu de livraison : Site 2", "Délai maximum de livraison de chaque commande : 30 jours");
-
-        try (XSSFWorkbook bp = new XSSFWorkbook(new ByteArrayInputStream(contenu(documents, "BP", "xlsx", 2)))) {
-            XSSFSheet f = bp.getSheetAt(0);
-            assertThat(f.getProtect()).isTrue();
-            assertThat(f.getRow(0).getCell(0).getStringCellValue()).isEqualTo("Bordereau des prix — lot 2");
-            assertThat(f.getRow(5).getCell(1).getStringCellValue()).isEqualTo("Ordinateur lot 2");
-            assertThat(f.getRow(5).getCell(3).getNumericCellValue()).isEqualTo(20);
-            assertThat(f.getRow(5).getCell(5).getCellStyle().getLocked()).isFalse();   // prix unitaire HT
-            assertThat(f.getRow(5).getCell(3).getCellStyle().getLocked()).isTrue();
-            assertThat(f.getRow(5).getCell(7).getCellType()).isEqualTo(CellType.FORMULA);
-            assertThat(f.getRow(5).getCell(7).getCellFormula()).isEqualTo("E6*F6");
-            assertThat(f.getRow(7).getCell(5).getStringCellValue()).isEqualTo("Total HT");
-            assertThat(f.getRow(8).getCell(5).getStringCellValue()).isEqualTo("TVA (20 %)");
-            assertThat(f.getRow(9).getCell(7).getCellFormula()).isEqualTo("H8+H9");
-        }
-        try (XSSFWorkbook tc = new XSSFWorkbook(new ByteArrayInputStream(contenu(documents, "TC", "xlsx", 1)))) {
-            XSSFSheet f = tc.getSheetAt(0);
-            assertThat(f.getProtect()).isTrue();
-            assertThat(f.getRow(5).getCell(3).getStringCellValue()).isEqualTo("8 Go au minimum");
-            assertThat(f.getRow(5).getCell(4).getCellStyle().getLocked()).isFalse();
-            assertThat(f.getDataValidations()).hasSize(1);
-        }
 
         articles(idDmc, 1, article(null, "X", 1, 2, "a", "b")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("FICHE_VALIDEE"));

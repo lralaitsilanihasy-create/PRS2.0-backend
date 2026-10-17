@@ -139,7 +139,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         remplirObligatoiresEtValider(idDmc, "A_COMMANDE", null, propres);
 
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "LF", "LF", "BP", "TC", "BORDEREAU_ESTIMATIF");   // ⚠️ V117 (Q11)
+        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "LF", "LF", "BORDEREAU_ESTIMATIF");   // ⚠️ V117 (Q11) ; ⚠️ 17/10 : ni BP ni TC
         assertThat(texte(idDmc, "DPAO")).contains("1.2. - DONNEES PARTICULIERES DE L’APPEL D’OFFRES", "1.2 Marché à commandes");
         assertThat(texte(idDmc, "CCAP")).contains("CAHIER DES PRESCRIPTIONS SPECIALES", "fixé dans le bon de commande");
         assertThat(texte(idDmc, "AE")).contains("ACTE D'ENGAGEMENT (A.E)", "Le délai d'exécution est fixé dans le bon de commande");
@@ -182,7 +182,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
 
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", null, Map.of("B05-MT-01", "250000000"));
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "LF", "LF", "BP", "TC", "BORDEREAU_ESTIMATIF");   // ⚠️ V117 (Q11)
+        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "LF", "LF", "BORDEREAU_ESTIMATIF");   // ⚠️ V117 (Q11) ; ⚠️ 17/10 : ni BP ni TC
         // ⚠️ Lot D (2026-09-28) — le DPAC et l'AE du contrat-cadre sont le document type officiel rempli, plus des listes.
         assertThat(texte(idDmc, "DPAC")).contains("DONNEES PARTICULIERES D’APPEL A CONCURRENCE",
                 "Calendrier prévisionnel de la consultation").doesNotContain("{{");

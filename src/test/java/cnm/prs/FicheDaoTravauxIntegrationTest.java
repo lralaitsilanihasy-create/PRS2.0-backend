@@ -149,7 +149,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
 
         remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of("B02-LT-03", "Tranche ferme : gros œuvre"));
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "A1", "A1", "BP", "DQE_ESTIMATIF");   // ⚠️ V117 (Q11)   // V59 : + le bordereau des prix et DQE (xlsx)   // V46 : fiche A1 exigée (B04-CD-01), gabarit provisoire
+        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "A1", "A1", "DQE_ESTIMATIF");   // ⚠️ 17/10 : plus de classeur BP   // ⚠️ V117 (Q11)   // V59 : + le bordereau des prix et DQE (xlsx)   // V46 : fiche A1 exigée (B04-CD-01), gabarit provisoire
     }
 
     @Test
@@ -159,7 +159,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         cadrage(idDmc, "{\"attributaires\":\"MONO\",\"groupement\":\"NON\",\"avance\":\"NON\"}");
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", "TRAVAUX", Map.of());
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "A1", "A1", "BP", "DQE_ESTIMATIF");   // ⚠️ V117 (Q11)   // V59 : + le bordereau des prix et DQE   // ⚠️ 16/10 (charte, R4) : B04-CD-01 ouvert au contrat-cadre, fiche A1
+        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "A1", "A1", "DQE_ESTIMATIF");   // ⚠️ 17/10 : plus de classeur BP   // ⚠️ V117 (Q11)   // V59 : + le bordereau des prix et DQE   // ⚠️ 16/10 (charte, R4) : B04-CD-01 ouvert au contrat-cadre, fiche A1
     }
 
     @Test
@@ -321,8 +321,8 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("V59 (02/10, DQE des travaux, §B1) — prix unitaires (MTP) : le besoin s'ouvre aux travaux ; numéro de prix, "
-            + "série, quantités à deux décimales, 400 nominatifs ; classeur BP : séries, sous-totaux, récapitulation, prix en "
-            + "lettres et HT seuls ouverts, plafond de 001 en formule, liste des sous-détails ; ni LF ni TC ; fournitures inchangées")
+            + "série, quantités à deux décimales, 400 nominatifs ; ⚠️ 17/10 : plus de classeur BP (le DAO complet porte BPU et DQE) ; "
+            + "ni LF ni TC ; fournitures inchangées")
     void dqePrixUnitaires() throws Exception {
         String ref = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
         assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B12')].rendu")).containsExactly("BESOIN");
@@ -363,81 +363,8 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
 
         remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of());
         String docs = documents(idDmc);
-        assertThat(JsonPath.<List<String>>read(docs, "$[*].type")).contains("BP").doesNotContain("LF", "TC");
-        assertThat(JsonPath.<List<String>>read(docs, "$[?(@.type=='BP')].libelle"))
-                .containsExactly("Bordereau des prix et détail quantitatif et estimatif");
-        int idBp = JsonPath.<List<Integer>>read(docs, "$[?(@.type=='BP')].idDocument").get(0);
-        byte[] xlsx = mvc.perform(get("/api/fiches-marche/documents/" + idBp + "/contenu").header("Authorization", tokenPrmp))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
-        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
-                new java.io.ByteArrayInputStream(xlsx))) {
-            org.apache.poi.xssf.usermodel.XSSFSheet f = wb.getSheetAt(0);
-            assertThat(f.getProtect()).isTrue();
-            // ⚠️ 03/10 (contre-recette du front) — le numéro du DAO, puis la référence du plan de passation.
-            String valide = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
-                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-            String numeroDao = JsonPath.read(valide, "$.valeurs['B02-OB-03']");
-            assertThat(numeroDao).isNotBlank();
-            assertThat(f.getRow(1).getCell(0).getStringCellValue()).isEqualTo("Dossier d'appel d'offres : " + numeroDao
-                    + " (plan de passation : " + JsonPath.read(valide, "$.refeDossier") + ")");
-            assertThat(cnm.prs.service.GenerateurClasseursFiche.ligneDossier(null, "00004/PPM-AGPM/CNM/2026"))
-                    .isEqualTo("Plan de passation : 00004/PPM-AGPM/CNM/2026");
-            List<String> entetes = new java.util.ArrayList<>();
-            f.getRow(4).forEach(c -> entetes.add(c.getStringCellValue()));
-            assertThat(entetes).containsExactly("N° de prix", "Désignation", "Unité", "Quantité", "Libellé du bordereau",
-                    "Prix unitaire en toutes lettres", "Prix unitaire HT", "Montant HT");
-            Map<String, Integer> lignes = new java.util.LinkedHashMap<>();
-            for (org.apache.poi.ss.usermodel.Row r : f) {
-                org.apache.poi.ss.usermodel.Cell c0 = r.getCell(0);
-                org.apache.poi.ss.usermodel.Cell c1 = r.getCell(1);
-                String cle = (c0 == null ? "" : c0.toString()) + "|" + (c1 == null || c1.getCellType()
-                        == org.apache.poi.ss.usermodel.CellType.FORMULA ? "" : c1.getStringCellValue());
-                lignes.putIfAbsent(cle, r.getRowNum());
-            }
-            org.apache.poi.ss.usermodel.Row deblais = f.getRow(lignes.get("529|Déblais"));
-            assertThat(deblais.getCell(3).getNumericCellValue()).isEqualTo(2054.5);
-            assertThat(deblais.getCell(4).getStringCellValue()).isEqualTo("Le mètre cube à :");
-            for (int c = 0; c <= 7; c++) {   // seules les colonnes du candidat sont ouvertes
-                assertThat(deblais.getCell(c).getCellStyle().getLocked()).as("colonne " + c).isEqualTo(c != 5 && c != 6);
-            }
-            assertThat(lignes).containsKeys("500|Ouvrages", "|Sous-total série 500 — Ouvrages", "|Récapitulation", "|Total HT");
-            // Des prix posés comme le ferait le candidat : sous-totaux, récapitulation et plafond se calculent.
-            Map<String, Double> prix = Map.of("001", 9_000_000.0, "529", 10_000.0, "530", 8_000.0, "601", 15_000.0);
-            for (org.apache.poi.ss.usermodel.Row r : f) {
-                org.apache.poi.ss.usermodel.Cell c0 = r.getCell(0);
-                if (c0 != null && prix.containsKey(c0.toString()) && r.getCell(3) != null) {
-                    r.getCell(6).setCellValue(prix.get(c0.toString()));
-                }
-            }
-            org.apache.poi.ss.usermodel.FormulaEvaluator ev = wb.getCreationHelper().createFormulaEvaluator();
-            ev.evaluateAll();
-            double ouvrages = 2054.5 * 10_000 + 100 * 8_000;
-            assertThat(f.getRow(lignes.get("|Sous-total série 500 — Ouvrages")).getCell(7).getNumericCellValue()).isEqualTo(ouvrages);
-            double ht = 9_000_000 + ouvrages + 3000 * 15_000;
-            assertThat(f.getRow(lignes.get("|Total HT")).getCell(7).getNumericCellValue()).isEqualTo(ht);
-            String plafond = null;
-            for (org.apache.poi.ss.usermodel.Row r : f) {
-                org.apache.poi.ss.usermodel.Cell c1 = r.getCell(1);
-                if (c1 != null && c1.getCellType() == org.apache.poi.ss.usermodel.CellType.FORMULA) {
-                    plafond = c1.getStringCellValue();
-                }
-            }
-            assertThat(plafond).isEqualTo("001 : 10 % au plus du montant des travaux — dépassé");   // 9 M > 10 % de 75,3 M
-            f.getRow(lignes.get("001|Installation de chantier")).getCell(6).setCellValue(5_000_000);
-            ev.clearAllCachedResultValues();
-            ev.evaluateAll();
-            for (org.apache.poi.ss.usermodel.Row r : f) {
-                org.apache.poi.ss.usermodel.Cell c1 = r.getCell(1);
-                if (c1 != null && c1.getCellType() == org.apache.poi.ss.usermodel.CellType.FORMULA) {
-                    plafond = c1.getStringCellValue();
-                }
-            }
-            assertThat(plafond).endsWith("— respecté");   // 5 M ≤ 10 % de 71,3 M
-            org.apache.poi.xssf.usermodel.XSSFSheet sd = wb.getSheet("Prix soumis à sous-détail");
-            assertThat(sd).isNotNull();
-            assertThat(sd.getRow(5).getCell(0).getStringCellValue()).isEqualTo("001");
-            assertThat(sd.getLastRowNum()).isEqualTo(5);
-        }
+        // ⚠️ 17/10 (« retirer-classeurs-bp-tc ») — plus de classeur BP : le DAO complet porte le BPU et le DQE (TableauxBesoinTest).
+        assertThat(JsonPath.<List<String>>read(docs, "$[*].type")).doesNotContain("BP", "LF", "TC");
 
         // Fournitures : les propriétés des travaux sont ignorées, la caractéristique reste exigée.
         long fournitures = creerDmc(9903);
@@ -449,7 +376,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("V59 (02/10, DQE des travaux, §B1.4) — prix forfaitaire (MEN), deux lots : BESOIN_INCOMPLET par lot vide et "
-            + "par quantité nulle, sans caractéristique exigée ; un BP par lot, sans colonne des lettres ; la révision copie le DQE")
+            + "par quantité nulle, sans caractéristique exigée ; plus de classeur BP (17/10) ; la révision copie le DQE")
     void dqeForfaitParLot() throws Exception {
         long idDmc = creerDmc(9904);
         cadrage(idDmc, "{\"tranches\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"garantieSoumission\":\"NON\","
@@ -473,19 +400,8 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
 
         remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of());
         String docs = documents(idDmc);
-        assertThat(JsonPath.<List<String>>read(docs, "$[?(@.type=='BP')].libelle")).containsExactly(
-                "Bordereau des prix et détail quantitatif et estimatif — lot 1", "Bordereau des prix et détail quantitatif et estimatif — lot 2");
-        int idBp = JsonPath.<List<Integer>>read(docs, "$[?(@.type=='BP')].idDocument").get(1);
-        byte[] xlsx = mvc.perform(get("/api/fiches-marche/documents/" + idBp + "/contenu").header("Authorization", tokenPrmp))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
-        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
-                new java.io.ByteArrayInputStream(xlsx))) {
-            List<String> entetes = new java.util.ArrayList<>();
-            wb.getSheetAt(0).getRow(4).forEach(c -> entetes.add(c.getStringCellValue()));
-            assertThat(entetes).containsExactly("N° de prix", "Désignation", "Unité", "Quantité", "Prix unitaire HT", "Montant HT");
-            assertThat(wb.getNumberOfSheets()).isEqualTo(1);   // aucun prix soumis à sous-détail
-            assertThat(wb.getSheetAt(0).getRow(0).getCell(0).getStringCellValue()).endsWith("— lot 2");
-        }
+        // ⚠️ 17/10 (« retirer-classeurs-bp-tc ») — plus de classeur BP par lot : le DAO complet porte le BPU et le DQE de chaque lot.
+        assertThat(JsonPath.<List<String>>read(docs, "$[*].type")).doesNotContain("BP", "TC");
 
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
         String copie = mvc.perform(get("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp))
