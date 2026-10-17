@@ -31,7 +31,12 @@ class LectureTableauxRecetteTest {
         String env = System.getenv("PRS_DAO_DIR");
         Path dir = env != null && !env.isBlank() ? Path.of(env) : Path.of(System.getProperty("user.home"), "Downloads");
         Path p = dir.resolve(nom);
-        return Files.isRegularFile(p) ? p : null;
+        if (Files.isRegularFile(p)) {
+            return p;
+        }
+        // ⚠️ 2026-10-17 (« numeros-a-deux-niveaux ») — les DAO de travaux d'exemple du front (dont celui du MEN), hors Téléchargements.
+        Path exemple = Path.of(System.getProperty("user.home"), "frontendprs2", "Documents Types", "Travaux", "ExemplesDAO", nom);
+        return Files.isRegularFile(exemple) ? exemple : null;
     }
 
     private static String texte(JsonNode n) {
@@ -53,7 +58,8 @@ class LectureTableauxRecetteTest {
         "297.Projet_de_DAO_Mat_Info_re_corrig_.pdf, paositra-297.json, 0",
         "207.DAOO_6114_VF_2026_VF_CORRIGEE.pdf, mef-6114-207.json, 2",
         "projetdao.DAO_Ankily_et_Mahasoa.pdf, mtp-ankily-mahasoa.json, 1",
-        "225.DAOO_6213__CNM_2026_final_corrig_.pdf, mef-6213-225.json, 0" })
+        "225.DAOO_6213__CNM_2026_final_corrig_.pdf, mef-6213-225.json, 0",
+        "daolance.DAO_2026_4SDC_vf.pdf, men-4sdc.json, 0" })
     void parite(String pdf, String attendu, int ecarts) throws Exception {
         Path fichier = dao(pdf);
         assumeTrue(fichier != null, "DAO absent (" + pdf + ") : recette ignorée.");

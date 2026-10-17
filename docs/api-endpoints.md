@@ -6216,6 +6216,20 @@ articles retenus par **`PUT …/articles`**, sans nouvelle route. Lecteur : `Lec
   manquent) : 2463, 297, 6114, 6213 et MTP Ankily-Mahasoa, **136 articles sur 136** identiques aux sorties de référence (lot,
   numéro, désignation, unité, quantités, série, nombre de caractéristiques), et les **trois écarts réels seuls** (500 ml / 100 ml,
   1 l / 950 cl, B2 / B1).
+  - ⚠️ **17/10** : s'y ajoute le DAO des bâtiments scolaires du MEN (`daolance.DAO_2026_4SDC_vf.pdf`, lu aussi dans
+    `frontendprs2/Documents Types/Travaux/ExemplesDAO`) : **113 articles sur 113** (56 + 57), voir ci-dessous.
+- ⚠️ **Numéros à deux niveaux et chapitres romains (17/10, demande front « numeros-a-deux-niveaux »)** :
+  - **B1** : une première cellule « chapitre.article » (`^(\d{1,2})\s*\.\s*(\d{1,3})$`, la coupure « 2 .2 » de l'extraction
+    comprise) est un article. `numero` vaut la forme rétablie, « 2.2 ». Le rang de tri vaut (chapitre + 1) × 1000 + article :
+    l'ordre du DQE est gardé, et le rang ne se confond jamais avec un numéro simple (≤ 999).
+  - **B2** : une première cellule en chiffres romains (`^[IVXL]{1,7}$`) ouvre le tableau mais ne crée jamais d'article. Sans
+    unité, elle devient la `serie` et le `serieLibelle` des articles qui la suivent (« IV », « Maçonnerie - ravalement ») ; avec
+    une unité, elle est ignorée.
+  - Un numéro simple se lit comme avant. La définition des prix (« Prix n° … ») n'est pas touchée.
+  - Le serveur n'interdit pas le point dans `numeroPrix`, ni « XIV » dans `serie` (H2) : 10 caractères au plus.
+  - Hors champ (H1) : des chapitres numérotés en lettres (A, B…), qu'on confondrait avec une unité ou une désignation.
+  - Mesure : DAO du MEN, 0 → 113 articles, dont les douze chapitres (0 à XI) sont les séries ; parité inchangée sur les cinq
+    DAO réels de la recette.
 - **`PUT …/articles`, la trace de l'import** (§B2) : deux champs facultatifs du corps, **`importFichier`** et
   **`importEmpreinte`** (SHA-256 hexadécimal, celle de la lecture). Ils vont ensemble (400 nominatif sinon). Présents, le journal du
   dossier de planification reçoit `FICHE_IMPORTEE` « besoin pré-rempli par import de <fichier> (<12 caractères>) : n article(s)[,
@@ -9673,6 +9687,7 @@ national, travaux en deux tableaux, aucun champ nouveau. Pas de migration, pas d
       forfaitaire ».
   - **À noter** : le DAO des bâtiments scolaires (MEN, `daolance.DAO_2026_4SDC_vf.pdf`) ne rend aucun article à la relecture.
     Son détail quantitatif numérote ses chapitres en chiffres romains (I à XIV), que la lecture des tableaux ne reconnaît pas.
+    ⚠️ **Traité le 17/10** (demande « numeros-a-deux-niveaux ») : 113 articles relus.
 - ⚠️ **Volet travaux, tranche B (même demande, T5 à T7, Q1 à Q3 ; arbitrage 4 du pilote du 17/10)**. Ce sont les formulaires
   techniques du candidat, générés par `FormulairesTravaux` (POI, charte).
   - **Origine des textes** : ils sont repris du DAO routier réel (p. 45-46 et 95-101). Ils ne contiennent aucune clause,

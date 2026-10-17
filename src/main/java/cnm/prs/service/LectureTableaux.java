@@ -78,6 +78,13 @@ public final class LectureTableaux {
     private static final Pattern LIGNE_PRIX = js("\\s*(?:l['’]\\s*|le\\s+|la\\s+|les\\s+)(?:\\p{L}+\\s+){0,3}à\\s*:.*$", I);
     private static final Pattern LOT = js("\\bLOT\\s*(?:N\\s*°?\\s*)?(\\d+)\\s*:", I);
     private static final Pattern NUMERO = Pattern.compile("^\\d{1,3}$");
+    /**
+     * ⚠️ 2026-10-17 (demande front « numeros-a-deux-niveaux », B1) — un numéro « chapitre.article » (« 2.3 », coupé « 2 .3 » par
+     * l'extraction), rangé après son chapitre : n = (chapitre + 1) × 1000 + article, jamais confondu avec un numéro simple.
+     */
+    private static final Pattern NUMERO_DEUX_NIVEAUX = Pattern.compile("^(\\d{1,2})\\s*\\.\\s*(\\d{1,3})$");
+    /** ⚠️ 2026-10-17 (même demande, B2) — un chapitre en chiffres romains (« IV ») : une ligne de section, jamais un article. */
+    private static final Pattern ROMAIN = Pattern.compile("^[IVXL]{1,7}$");
     private static final Pattern PRIX_DEF = js("^Prix\\s*N\\s*[°o]?\\s*(\\d{1,3})$", I);
     private static final Pattern PRIX_SEUL = js("^Prix\\s*N\\s*[°o]?$", I);
     private static final Pattern COL_DESIG = Pattern.compile("DESIGNATION|DESCRIPTION");
@@ -665,7 +672,7 @@ public final class LectureTableaux {
             }
             int iPremier = -1;
             for (int i = 0; i < t.lignes().size(); i++) {
-                if (NUMERO.matcher(premiere(t.lignes().get(i))).matches()) {
+                if (numerote(premiere(t.lignes().get(i)))) {
                     iPremier = i;
                     break;
                 }
@@ -712,7 +719,9 @@ public final class LectureTableaux {
             for (int il = Math.min(nEntete, t.lignes().size()); il < t.lignes().size(); il++) {
                 Ligne l = t.lignes().get(il);
                 String c0 = premiere(l);
-                Integer num = NUMERO.matcher(c0).matches() ? Integer.valueOf(c0) : null;
+                Numero numero = numeroDe(c0);
+                boolean chapitre = ROMAIN.matcher(c0).matches();
+                Integer num = numero != null ? Integer.valueOf(numero.n()) : chapitre ? Integer.valueOf(-1) : null;
                 if (num == null && suite && il < iPremier && p.dernier != null) {
                     Article d = p.dernier;
                     if (spec) {
@@ -736,9 +745,12 @@ public final class LectureTableaux {
                     serieCourante = new String[] { c0, desig };
                     continue;
                 }
+                if (chapitre) {
+                    continue;
+                }
                 Article a = art(articles, lot, num);
                 if (a.code == null) {
-                    a.code = c0;
+                    a.code = numero.code();
                 }
                 p.dernier = a;
                 if (spec) {
@@ -772,6 +784,27 @@ public final class LectureTableaux {
             a.caracteristiques = a.definition ? puces(a.exigences) : caracteristiques(a.exigences == null ? List.of() : a.exigences, a.prose);
         }
         return liste;
+    }
+
+    /** Le rang de tri d'un article et son numéro tel qu'il s'imprime (« 2.2 », rétabli sans l'espace de l'extraction). */
+    record Numero(int n, String code) {
+    }
+
+    static Numero numeroDe(String x) {
+        if (NUMERO.matcher(x).matches()) {
+            return new Numero(Integer.parseInt(x), x);
+        }
+        Matcher m = NUMERO_DEUX_NIVEAUX.matcher(x);
+        if (!m.matches()) {
+            return null;
+        }
+        int chapitre = Integer.parseInt(m.group(1));
+        int article = Integer.parseInt(m.group(2));
+        return new Numero((chapitre + 1) * 1000 + article, chapitre + "." + article);
+    }
+
+    private static boolean numerote(String c0) {
+        return numeroDe(c0) != null || ROMAIN.matcher(c0).matches();
     }
 
     private static Article art(Map<String, Article> articles, Integer lot, int n) {

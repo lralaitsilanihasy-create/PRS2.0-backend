@@ -864,6 +864,9 @@ Décision : ADR-0012. Contrat : `docs/api-endpoints.md`, § *L'import du DAO*.
   repris. Quand le bordereau et les spécifications du DAO se contredisent (500 ml contre 100 ml), l'écart est signalé, et
   non tranché. La trace du fichier repris va au journal, comme pour les champs.
   - Un tableau sans filets, ou un PDF scanné, n'est pas lu : ses articles restent à saisir.
+  - ⚠️ **17/10** : un détail quantitatif à chapitres en chiffres romains (« IV — Maçonnerie ») et à articles numérotés
+    « chapitre.article » (« 4.2 »), comme ceux des bâtiments scolaires, est lu. Chaque chapitre devient la série de ses
+    articles, qui gardent leur numéro et l'ordre du DAO. Des chapitres numérotés en lettres (A, B…) ne sont pas reconnus.
 
 #### Les documents générés (lot 2a, demande front du 2026-09-23)
 
