@@ -415,6 +415,34 @@ public class FicheMarcheService {
     }
 
     /**
+     * ⚠️ 2026-10-17 (« canevas-rapport-evaluation », §B1) — la version que le dossier présente à la Commission : sa version
+     * <strong>soumise</strong> si elle est validée, sinon la dernière version validée ({@code empty} si aucune). Sans contrôle de
+     * périmètre ; avec son identifiant de fiche, pour lire le besoin et les sous-critères de cette version.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<VersionPresentee> versionPresentee(Long idDmc, Integer versionSoumise) {
+        java.util.Optional<FicheMarche> soumise = versionSoumise == null ? java.util.Optional.empty()
+                : ficheRepository.findByIdDmcAndNumeroVersion(idDmc, versionSoumise)
+                        .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut()));
+        return soumise.or(() -> derniereValidee(idDmc))
+                .map(f -> new VersionPresentee(f.getIdFiche(), etatVersion(contexte(idDmc, false), f)));
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (« canevas-rapport-evaluation », Q3) — la version de la fiche que le dossier du DMC a soumise à la Commission
+     * ({@code empty} sans dossier, ou dossier pas encore soumis).
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<Integer> versionSoumiseALaCommission(Long idDmc) {
+        return dossierRepository.findIdDossierByIdDmc(idDmc).flatMap(dossierRepository::findById)
+                .map(cnm.prs.entity.Dossier::getVersionFicheSoumise);
+    }
+
+    /** La version présentée : l'identifiant de la fiche et son état. */
+    public record VersionPresentee(Integer idFiche, EtatVersion etat) {
+    }
+
+    /**
      * ⚠️ V67 (2026-10-04, lot 2a) — l'état de la version <strong>courante</strong>, validée ou non ({@code empty} si jamais
      * enregistrée). Sans contrôle de périmètre : la vue d'un membre de CAO, qui voit sa procédure avant son lancement.
      */

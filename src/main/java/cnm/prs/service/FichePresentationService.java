@@ -26,7 +26,7 @@ import cnm.prs.repository.DossierRepository;
  * ⚠️ 2026-10-17 (demande front « pieces-dmc-par-les-donnees », §B2 ; demande du pilote) — la <strong>fiche de présentation</strong>
  * d'un dossier né d'une fiche, produite de ses données comme celle du dossier de planification : elle remplace la pièce
  * « Fiche de présentation datée et signée » ({@link PiecesFournies}). Q1 : la validation nominative de la fiche par la PRMP, datée et
- * journalisée, vaut signature (comme R2, V102).
+ * journalisée, vaut signature (comme R2, V102) ; confirmé par le pilote le 17/10.
  * <p>
  * Contenu (Q2) : celui que le front propose, ajusté aux points que le manuel de contrôle fait vérifier sur la fiche de présentation
  * d'un DAO (objet, mode de passation, allotissement, retard de disponibilité du DAO sur l'AGPM, garantie de soumission, validité des
@@ -191,17 +191,17 @@ public class FichePresentationService {
     }
 
     /** Les lignes qui ont une valeur. */
-    private static List<Ligne> lignes(Ligne... ls) {
+    static List<Ligne> lignes(Ligne... ls) {
         return java.util.Arrays.stream(ls).filter(java.util.Objects::nonNull).toList();
     }
 
     /** Une ligne, ou nul sans valeur. */
-    private static Ligne ligne(String code, String libelle, String valeur) {
+    static Ligne ligne(String code, String libelle, String valeur) {
         return valeur == null || valeur.isBlank() ? null : new Ligne(code, libelle, valeur);
     }
 
     /** La valeur du premier champ qui vaut pour la fiche et porte une valeur. */
-    private static String premier(FicheMarcheService.EtatVersion ev, String... codes) {
+    static String premier(FicheMarcheService.EtatVersion ev, String... codes) {
         for (String c : codes) {
             String v = ev.valeur(c);
             if (v != null && !v.isBlank()) {
@@ -261,7 +261,7 @@ public class FichePresentationService {
     }
 
     /** Les lignes d'imputation du plan, sans leurs montants entre parenthèses (comme la garde du DAO complet, T1). */
-    private static String imputation(String beneficiaires) {
+    static String imputation(String beneficiaires) {
         if (beneficiaires == null) {
             return null;
         }
@@ -287,7 +287,7 @@ public class FichePresentationService {
         return sb.toString();
     }
 
-    private static String categorie(String code) {
+    static String categorie(String code) {
         return code == null ? null : switch (code) {
             case "FOURNITURES_SERVICES" -> "Fournitures et services";
             case "TRAVAUX" -> "Travaux";

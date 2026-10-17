@@ -8600,6 +8600,33 @@ sous-type). Aucune dépendance ajoutée.
   | `COHERENCE` | `LANCEMENT_PREVU` (plan), `DAO_DISPONIBLE` (date de lancement `B04-CP-01`, à défaut validation de la fiche), `RETARD` (« n jour(s) » ou « aucun ») |
   | `VALIDATION` | `VERSION`, `DATE_VALIDATION`, `VALIDEE_PAR` (nom) |
 
+⚠️ **2026-10-17 (demande front « canevas-rapport-evaluation »)** — le canevas de rapport d'évaluation, et « tout autre document utile ».
+- **`GET /api/dossiers/{id}/canevas-rapport`** rend le canevas en données, et **`…/canevas-rapport/pdf`** en PDF.
+  - **Garde** : celle de la lecture du dossier.
+  - **Refus** : 404, et 409 **`CANEVAS_INDISPONIBLE`** pour un dossier sans fiche validée ou en contrat-cadre.
+  - **La forme** : `CanevasRapportDto { idDossier, idDmc, versionFiche, categorie, sections: [{ code, titre, partie, lignes:
+    [{ code, libelle, valeur }], tableau: { colonnes, rangees, rangeesVides } | null }] }`.
+    - `lignes` : ce que la fiche exige.
+    - `tableau` : ce que la commission remplira. `rangees` sont les rangées déjà nommées (première colonne) ; `rangeesVides`
+      rangées vierges s'y ajoutent à l'impression.
+    - `partie` : `TECHNIQUE` ou `FINALE` en prestations intellectuelles, nul sinon.
+  - **La version** : la version de la fiche soumise par le dossier, à défaut la dernière validée.
+
+  | Catégorie | Sections |
+  |---|---|
+  | Fournitures, travaux | `REFERENCES`, `PLIS_RECUS`, `EXAMEN_PRELIMINAIRE` (garantie, validité, pièces, visite ; grille des vérifications du rapport à coter C / SC / NC / SO, sans la visite des lieux hors travaux), `CONFORMITE` (délai, articles par lot ; une rangée par caractéristique exigée), `EVALUATION` (méthode, plusieurs lots, critères additionnels, marge, variantes, offres anormales, variation des quantités ; tableau des corrections), `CLASSEMENT`, `POST_QUALIFICATION` (champs `B03-CQ-*`, `B03-QT-*`, `B03-GT-03`), `ATTRIBUTION` (rangées « Marché » ou « Lot n »), `SIGNATURES` |
+  | Prestations intellectuelles (Q2) | partie `TECHNIQUE` : `REFERENCES`, `PROPOSITIONS_RECUES`, `EXAMEN_PRELIMINAIRE`, `EVALUATION_TECHNIQUE` (critères `B06-TP-02` à `06` et leurs sous-critères, score minimum), `SIGNATURES` ; partie `FINALE` : `OUVERTURE_FINANCIERE`, `EVALUATION_FINALE` (poids T et F), `NEGOCIATIONS`, `SIGNATURES_FINALE` |
+
+- **`GET …/pieces-exigees`** : `CANEVAS_RAPPORT` est fourni par l'application, avec `fourniePar: "APPLICATION"` et `lien`
+  `/api/dossiers/{id}/canevas-rapport`. Cela vaut pour un dossier né d'une fiche validée hors contrat-cadre, dans les deux modes de
+  remise.
+- **V130** ajoute la pièce **`AUTRE_DOCUMENT`** (« Tout autre document utile à l'appréciation du dossier »), facultative, en dernier
+  de chaque liste de sous-type. Elle se téléverse par le dépôt habituel, autant de fichiers que voulu ; le nom du fichier tient lieu
+  d'intitulé.
+- **Le rapport d'évaluation (Q3)** porte, en section 1, la phrase « Critères repris de la version n de la fiche… ». Il avertit
+  quand la Commission des marchés a examiné une autre version.
+- **`BORDEREAU_PRIX` et `DQE`** sont inchangés : les estimatifs sont joints d'office au dossier depuis V117.
+
 - **`TypePieceJointeDto`** gagne `categorie` (`FOURNITURES_SERVICES` | `TRAVAUX` | `PRESTATIONS_INTELLECTUELLES`, nul : toutes) et
   `forme` (`CONTRAT_CADRE` | `AUTRE` — toute autre forme —, nul : toutes). `GET /api/type-piece-jointes?typeDossier=` est inchangé
   (pièces de la famille).

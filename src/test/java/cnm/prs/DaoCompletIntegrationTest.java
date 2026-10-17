@@ -227,6 +227,65 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private cnm.prs.repository.PieceSousTypeRepository pieceSousTypeRepository;
 
     @Test
+    @DisplayName("⚠️ 17/10 (« canevas-rapport-evaluation ») — fournitures à quantités fixes : le canevas de rapport fourni par "
+            + "l'application (données et PDF, plan du rapport, grille de l'examen préliminaire, articles du besoin) ; « tout autre "
+            + "document utile » listé facultatif ; un dossier sans fiche n'a pas de canevas")
+    void canevasRapport() throws Exception {
+        int ordre = 1;
+        for (String[] p : List.of(new String[] {"CANEVAS_RAPPORT", "Canevas de rapport d'évaluation", "PAPIER"},
+                new String[] {"AUTRE_DOCUMENT", "Tout autre document utile à l'appréciation du dossier", null})) {
+            cnm.prs.entity.TypePieceJointe t = typePieceJointeRepository.findFirstByCode(p[0]).orElseGet(() -> {
+                cnm.prs.entity.TypePieceJointe n = new cnm.prs.entity.TypePieceJointe();
+                n.setLibellePiece(p[1]);
+                n.setObligatoire(false);
+                n.setOrdre(0);
+                n.setCode(p[0]);
+                return typePieceJointeRepository.save(n);
+            });
+            cnm.prs.entity.PieceSousType a = new cnm.prs.entity.PieceSousType(t.getIdTypePiece(), "DAOO", !"AUTRE_DOCUMENT".equals(p[0]),
+                    ordre++, null, "CANEVAS_RAPPORT".equals(p[0]) ? "AUTRE" : null);
+            a.setCondition(p[2]);
+            pieceSousTypeRepository.save(a);
+        }
+        Long idDmc = creerDmc();
+        besoinDeTest(idDmc);
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", new LinkedHashMap<>());
+        String cree = mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int id = JsonPath.<Integer>read(cree, "$.idDossier");
+
+        String exigees = mvc.perform(get("/api/dossiers/" + id + "/pieces-exigees").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='CANEVAS_RAPPORT')].fourniePar")).containsExactly("APPLICATION");
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='CANEVAS_RAPPORT')].lien"))
+                .containsExactly("/api/dossiers/" + id + "/canevas-rapport");
+        assertThat(JsonPath.<List<Boolean>>read(exigees, "$[?(@.code=='AUTRE_DOCUMENT')].obligatoire")).containsExactly(false);
+        assertThat(mvc.perform(post("/api/dossiers/" + id + "/soumettre").header("Authorization", tokenPrmp))
+                .andReturn().getResponse().getContentAsString()).doesNotContain("Canevas de rapport").doesNotContain("Tout autre document");
+
+        String c = mvc.perform(get("/api/dossiers/" + id + "/canevas-rapport").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(c, "$.categorie")).isEqualTo("FOURNITURES_SERVICES");
+        assertThat(JsonPath.<List<String>>read(c, "$.sections[*].code")).containsExactly("REFERENCES", "PLIS_RECUS",
+                "EXAMEN_PRELIMINAIRE", "CONFORMITE", "EVALUATION", "CLASSEMENT", "POST_QUALIFICATION", "ATTRIBUTION", "SIGNATURES");
+        // La grille de l'examen préliminaire : les vérifications du rapport, sans la visite des lieux (travaux seulement).
+        assertThat(JsonPath.<List<List<String>>>read(c, "$.sections[?(@.code=='EXAMEN_PRELIMINAIRE')].tableau.rangees").get(0))
+                .hasSize(cnm.prs.service.EvaluationService.VERIFICATIONS.size() - 1)
+                .first().isEqualTo(cnm.prs.service.EvaluationService.VERIFICATIONS.get("AE_PRIX"));
+        assertThat(JsonPath.<List<String>>read(c, "$.sections[?(@.code=='REFERENCES')].lignes[?(@.code=='OBJET')].valeur"))
+                .containsExactly("Acquisition de matériels informatiques");
+        assertThat(JsonPath.<List<List<String>>>read(c, "$.sections[?(@.code=='CONFORMITE')].tableau.rangees").get(0)).isNotEmpty();
+        assertThat(JsonPath.<List<List<String>>>read(c, "$.sections[?(@.code=='ATTRIBUTION')].tableau.rangees").get(0))
+                .containsExactly("Marché");
+        byte[] pdf = mvc.perform(get("/api/dossiers/" + id + "/canevas-rapport/pdf").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(pdf, 0, 5, java.nio.charset.StandardCharsets.ISO_8859_1)).isEqualTo("%PDF-");
+
+        mvc.perform(get("/api/dossiers/9900/canevas-rapport").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CANEVAS_INDISPONIBLE"));
+    }
+
+    @Test
     @DisplayName("⚠️ 17/10 (« pieces-dmc-par-les-donnees ») — dossier né d'une fiche validée, remise papier : fiche de présentation, "
             + "calendrier et contrôle du plan fournis par l'application (plus exigés à la soumission) ; fiche de présentation en données "
             + "et en PDF ; plan et PV sur le dossier ; un dossier sans fiche n'a pas de fiche de présentation")

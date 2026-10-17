@@ -2020,6 +2020,12 @@ public class EvaluationService {
         if (v != null) {
             String numero = v.etat().getValeurs() == null ? null : nettoyer(v.etat().getValeurs().get("B02-OB-03"));
             para(el, "Dossier d'appel d'offres" + (numero == null ? "" : " n° " + numero) + " — " + Objects.toString(v.etat().getDesignationMarche(), ""));
+            // ⚠️ 2026-10-17 (« canevas-rapport-evaluation », Q3) — les critères viennent de cette version de la fiche ; signalé si ce
+            // n'est pas celle que la Commission des marchés a examinée (le canevas de rapport en est tiré).
+            Integer examinee = fiches.versionSoumiseALaCommission(idDmc).orElse(null);
+            para(el, "Critères repris de la version " + v.version() + " de la fiche du dossier d'appel d'offres"
+                    + (examinee == null || examinee.equals(v.version()) ? "." : " ; attention : la Commission des marchés a examiné la version "
+                            + examinee + ", dont le canevas de rapport est tiré."));
             try {
                 String entite = valeursPpm.lire(v.etat().getIdDetail()).valeurs().get("ENTITE");
                 if (entite != null) {

@@ -2662,7 +2662,31 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     - Ces pièces restent listées, avec la mention « fournie par l'application ». Elles ne sont plus à déposer : ni la soumission
       ni la recevabilité ne les comptent manquantes. La **publication de l'AGPM** reste une pièce : c'est un justificatif externe.
     - Un dossier saisi sans fiche, ou dont la fiche n'a pas de version validée, garde la règle d'avant.
-    - Q1 est une **hypothèse** en attendant le pilote : la règle se retire s'il la refuse.
+    - Q1 : **confirmé par le pilote le 17/10**. La validation nominative de la fiche par la PRMP vaut signature de la fiche de
+      présentation, et le PV signé dans l'application vaut signature de l'AGPM (ou du PPM) contrôlé.
+  - ⚠️ **2026-10-17 — Le canevas de rapport d'évaluation est produit par l'application** (demande du pilote ; V115 l'annonçait).
+    - **Pour qui** : un dossier né d'une fiche validée, hors contrat-cadre, que le manuel dispense du canevas (page 32).
+    - **Ce qu'il est** : il suit le plan du rapport d'évaluation du guide de la CAO. Il porte ce que la fiche sait avant les
+      offres :
+      - les références ;
+      - les exigences de l'examen préliminaire et sa grille à coter ;
+      - les articles et leurs caractéristiques ;
+      - la méthode d'évaluation ;
+      - les critères de qualification.
+
+      Les tableaux que la commission remplira restent vides : plis reçus, corrections, classement, attribution, signatures.
+    - **En prestations intellectuelles** : un seul canevas en deux parties, l'évaluation technique puis l'évaluation finale (Q2).
+    - **La version** : la version de la fiche soumise à la Commission, à défaut la dernière validée.
+    - **La pièce** : « Canevas de rapport d'évaluation » est fournie par l'application, jamais téléversée ni comptée manquante. Un
+      dossier saisi sans fiche garde la règle de V115.
+    - **Q3** : le rapport d'évaluation dit de quelle version de la fiche viennent ses critères. Il avertit si ce n'est pas celle
+      que la Commission a examinée, dont le canevas est tiré. C'est un avertissement, pas un blocage.
+  - ⚠️ **2026-10-17 — « Tout autre document utile » (V130)**. Chaque liste de pièces du manuel admet, en dernier, une pièce
+    facultative « Tout autre document utile à l'appréciation du dossier ». Elle est téléversée, en autant de fichiers que voulu, et
+    le nom du fichier lui tient lieu d'intitulé.
+  - Le **bordereau des prix estimatifs** et le **DQE estimatif** restent, comme depuis V117, des documents produits par la fiche et
+    **joints d'office** au dossier sous leurs pièces : ils ne sont pas à téléverser. Le **tableau des coûts estimatifs** des
+    prestations intellectuelles reste à téléverser, car la fiche ne le produit pas (H3 du 14/10).
 - CCAG et descriptif des travaux [Action] ⚠️ **Décisions du pilote (2026-10-15 ; V119)**
   - Le CCAG n'est plus une pièce exigée : le dossier d'appel d'offres complet le recopie (partie 2.3, CCAG de la catégorie).
   - Le **descriptif technique et les plans** d'un marché de travaux restent de vrais documents : une pièce du dossier d'appel
