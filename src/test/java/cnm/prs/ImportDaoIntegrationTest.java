@@ -372,6 +372,25 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(repris, "$.identite.motif")).doesNotContain("marque");
     }
 
+    @Test
+    @DisplayName("⚠️ 17/10 (« cadrage-depuis-dao », mesure) — le DAO complet de la ligne 303339 lu pour un contrat-cadre : avance = OUI par "
+            + "le reflet de B08-AV-02, aucune réponse tirée des IC ni du CCAG, et rien hors garantie de soumission et avance par clause ; "
+            + "ignoré sans le fichier")
+    void cadrageDuDao303339() throws Exception {
+        Path fichier = Path.of(System.getProperty("user.home"), "frontendprs2", "PDF_generes",
+                "DAO_CC_303339_consomptibles_informatiques_charte_application.pdf");
+        org.junit.jupiter.api.Assumptions.assumeTrue(java.nio.file.Files.isRegularFile(fichier), "DAO de 303339 absent : cas ignoré.");
+        Long cible = creerDmc(9914);
+        String r = importer(cible, fichier.getFileName().toString(), java.nio.file.Files.readAllBytes(fichier)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(r, "$.cadrage[?(@.cle=='avance')].valeur")).containsExactly("OUI");
+        assertThat(JsonPath.<List<String>>read(r, "$.cadrage[?(@.cle=='avance')].source")).containsExactly("reflet");
+        assertThat(JsonPath.<List<String>>read(r, "$.cadrage[?(@.source=='clause')].cle")).allMatch(c -> c.equals("garantieSoumission")
+                || c.equals("avance"));
+        assertThat(JsonPath.<List<String>>read(r, "$.cadrage[*].cle")).doesNotContain("variantes", "formeGroupement", "provenance",
+                "prixRevisable", "garantieSoumission");
+    }
+
     // ------------------------------------------------------------------ lot D2 (2026-09-29) — PDF et fournitures
 
     @Test

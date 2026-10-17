@@ -867,6 +867,14 @@ Décision : ADR-0012. Contrat : `docs/api-endpoints.md`, § *L'import du DAO*.
   - ⚠️ **17/10** : un détail quantitatif à chapitres en chiffres romains (« IV — Maçonnerie ») et à articles numérotés
     « chapitre.article » (« 4.2 »), comme ceux des bâtiments scolaires, est lu. Chaque chapitre devient la série de ses
     articles, qui gardent leur numéro et l'ordre du DAO. Des chapitres numérotés en lettres (A, B…) ne sont pas reconnus.
+- ⚠️ **Depuis le 17/10 : les réponses de cadrage que le DAO dit en clair.**
+  - L'import propose les réponses sur les variantes, la forme du groupement, la provenance, la révision des prix, la garantie de
+    soumission et l'avance quand les données particulières, l'acte d'engagement ou le CCAP les disent par une phrase affirmative.
+  - Les instructions aux candidats et le CCAG ne comptent jamais : ce sont des textes généraux.
+  - Ces réponses sont à vérifier par la PRMP ; deux phrases contraires ne donnent aucune réponse.
+  - Un taux d'avance lu vaut réponse « avance : oui ».
+  - Au contrat-cadre, les variantes, la forme du groupement, la provenance et la révision des prix ne servent à rien et ne sont
+    pas demandées ; la garantie de soumission et l'avance restent.
 - ⚠️ **Depuis le 17/10 : le DAO importé doit être celui de la ligne** (ADR-0015).
   - **Le contrôle** : l'import cherche dans le document l'objet, l'autorité contractante, le mode de passation et, selon le
     cas, la forme du contrat-cadre et les lots de la ligne du plan.

@@ -6327,6 +6327,64 @@ inchangé). Une migration : V128, `t_import_verdict`.
     6213 sur 303336 est `NON_PROUVE` (objet abrégé ; la ligne 303355 lui ressemble autant) ;
   - sur une autre des lignes 303336 à 303339, **12 cas sur 12** sont `ETRANGER`, avec la bonne voisine.
 
+#### ⚠️ 2026-10-17 — les réponses de cadrage que le texte dit en clair (demande front « cadrage-depuis-dao »)
+
+`ImportDaoResult.cadrage[]` gagne deux champs, `source` et `extrait`. Pas de migration, pas de dépendance ajoutée.
+
+- **`source`** :
+  - `section` : la règle actuelle des sections conditionnelles ;
+  - `reflet` : déduite d'une valeur lue, comme `tauxAvance` ou, depuis le 17/10, `avance` ;
+  - `clause` : lue par mots-clés. Elle n'est jamais sûre, et le front ne la coche pas d'office.
+- **`extrait`** : la phrase du DAO pour une clause, ou « Taux de l'avance lu : … % » pour le reflet de l'avance.
+- **§B1.2, `avance = OUI` par reflet** : elle est proposée quand le taux d'avance est lu (`tauxAvance`, reflet de `B08-AV-02`, ou à
+  défaut la valeur du champ).
+- **§B1, la lecture par clause** (`CadrageParClause`) cherche les questions qu'aucune section ni aucun reflet ne tranche :
+  `variantes`, `formeGroupement`, `provenance`, `prixRevisable`, `garantieSoumission` et `avance` (`NON` seulement).
+  - **Au contrat-cadre**, seulement `garantieSoumission` et `avance` (§B2). En prestations intellectuelles, pas de `provenance`.
+  - **Où** : la partie en cours est celle du dernier titre de partie vu, un paragraphe court qui commence par le titre.
+    - **Admises** : les données particulières (DPAO, DPAC, DPIC, règlement de la consultation), l'acte d'engagement (« contrat-cadre
+      valant acte d'engagement » compris), le CCAP et le cahier des prescriptions spéciales.
+    - **Exclues** : les instructions aux candidats, le CCAG, les formulaires et modèles, les spécifications techniques, le
+      bordereau, le sommaire, et tout ce qui précède le premier titre.
+  - **Quoi** : une phrase affirmative.
+    - Ne comptent pas : une phrase au conditionnel ou qui renvoie aux données particulières (« si… », « lorsqu'… », « le cas
+      échéant », « indiqué dans les DPAO »), un trou de modèle (« <…> », « […] », « …… ») et une alternative restée à choisir
+      (« OUI / NON »).
+    - Une négation l'emporte sur le mot-clé qu'elle porte. Un libellé seul (« Variantes : ») se lit avec le paragraphe suivant.
+  - **Les tournures retenues** :
+    - `variantes` : « ne sont pas autorisées / admises / prises en considération », « aucune variante », « Variantes : non » ;
+      « sont autorisées » ;
+    - `formeGroupement` : « groupement conjoint ou solidaire » ; « le groupement devra être solidaire », « … obligatoirement
+      solidaire » ;
+    - `provenance` : Incoterm CIP ou CIF, ou « les fournitures sont importées » ; Incoterm EXW, ou « les fournitures sont
+      disponibles sur le territoire national » ;
+    - `prixRevisable` : « prix fermes », « non révisables » ; « les prix sont révisables » ;
+    - `garantieSoumission` : « néant », « non exigée », « aucune garantie de soumission » ; un montant (chiffres ou %), ou « doit
+      être fournie » ;
+    - `avance` : « aucune avance », « avance : néant ».
+  - **Priorités** : une section l'emporte sur un reflet et sur une clause. Deux réponses contraires, clause contre clause ou
+    clause contre reflet, vont dans `conflits` et ne donnent aucune réponse. Chaque réponse est validée comme
+    `PUT …/cadrage` ; un refus devient un avertissement.
+- **§B2 (Q1)** : `variantes`, `formeGroupement`, `provenance` et `prixRevisable` ne servent à rien pour un contrat-cadre.
+  - Aucune classe ne les lit. Aucune section du DPAC-CC ni de l'AE-CC, aucun champ ouvert au contrat-cadre n'en dépend.
+  - Le serveur n'exige aucune complétude du cadrage : un cadrage de contrat-cadre sans ces quatre clés est complet pour
+    `PUT …/cadrage`, la validation et les contrôles.
+  - `garantieSoumission` sert : `ControlesFicheMarche` (garantie manquante), `EvaluationService`, `ProceduresEnLigneService`
+    (soumission en ligne). `avance` aussi : `ControlesFicheMarche`.
+- **Mesure** (`CadrageParClauseRecetteTest`, toutes les clés cherchées) : 13 réponses sur sept DAO réels, **aucune fausse**.
+  - 2463 : `variantes = NON`, `prixRevisable = NON`, `garantieSoumission = OUI` (données particulières) et `provenance = NATIONAL`
+    (CCAP, Incoterm EXW), les quatre réponses du cadrage vérifié du jeu 2463.
+  - 297 : `variantes = NON`.
+  - 6114 : `garantieSoumission = OUI` (5 000 000 Ar), `prixRevisable = NON`.
+  - 6213 : `prixRevisable = NON`.
+  - Ankily-Mahasoa : `prixRevisable = NON`, `garantieSoumission = OUI`.
+  - DAO complets de 303337 et 303339 : `prixRevisable = NON` (le contrat-cadre ; non proposé, §B2).
+  - Deux fausses réponses ont été écartées en cours de mesure : une règle de prix (« Pour les fournitures acquises sur le
+    territoire national… », 2463) et une phrase des instructions aux candidats commençant par « DPAO. » (303337), qui avait
+    été prise pour un titre.
+  - Sur le DAO de 303339 lu pour un contrat-cadre : `avance = OUI` par reflet, rien d'autre par clause. `garantieSoumission` n'y
+    est pas dite et reste à la PRMP.
+
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 
 Demande front `frontend/docs/demande-backend-2026-09-25-formulaires-du-candidat.md`. Livré : §B1, §B2, §B4, et au §B3

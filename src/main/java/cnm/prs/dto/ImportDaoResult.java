@@ -77,8 +77,13 @@ public record ImportDaoResult(String fichier, String empreinte, List<Modele> mod
     public record Modele(String sigle, int unites, int reconnues) {
     }
 
-    /** {@code section} : la section du modèle dont la rédaction dit la réponse ({@code null} : lue sur un reflet). */
-    public record Cadrage(String cle, Object valeur, String section, Object actuelle) {
+    /**
+     * {@code section} : la section du modèle dont la rédaction dit la réponse ({@code null} : lue sur un reflet). ⚠️ 2026-10-17
+     * (« cadrage-depuis-dao », §B1) — {@code source} : {@code section} (la règle des sections conditionnelles), {@code reflet} (déduite
+     * d'un champ lu : {@code avance} depuis {@code B08-AV-02}) ou {@code clause} (lue par mots-clés dans les données particulières, l'acte
+     * d'engagement ou le CCAP : jamais sûre, à vérifier) ; {@code extrait} : la phrase du DAO (reflet et clause).
+     */
+    public record Cadrage(String cle, Object valeur, String section, Object actuelle, String source, String extrait) {
     }
 
     /**

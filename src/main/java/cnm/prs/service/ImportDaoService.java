@@ -510,6 +510,44 @@ public class ImportDaoService {
             }
         }
 
+        // ⚠️ 2026-10-17 (« cadrage-depuis-dao », §B1, §B1.2) — les questions qu'aucune section ne tranche : avance par le reflet de
+        // B08-AV-02, puis la lecture par clause. Une section l'emporte ; deux réponses contraires (clause contre clause ou contre le
+        // reflet) font un conflit, jamais une réponse.
+        Map<String, String[]> origine = new LinkedHashMap<>();   // clé → { source, extrait }
+        reponses.values().forEach(rc -> origine.put(rc.cle(), new String[] { rc.section() == null ? "reflet" : "section", null }));
+        Set<String> cherchees = new LinkedHashSet<>(CadrageParClause.clesPour(typeMarche, categorie));
+        cherchees.removeAll(reponses.keySet());
+        cherchees.removeAll(enConflit);
+        // Le taux (B08-AV-02, reflet de tauxAvance) revient d'ordinaire en réponse de cadrage ; à défaut, en valeur de champ.
+        LectureDao.Reponse taux = reponses.get("tauxAvance");
+        if (cherchees.contains("avance") && taux != null && !enConflit.contains("tauxAvance") && taux.valeur() != null
+                && taux.valeur().matches("\\s*0*[1-9]\\d*(?:[.,]\\d+)?\\s*%?\\s*")) {
+            reponses.put("avance", new LectureDao.Reponse("avance", "OUI", null));
+            origine.put("avance", new String[] { "reflet", "Taux de l'avance lu : " + taux.valeur().trim() + " %" });
+        } else if (cherchees.contains("avance")) {
+            propositions.values().stream().filter(p -> "B08-AV-02".equals(p.code().split("#", -1)[0]) && p.valeur() != null
+                    && !p.valeur().isBlank() && !enConflit.contains(p.code())).findFirst().ifPresent(p -> {
+                        reponses.put("avance", new LectureDao.Reponse("avance", "OUI", null));
+                        origine.put("avance", new String[] { "reflet", p.extrait() });
+                    });
+        }
+        CadrageParClause.Resultat lusParClause = CadrageParClause.lire(origines, cherchees);
+        for (CadrageParClause.Reponse r : lusParClause.reponses()) {
+            LectureDao.Reponse deja = reponses.get(r.cle());
+            if (deja == null) {
+                reponses.put(r.cle(), new LectureDao.Reponse(r.cle(), r.valeur(), null));
+                origine.put(r.cle(), new String[] { "clause", r.extrait() });
+            } else if (!deja.valeur().equalsIgnoreCase(r.valeur())) {
+                conflits.add(new ImportDaoResult.Conflit(r.cle(), List.of(deja.valeur(), r.valeur())));
+                enConflit.add(r.cle());
+            }
+        }
+        lusParClause.conflits().forEach((cle, valeurs) -> {
+            if (enConflit.add(cle)) {
+                conflits.add(new ImportDaoResult.Conflit(cle, valeurs));
+            }
+        });
+
         // Le cadrage : chaque réponse validée comme par PUT …/cadrage ; refusée, elle devient un avertissement.
         Map<String, Object> cadrageFiche = fiche.getCadrage() == null ? Map.of() : fiche.getCadrage();
         Map<String, Object> cadrageLu = new LinkedHashMap<>(cadrageFiche);
@@ -534,7 +572,8 @@ public class ImportDaoService {
                 if (valeur == null) {
                     continue;
                 }
-                cadrage.add(new ImportDaoResult.Cadrage(rc.cle(), valeur, rc.section(), cadrageFiche.get(rc.cle())));
+                String[] o = origine.getOrDefault(rc.cle(), new String[] { rc.section() == null ? "reflet" : "section", null });
+                cadrage.add(new ImportDaoResult.Cadrage(rc.cle(), valeur, rc.section(), cadrageFiche.get(rc.cle()), o[0], o[1]));
                 cadrageLu.put(rc.cle(), valeur);
             } catch (ChampsInvalidesException e) {
                 avertissements.add("réponse de cadrage « " + rc.cle() + " = " + rc.valeur() + " » écartée : "
