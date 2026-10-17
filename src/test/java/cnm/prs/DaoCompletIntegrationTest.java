@@ -224,6 +224,76 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Autowired private cnm.prs.repository.FicheMarcheRepository ficheMarcheRepository;
+    @Autowired private cnm.prs.repository.PieceSousTypeRepository pieceSousTypeRepository;
+
+    @Test
+    @DisplayName("⚠️ 17/10 (« pieces-dmc-par-les-donnees ») — dossier né d'une fiche validée, remise papier : fiche de présentation, "
+            + "calendrier et contrôle du plan fournis par l'application (plus exigés à la soumission) ; fiche de présentation en données "
+            + "et en PDF ; plan et PV sur le dossier ; un dossier sans fiche n'a pas de fiche de présentation")
+    void piecesFourniesParLesDonnees() throws Exception {
+        // Les quatre premières pièces du DAOO (V95), les trois internes en PAPIER (V102, V115), comme en production.
+        int ordre = 1;
+        for (String[] p : List.of(new String[] {"FICHE_PRESENTATION", "Fiche de présentation datée et signée", "PAPIER"},
+                new String[] {"CALENDRIER", "Calendrier annuel de passation mis à jour et signé", "PAPIER"},
+                new String[] {"AGPM_CONTROLE", "AGPM (ou PPM) signé et contrôlé, avec le PV de la Commission", "PAPIER"},
+                new String[] {"PUBLICATION_AGPM", "Publication de l'AGPM", null})) {
+            cnm.prs.entity.TypePieceJointe t = typePieceJointeRepository.findFirstByCode(p[0]).orElseGet(() -> {
+                cnm.prs.entity.TypePieceJointe n = new cnm.prs.entity.TypePieceJointe();
+                n.setLibellePiece(p[1]);
+                n.setObligatoire(false);
+                n.setOrdre(0);
+                n.setCode(p[0]);
+                return typePieceJointeRepository.save(n);
+            });
+            cnm.prs.entity.PieceSousType a = new cnm.prs.entity.PieceSousType(t.getIdTypePiece(), "DAOO", true, ordre++, null, null);
+            a.setCondition(p[2]);
+            pieceSousTypeRepository.save(a);
+        }
+        Long idDmc = creerDmc();
+        besoinDeTest(idDmc);
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", new LinkedHashMap<>());
+        String cree = mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int id = JsonPath.<Integer>read(cree, "$.idDossier");
+
+        String exigees = mvc.perform(get("/api/dossiers/" + id + "/pieces-exigees").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.fourniePar=='APPLICATION')].code"))
+                .containsExactlyInAnyOrder("FICHE_PRESENTATION", "CALENDRIER", "AGPM_CONTROLE");
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='FICHE_PRESENTATION')].lien"))
+                .containsExactly("/api/dossiers/" + id + "/fiche-presentation");
+        assertThat(JsonPath.<List<Integer>>read(exigees, "$[?(@.code=='AGPM_CONTROLE')].idDossierPlan")).containsExactly(9900);
+        assertThat(JsonPath.<List<Integer>>read(exigees, "$[?(@.code=='AGPM_CONTROLE')].idPvPlan")).hasSize(1).doesNotContainNull();
+        assertThat(JsonPath.<List<Object>>read(exigees, "$[?(@.code=='PUBLICATION_AGPM')].fourniePar")).containsOnlyNulls();
+        String erreurs = mvc.perform(post("/api/dossiers/" + id + "/soumettre").header("Authorization", tokenPrmp))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(erreurs).doesNotContain("Fiche de présentation datée et signée").doesNotContain("Calendrier annuel de passation")
+                .doesNotContain("AGPM (ou PPM) signé et contrôlé");
+
+        String dossier = mvc.perform(get("/api/dossiers/" + id).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Integer>read(dossier, "$.idDossierPlan")).isEqualTo(9900);
+        assertThat(JsonPath.<Integer>read(dossier, "$.idPvPlan")).isNotNull();
+
+        String fp = mvc.perform(get("/api/dossiers/" + id + "/fiche-presentation").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fp, "$.sections[*].code"))
+                .containsExactly("IDENTIFICATION", "MARCHE", "PROCEDURE", "COHERENCE", "VALIDATION");
+        assertThat(JsonPath.<List<String>>read(fp, "$.sections[?(@.code=='MARCHE')].lignes[?(@.code=='OBJET')].valeur"))
+                .containsExactly("Acquisition de matériels informatiques");
+        assertThat(JsonPath.<List<String>>read(fp, "$.sections[?(@.code=='MARCHE')].lignes[?(@.code=='MODE')].valeur"))
+                .containsExactly("Appel d'offres ouvert");
+        assertThat(JsonPath.<List<String>>read(fp, "$.sections[?(@.code=='VALIDATION')].lignes[?(@.code=='VERSION')].valeur"))
+                .containsExactly("1");
+        assertThat(JsonPath.<List<String>>read(fp, "$.sections[?(@.code=='VALIDATION')].lignes[?(@.code=='VALIDEE_PAR')].valeur"))
+                .hasSize(1);
+        byte[] pdf = mvc.perform(get("/api/dossiers/" + id + "/fiche-presentation/pdf").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(pdf, 0, 5, java.nio.charset.StandardCharsets.ISO_8859_1)).isEqualTo("%PDF-");
+
+        mvc.perform(get("/api/dossiers/9900/fiche-presentation").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("FICHE_PRESENTATION_INDISPONIBLE"));
+    }
 
     private ResultActions deposer(String url, String nom, byte[] contenu) throws Exception {
         return mvc.perform(multipart(HttpMethod.PUT, url).file(new MockMultipartFile("fichier", nom,

@@ -2651,6 +2651,18 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     l'application, ni la pièce « Canevas de rapport d'évaluation » (le rapport est produit par l'application ; ⚠️ 15/10 : son
     canevas est celui du Guide de la Commission d'Appel d'Offres, par catégorie et non par sous-type) ; le dossier saisi hors
     application garde les deux (V115).
+  - ⚠️ **2026-10-17 — Les pièces que l'application détient sont fournies par ses données, quel que soit le mode de remise**
+    (demande du pilote, dossier 100380). Depuis R8 (13/10), « en ligne » se lit au mode de remise, si bien qu'un dossier né
+    d'une fiche en remise **papier** se voyait redemander ces pièces. Pour un dossier né d'une fiche **validée**, en papier comme
+    en électronique et quel que soit son sous-type (Q3) :
+    - la **fiche de présentation** est produite des données de la fiche et du plan. La validation nominative de la fiche par la
+      PRMP, datée et journalisée, vaut signature (Q1, comme R2) ;
+    - le **calendrier annuel** est celui que l'application produit, si le plan de la ligne est dans l'application ;
+    - l'**AGPM (ou PPM) contrôlé** est le plan de la ligne, si son PV d'examen est **signé** dans l'application.
+    - Ces pièces restent listées, avec la mention « fournie par l'application ». Elles ne sont plus à déposer : ni la soumission
+      ni la recevabilité ne les comptent manquantes. La **publication de l'AGPM** reste une pièce : c'est un justificatif externe.
+    - Un dossier saisi sans fiche, ou dont la fiche n'a pas de version validée, garde la règle d'avant.
+    - Q1 est une **hypothèse** en attendant le pilote : la règle se retire s'il la refuse.
 - CCAG et descriptif des travaux [Action] ⚠️ **Décisions du pilote (2026-10-15 ; V119)**
   - Le CCAG n'est plus une pièce exigée : le dossier d'appel d'offres complet le recopie (partie 2.3, CCAG de la catégorie).
   - Le **descriptif technique et les plans** d'un marché de travaux restent de vrais documents : une pièce du dossier d'appel

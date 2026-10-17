@@ -1,0 +1,254 @@
+package cnm.prs.service;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import cnm.prs.dto.FichePresentationDto;
+import cnm.prs.dto.FichePresentationDto.Ligne;
+import cnm.prs.dto.FichePresentationDto.Section;
+import cnm.prs.entity.Dossier;
+import cnm.prs.entity.DossierMec;
+import cnm.prs.exception.BusinessRuleException;
+import cnm.prs.exception.ResourceNotFoundException;
+import cnm.prs.repository.DossierMecRepository;
+import cnm.prs.repository.DossierRepository;
+
+/**
+ * ⚠️ 2026-10-17 (demande front « pieces-dmc-par-les-donnees », §B2 ; demande du pilote) — la <strong>fiche de présentation</strong>
+ * d'un dossier né d'une fiche, produite de ses données comme celle du dossier de planification : elle remplace la pièce
+ * « Fiche de présentation datée et signée » ({@link PiecesFournies}). Q1 : la validation nominative de la fiche par la PRMP, datée et
+ * journalisée, vaut signature (comme R2, V102).
+ * <p>
+ * Contenu (Q2) : celui que le front propose, ajusté aux points que le manuel de contrôle fait vérifier sur la fiche de présentation
+ * d'un DAO (objet, mode de passation, allotissement, retard de disponibilité du DAO sur l'AGPM, garantie de soumission, validité des
+ * offres, heure et lieu de remise). Le manuel n'annexe de modèle que pour le plan. Les valeurs de la fiche se lisent par champ ;
+ * une ligne prend le premier champ qui vaut pour la catégorie et la forme de la fiche (les codes diffèrent d'une catégorie à
+ * l'autre), et n'est pas servie sans valeur.
+ */
+@Service
+@Transactional(readOnly = true)
+public class FichePresentationService {
+
+    public static final String CODE_INDISPONIBLE = "FICHE_PRESENTATION_INDISPONIBLE";
+    private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter JOUR_HEURE = DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm");
+
+    private final DossierRepository dossiers;
+    private final DossierMecRepository dmcs;
+    private final FicheMarcheService fiches;
+    private final ValeursPpmService valeursPpm;
+    private final ActeurDirectory acteurs;
+    private final GenerateurDocumentsFiche generateur;
+    private final ObjectProvider<DossierService> dossierService;
+
+    public FichePresentationService(DossierRepository dossiers, DossierMecRepository dmcs, FicheMarcheService fiches,
+            ValeursPpmService valeursPpm, ActeurDirectory acteurs, GenerateurDocumentsFiche generateur,
+            ObjectProvider<DossierService> dossierService) {
+        this.dossiers = dossiers;
+        this.dmcs = dmcs;
+        this.fiches = fiches;
+        this.valeursPpm = valeursPpm;
+        this.acteurs = acteurs;
+        this.generateur = generateur;
+        this.dossierService = dossierService;
+    }
+
+    /** La fiche, sous la garde de lecture du dossier ; 409 {@code FICHE_PRESENTATION_INDISPONIBLE} sans fiche validée. */
+    public FichePresentationDto lire(Integer idDossier) {
+        dossierService.getObject().controlerVisibilite(idDossier);
+        return contenu(idDossier);
+    }
+
+    /** Le PDF, sous la même garde. */
+    public byte[] pdf(Integer idDossier) {
+        dossierService.getObject().controlerVisibilite(idDossier);
+        FichePresentationDto f = contenu(idDossier);
+        return generateur.generer(document(f, LocalDateTime.now())).stream().filter(x -> "pdf".equals(x.extension())).findFirst()
+                .orElseThrow(() -> new IllegalStateException("La fiche de présentation n'a pas été rendue en pdf.")).contenu();
+    }
+
+    /** {@code FICHE_PRESENTATION_<référence ou id du dossier>.pdf}. */
+    public String nomPdf(Integer idDossier) {
+        Dossier d = dossiers.findById(idDossier).orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
+        String ref = d.getRefeDossier() == null || d.getRefeDossier().isBlank() ? String.valueOf(idDossier) : d.getRefeDossier();
+        return "FICHE_PRESENTATION_" + ref.replaceAll("[^A-Za-z0-9._-]", "_") + ".pdf";
+    }
+
+    FichePresentationDto contenu(Integer idDossier) {
+        Dossier d = dossiers.findById(idDossier).orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
+        FicheMarcheService.EtatVersion ev = d.getIdDmc() == null ? null : fiches.etatValide(d.getIdDmc()).orElse(null);
+        if (ev == null) {
+            throw new BusinessRuleException("Ce dossier n'est pas né d'une fiche validée : sa fiche de présentation n'est pas produite par "
+                    + "l'application.", CODE_INDISPONIBLE, idDossier);
+        }
+        Integer idDetail = dmcs.findById(d.getIdDmc()).map(DossierMec::getIdDetail).orElse(null);
+        ValeursPpmService.ValeursPpm ppm = idDetail == null ? new ValeursPpmService.ValeursPpm(null, 0, Map.of(), Map.of())
+                : valeursPpm.lire(idDetail);
+        Map<String, String> p = ppm.valeurs();
+
+        List<Section> sections = new ArrayList<>();
+        sections.add(section("IDENTIFICATION", "Identification", lignes(
+                ligne("AUTORITE", "Autorité contractante", p.get("ENTITE")),
+                ligne("MINISTERE", "Ministère de tutelle", p.get("MINISTERE")),
+                ligne("PRMP", "Personne responsable des marchés publics", p.get("PRMP")),
+                ligne("PLAN", "Plan de passation", plan(p)),
+                ligne("LIGNE", "Ligne du plan", ppm.ligne() == null ? null : "n° " + ppm.ligne().getIdDetail()),
+                ligne("DOSSIER", "Dossier", d.getRefeDossier()))));
+        sections.add(section("MARCHE", "Marché", lignes(
+                ligne("OBJET", "Objet", p.get("OBJET")),
+                ligne("CATEGORIE", "Catégorie", categorie(ev.categorie())),
+                ligne("NATURE", "Nature des prestations", p.get("NATURE")),
+                ligne("MODE", "Mode de passation", p.get("MODE")),
+                ligne("FORME", "Forme du marché", forme(ev.type(), p.get("FORME_MARCHE"))),
+                ligne("NB_LOTS", "Nombre de lots", ev.etat().getNbLots() == null ? p.get("NB_LOTS_PPM") : String.valueOf(ev.etat().getNbLots())),
+                ligne("LOTS", "Désignation des lots", p.get("LOTS_DESIGNATION")),
+                ligne("MONTANT_ESTIMATIF", "Montant estimatif du plan", p.get("MONTANT_ESTIMATIF")),
+                ligne("FINANCEMENT", "Source de financement", p.get("FINANCEMENT")),
+                ligne("IMPUTATION", "Imputation budgétaire", p.get("COMPTES")))));
+        List<Ligne> procedure = new ArrayList<>(lignes(
+                ligne("NUMERO_DAO", "Numéro du dossier d'appel d'offres", premier(ev, "B02-OB-03")),
+                ligne("MODE_REMISE", "Mode de remise des offres", premier(ev, "B04-SE-01")),
+                ligne("PLATEFORME", "Plateforme de dépôt", premier(ev, "B04-SE-02")),
+                ligne("DATE_LIMITE", "Date et heure limites de remise",
+                        avecHeure(premier(ev, "B04-LR-03", "B04-OV-02", "B04-LH-02", "B04-CP-02"), premier(ev, "B04-LR-04"))),
+                ligne("LIEU_REMISE", "Lieu de remise des offres", premier(ev, "B04-LR-02", "B04-LH-01", "B04-RQ-03")),
+                ligne("OUVERTURE", "Ouverture des plis", avecHeure(premier(ev, "B04-OP-02"), premier(ev, "B04-OP-03"))),
+                ligne("LIEU_OUVERTURE", "Lieu de l'ouverture des plis", premier(ev, "B04-OP-01", "B04-OV-01")),
+                ligne("VALIDITE_OFFRES", "Délai de validité des offres (jours)", premier(ev, "B04-VO-01", "B04-VT-01", "B04-DV-01", "B04-DP-01")),
+                ligne("GARANTIE", "Garantie de soumission exigée", premier(ev, "B05-GS-01", "B05-GQ-01")),
+                ligne("GARANTIE_FORME", "Forme de la garantie de soumission", premier(ev, "B05-GS-02", "B05-GQ-02")),
+                ligne("GARANTIE_MONTANT", "Montant de la garantie de soumission (Ariary)", premier(ev, "B05-GS-03", "B05-GQ-03")),
+                ligne("GARANTIE_VALIDITE", "Validité de la garantie de soumission (jours)", premier(ev, "B05-GS-04"))));
+        // Le calendrier de la procédure du contrat-cadre (B04-CP, huit étapes), sous les libellés du référentiel.
+        for (int i = 1; i <= 8; i++) {
+            String code = "B04-CP-0" + i;
+            procedure.add(ligne(code, ev.libelle(code), ev.valeur(code)));
+        }
+        procedure.add(ligne("DATES_PREVISIONNELLES", "Dates prévisionnelles du plan", p.get("DATES_PREVISIONNELLES")));
+        sections.add(section("PROCEDURE", "Procédure", procedure));
+
+        // Le manuel : « relever l'éventuel retard de la date de disponibilité du DAO » au regard de l'AGPM. Le DAO est disponible à la
+        // date de lancement de la fiche (contrat-cadre) ou, à défaut, à la validation de la fiche.
+        LocalDate prevu = ppm.dates().get("LANCEMENT");
+        LocalDate disponible = date(ev.valeur("B04-CP-01"));
+        if (disponible == null && ev.etat().getDateValidation() != null) {
+            disponible = ev.etat().getDateValidation().toLocalDate();
+        }
+        Long retard = prevu == null || disponible == null ? null : ChronoUnit.DAYS.between(prevu, disponible);
+        sections.add(section("COHERENCE", "Cohérence avec l'AGPM", lignes(
+                ligne("LANCEMENT_PREVU", "Lancement prévu au plan", prevu == null ? null : prevu.format(JOUR)),
+                ligne("DAO_DISPONIBLE", "Disponibilité du dossier d'appel d'offres", disponible == null ? null : disponible.format(JOUR)),
+                ligne("RETARD", "Retard sur le plan", retard == null ? null : retard > 0 ? retard + " jour(s)" : "aucun"))));
+
+        String validePar = ev.etat().getValidePar();
+        sections.add(section("VALIDATION", "Validation", lignes(
+                ligne("VERSION", "Version de la fiche", String.valueOf(ev.version())),
+                ligne("DATE_VALIDATION", "Validée le", ev.etat().getDateValidation() == null ? null
+                        : ev.etat().getDateValidation().format(JOUR_HEURE)),
+                ligne("VALIDEE_PAR", "Validée par", validePar == null ? null : acteurs.nom(validePar)))));
+        return new FichePresentationDto(idDossier, d.getIdDmc(), ev.version(), sections);
+    }
+
+    DocumentLibre document(FichePresentationDto f, LocalDateTime le) {
+        List<DocumentLibre.Element> els = new ArrayList<>();
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "FICHE DE PRÉSENTATION"));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "Dossier d'appel à la concurrence"));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        for (Section s : f.sections()) {
+            els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, s.titre(), true));
+            List<List<List<String>>> lignes = new ArrayList<>();
+            s.lignes().forEach(l -> lignes.add(List.of(List.of(l.libelle()), List.of(l.valeur().split("\n", -1)))));
+            els.add(new DocumentLibre.Tableau(2, lignes));
+            els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        }
+        String pied = "Fiche produite par l'application le " + le.format(JOUR_HEURE) + " à partir de la version " + f.versionFiche()
+                + " de la fiche ; la validation tracée de la fiche par la PRMP vaut signature.";
+        return new DocumentLibre("FICHE_PRESENTATION", null, els, pied);
+    }
+
+    // ------------------------------------------------------------------ outils
+
+    private static Section section(String code, String titre, List<Ligne> lignes) {
+        return new Section(code, titre, lignes.stream().filter(java.util.Objects::nonNull).toList());
+    }
+
+    /** Les lignes qui ont une valeur. */
+    private static List<Ligne> lignes(Ligne... ls) {
+        return java.util.Arrays.stream(ls).filter(java.util.Objects::nonNull).toList();
+    }
+
+    /** Une ligne, ou nul sans valeur. */
+    private static Ligne ligne(String code, String libelle, String valeur) {
+        return valeur == null || valeur.isBlank() ? null : new Ligne(code, libelle, valeur);
+    }
+
+    /** La valeur du premier champ qui vaut pour la fiche et porte une valeur. */
+    private static String premier(FicheMarcheService.EtatVersion ev, String... codes) {
+        for (String c : codes) {
+            String v = ev.valeur(c);
+            if (v != null && !v.isBlank()) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    private static String avecHeure(String date, String heure) {
+        return date == null ? null : heure == null || heure.isBlank() ? date : date + " à " + heure;
+    }
+
+    private static String plan(Map<String, String> p) {
+        if (p.get("PPM_REFERENCE") == null) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder(p.get("PPM_REFERENCE"));
+        if (p.get("PPM_EXERCICE") != null) {
+            sb.append(", exercice ").append(p.get("PPM_EXERCICE"));
+        }
+        if (p.get("PPM_VERSION") != null && !"0".equals(p.get("PPM_VERSION"))) {
+            sb.append(", mise à jour n° ").append(p.get("PPM_VERSION"));
+        }
+        return sb.toString();
+    }
+
+    private static String categorie(String code) {
+        return code == null ? null : switch (code) {
+            case "FOURNITURES_SERVICES" -> "Fournitures et services";
+            case "TRAVAUX" -> "Travaux";
+            case "PRESTATIONS_INTELLECTUELLES" -> "Prestations intellectuelles";
+            default -> code;
+        };
+    }
+
+    private static String forme(String type, String formePlan) {
+        String t = type == null ? null : switch (type) {
+            case "QUANTITE_FIXE" -> "Marché à quantités fixes";
+            case "A_COMMANDE" -> "Marché à commandes";
+            case "CONTRAT_CADRE" -> "Contrat-cadre";
+            default -> type;
+        };
+        return t == null ? formePlan : formePlan == null || formePlan.equalsIgnoreCase(t) ? t : t + " (plan : " + formePlan + ")";
+    }
+
+    /** Une date de la fiche (« jj/mm/aaaa » ou ISO, éventuellement suivie d'une heure), ou nul. */
+    static LocalDate date(String valeur) {
+        if (valeur == null || valeur.length() < 10) {
+            return null;
+        }
+        String s = valeur.substring(0, 10);
+        try {
+            return s.charAt(2) == '/' ? LocalDate.parse(s, JOUR) : LocalDate.parse(s);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+}

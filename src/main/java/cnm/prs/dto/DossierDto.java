@@ -194,6 +194,15 @@ public class DossierDto {
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     private FicheMarcheResumeDto ficheMarche;
 
+    /**
+     * ⚠️ 2026-10-17 (« pieces-dmc-par-les-donnees », §B3) — pour un dossier né d'une fiche, sur la lecture unitaire : le dossier de
+     * planification qui porte sa ligne en vigueur, et le PV <strong>signé</strong> de son examen ; nuls sinon.
+     */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private Integer idDossierPlan;
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private Integer idPvPlan;
+
     /** ⚠️ Chronométrage (2026-09-01) — étape ouverte du circuit ; {@code null} si aucune tâche CNM ne court. */
     @Size(max = 30)
     private String etapeCourante;

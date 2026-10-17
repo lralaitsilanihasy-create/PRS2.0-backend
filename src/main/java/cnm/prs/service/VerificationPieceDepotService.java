@@ -126,7 +126,7 @@ public class VerificationPieceDepotService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
         // ⚠️ M2 (manuel de contrôle, §B2) — les pièces exigées du sous-type (à défaut, de la famille), obligation résolue pour le dossier.
         List<PiecesExigees.Exigee> exigees = piecesExigees.pour(dossier);
-        Set<Integer> obligatoires = exigees.stream().filter(PiecesExigees.Exigee::obligatoire).map(e -> e.type().getIdTypePiece())
+        Set<Integer> obligatoires = exigees.stream().filter(PiecesExigees.Exigee::aFournir).map(e -> e.type().getIdTypePiece())
                 .collect(java.util.stream.Collectors.toSet());
         List<TypePieceJointe> attendus = exigees.stream().map(PiecesExigees.Exigee::type).toList();
         Set<Integer> deposes = pieceJointeDossierRepository.findAll().stream()

@@ -137,6 +137,8 @@ public class DossierService {
     private final org.springframework.beans.factory.ObjectProvider<CalendrierPlan> calendrierPlan;
     /** ⚠️ V118 (2026-10-15, §B2) — la publication de l'AGPM du plan, reprise d'office à la soumission. */
     private final org.springframework.beans.factory.ObjectProvider<PublicationAgpmService> publicationAgpm;
+    /** ⚠️ 2026-10-17 (« pieces-dmc-par-les-donnees », §B3) — le plan de la ligne et son PV signé, pour un dossier né d'une fiche. */
+    private final org.springframework.beans.factory.ObjectProvider<PiecesFournies> piecesFournies;
     /** ⚠️ M3 (manuel de contrôle) — la grille du dossier. */
     private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
     /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
@@ -196,7 +198,9 @@ public class DossierService {
             org.springframework.beans.factory.ObjectProvider<InstantaneService> instantanes,
             org.springframework.beans.factory.ObjectProvider<ControlesService> controles,
             org.springframework.beans.factory.ObjectProvider<CalendrierPlan> calendrierPlan,
-            org.springframework.beans.factory.ObjectProvider<PublicationAgpmService> publicationAgpm) {
+            org.springframework.beans.factory.ObjectProvider<PublicationAgpmService> publicationAgpm,
+            org.springframework.beans.factory.ObjectProvider<PiecesFournies> piecesFournies) {
+        this.piecesFournies = piecesFournies;
         this.calendrierPlan = calendrierPlan;
         this.publicationAgpm = publicationAgpm;
         this.controles = controles;
@@ -582,6 +586,12 @@ public class DossierService {
         // (le résumé relit le plan et recalcule le bilan) ; aucune requête pour un dossier sans ID_DMC.
         if (entity.getIdDmc() != null) {
             dto.setFicheMarche(ficheMarcheService.resume(entity.getIdDmc(), entity.getVersionFicheSoumise()));   // lot C
+            // ⚠️ 2026-10-17 (« pieces-dmc-par-les-donnees », §B3) — le plan qui porte la ligne, et le PV signé de son examen.
+            PiecesFournies.Fourniture plan = piecesFournies.getObject().planDe(entity);
+            if (plan != null) {
+                dto.setIdDossierPlan(plan.idDossierPlan());
+                dto.setIdPvPlan(plan.idPvPlan());
+            }
         }
         return enrichir(List.of(dto)).get(0);
     }

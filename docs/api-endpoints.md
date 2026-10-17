@@ -8564,6 +8564,41 @@ sous-type). Aucune dépendance ajoutée.
 | GET | /api/type-piece-jointes?sousType={code} | la liste du sous-type : `[{ idTypePiece, libellePiece, code, obligatoire, ordre, categorie, forme, idTypeDossier }]` ; à défaut de liste propre, les pièces de sa famille | comme le référentiel |
 | GET | /api/dossiers/{id}/pieces-exigees | les pièces exigées **de ce dossier** : la liste de son sous-type, obligation **résolue** par la catégorie et la forme de sa fiche | comme la lecture du dossier |
 
+⚠️ **2026-10-17 (demande front « pieces-dmc-par-les-donnees »)** — les pièces que l'application fournit par ses données.
+- **Sur `GET /api/dossiers/{id}/pieces-exigees`**, pour un dossier né d'une fiche **validée**, quel que soit le mode de remise et le
+  sous-type, `TypePieceJointeDto` gagne quatre champs (nuls sinon) :
+  - **`fourniePar`** : `"APPLICATION"` ;
+  - **`lien`** : la route qui rend la pièce ;
+  - **`idDossierPlan`** et **`idPvPlan`** : le plan de la ligne et le PV signé de son examen.
+
+  | Code | Fournie quand | `lien` | `idDossierPlan` | `idPvPlan` |
+  |---|---|---|---|---|
+  | `FICHE_PRESENTATION` | toujours | `/api/dossiers/{id}/fiche-presentation` | — | — |
+  | `CALENDRIER` | le plan de la ligne est dans l'application | `/api/dossiers/{id}/calendrier-annuel` | oui | — |
+  | `AGPM_CONTROLE`, `PPM_CONTROLE` | le PV d'examen de ce plan est **signé** | `/api/pv-examens/{idPv}/document` | oui | oui |
+
+  - La pièce fournie reste listée avec son `obligatoire`, et apparaît **même en remise électronique**, où la condition `PAPIER` la
+    masquait auparavant.
+  - Elle n'est plus à déposer : la soumission (`POST …/soumettre`), les défauts de la recevabilité et la garde de la réception ne la
+    comptent plus manquante.
+- **`GET /api/dossiers/{id}`** gagne `idDossierPlan` et `idPvPlan` (lecture unitaire, dossier né d'une fiche ; absents sinon) : le
+  plan qui porte la ligne en vigueur, et le PV **signé** de son examen.
+- **`GET /api/dossiers/{id}/fiche-presentation`** rend la fiche de présentation : `FichePresentationDto { idDossier, idDmc,
+  versionFiche, sections: [{ code, titre, lignes: [{ code, libelle, valeur }] }] }`.
+  - **`GET …/fiche-presentation/pdf`** la rend en PDF, pour l'impression.
+  - **Garde** : celle de la lecture du dossier.
+  - **Refus** : 404, et 409 **`FICHE_PRESENTATION_INDISPONIBLE`** pour un dossier sans fiche validée.
+  - **Le contenu** : la dernière version validée de la fiche, et la ligne du plan en vigueur. Une ligne sans valeur n'est pas
+    servie. Une ligne prend le premier champ qui vaut pour la catégorie et la forme de la fiche.
+
+  | Section | Lignes |
+  |---|---|
+  | `IDENTIFICATION` | `AUTORITE`, `MINISTERE`, `PRMP`, `PLAN` (référence, exercice, mise à jour), `LIGNE`, `DOSSIER` |
+  | `MARCHE` | `OBJET`, `CATEGORIE`, `NATURE`, `MODE`, `FORME`, `NB_LOTS`, `LOTS`, `MONTANT_ESTIMATIF`, `FINANCEMENT`, `IMPUTATION` |
+  | `PROCEDURE` | `NUMERO_DAO`, `MODE_REMISE`, `PLATEFORME`, `DATE_LIMITE`, `LIEU_REMISE`, `OUVERTURE`, `LIEU_OUVERTURE`, `VALIDITE_OFFRES`, `GARANTIE`, `GARANTIE_FORME`, `GARANTIE_MONTANT`, `GARANTIE_VALIDITE`, les dates `B04-CP-01` à `08` (contrat-cadre), `DATES_PREVISIONNELLES` (du plan) |
+  | `COHERENCE` | `LANCEMENT_PREVU` (plan), `DAO_DISPONIBLE` (date de lancement `B04-CP-01`, à défaut validation de la fiche), `RETARD` (« n jour(s) » ou « aucun ») |
+  | `VALIDATION` | `VERSION`, `DATE_VALIDATION`, `VALIDEE_PAR` (nom) |
+
 - **`TypePieceJointeDto`** gagne `categorie` (`FOURNITURES_SERVICES` | `TRAVAUX` | `PRESTATIONS_INTELLECTUELLES`, nul : toutes) et
   `forme` (`CONTRAT_CADRE` | `AUTRE` — toute autre forme —, nul : toutes). `GET /api/type-piece-jointes?typeDossier=` est inchangé
   (pièces de la famille).

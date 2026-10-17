@@ -39,4 +39,15 @@ public class TypePieceJointeDto {
     private String forme;
     /** ⚠️ R2 (manuel révisé, V102) — la condition de la pièce : {@code PAPIER} (hors ligne seulement), {@code FACULTATIVE_EN_LIGNE}, ou nul. */
     private String condition;
+
+    // ⚠️ 2026-10-17 (« pieces-dmc-par-les-donnees », §B1) — servis pour un dossier né d'une fiche validée : la pièce que l'application
+    // fournit par ses données (fiche de présentation, calendrier annuel, contrôle du plan). Elle n'est plus à déposer.
+    /** {@code APPLICATION}, ou nul : la pièce est à déposer. */
+    private String fourniePar;
+    /** La route qui rend la pièce fournie. */
+    private String lien;
+    /** Le plan de la ligne (calendrier, contrôle du plan). */
+    private Integer idDossierPlan;
+    /** Le PV signé de l'examen du plan (contrôle du plan). */
+    private Integer idPvPlan;
 }

@@ -44,10 +44,14 @@ public class PiecesExigees {
     private final cnm.prs.repository.SansSuiteRepository sansSuites;
     /** ⚠️ R3a (§B3) — la transition SIGMP : terminée, les pièces {@code FACULTATIVE_EN_LIGNE} sont retirées des procédures en ligne. */
     private final ParametreService parametres;
+    /** ⚠️ 2026-10-17 — paresseux : il lit la fiche et le plan, et le calendrier remonte au service des dossiers. */
+    private final org.springframework.beans.factory.ObjectProvider<PiecesFournies> piecesFournies;
 
     public PiecesExigees(PieceSousTypeRepository associations, TypePieceJointeRepository types, AttributionRepository attributions,
             FicheMarcheService fiches, cnm.prs.repository.SousTypeDossierRepository sousTypes, cnm.prs.repository.ActeGestionRepository actes,
-            cnm.prs.repository.SansSuiteRepository sansSuites, ParametreService parametres) {
+            cnm.prs.repository.SansSuiteRepository sansSuites, ParametreService parametres,
+            org.springframework.beans.factory.ObjectProvider<PiecesFournies> piecesFournies) {
+        this.piecesFournies = piecesFournies;
         this.parametres = parametres;
         this.actes = actes;
         this.sansSuites = sansSuites;
@@ -59,7 +63,17 @@ public class PiecesExigees {
     }
 
     /** Une pièce exigée : son type, son obligation pour ce dossier, sa condition (catégorie, forme, et ⚠️ R2 : {@code condition} de ligne). */
-    public record Exigee(TypePieceJointe type, boolean obligatoire, int ordre, String categorie, String forme, String condition) {
+    public record Exigee(TypePieceJointe type, boolean obligatoire, int ordre, String categorie, String forme, String condition,
+            PiecesFournies.Fourniture fourniture) {
+
+        Exigee(TypePieceJointe type, boolean obligatoire, int ordre, String categorie, String forme, String condition) {
+            this(type, obligatoire, ordre, categorie, forme, condition, null);
+        }
+
+        /** ⚠️ 2026-10-17 — obligatoire et pas fournie par l'application : le dossier doit la porter. */
+        public boolean aFournir() {
+            return obligatoire && fourniture == null;
+        }
     }
 
     /**
@@ -79,6 +93,8 @@ public class PiecesExigees {
                 && parametres.transitionSigmpTerminee();
         Map<Integer, TypePieceJointe> parId = types.findAllById(liste.stream().map(PieceSousType::getIdTypePiece).distinct().toList()).stream()
                 .collect(Collectors.toMap(TypePieceJointe::getIdTypePiece, Function.identity()));
+        // ⚠️ 2026-10-17 (« pieces-dmc-par-les-donnees », §B1) — les pièces que les données fournissent, en ligne comme sur papier.
+        Map<String, PiecesFournies.Fourniture> fournies = fournies(d);
         List<Exigee> out = new ArrayList<>();
         for (PieceSousType a : liste) {
             TypePieceJointe t = parId.get(a.getIdTypePiece());
@@ -87,6 +103,12 @@ public class PiecesExigees {
             }
             Boolean vaut = vaut(a, c);
             if (Boolean.FALSE.equals(vaut)) {
+                continue;
+            }
+            PiecesFournies.Fourniture f = t.getCode() == null ? null : fournies.get(t.getCode());
+            if (f != null) {
+                out.add(new Exigee(t, Boolean.TRUE.equals(a.getObligatoire()), a.getOrdre(), a.getCategorie(), a.getForme(),
+                        a.getCondition(), f));
                 continue;
             }
             // ⚠️ R2 — en ligne : la pièce « papier » disparaît, la pièce facultative en ligne reste sans obligation.
@@ -111,7 +133,7 @@ public class PiecesExigees {
 
     /** Les pièces exigées obligatoires d'un dossier. */
     public List<TypePieceJointe> obligatoires(Dossier d) {
-        return pour(d).stream().filter(Exigee::obligatoire).map(Exigee::type).toList();
+        return pour(d).stream().filter(Exigee::aFournir).map(Exigee::type).toList();
     }
 
     /** La liste d'un sous-type, sans condition résolue (référentiel, écran de dépôt) ; à défaut de liste propre, les pièces de sa famille. */
@@ -129,7 +151,21 @@ public class PiecesExigees {
 
     /** Les pièces exigées d'un dossier, en DTO (obligation résolue pour ce dossier). */
     public List<TypePieceJointeDto> dtoPour(Dossier d) {
-        return pour(d).stream().map(e -> dto(e.type(), e.obligatoire(), e.ordre(), e.categorie(), e.forme(), e.condition())).toList();
+        return pour(d).stream().map(e -> {
+            TypePieceJointeDto x = dto(e.type(), e.obligatoire(), e.ordre(), e.categorie(), e.forme(), e.condition());
+            if (e.fourniture() != null) {
+                x.setFourniePar(PiecesFournies.PAR_APPLICATION);
+                x.setLien(e.fourniture().lien());
+                x.setIdDossierPlan(e.fourniture().idDossierPlan());
+                x.setIdPvPlan(e.fourniture().idPvPlan());
+            }
+            return x;
+        }).toList();
+    }
+
+    private Map<String, PiecesFournies.Fourniture> fournies(Dossier d) {
+        PiecesFournies p = piecesFournies.getIfAvailable();
+        return p == null ? Map.of() : p.de(d);
     }
 
     private static TypePieceJointeDto dto(TypePieceJointe t, Boolean obligatoire, Integer ordre, String categorie, String forme, String condition) {

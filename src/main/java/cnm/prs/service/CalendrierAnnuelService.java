@@ -85,6 +85,15 @@ public class CalendrierAnnuelService {
     }
 
     /**
+     * ⚠️ 2026-10-17 (« pieces-dmc-par-les-donnees ») — le dossier de planification qui porte la ligne en vigueur de la fiche de ce
+     * dossier ; vide pour un dossier sans fiche ou dont la ligne n'est pas dans l'application.
+     */
+    public java.util.Optional<Integer> idPlanDeFiche(Long idDmc) {
+        return java.util.Optional.ofNullable(idDmc).flatMap(dmcs::findById).map(DossierMec::getIdDetail).flatMap(marches::findById)
+                .map(valeursPpm::ligneEnVigueur).map(Marche::getIdDossier);
+    }
+
+    /**
      * Le plan dont le calendrier se lit depuis ce dossier : lui-même (dossier de planification), ou celui de la ligne en vigueur
      * de sa fiche marché. 409 {@code CALENDRIER_INDISPONIBLE} sinon.
      */
@@ -93,8 +102,7 @@ public class CalendrierAnnuelService {
         if (FAMILLE_DDP.equals(d.getIdTypeDossier())) {
             return d;
         }
-        Integer idPlan = d.getIdDmc() == null ? null : dmcs.findById(d.getIdDmc()).map(DossierMec::getIdDetail)
-                .flatMap(marches::findById).map(valeursPpm::ligneEnVigueur).map(Marche::getIdDossier).orElse(null);
+        Integer idPlan = idPlanDeFiche(d.getIdDmc()).orElse(null);
         if (idPlan == null) {
             throw new BusinessRuleException("Ce dossier n'est pas rattaché à un plan de passation conduit dans l'application : son "
                     + "calendrier annuel n'est pas produit.", CODE_INDISPONIBLE, idDossier);
