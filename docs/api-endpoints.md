@@ -9649,6 +9649,30 @@ national, travaux en deux tableaux, aucun champ nouveau. Pas de migration, pas d
     - Vérifié dans Word après insertion : alignement à gauche gardé, marge de 4,25 pt.
   - **R6 — le numéro dans les formulaires** : en contrat-cadre, le jeton `{{B02-OB-03}}` vide prend `B02-OE-01`, le numéro de
     R1 (« No. d'appel d'offres et titre » des formulaires A1 et A3). Les modèles, copies de ceux du front, ne changent pas.
+- ⚠️ **Volet travaux, tranche A (demande front du 17/10 « charte-dao-travaux », T1 à T4)** :
+  - **T1 — la garde** : « IMPUTATION BUDGETAIRE : » reprend les lignes d'imputation du plan (`B01-AC-16`, sans leurs montants),
+    et « COMPTE : » le compte (`B01-AC-17`). C'est un **correctif pour toutes les catégories** : le 16/10, le compte était
+    imprimé sous « IMPUTATION BUDGETAIRE ». En travaux, « MARCHES PUBLICS DE TRAVAUX » termine la garde. La localisation par lot
+    attend ses champs (Q1).
+  - **T2 — l'en-tête courant, toutes catégories** : à gauche l'intitulé court de la partie en cours, à droite « DAO n° … ».
+    - L'intitulé est le titre de la section sans numéro, sigle ni champ d'application, en minuscules sauf l'initiale :
+      « Données particulières de l'appel d'offres », « Cadre d'acte d'engagement »,
+      « Cahier des clauses administratives générales »… Le sommaire porte « Sommaire général ».
+    - Chaque section du sommaire pose son en-tête (première page sans en-tête, le séparateur), et les parties insérées
+      ensuite le reprennent. L'objet ne figure plus dans l'en-tête ; le pied ne change pas.
+  - **T3 — le bordereau des prix unitaires** : la désignation, puis, sur la ligne suivante de la même cellule, « {Unité avec
+    son article} à : …………… Ariary » (« Le mètre cube à : … », le libellé du bordereau quand il est saisi). À la relecture,
+    `LectureTableaux` retire cette ligne de la désignation, et le DAO routier réel se relit en 17 articles.
+  - **T4 — le détail quantitatif** :
+    - après chaque série, une ligne « Sous-total {code} — {libellé} » en italique gras sur gris, sans n° ni unité : ce n'est
+      pas un article à la relecture ;
+    - sous le tableau de chaque lot, la « RECAPITULATION » (`SERIE · DESIGNATION · MONTANT EN ARIARY`, une ligne par série,
+      total HT, TVA, TTC), « Arrêté le montant du lot k (ou du marché) à la somme de … », « Fait à …, le … », « Le
+      candidat » ;
+    - en prix global et forfaitaire (cadrage `typePrix`), la même structure s'intitule « Décomposition du prix global et
+      forfaitaire ».
+  - **À noter** : le DAO des bâtiments scolaires (MEN, `daolance.DAO_2026_4SDC_vf.pdf`) ne rend aucun article à la relecture.
+    Son détail quantitatif numérote ses chapitres en chiffres romains (I à XIV), que la lecture des tableaux ne reconnaît pas.
 - **Pas encore** (second temps, lot distinct) : la même charte pour l'avis spécifique, les lettres d'invitation, le projet de
   marché et les marchés subséquents.
 

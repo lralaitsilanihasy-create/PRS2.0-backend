@@ -134,12 +134,14 @@ try {
 
     # Les parties, chacune dans sa section, précédée de ses titres ; une section du sommaire s'ouvre sur sa page de séparation.
     $separees = @(1)
+    $entetes = @{}
     foreach ($p in $m.parties) {
         $r = Fin
         $r.InsertBreak(2)
         $titres = @($p.titres)
         if ([bool]$p.separateur) {
             $separees += $doc.Sections.Count
+            if ([string]$p.entete -ne '') { $entetes[$doc.Sections.Count] = [string]$p.entete }   # ⚠️ 17/10 (T2) : la partie en cours
             foreach ($l in $m.separateur) { Ligne $l }
             if ([string]$p.partie -ne '') {
                 $r = Fin
@@ -222,7 +224,16 @@ try {
         $b.LineWidth = 4
         return $t
     }
-    Zones $doc.Sections.Item(1).Headers.Item(1).Range @([string]$m.enteteGauche, [string]$m.enteteDroite) @(($largeur * 0.4), ($largeur * 0.6)) -3 | Out-Null
+    Zones $doc.Sections.Item(1).Headers.Item(1).Range @([string]$m.enteteGauche, [string]$m.enteteDroite) @(($largeur * 0.6), ($largeur * 0.4)) -3 | Out-Null
+    # ⚠️ 17/10 (charte travaux, T2) — chaque section du sommaire pose son en-tête : sa partie à gauche, le n° à droite ; les
+    # sections suivantes (parties insérées) le reprennent par le lien au précédent.
+    foreach ($i in ($entetes.Keys | Sort-Object)) {
+        $hs = $doc.Sections.Item([int]$i).Headers.Item(1)
+        $hs.LinkToPrevious = $false
+        Zones $hs.Range @($entetes[$i], [string]$m.enteteDroite) @(($largeur * 0.6), ($largeur * 0.4)) -3 | Out-Null
+        $p = $hs.Range.Paragraphs.Last.Range
+        $p.Font.Size = 1
+    }
     $t = Zones $doc.Sections.Item(1).Footers.Item(1).Range @([string]$m.piedGauche, [string]$m.piedCentre, 'page ') @(($largeur * 0.42), ($largeur * 0.36), ($largeur * 0.22)) -1
     $r = $t.Cell(1, 3).Range
     $r.MoveEnd(1, -1) | Out-Null

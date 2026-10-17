@@ -193,7 +193,7 @@ public class DaoCompletService {
                 p.document(t.bpu());
             }
             if (t.dqe() != null) {
-                p.titre("Annexe : Détail quantitatif et estimatif", 3);
+                p.titre(forfaitaire(etat) ? "Annexe : Décomposition du prix global et forfaitaire" : "Annexe : Détail quantitatif et estimatif", 3);
                 p.document(t.dqe());
             }
         } else if (t.bordereau() != null) {
@@ -258,7 +258,7 @@ public class DaoCompletService {
         boolean cc = contratCadre(etat);
         Map<String, String> valeurs = etat.getValeurs() == null ? Map.of() : etat.getValeurs();
         TableauxBesoin.Contexte c = new TableauxBesoin.Contexte(TypeMarcheDao.A_COMMANDE.name().equals(etat.getTypeMarche()), cc, objet(etat),
-                lots(etat));
+                lots(etat), forfaitaire(etat));
         if (CategorieDao.TRAVAUX.name().equals(categorie)) {
             return new Tableaux(true, null, null, null, TableauxBesoin.bpu(c, articles),
                     TableauxBesoin.dqe(c, articles, parametres == null ? null : parametres.tauxTva()));
@@ -267,6 +267,11 @@ public class DaoCompletService {
                 && "Fixés par l'autorité contractante".equals(valeurs.get("B07-DE-01"));
         return new Tableaux(true, TableauxBesoin.bordereau(c, articles), TableauxBesoin.specifications(c, articles),
                 liste ? TableauxBesoin.liste(c, articles, valeurs) : null, null, null);
+    }
+
+    /** ⚠️ 17/10 (T4) — un prix global et forfaitaire (cadrage {@code typePrix}) : son détail est une décomposition du prix. */
+    static boolean forfaitaire(FicheMarcheDto etat) {
+        return etat.getCadrage() != null && "FORFAITAIRE".equals(String.valueOf(etat.getCadrage().get("typePrix")));
     }
 
     /** Les lots du plan, avec leur intitulé ; une ligne non allotie n'en a qu'un, sans numéro. */
@@ -308,7 +313,9 @@ public class DaoCompletService {
         private DaoCompletWord.Partie partie(byte[] docx) {
             boolean separateur = titres.stream().anyMatch(t -> t.niveau() == 2);
             boolean ouvre = titres.stream().anyMatch(t -> t.niveau() == 1);
-            return new DaoCompletWord.Partie(titres, docx, separateur, separateur && !ouvre ? partieCourante : null);
+            String section = titres.stream().filter(t -> t.niveau() == 2).map(DaoCompletWord.Titre::texte).findFirst().orElse(null);
+            return new DaoCompletWord.Partie(titres, docx, separateur, separateur && !ouvre ? partieCourante : null,
+                    section == null ? null : intituleCourt(section));
         }
 
         void documents(List<DocumentFicheMarche> docs) {
@@ -322,6 +329,25 @@ public class DaoCompletService {
             }
             return parties;
         }
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (charte travaux, T2) — l'intitulé court d'une section du sommaire, à gauche de l'en-tête courant : sans son
+     * numéro, son sigle ni son champ d'application, en minuscules sauf l'initiale (« 1.2. - Données Particulières de l'Appel
+     * d'Offres (DPAO) » → « Données particulières de l'appel d'offres »), ce qui le distingue aussi du titre du séparateur (règle 6
+     * de B4) ; l'acte d'engagement des fournitures et des travaux : « Cadre d'acte d'engagement ».
+     */
+    static String intituleCourt(String section) {
+        String s = section.replaceFirst("^\\d+(\\.\\d+)*\\.?\\s*-\\s*", "").replaceAll("\\s*\\([A-Z]{2,6}\\)", "")
+                .replaceFirst("(?i)\\s+applicable aux march.*$", "").replaceFirst("(?i)\\s*\\(adress.*$", "").trim();
+        if (s.equalsIgnoreCase("Acte d'Engagement")) {
+            return "Cadre d'acte d'engagement";
+        }
+        if (s.toLowerCase(Locale.FRENCH).startsWith("contrat-cadre valant")) {
+            return "Contrat-cadre valant acte d'engagement et CCAP";
+        }
+        String bas = s.toLowerCase(Locale.FRENCH);
+        return bas.isEmpty() ? bas : Character.toUpperCase(bas.charAt(0)) + bas.substring(1);
     }
 
     /** Les documents de ces types, dans l'ordre des types puis des lots. */
@@ -374,14 +400,22 @@ public class DaoCompletService {
      * ⚠️ 2026-10-16 (charte, §B2) — la page de garde des DAO réels, de haut en bas : le bloc de l'autorité centré, en capitales et
      * séparé par des tirets (ministère, entité, PRMP) ; « DOSSIER D'APPEL D'OFFRES {mode} », « N° … », « Lancé le … » (la date de
      * lancement {@code B04-CP-01} quand elle est saisie, à défaut celle de la validation) ; l'objet suivi des lots ; puis, à gauche,
-     * « FINANCEMENT » et « IMPUTATION BUDGETAIRE » (les comptes budgétaires du plan, {@code B01-AC-17}).
+     * « FINANCEMENT », « IMPUTATION BUDGETAIRE » (⚠️ 17/10, T1 : les lignes d'imputation du plan, {@code B01-AC-16}, sans leurs
+     * montants) et « COMPTE » ({@code B01-AC-17}) ; en travaux, « MARCHES PUBLICS DE TRAVAUX » en bas de garde.
      */
     List<DaoCompletWord.LigneGarde> garde(FicheMarcheDto etat, Map<String, String> plan, LocalDateTime validation) {
         Map<String, String> p = plan == null ? Map.of() : plan;
         List<DaoCompletWord.LigneGarde> l = new ArrayList<>(autorite(etat, p, validation, true));
         vide(l);
         ligne(l, p.get("FINANCEMENT") == null ? null : "FINANCEMENT : " + p.get("FINANCEMENT"), 11, true, true);
-        ligne(l, p.get("COMPTES") == null ? null : "IMPUTATION BUDGETAIRE : " + p.get("COMPTES"), 11, true, true);
+        // ⚠️ 2026-10-17 (charte travaux, T1, correctif toutes catégories) — l'imputation est B01-AC-16, le compte B01-AC-17.
+        String imputation = p.get("BENEFICIAIRES") == null ? null : p.get("BENEFICIAIRES").replaceAll("\\s*\\([^)]*\\)", "").trim();
+        ligne(l, imputation == null || imputation.isEmpty() ? null : "IMPUTATION BUDGETAIRE : " + imputation, 11, true, true);
+        ligne(l, p.get("COMPTES") == null ? null : "COMPTE : " + p.get("COMPTES"), 11, true, true);
+        if (CategorieDao.TRAVAUX.name().equals(categorie(etat))) {
+            vide(l);
+            ligne(l, "MARCHES PUBLICS DE TRAVAUX", 13, true);
+        }
         return l;
     }
 
@@ -446,13 +480,10 @@ public class DaoCompletService {
     DaoCompletWord.Charte charte(FicheMarcheDto etat, Map<String, String> plan, Integer version, LocalDateTime validation) {
         Map<String, String> p = plan == null ? Map.of() : plan;
         boolean pi = CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie(etat));
-        String o = objet(etat);
-        if (o != null && o.length() > 70) {
-            o = o.substring(0, 67) + "…";
-        }
         String autorite = p.get("ENTITE") != null ? p.get("ENTITE") : p.get("MINISTERE");
-        return new DaoCompletWord.Charte(garde(etat, p, validation), autorite(etat, p, validation, false), "SOMMAIRE GÉNÉRAL",
-                (pi ? "Dossier de consultation" : "DAO") + (numero(etat) == null ? "" : " n° " + numero(etat)), o == null ? "" : o,
+        // ⚠️ 2026-10-17 (T2) — l'en-tête : la partie en cours à gauche (ici le sommaire ; chaque section pose la sienne), le n° à droite.
+        return new DaoCompletWord.Charte(garde(etat, p, validation), autorite(etat, p, validation, false), "SOMMAIRE GÉNÉRAL", "Sommaire général",
+                (pi ? "Dossier de consultation" : "DAO") + (numero(etat) == null ? "" : " n° " + numero(etat)),
                 (autorite == null ? "Autorité contractante" : autorite.trim()) + " — PRMP",
                 "Fiche v" + (version == null ? "?" : version) + (validation == null ? "" : " validée le " + validation.format(JOUR)));
     }

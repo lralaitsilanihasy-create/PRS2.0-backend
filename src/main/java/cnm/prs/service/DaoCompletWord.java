@@ -40,7 +40,11 @@ public class DaoCompletWord {
      * Une partie : une nouvelle section, ses titres (aucun : suite de la partie précédente), puis son fichier Word ({@code null} :
      * les titres seuls).
      */
-    public record Partie(List<Titre> titres, byte[] docx, boolean separateur, String partie) {
+    public record Partie(List<Titre> titres, byte[] docx, boolean separateur, String partie, String entete) {
+
+        public Partie(List<Titre> titres, byte[] docx, boolean separateur, String partie) {
+            this(titres, docx, separateur, partie, null);
+        }
 
         /** ⚠️ 2026-10-16 (charte, §B2) — une partie qui ouvre une section du sommaire (un titre de niveau 2) a sa page de séparation. */
         public Partie(List<Titre> titres, byte[] docx) {
@@ -108,6 +112,7 @@ public class DaoCompletWord {
                 p.put("fichier", "");
                 p.put("separateur", parties.get(i).separateur());
                 p.put("partie", parties.get(i).partie() == null ? "" : parties.get(i).partie());
+                p.put("entete", parties.get(i).entete() == null ? "" : parties.get(i).entete());   // ⚠️ 17/10 (T2) : la partie en cours
                 if (parties.get(i).docx() != null) {
                     Path f = dossier.resolve(String.format("partie-%02d.docx", i));
                     Files.write(f, parties.get(i).docx());

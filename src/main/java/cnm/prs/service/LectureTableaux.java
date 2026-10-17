@@ -74,6 +74,8 @@ public final class LectureTableaux {
     private static final Pattern MOT_VIDE = Pattern.compile("^(DES|LES|POUR|AVEC|PAR|SUR|UNE)$");
     private static final Pattern INSERER = js("\\s*\\(?\\s*ins[ée]rer le prix.*$", I);
     private static final Pattern SUFFIXE_PRIX = js("\\s*,?\\s*(?:l['’]\\s*|le\\s+|la\\s+)\\p{L}+\\s+à(?!\\p{L}).*$", I);
+    /** ⚠️ 2026-10-17 (charte travaux, T3) — la ligne de prix d'un bordereau de travaux : « Le mètre cube à : …………… Ariary ». */
+    private static final Pattern LIGNE_PRIX = js("\\s*(?:l['’]\\s*|le\\s+|la\\s+|les\\s+)(?:\\p{L}+\\s+){0,3}à\\s*:.*$", I);
     private static final Pattern LOT = js("\\bLOT\\s*(?:N\\s*°?\\s*)?(\\d+)\\s*:", I);
     private static final Pattern NUMERO = Pattern.compile("^\\d{1,3}$");
     private static final Pattern PRIX_DEF = js("^Prix\\s*N\\s*[°o]?\\s*(\\d{1,3})$", I);
@@ -833,6 +835,7 @@ public final class LectureTableaux {
     /** Désignation de bordereau sans son suffixe de prix : « , l'unité à… », « Le forfait à… », « (insérer le prix…) ». */
     static String nettoie(String x) {
         String t = INSERER.matcher(x).replaceFirst("");
+        t = LIGNE_PRIX.matcher(t).replaceFirst("");
         t = SUFFIXE_PRIX.matcher(t).replaceFirst("");
         return trimJs(t);
     }

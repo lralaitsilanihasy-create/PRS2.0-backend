@@ -101,13 +101,13 @@ class DaoCompletWordTest {
         }
         DaoCompletWord.Resultat r = word.assembler(charte, List.of(
                 new DaoCompletWord.Partie(List.of(t("PREMIÈRE PARTIE : PROCÉDURE D'APPEL D'OFFRES", 1), t("1.1. - Instructions aux candidats", 2)),
-                        CharteDao.fixe(DaoCompletService.fixe("FOURNITURES_SERVICES", "IC")), true, null),
+                        CharteDao.fixe(DaoCompletService.fixe("FOURNITURES_SERVICES", "IC")), true, null, "Instructions aux candidats"),
                 new DaoCompletWord.Partie(List.of(t("1.2. - Données Particulières de l'Appel d'Offres (DPAO)", 2)), CharteDao.partie(dpao), true,
-                        "PREMIÈRE PARTIE : PROCÉDURE D'APPEL D'OFFRES"),
+                        "PREMIÈRE PARTIE : PROCÉDURE D'APPEL D'OFFRES", "Données particulières de l'appel d'offres"),
                 new DaoCompletWord.Partie(List.of(t("DEUXIÈME PARTIE : MARCHÉ", 1), t("2.1. - Acte d'Engagement", 2),
-                        t("Annexe 1 : Cadre du bordereau des prix", 3)), TableauxBesoin.bordereau(ctx, articles), true, null),
+                        t("Annexe 1 : Cadre du bordereau des prix", 3)), TableauxBesoin.bordereau(ctx, articles), true, null, "Cadre d'acte d'engagement"),
                 new DaoCompletWord.Partie(List.of(t("2.2. - Cahier des Prescriptions Spéciales", 2), t("Spécifications techniques", 3)),
-                        TableauxBesoin.specifications(ctx, articles), true, "DEUXIÈME PARTIE : MARCHÉ")));
+                        TableauxBesoin.specifications(ctx, articles), true, "DEUXIÈME PARTIE : MARCHÉ", "Cahier des prescriptions spéciales")));
         if (System.getProperty("dao.sortie") != null) {
             java.nio.file.Files.write(java.nio.file.Path.of(System.getProperty("dao.sortie"), "dao-charte.pdf"), r.pdf());
         }
@@ -124,8 +124,8 @@ class DaoCompletWordTest {
                 }
             };
             assertThat(page.apply(1)).contains("MINISTÈRE DE L'ÉCONOMIE ET DES FINANCES", "SECRÉTARIAT GÉNÉRAL", "Lancé le 12/01/2027",
-                    "IMPUTATION BUDGETAIRE : 6111").doesNotContain("page 1 /", "DAO n° 001-2026");
-            assertThat(page.apply(2)).contains("SOMMAIRE GÉNÉRAL", "DAO n° 001-2026", "Essai", "Secrétariat général — PRMP",
+                    "COMPTE : 6111").doesNotContain("page 1 /", "DAO n° 001-2026");
+            assertThat(page.apply(2)).contains("SOMMAIRE GÉNÉRAL", "Sommaire général", "DAO n° 001-2026", "Secrétariat général — PRMP",
                     "Fiche v3 validée le 12/01/2027", "page 2 / " + n);
             assertThat(page.apply(3)).contains("1.1. - Instructions aux candidats", "N° 001-2026").doesNotContain("page 3 /");
             String tout = s.getText(pdf);
@@ -137,7 +137,7 @@ class DaoCompletWordTest {
             }
             assertThat(dp).isPositive();
             assertThat(page.apply(dp)).contains("PREMIÈRE PARTIE").doesNotContain("page " + dp + " /");
-            assertThat(cnm.prs.service.LectureDao.norm(page.apply(dp + 1))).contains("ARTICLE 1 : OBJET DU CONTRAT-CADRE", "(mono-attributaire)",
+            assertThat(cnm.prs.service.LectureDao.norm(page.apply(dp + 1))).contains("Données particulières de l'appel d'offres", "ARTICLE 1 : OBJET DU CONTRAT-CADRE", "(mono-attributaire)",
                     "page " + (dp + 1) + " / " + n);
             assertThat(tout).doesNotContain("Times New Roman");
             // Les polices des caractères imprimés (les espaces des lignes vides ne comptent pas).

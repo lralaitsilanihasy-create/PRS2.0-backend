@@ -49,7 +49,11 @@ public final class TableauxBesoin {
     }
 
     /** Le contexte d'impression : la forme, l'objet, les lots et la mention propre au contrat-cadre. */
-    public record Contexte(boolean aCommande, boolean contratCadre, String objet, List<Lot> lots) {
+    public record Contexte(boolean aCommande, boolean contratCadre, String objet, List<Lot> lots, boolean forfaitaire) {
+
+        public Contexte(boolean aCommande, boolean contratCadre, String objet, List<Lot> lots) {
+            this(aCommande, contratCadre, objet, lots, false);
+        }
     }
 
     /** Les colonnes, au mot près (§B3, §B4 règle 4). */
@@ -62,6 +66,8 @@ public final class TableauxBesoin {
             "Délai offert par le candidat");
     static final List<String> BPU = List.of("N° prix", "DESIGNATION DES OUVRAGES ET PRIX UNITAIRE EN TOUTES LETTRES", "UNITE",
             "PRIX UNITAIRE EN CHIFFRES");
+    /** ⚠️ T4 — la récapitulation d'un lot de travaux. */
+    static final List<String> RECAPITULATION = List.of("SERIE", "DESIGNATION", "MONTANT EN ARIARY");
     static final List<String> DQE = List.of("N° prix", "DESIGNATION DES OUVRAGES", "UNITE", "QUANTITE", "PRIX UNITAIRE", "MONTANT EN ARIARY");
 
     /** Les colonnes de quantités, alignées à droite (R3). */
@@ -149,52 +155,111 @@ public final class TableauxBesoin {
 
     // ------------------------------------------------------------------ travaux
 
-    /** Le bordereau des prix unitaires (travaux) : n° de prix, désignation et prix en lettres, unité ; lignes de série. */
+    /**
+     * Le bordereau des prix unitaires (travaux) : n° de prix ; la désignation puis, ⚠️ 17/10 (charte travaux, T3), sur la ligne
+     * suivante de la même cellule, « Le mètre cube à : …………… Ariary » ; l'unité ; lignes de série.
+     */
     public static byte[] bpu(Contexte c, List<ArticleBesoinDto> articles) {
         return document(c, articles, "BORDEREAU DES PRIX UNITAIRES", null, (doc, lot, as) -> {
-            List<List<String>> lignes = new ArrayList<>();
-            List<Boolean> series = new ArrayList<>();
-            travaux(as, lignes, series, a -> List.of(texte(a.getNumeroPrix()), designationPrix(a.getDesignation(), a.getUnite(), a.getLibelleBordereau()),
-                    texte(a.getUnite()), ""), 4);
-            XWPFTable t = table(doc, BPU, new int[] { 900, 5600, 1100, 1812 }, lignes);
-            griserSeries(t, series);
+            List<List<List<String>>> lignes = new ArrayList<>();
+            List<Integer> genres = new ArrayList<>();
+            travaux(as, lignes, genres, a -> List.of(List.of(texte(a.getNumeroPrix())),
+                    List.of(texte(a.getDesignation()), lignePrix(a.getUnite(), a.getLibelleBordereau())), List.of(texte(a.getUnite())), List.of("")),
+                    4, false);
+            XWPFTable t = tableMulti(doc, BPU, new int[] { 900, 5600, 1100, 1812 }, lignes);
+            griser(t, genres);
             signature(doc);
         });
     }
 
-    /** Le détail quantitatif et estimatif (travaux) : mêmes n° de prix et lignes de série ; total HT, TVA, TTC. */
+    /**
+     * Le détail quantitatif et estimatif (travaux), ou la décomposition du prix global et forfaitaire : mêmes n° de prix et
+     * lignes de série ; ⚠️ 17/10 (T4), après chaque série « Sous-total {code} — {libellé} », puis, sous le tableau du lot, sa
+     * récapitulation (une ligne par série, total HT, TVA, TTC), « Arrêté le montant… », « Fait à…, le… », « Le candidat ».
+     */
     public static byte[] dqe(Contexte c, List<ArticleBesoinDto> articles, BigDecimal tauxTva) {
-        return document(c, articles, "DETAIL QUANTITATIF ET ESTIMATIF", null, (doc, lot, as) -> {
-            List<List<String>> lignes = new ArrayList<>();
-            List<Boolean> series = new ArrayList<>();
-            travaux(as, lignes, series, a -> List.of(texte(a.getNumeroPrix()), texte(a.getDesignation()), texte(a.getUnite()), nombre(a.getQuantite()),
-                    "", ""), 6);
-            XWPFTable t = table(doc, DQE, new int[] { 900, 4100, 900, 1100, 1200, 1212 }, lignes);
-            griserSeries(t, series);
-            ligneTotale(t, 6, "Total hors taxes", false);
-            ligneTotale(t, 6, "TVA" + (tauxTva == null ? "" : " " + FormulairesEnLigne.lisible(tauxTva) + " %"), false);
-            ligneTotale(t, 6, "Total toutes taxes comprises", false);
-        });
+        return document(c, articles, c.forfaitaire() ? "DECOMPOSITION DU PRIX GLOBAL ET FORFAITAIRE" : "DETAIL QUANTITATIF ET ESTIMATIF", null,
+                (doc, lot, as) -> {
+                    List<List<List<String>>> lignes = new ArrayList<>();
+                    List<Integer> genres = new ArrayList<>();
+                    travaux(as, lignes, genres, a -> List.of(List.of(texte(a.getNumeroPrix())), List.of(texte(a.getDesignation())),
+                            List.of(texte(a.getUnite())), List.of(nombre(a.getQuantite())), List.of(""), List.of("")), 6, true);
+                    XWPFTable t = tableMulti(doc, DQE, new int[] { 900, 4100, 900, 1100, 1200, 1212 }, lignes);
+                    griser(t, genres);
+                    // La récapitulation du lot.
+                    paragraphe(doc, "RECAPITULATION" + (lot.numero() == null ? "" : " — LOT " + lot.numero()), true, ParagraphAlignment.CENTER)
+                            .setSpacingBefore(200);
+                    List<List<List<String>>> recap = new ArrayList<>();
+                    String vue = null;
+                    for (ArticleBesoinDto a : as) {
+                        String s = texte(a.getSerie());
+                        if (!s.isEmpty() && !s.equals(vue)) {
+                            recap.add(List.of(List.of(s), List.of(texte(a.getSerieLibelle()).toUpperCase(Locale.FRENCH)), List.of("")));
+                            vue = s;
+                        }
+                    }
+                    XWPFTable r = tableMulti(doc, RECAPITULATION, new int[] { 1200, 5600, 2612 }, recap);
+                    ligneTotale(r, 3, "Total hors taxes", false);
+                    ligneTotale(r, 3, "TVA" + (tauxTva == null ? "" : " " + FormulairesEnLigne.lisible(tauxTva) + " %"), false);
+                    ligneTotale(r, 3, "Total toutes taxes comprises", false);
+                    paragraphe(doc, "Arrêté le montant " + (lot.numero() == null ? "du marché" : "du lot " + lot.numero()) + " à la somme de "
+                            + POINTILLES + " (en lettres et en chiffres) Ariary toutes taxes comprises.", false, ParagraphAlignment.LEFT);
+                    signature(doc);
+                });
     }
 
-    /** Les lignes de travaux, une ligne de série (sans unité) devant le premier article de chaque série. */
-    private static void travaux(List<ArticleBesoinDto> as, List<List<String>> lignes, List<Boolean> series,
-            java.util.function.Function<ArticleBesoinDto, List<String>> ligne, int colonnes) {
+    /** Ligne d'article, de série ou de sous-total : le genre de chaque ligne du tableau. */
+    static final int ARTICLE = 0;
+    static final int SERIE = 1;
+    static final int SOUS_TOTAL = 2;
+
+    /**
+     * Les lignes de travaux : une ligne de série (sans unité) devant le premier article de chaque série et, avec {@code sousTotaux},
+     * une ligne « Sous-total {code} — {libellé} » après son dernier article (sans n° ni unité : la relecture n'y voit pas d'article).
+     */
+    private static void travaux(List<ArticleBesoinDto> as, List<List<List<String>>> lignes, List<Integer> genres,
+            java.util.function.Function<ArticleBesoinDto, List<List<String>>> ligne, int colonnes, boolean sousTotaux) {
         String serie = null;
+        String libelle = null;
         for (ArticleBesoinDto a : as) {
             String s = texte(a.getSerie());
             if (!s.isEmpty() && !s.equals(serie)) {
-                List<String> l = new ArrayList<>(List.of(s, texte(a.getSerieLibelle()).toUpperCase(Locale.FRENCH)));
+                if (sousTotaux && serie != null) {
+                    lignes.add(ligneVide(colonnes, "Sous-total " + serie + " — " + libelle));
+                    genres.add(SOUS_TOTAL);
+                }
+                List<List<String>> l = new ArrayList<>(List.of(List.of(s), List.of(texte(a.getSerieLibelle()).toUpperCase(Locale.FRENCH))));
                 while (l.size() < colonnes) {
-                    l.add("");
+                    l.add(List.of(""));
                 }
                 lignes.add(l);
-                series.add(true);
+                genres.add(SERIE);
                 serie = s;
+                libelle = texte(a.getSerieLibelle()).toUpperCase(Locale.FRENCH);
             }
             lignes.add(ligne.apply(a));
-            series.add(false);
+            genres.add(ARTICLE);
         }
+        if (sousTotaux && serie != null) {
+            lignes.add(ligneVide(colonnes, "Sous-total " + serie + " — " + libelle));
+            genres.add(SOUS_TOTAL);
+        }
+    }
+
+    /** Une ligne sans n° ni unité, son libellé dans la colonne de la désignation. */
+    private static List<List<String>> ligneVide(int colonnes, String libelle) {
+        List<List<String>> l = new ArrayList<>();
+        for (int j = 0; j < colonnes; j++) {
+            l.add(List.of(j == 1 ? libelle : ""));
+        }
+        return l;
+    }
+
+    /** « Le mètre cube à : …………… Ariary » : le libellé du bordereau quand il est saisi, sinon l'unité et son article défini. */
+    static String lignePrix(String unite, String libelleBordereau) {
+        String l = texte(libelleBordereau);
+        String u = l.isEmpty() ? uniteAvecArticle(unite) : l;
+        return Character.toUpperCase(u.charAt(0)) + u.substring(1) + " à : …………… Ariary";
     }
 
     // ------------------------------------------------------------------ le document
@@ -301,12 +366,17 @@ public final class TableauxBesoin {
         return t;
     }
 
-    private static void griserSeries(XWPFTable t, List<Boolean> series) {
-        for (int i = 0; i < series.size(); i++) {
-            if (series.get(i)) {
+    /** Les lignes de série en gras sur gris ; ⚠️ T4 : les sous-totaux en italique gras sur gris. */
+    private static void griser(XWPFTable t, List<Integer> genres) {
+        for (int i = 0; i < genres.size(); i++) {
+            if (genres.get(i) != ARTICLE) {
+                boolean italique = genres.get(i) == SOUS_TOTAL;
                 for (XWPFTableCell c : t.getRow(i + 1).getTableCells()) {
                     c.setColor("F3F3F3");
-                    c.getParagraphs().forEach(p -> p.getRuns().forEach(r -> r.setBold(true)));
+                    c.getParagraphs().forEach(p -> p.getRuns().forEach(r -> {
+                        r.setBold(true);
+                        r.setItalic(italique);
+                    }));
                 }
             }
         }

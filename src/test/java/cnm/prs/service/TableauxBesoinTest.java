@@ -145,11 +145,23 @@ class TableauxBesoinTest {
         b.setSerieLibelle("Ouvrages");
         byte[] bpu = TableauxBesoin.bpu(c, List.of(a, b));
         byte[] dqe = TableauxBesoin.dqe(c, List.of(a, b), new BigDecimal("20"));
-        assertThat(texte(bpu)).contains("PRIX UNITAIRE EN CHIFFRES", "Installation et repli de chantier, le forfait à ….Ariary",
+        // ⚠️ 17/10 (T3) — le prix en lettres sur sa propre ligne, sous la désignation.
+        assertThat(texte(bpu)).contains("PRIX UNITAIRE EN CHIFFRES", "Installation et repli de chantier\tLe forfait à : …………… Ariary",
                 "INSTALLATION DE CHANTIER").doesNotContain("QUANTITE");
-        assertThat(texte(dqe)).contains("DESIGNATION DES OUVRAGES", "Total hors taxes", "TVA 20 %", "Total toutes taxes comprises", "OUVRAGES");
+        // ⚠️ 17/10 (T4) — un sous-total après chaque série, puis la récapitulation du lot.
+        assertThat(texte(dqe)).contains("DESIGNATION DES OUVRAGES", "Sous-total 000 — INSTALLATION DE CHANTIER", "Sous-total 500 — OUVRAGES",
+                "RECAPITULATION", "SERIE\tDESIGNATION\tMONTANT EN ARIARY", "Total hors taxes", "TVA 20 %", "Total toutes taxes comprises",
+                "Arrêté le montant du marché à la somme de");
+        assertThat(LectureTableaux.nettoie("Béton B1 dosé à 250 kg Le mètre cube à : …………… Ariary")).isEqualTo("Béton B1 dosé à 250 kg");
+        assertThat(TableauxBesoin.lignePrix("M3", "Le mètre cube")).isEqualTo("Le mètre cube à : …………… Ariary");
+        assertThat(TableauxBesoin.lignePrix("Fft", null)).isEqualTo("Le forfait à : …………… Ariary");
         assertThat(LectureTableaux.articles(LectureTableaux.tableauxDocx(bpu))).isEmpty();
         List<LectureTableaux.Article> lus = LectureTableaux.articles(LectureTableaux.tableauxDocx(dqe));
-        assertThat(lus).extracting(x -> x.code + " " + x.serie + " " + x.quantite).containsExactly("001 000 1", "531 500 140");
+        assertThat(lus).extracting(x -> x.code + " " + x.serie + " " + x.quantite).containsExactly("001 000 1", "531 500 140");   // sous-totaux exclus
+        TableauxBesoin.Contexte f = new TableauxBesoin.Contexte(false, false, "Entretien routier", List.of(new TableauxBesoin.Lot(1, "Voirie"),
+                new TableauxBesoin.Lot(2, "Assainissement")), true);
+        a.setLot(2);
+        b.setLot(2);
+        assertThat(texte(TableauxBesoin.dqe(f, List.of(a, b), null))).contains("RECAPITULATION — LOT 2", "Arrêté le montant du lot 2");
     }
 }

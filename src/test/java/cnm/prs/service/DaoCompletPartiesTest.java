@@ -134,7 +134,7 @@ class DaoCompletPartiesTest {
         assertThat(l).containsExactly("MINISTÈRE DE L'ÉDUCATION NATIONALE", "-------------", "DIRECTION DES AFFAIRES FINANCIÈRES", "-------------",
                 "PERSONNE RESPONSABLE DES MARCHÉS PUBLICS", "-------------", "DOSSIER D'APPEL D'OFFRES OUVERT", "N° 001-DAOO/MEN/PRMP/Tvx-PI-2026",
                 "Lancé le …………………………", "Objet : Acquisition de matériels informatiques", "Lot 1 : Ordinateurs", "Lot 2 : Imprimantes",
-                "FINANCEMENT : RPI", "IMPUTATION BUDGETAIRE : 2321");
+                "FINANCEMENT : RPI", "IMPUTATION BUDGETAIRE : 00-71-0-110 – DAF", "COMPTE : 2321");   // ⚠️ 17/10 (T1) : B01-AC-16 puis B01-AC-17
         // La date de lancement saisie (B04-CP-01), à défaut celle de la validation ; une ligne non allotie : « en un lot unique ».
         FicheMarcheDto cc = etat("FOURNITURES_SERVICES", "CONTRAT_CADRE");
         cc.setValeurs(Map.of("B02-OB-03", "07-CC/MEF", "B04-CP-01", "2027-01-18"));
@@ -145,7 +145,13 @@ class DaoCompletPartiesTest {
                 "Objet : Fourniture d'articles de bureau, en un lot unique");
         assertThat(charte.separateur()).extracting(DaoCompletWord.LigneGarde::texte).contains("SECRÉTARIAT GÉNÉRAL", "N° 07-CC/MEF",
                 "Objet : Fourniture d'articles de bureau").doesNotContain("FINANCEMENT : RPI");
-        assertThat(charte.enteteGauche()).isEqualTo("DAO n° 07-CC/MEF");
+        assertThat(charte.enteteGauche()).isEqualTo("Sommaire général");   // ⚠️ 17/10 (T2) : la partie en cours à gauche, le n° à droite
+        assertThat(charte.enteteDroite()).isEqualTo("DAO n° 07-CC/MEF");
+        assertThat(DaoCompletService.intituleCourt("1.2. - Données Particulières de l'Appel d'Offres (DPAO)")).isEqualTo("Données particulières de l'appel d'offres");
+        assertThat(DaoCompletService.intituleCourt("2.1. - Acte d'Engagement")).isEqualTo("Cadre d'acte d'engagement");
+        assertThat(DaoCompletService.intituleCourt("2.3. - Cahier des Clauses Administratives Générales applicable aux marchés publics de travaux"))
+                .isEqualTo("Cahier des clauses administratives générales");
+        assertThat(DaoCompletService.intituleCourt("1.3. - Formulaires de soumission")).isEqualTo("Formulaires de soumission");
         assertThat(charte.piedGauche()).isEqualTo("Secrétariat général — PRMP");
         assertThat(charte.piedCentre()).isEqualTo("Fiche v3 validée le 12/01/2027");
         assertThat(DaoCompletService.lance(cc, null)).isEqualTo("18/01/2027");
