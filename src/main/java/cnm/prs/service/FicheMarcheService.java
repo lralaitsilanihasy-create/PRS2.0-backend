@@ -1221,6 +1221,17 @@ public class FicheMarcheService {
      * ({@code idDossier}, {@code details.statut}) tant que le dossier soumis est entre les mains de la Commission.
      */
     public FicheMarcheDto reviser(Long idDmc) {
+        return reviser(idDmc, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (demande front « abandonner-revision-repartir-version », §B2) — la même révision, copiée de la version figée
+     * {@code depuis} au lieu de la dernière ({@code null} : la dernière). Le brouillon prend toujours le numéro suivant : l'historique
+     * n'est jamais réécrit. 404 si la version n'existe pas ou n'est pas validée ; 409 {@code REVISION_OUVERTE} si un brouillon de
+     * révision existe déjà (à abandonner d'abord). Le mode de remise figé (R8) l'emporte sur celui de la version copiée (Q1). Journal
+     * du plan : {@code FICHE_REVISION_OUVERTE}.
+     */
+    public FicheMarcheDto reviser(Long idDmc, Integer depuis) {
         Contexte ctx = contexteEcriture(idDmc);
         dossierRepository.findIdDossierByIdDmc(idDmc).flatMap(dossierRepository::findById).ifPresent(d -> {
             if (STATUTS_TENUS_PAR_LA_COMMISSION.contains(d.getStatut())) {
@@ -1233,15 +1244,30 @@ public class FicheMarcheService {
         FicheMarche derniere = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc)
                 .orElseThrow(() -> new BusinessRuleException("La fiche n'a jamais été enregistrée : rien à réviser.", "FICHE_VIDE"));
         if (!StatutFicheMarche.VALIDEE.name().equals(derniere.getStatut())) {
+            if (depuis != null) {
+                throw new BusinessRuleException("Une révision est déjà ouverte (version " + derniere.getNumeroVersion() + " en brouillon) : "
+                        + "abandonnez-la avant de repartir d'une autre version.", "REVISION_OUVERTE");
+            }
             throw new BusinessRuleException("La version " + derniere.getNumeroVersion() + " est encore en brouillon.",
                     "BROUILLON_EN_COURS");
         }
+        // ⚠️ 2026-10-17 (§B2) — la version copiée : la dernière, ou la version figée demandée.
+        FicheMarche source = depuis == null ? derniere : ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
+                .filter(f -> depuis.equals(f.getNumeroVersion()) && StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("La version " + depuis + " de cette fiche n'existe pas ou n'est pas validée."));
         FicheMarche suivante = new FicheMarche();
         suivante.setIdDmc(idDmc);
         suivante.setNumeroVersion(derniere.getNumeroVersion() + 1);
         suivante.setStatut(StatutFicheMarche.BROUILLON.name());
         suivante.setTypeMarche(ctx.forme().name());   // lot 1c : le type dérivé au moment de la révision
-        suivante.setCadrage(derniere.getCadrage());
+        // ⚠️ Q1 (R8) — le mode de remise figé l'emporte sur celui de la version copiée.
+        Map<String, Object> cadrageSource = new LinkedHashMap<>(lireJson(source.getCadrage()));
+        String fige = modeFige(idDmc).orElse(null);
+        if (fige != null && !fige.equals(modeRemise(cadrageSource))) {
+            cadrageSource.put(RemiseElectronique.CLE_CADRAGE, fige);
+        }
+        suivante.setCadrage(source == derniere && (fige == null || fige.equals(modeRemise(lireJson(derniere.getCadrage()))))
+                ? derniere.getCadrage() : ecrireJson(cadrageSource));
         suivante.setDateCreation(LocalDateTime.now());
         suivante.setCreePar(CurrentUser.ref().orElse(null));
         suivante = ficheRepository.save(suivante);
@@ -1251,24 +1277,57 @@ public class FicheMarcheService {
         Map<String, ChampFicheMarche> referentiel = new LinkedHashMap<>();
         champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> referentiel.put(c.getCode(), c));
         int nbLots = LotsFiche.nbLots(valeursPpm.lire(ctx.idDetail()).valeurs());
-        for (FicheMarcheValeur v : valeurRepository.findByIdFiche(derniere.getIdFiche())) {
+        for (FicheMarcheValeur v : valeurRepository.findByIdFiche(source.getIdFiche())) {
             if (valeurReprise(referentiel, v.getCodeChamp(), v.getValeur(), nbLots)) {
                 valeurRepository.save(new FicheMarcheValeur(null, suivante.getIdFiche(), v.getCodeChamp(), v.getValeur(),
                         Boolean.TRUE.equals(v.getCalculee())));   // V50 : la mention « calculée » suit la valeur
             }
         }
-        besoin.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V45 — le besoin suit, comme les valeurs
-        moyens.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V60 — le matériel et le personnel aussi
-        pieces.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V61 — les pièces de l'offre aussi
-        sousCriteres.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V84 — les sous-critères techniques aussi
+        besoin.copier(source.getIdFiche(), suivante.getIdFiche());   // ⚠️ V45 — le besoin suit, comme les valeurs
+        moyens.copier(source.getIdFiche(), suivante.getIdFiche());   // ⚠️ V60 — le matériel et le personnel aussi
+        pieces.copier(source.getIdFiche(), suivante.getIdFiche());   // ⚠️ V61 — les pièces de l'offre aussi
+        sousCriteres.copier(source.getIdFiche(), suivante.getIdFiche());   // ⚠️ V84 — les sous-critères techniques aussi
         // ⚠️ 2026-10-06 (DAO complet, §B2) — les spécifications techniques suivent la version, comme le besoin.
         Integer idSuivante = suivante.getIdFiche();
         // ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf ») — sauf ce que la catégorie n'admet plus (un Word en fournitures ou en
         // travaux) : la version validée garde le sien, la révision repart sans.
-        specificationsRepository.findById(derniere.getIdFiche()).filter(s -> SpecificationsService.admis(s.getNomFichier(), ctx.codeCategorie()))
+        specificationsRepository.findById(source.getIdFiche()).filter(s -> SpecificationsService.admis(s.getNomFichier(), ctx.codeCategorie()))
                 .ifPresent(s -> specificationsRepository.save(new cnm.prs.entity.SpecificationsFiche(
                 idSuivante, s.getNomFichier(), s.getTailleOctets(), s.getEmpreinte(), s.getContenu(), s.getDeposeLe(), s.getDeposePar())));
+        if (depuis != null) {
+            journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_REVISION_OUVERTE, "DAO, révision ouverte depuis la version "
+                    + depuis + " : version " + suivante.getNumeroVersion() + " en brouillon");
+        }
         return toDto(ctx, suivante);
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (demande front « abandonner-revision-repartir-version », §B1) — abandonne la révision ouverte : le brouillon est
+     * supprimé avec tout ce qu'il porte (valeurs, besoin, matériel, personnel, pièces, sous-critères, fichier de spécifications : ON
+     * DELETE CASCADE), aucune version n'est créée et la fiche revient à sa dernière version validée. Mêmes droits que la révision.
+     * 409 {@code PAS_DE_REVISION} (la version courante est validée), {@code PREMIERE_VERSION} (jamais validée : le brouillon initial
+     * ne s'abandonne pas ainsi), {@code MODE_MIGRE} (le brouillon porte une migration documentée du mode de remise, R8 : sa trace
+     * ne s'efface pas). Journal du plan : {@code FICHE_REVISION_ABANDONNEE}.
+     */
+    public FicheMarcheDto abandonnerRevision(Long idDmc) {
+        Contexte ctx = contexteEcriture(idDmc);
+        List<FicheMarche> versions = ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc);
+        FicheMarche derniere = versions.isEmpty() ? null : versions.get(versions.size() - 1);
+        if (derniere == null || StatutFicheMarche.VALIDEE.name().equals(derniere.getStatut())) {
+            throw new BusinessRuleException("Aucune révision n'est ouverte : la version courante est validée.", "PAS_DE_REVISION");
+        }
+        FicheMarche validee = versions.stream().filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((a, b) -> b)
+                .orElseThrow(() -> new BusinessRuleException("La fiche n'a jamais été validée : son brouillon initial ne s'abandonne pas "
+                        + "ainsi.", "PREMIERE_VERSION"));
+        if (derniere.getModeMigreLe() != null) {
+            throw new BusinessRuleException("La version " + derniere.getNumeroVersion() + " porte une migration documentée du mode de remise "
+                    + "(R8) : elle ne s'abandonne pas, validez-la.", "MODE_MIGRE");
+        }
+        ficheRepository.delete(derniere);
+        ficheRepository.flush();
+        journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_REVISION_ABANDONNEE, "DAO, révision de la version "
+                + derniere.getNumeroVersion() + " abandonnée : la fiche revient à la version " + validee.getNumeroVersion());
+        return toDto(ctx, validee);
     }
 
     /**

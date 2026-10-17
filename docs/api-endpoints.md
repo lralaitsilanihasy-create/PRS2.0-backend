@@ -5089,8 +5089,23 @@ Une règle dont un rôle n'a pas encore de champ (référentiel incomplet) **n'e
 | POST | /api/fiches-marche/{idDmc}/controler | — | `BilanControlesDto` (sans écrire) | 200, 403, 404 | lecture |
 | POST | /api/fiches-marche/{idDmc}/valider | — | `FicheMarcheDto` (`VALIDEE`, version n) | 200, 403, 404, 409 `CONTROLES_BLOQUANTS` / `FICHE_VIDE` / `FICHE_VALIDEE` / `VACANCE_PRMP`, ⚠️ lot 2a : **500 `GENERATION_DOCUMENTS`** (documents non produits, version non validée) | **PRMP seule** |
 | POST | /api/fiches-marche/{idDmc}/reviser | — | `FicheMarcheDto` (version n+1 `BROUILLON`, copie de la validée) | 200, 403, 404, 409 `FICHE_VIDE` / `BROUILLON_EN_COURS` / `VACANCE_PRMP` | écriture |
+| POST | /api/fiches-marche/{idDmc}/reviser?depuis={n} | — | ⚠️ 17/10 : `FicheMarcheDto` (version **dernière + 1** `BROUILLON`, copie de la version **figée n** ; voir sous le tableau) ; journal du plan `FICHE_REVISION_OUVERTE` | 200, 403, **404** (n inconnue ou non validée), 409 **`REVISION_OUVERTE`** (un brouillon existe : l'abandonner d'abord), `FICHE_VIDE`, `DOSSIER_EN_EXAMEN` | écriture |
+| DELETE | /api/fiches-marche/{idDmc}/revision | — | ⚠️ 17/10 : `FicheMarcheDto` de la **dernière version validée** (voir sous le tableau) ; journal du plan `FICHE_REVISION_ABANDONNEE` | 200, 403, 409 **`PAS_DE_REVISION`** (version courante validée), **`PREMIERE_VERSION`** (jamais validée), **`MODE_MIGRE`** | écriture (PRMP, UGPM, Administrateur, comme la révision) |
 | GET | /api/fiches-marche/{idDmc}/versions | — | `VersionFicheDto[]` = `{ idFiche, version, statut, typeMarche, dateCreation, dateValidation, validePar, nbValeurs }` — les versions **validées** | 200, 403, 404 | lecture |
 | GET | /api/fiches-marche/{idDmc}/versions/{numero} | — | `FicheMarcheDto` de cette version | 200, 403, 404 | lecture |
+
+⚠️ **17/10 (demande front « abandonner-revision-repartir-version »)** :
+- **`POST …/reviser?depuis=n`** fait la même copie que la révision ordinaire, mais depuis la version figée n.
+  - **Ce qui est copié** : les valeurs que le référentiel admet encore, le cadrage, le besoin avec ses prix estimés, le matériel,
+    le personnel, les pièces, les sous-critères et le fichier de spécifications admis par la catégorie.
+  - **Le mode de remise figé** (R8) l'emporte sur celui de la version n (Q1).
+  - **Le journal** : « DAO, révision ouverte depuis la version n : version m en brouillon ».
+  - **Le brouillon** est contrôlé à la validation comme tout brouillon.
+- **`DELETE …/revision`** supprime le brouillon de révision avec tout ce qu'il porte (`ON DELETE CASCADE`), sans créer de version,
+  et rend la dernière version validée.
+  - **Le journal** : « DAO, révision de la version m abandonnée : la fiche revient à la version n ».
+  - **`MODE_MIGRE`** : un brouillon qui porte une migration documentée du mode de remise ne s'abandonne pas, pour garder la trace de
+    l'Administrateur.
 
 Le corps d'un `PUT …/blocs/{bloc}` **remplace** les valeurs `SAISIE` du bloc : un code absent ou une valeur vide est
 effacé. ⚠️ **Sauf les valeurs des champs retirés** (inactifs, 2026-09-29) : l'écran ne les renvoie plus, et elles sont

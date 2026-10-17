@@ -330,10 +330,22 @@ public class FicheMarcheController {
         return service.valider(idDmc);
     }
 
-    /** Ouvre la version suivante en brouillon, copie de la dernière validée. */
+    /**
+     * Ouvre la version suivante en brouillon, copie de la dernière validée. ⚠️ 2026-10-17 — {@code ?depuis=n} : copie de la version
+     * figée n (404 inconnue ou non validée, 409 {@code REVISION_OUVERTE}).
+     */
     @PostMapping("/{idDmc}/reviser")
-    public FicheMarcheDto reviser(@PathVariable Long idDmc) {
-        return service.reviser(idDmc);
+    public FicheMarcheDto reviser(@PathVariable Long idDmc, @RequestParam(required = false) Integer depuis) {
+        return service.reviser(idDmc, depuis);
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (« abandonner-revision-repartir-version », §B1) — abandonne la révision ouverte : la fiche revient à sa dernière
+     * version validée, rendue. 409 {@code PAS_DE_REVISION}, {@code PREMIERE_VERSION}, {@code MODE_MIGRE}.
+     */
+    @org.springframework.web.bind.annotation.DeleteMapping("/{idDmc}/revision")
+    public FicheMarcheDto abandonnerRevision(@PathVariable Long idDmc) {
+        return service.abandonnerRevision(idDmc);
     }
 
     /**

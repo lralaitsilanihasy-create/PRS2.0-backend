@@ -13,6 +13,7 @@ import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.junit.jupiter.api.BeforeEach;
@@ -166,6 +167,63 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
                 .header("Authorization", tokenPrmp)).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Fichier trop volumineux : la taille maximale autorisée est dépassée."));
     }
+
+    @Test
+    @DisplayName("⚠️ 17/10 (« abandonner-revision-repartir-version ») — abandonner la révision (la fiche revient à sa dernière version "
+            + "validée, aucune version créée) ; repartir d'une version figée antérieure (numéro suivant, contenu de l'ancienne) ; refus "
+            + "nommés ; journal du plan")
+    void abandonnerEtRepartir() throws Exception {
+        Long idDmc = creerDmc();
+        String base = "/api/fiches-marche/" + idDmc;
+        mvc.perform(delete(base + "/revision").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PREMIERE_VERSION"));
+        besoinDeTest(idDmc);
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", new LinkedHashMap<>());
+        mvc.perform(delete(base + "/revision").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PAS_DE_REVISION"));
+
+        // Une v2 qui diffère de la v1 par ses prescriptions générales.
+        mvc.perform(post(base + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(put(base + "/blocs/B12").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"valeurs\":{\"B12-BE-01\":\"Notice en français.\"}}")).andExpect(status().isOk());
+        mvc.perform(post(base + "/valider").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+
+        // Repartir de la v1 : une v3 au contenu de la v1.
+        mvc.perform(post(base + "/reviser").param("depuis", "9").header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        String v3 = mvc.perform(post(base + "/reviser").param("depuis", "1").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Integer>read(v3, "$.version")).isEqualTo(3);
+        assertThat(JsonPath.<String>read(v3, "$.statut")).isEqualTo("BROUILLON");
+        assertThat(JsonPath.<Map<String, Object>>read(v3, "$.valeurs")).doesNotContainKey("B12-BE-01");
+        assertThat(mvc.perform(get(base + "/articles").header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsString())
+                .contains("\"designation\"");
+        mvc.perform(post(base + "/reviser").param("depuis", "1").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("REVISION_OUVERTE"));
+
+        // Abandonner la v3 : la fiche revient à la v2, validée, sans version créée.
+        String v2 = mvc.perform(delete(base + "/revision").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Integer>read(v2, "$.version")).isEqualTo(2);
+        assertThat(JsonPath.<String>read(v2, "$.statut")).isEqualTo("VALIDEE");
+        assertThat(JsonPath.<Map<String, Object>>read(fiche(idDmc), "$.valeurs")).containsEntry("B12-BE-01", "Notice en français.");
+
+        String journal = mvc.perform(get("/api/dossiers/9900/journal").header("Authorization", tokenPresident))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(journal, "$[?(@.typeAction=='FICHE_REVISION_OUVERTE')].detail"))
+                .containsExactly("DAO, révision ouverte depuis la version 1 : version 3 en brouillon");
+        assertThat(JsonPath.<List<String>>read(journal, "$[?(@.typeAction=='FICHE_REVISION_ABANDONNEE')].detail"))
+                .containsExactly("DAO, révision de la version 3 abandonnée : la fiche revient à la version 2");
+
+        // Un brouillon qui porte une migration documentée du mode de remise (R8) ne s'abandonne pas.
+        mvc.perform(post(base + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        cnm.prs.entity.FicheMarche brouillon = ficheMarcheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElseThrow();
+        brouillon.setModeMigreLe(LocalDateTime.now());
+        ficheMarcheRepository.save(brouillon);
+        mvc.perform(delete(base + "/revision").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MODE_MIGRE"));
+    }
+
+    @Autowired private cnm.prs.repository.FicheMarcheRepository ficheMarcheRepository;
 
     private ResultActions deposer(String url, String nom, byte[] contenu) throws Exception {
         return mvc.perform(multipart(HttpMethod.PUT, url).file(new MockMultipartFile("fichier", nom,

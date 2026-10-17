@@ -96,6 +96,13 @@ public class JournalDossierService {
      * « Fiche marché version n validée, N information(s) modifiée(s), P pièce(s) remplacée(s) ». Acte PRMP.
      */
     public static final String FICHE_REVISEE = "FICHE_REVISEE";
+    /**
+     * ⚠️ 2026-10-17 (demande front « abandonner-revision-repartir-version ») — sur le plan : une révision ouverte depuis une version
+     * figée antérieure (« DAO, révision ouverte depuis la version n : version m en brouillon »), ou une révision abandonnée (« DAO,
+     * révision de la version m abandonnée : la fiche revient à la version n »). Actes PRMP ou UGPM.
+     */
+    public static final String FICHE_REVISION_OUVERTE = "FICHE_REVISION_OUVERTE";
+    public static final String FICHE_REVISION_ABANDONNEE = "FICHE_REVISION_ABANDONNEE";
     /** ⚠️ R6b (manuel révisé, lot 2, §B1 règle 5 ; V107) — le plan est réputé approuvé (art. 26-IV), posé par le planificateur. */
     public static final String PLAN_REPUTE_APPROUVE = "PLAN_REPUTE_APPROUVE";
     /**

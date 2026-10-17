@@ -939,6 +939,15 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   pas et ne s'abandonne pas : une version validée est un acte, et la **révision** est le geste prévu pour la
   corriger — **arbitré par le pilote le 26/09** (piste 2 ; l'abandon, un statut « abandonnée » qui rouvrirait la
   ligne, n'est pas retenu).
+- ⚠️ **2026-10-17 — Une révision ouverte s'abandonne, et une révision peut repartir d'une version antérieure.**
+  - **Abandonner une révision**, ce n'est pas abandonner la fiche (règle du 26/09, inchangée). Le brouillon de révision est
+    supprimé, et la fiche revient à sa dernière version validée. Aucune version validée ne bouge. Le journal du plan le dit.
+  - **Repartir d'une version antérieure** ouvre une révision copiée de cette version, sous le numéro suivant : on ne revient
+    jamais en arrière, l'historique n'est jamais réécrit.
+  - **Le mode de remise figé** l'emporte sur celui de la version copiée.
+  - **Une révision à la fois** : pour repartir d'une autre version, il faut d'abord abandonner celle qui est ouverte.
+  - **Exception** : un brouillon qui porte une migration du mode de remise, acte documenté de l'Administrateur, ne s'abandonne
+    pas.
 - ⚠️ **2026-09-26 — L'acheteur admet plusieurs formes de garantie de soumission, le candidat choisit** (arbitrage du
   pilote sur le dossier réel 2463, DPAO clause 6.6 : garantie bancaire, caution personnelle et solidaire ou chèque de
   banque). La forme de la garantie (`B05-GS-02`) est donc une **liste à choix multiples** : au moins une forme quand la
