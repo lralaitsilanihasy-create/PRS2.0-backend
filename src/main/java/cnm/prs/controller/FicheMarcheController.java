@@ -206,7 +206,8 @@ public class FicheMarcheController {
     @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
     @PutMapping("/{idDmc}/import/appliquer")
     public FicheMarcheDto appliquerImport(@PathVariable Long idDmc, @RequestBody cnm.prs.dto.ImportDaoAppliquerRequest corps) {
-        return service.appliquerImport(idDmc, corps.cadrage(), corps.valeurs(), corps.fichier(), corps.empreinte());
+        return service.appliquerImport(idDmc, corps.cadrage(), corps.valeurs(), corps.fichier(), corps.empreinte(),
+                Boolean.TRUE.equals(corps.attestation()));
     }
 
     /** Les valeurs d'un bloc — remplace celles du bloc ; 400 nominatif par champ fautif. */
@@ -234,7 +235,7 @@ public class FicheMarcheController {
     public List<cnm.prs.dto.ArticleBesoinDto> remplacerArticles(@PathVariable Long idDmc,
             @RequestParam(required = false) Integer lot, @RequestBody cnm.prs.dto.ArticleBesoinDto.Remplacement corps) {
         return service.remplacerArticles(idDmc, lot, corps == null ? null : corps.getArticles(), corps == null ? null : corps.getImportFichier(),
-                corps == null ? null : corps.getImportEmpreinte());
+                corps == null ? null : corps.getImportEmpreinte(), corps != null && Boolean.TRUE.equals(corps.getAttestation()));
     }
 
     /** ⚠️ V60 (2026-10-03, §B1.1) — le matériel exigé de la version courante (travaux), dans l'ordre. */

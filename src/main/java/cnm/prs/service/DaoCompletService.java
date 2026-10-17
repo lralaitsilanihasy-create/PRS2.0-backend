@@ -114,16 +114,31 @@ public class DaoCompletService {
                     fiche.getDateValidation() != null ? fiche.getDateValidation() : etat.getDateValidation()), parties(etat, fiche.getIdFiche(), docs));
             LocalDateTime maintenant = LocalDateTime.now();
             Integer idDetail = etat.getIdDetailCourant() != null ? etat.getIdDetailCourant() : etat.getIdDetail();
+            // ⚠️ 2026-10-17 (« identite-dao-importe », §B4) — la marque de l'application : la ligne, la fiche et la version, dans les
+            // mots-clés des deux fichiers ; réimporté, le DAO est jugé d'emblée. Une marque impossible à poser n'empêche rien.
+            byte[] docx = r.docx();
+            byte[] pdf = r.pdf();
+            if (idDetail != null) {
+                try {
+                    MarqueDao.Marque marque = new MarqueDao.Marque(idDetail, fiche.getIdFiche(), fiche.getNumeroVersion());
+                    docx = MarqueDao.marquerDocx(docx, marque);
+                    pdf = MarqueDao.marquerPdf(pdf, marque);
+                } catch (java.io.IOException | RuntimeException e) {
+                    log.warn("[DAO_COMPLET] DMC {} version {} : marque non posée ({})", fiche.getIdDmc(), fiche.getNumeroVersion(), e.getMessage());
+                    docx = r.docx();
+                    pdf = r.pdf();
+                }
+            }
             // ⚠️ C5 (recette du 06/10) — le nom porte le numéro du DAO (B02-OB-03), à défaut la référence du plan.
             String refe = numero(etat);
             documents.enregistrer(fiche.getIdFiche(), List.of(
                     new DocumentsFicheMarcheService.Produit(TYPE, "docx",
-                            DocumentsFicheMarcheService.nomFichier(TYPE, refe, idDetail, fiche.getNumeroVersion(), "docx"), r.docx(), null),
+                            DocumentsFicheMarcheService.nomFichier(TYPE, refe, idDetail, fiche.getNumeroVersion(), "docx"), docx, null),
                     new DocumentsFicheMarcheService.Produit(TYPE, "pdf",
-                            DocumentsFicheMarcheService.nomFichier(TYPE, refe, idDetail, fiche.getNumeroVersion(), "pdf"), r.pdf(), null)),
+                            DocumentsFicheMarcheService.nomFichier(TYPE, refe, idDetail, fiche.getNumeroVersion(), "pdf"), pdf, null)),
                     maintenant);
             log.info("[DAO_COMPLET] DMC {} version {} : {} Ko (docx), {} Ko (pdf)", fiche.getIdDmc(), fiche.getNumeroVersion(),
-                    r.docx().length / 1024, r.pdf().length / 1024);
+                    docx.length / 1024, pdf.length / 1024);
             return true;
         } catch (RuntimeException e) {
             log.warn("[DAO_COMPLET] DMC {} version {} non assemblé : {}", fiche.getIdDmc(), fiche.getNumeroVersion(), e.getMessage());

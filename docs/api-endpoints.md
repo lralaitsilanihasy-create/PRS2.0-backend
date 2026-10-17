@@ -6273,6 +6273,60 @@ pour garder la parité.
 - Les deux DAO de démonstration (`ExemplesDAO`) n'étaient plus sur le poste lors de la mesure : leur recette revient au front.
   Les cas B1 et B2 sont couverts par `LectureDaoVoisinesTest`, et la lecture de l'AE-CC à la suite d'un DPAC aussi.
 
+#### ⚠️ 2026-10-17 — l'identité du DAO importé (demande front « identite-dao-importe », ADR-0015, V128)
+
+`POST …/import` rend un verdict d'identité, et l'application de l'import le fait respecter. Pas de dépendance ajoutée (`pom.xml`
+inchangé). Une migration : V128, `t_import_verdict`.
+
+- **`ImportDaoResult.identite`** = `{ verdict, criteres[{ critere, plan, etat, extrait, page }], voisine{ idDetail, objet }, motif }`.
+  - `verdict` :
+    - `CONFORME` : tous les critères sont retrouvés ;
+    - `NON_PROUVE` : aucun n'est contredit, un au moins est introuvable ;
+    - `ETRANGER` : un critère au moins est contredit.
+  - `critere` : `OBJET` (`B02-OB-01`), `AUTORITE` (`B01-AC-01`, `B01-AC-03` s'il diffère, sigles du référentiel), `MODE`
+    (`B01-AC-13`), `FORME` (`B01-AC-19`, contrat-cadre seulement) et `LOTS` (`B02-LV-01`, `B02-LV-02`, ligne allotie seulement).
+    Montant, imputation, compte, financement et dates n'y entrent pas.
+  - `etat` : `RETROUVE`, `CONTREDIT` ou `INTROUVABLE`. `extrait` est le passage du document, 200 caractères au plus ; `page` est
+    sa page dans un PDF, et reste nulle pour un Word.
+  - `voisine` : la ligne de la même autorité à laquelle l'objet ressemble nettement plus (contredit), ou autant (introuvable).
+    Elle est nulle sinon.
+  - `motif` : une phrase prête à afficher.
+- **Retrouvé** : les mots significatifs de la valeur du plan, sans les mentions entre parenthèses ou crochets, apparaissent dans
+  l'ordre dans un même passage (un paragraphe et le suivant), en priorité dans les trois premières pages.
+  - Il peut manquer un mot si la valeur en compte quatre ou plus.
+  - Des mots collés par l'extraction (« FOURNITUREET ») et les variantes de genre (« administratif », « administrative ») se
+    valent.
+- **Contredit**, toujours sur un indice positif :
+  - **objet** : l'objet de la garde (« Objet : … », « OBJET DU CONTRAT-CADRE : … ») ressemble nettement plus à une autre ligne
+    des plans de la même autorité (exercice et exercice précédent : coefficient de Dice des mots, de 0,2 de plus et à 0,5 au
+    moins), ou il ne ressemble pas à l'objet du plan, retrouvé nulle part ;
+  - **autorité** : une autre autorité du référentiel est nommée en tête, et celle du plan n'apparaît nulle part ;
+  - **mode, forme** : une divergence que la lecture voyait déjà (`B01-AC-13`, `B01-AC-19`, `typeMarche`) ;
+  - **lots** : le DAO compte plus de lots que le plan, ou nomme un lot sans rapport avec le plan.
+- **Une voisine aussi proche** (moins de 0,2 d'écart) rend l'objet introuvable, et elle est nommée au motif. Sur une ligne allotie,
+  les lots départagent d'abord.
+- **La marque de l'application** (§B4) : le DAO complet porte dans ses mots-clés `PRS20-DAO ligne=… fiche=… version=…` (propriétés du
+  `.docx`, informations du PDF).
+  - Réimporté **tel quel**, c'est-à-dire avec l'empreinte d'un DAO complet produit, il est jugé d'emblée, sans critères :
+    `CONFORME` sur sa ligne (même filiation), `ETRANGER` ailleurs, avec `voisine` = sa ligne.
+  - Retouché, il est jugé comme tout autre document.
+- **La garde du verdict** (§B2, H1) : chaque lecture est gardée par fiche, empreinte et utilisateur, **4 heures**.
+  `PUT …/import/appliquer` et `PUT …/articles` porteur de `importFichier` et `importEmpreinte` la relisent, après les refus
+  nominatifs (400) :
+  - **409 `IMPORT_EXPIRE`** : pas de lecture de ce fichier par cet utilisateur pour cette fiche, ou une lecture de plus de 4 h.
+    L'import est à refaire ;
+  - **409 `DAO_ETRANGER`** : le message est le motif du verdict ;
+  - **409 `ATTESTATION_REQUISE`** : un DAO `NON_PROUVE` sans **`attestation: true`** dans le corps (nouveau champ facultatif
+    d'`ImportDaoAppliquerRequest` et du corps de `PUT …/articles`), ou attesté par une UGPM : seule la PRMP atteste ;
+  - le journal `FICHE_IMPORTEE` se termine par « ; identité : CONFORME » ou « ; identité : NON_PROUVE, attestée par <login> ».
+- **`DAO_PERIME`** (§B3) : la date limite de remise des offres lue (`B04-CP-02`) est passée, ou antérieure à l'exercice du plan
+  (`B01-AC-09`). Un avertissement « `DAO_PERIME : …` » se place alors **en tête** des `avertissements`. Ce n'est pas un refus.
+- **Un PDF sans texte** reste refusé (422 `DOCUMENT_SANS_TEXTE`), sans verdict.
+- **Mesure** (`IdentiteDaoRecetteTest`, DAO réels du pilote) :
+  - sur sa propre ligne, 6 DAO sont `CONFORME` (2463, 297, Ankily-Mahasoa, 6114 sur 303338, DAO complets de 303337 et 303339) et
+    6213 sur 303336 est `NON_PROUVE` (objet abrégé ; la ligne 303355 lui ressemble autant) ;
+  - sur une autre des lignes 303336 à 303339, **12 cas sur 12** sont `ETRANGER`, avec la bonne voisine.
+
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 
 Demande front `frontend/docs/demande-backend-2026-09-25-formulaires-du-candidat.md`. Livré : §B1, §B2, §B4, et au §B3

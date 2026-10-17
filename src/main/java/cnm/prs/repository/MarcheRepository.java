@@ -139,4 +139,15 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
               and d.idLocalite = :localite
             """)
     boolean existsVisibleParLocalite(@Param("id") Integer id, @Param("localite") String localite);
+
+    /**
+     * ⚠️ 2026-10-17 (« identite-dao-importe », §B1.4) — les lignes des plans d'une autorité contractante pour des exercices donnés, toutes
+     * versions confondues : le test de discrimination de l'import d'un DAO les compare à l'objet lu.
+     */
+    @Query("""
+            select m from Marche m, Dossier d, Ppm p
+            where d.idDossier = m.idDossier and p.idPpm = m.idPpm
+              and d.idEntiteContract = :entite and p.exercice in :exercices
+            """)
+    List<Marche> findLignesDeLAutorite(@Param("entite") Integer entite, @Param("exercices") java.util.Collection<Integer> exercices);
 }

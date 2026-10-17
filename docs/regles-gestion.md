@@ -867,6 +867,20 @@ Décision : ADR-0012. Contrat : `docs/api-endpoints.md`, § *L'import du DAO*.
   - ⚠️ **17/10** : un détail quantitatif à chapitres en chiffres romains (« IV — Maçonnerie ») et à articles numérotés
     « chapitre.article » (« 4.2 »), comme ceux des bâtiments scolaires, est lu. Chaque chapitre devient la série de ses
     articles, qui gardent leur numéro et l'ordre du DAO. Des chapitres numérotés en lettres (A, B…) ne sont pas reconnus.
+- ⚠️ **Depuis le 17/10 : le DAO importé doit être celui de la ligne** (ADR-0015).
+  - **Le contrôle** : l'import cherche dans le document l'objet, l'autorité contractante, le mode de passation et, selon le
+    cas, la forme du contrat-cadre et les lots de la ligne du plan.
+  - **Les lignes voisines** : il compare l'objet du document à ceux des autres lignes des plans de la même autorité, pour
+    l'exercice et le précédent.
+  - **Le verdict et ses suites** :
+    - un DAO qui porte l'objet d'une autre ligne, une autre autorité, un autre mode ou plus de lots que le plan est
+      **étranger** : il ne s'applique pas ;
+    - un DAO dont rien ne contredit le plan, mais où une information reste introuvable, s'applique seulement si la **PRMP
+      atteste** que c'est le DAO de la ligne ; l'attestation est nominative, au journal ;
+    - une lecture vaut quatre heures : au-delà, l'import est à refaire.
+  - **Un DAO produit par l'application et réimporté tel quel** est reconnu à sa marque.
+  - **Une date limite de remise des offres passée** est signalée, sans rien bloquer : un DAO relancé sur la même ligne est
+    légitime, ses dates se corrigent dans la fiche.
 
 #### Les documents générés (lot 2a, demande front du 2026-09-23)
 

@@ -132,6 +132,8 @@ public class FicheMarcheService {
     private final DelaisPublicite delaisPublicite;
     /** ⚠️ R8 (§B3 ; V110) — le point de non-retour de la migration du mode : un lot attribué. */
     private final cnm.prs.repository.AttributionRepository attributionRepository;
+    /** ⚠️ 2026-10-17 (« identite-dao-importe », §B2) — l'application d'un import relit le verdict d'identité de sa lecture. */
+    private final IdentiteImportService identiteImport;
 
     public FicheMarcheService(FicheMarcheRepository ficheRepository, FicheMarcheValeurRepository valeurRepository,
             ChampFicheMarcheRepository champRepository, BlocFicheMarcheRepository blocRepository,
@@ -144,7 +146,8 @@ public class FicheMarcheService {
             MoyensFiche moyens, PiecesFiche pieces, cnm.prs.repository.CeremonieClesRepository ceremonieRepository,
             cnm.prs.repository.OffreRepository offreRepository, cnm.prs.repository.SpecificationsFicheRepository specificationsRepository,
             DaoCompletService daoComplet, SousCriteresFiche sousCriteres, DelaisPublicite delaisPublicite,
-            cnm.prs.repository.AttributionRepository attributionRepository) {
+            cnm.prs.repository.AttributionRepository attributionRepository, IdentiteImportService identiteImport) {
+        this.identiteImport = identiteImport;
         this.attributionRepository = attributionRepository;
         this.delaisPublicite = delaisPublicite;
         this.sousCriteres = sousCriteres;
@@ -514,16 +517,17 @@ public class FicheMarcheService {
      */
     public List<cnm.prs.dto.ArticleBesoinDto> remplacerArticles(Long idDmc, Integer lot,
             List<cnm.prs.dto.ArticleBesoinDto> articles) {
-        return remplacerArticles(idDmc, lot, articles, null, null);
+        return remplacerArticles(idDmc, lot, articles, null, null, false);
     }
 
     /**
      * ⚠️ 2026-10-16 (« import-specifications », §B2) — le même remplacement, avec la trace facultative de l'import : {@code
      * importFichier} et {@code importEmpreinte} vont ensemble (400 nominatif sinon) et au journal du dossier de planification
-     * ({@code FICHE_IMPORTEE}), comme pour {@code …/import/appliquer}.
+     * ({@code FICHE_IMPORTEE}), comme pour {@code …/import/appliquer}. ⚠️ 2026-10-17 (« identite-dao-importe », §B2) — et le verdict
+     * d'identité de la lecture : 409 {@code IMPORT_EXPIRE}, {@code DAO_ETRANGER}, {@code ATTESTATION_REQUISE} ({@code attestation}).
      */
     public List<cnm.prs.dto.ArticleBesoinDto> remplacerArticles(Long idDmc, Integer lot,
-            List<cnm.prs.dto.ArticleBesoinDto> articles, String importFichier, String importEmpreinte) {
+            List<cnm.prs.dto.ArticleBesoinDto> articles, String importFichier, String importEmpreinte, boolean attestation) {
         Contexte ctx = contexteEcriture(idDmc);
         exigerBesoinDansLePerimetre(ctx);
         List<cnm.prs.dto.ArticleBesoinDto> recus = articles == null ? List.of() : articles;
@@ -566,6 +570,7 @@ public class FicheMarcheService {
         if (!erreurs.isEmpty()) {
             throw new ChampsInvalidesException(erreurs);
         }
+        String identite = importe ? identiteImport.exiger(idDmc, emp, attestation) : null;
         FicheMarche fiche = brouillonOuNouvelle(ctx);
         boolean travaux = CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie());   // ⚠️ V59 — le DQE des travaux
         BesoinFiche.valider(recus, ctx.forme().name(), travaux);
@@ -576,7 +581,7 @@ public class FicheMarcheService {
         ficheRepository.save(fiche);
         if (importe) {
             journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_IMPORTEE, "besoin pré-rempli par import de " + importFichier.trim()
-                    + " (" + emp.substring(0, 12) + ") : " + recus.size() + " article(s)" + (lot == null ? "" : ", lot " + lot));
+                    + " (" + emp.substring(0, 12) + ") : " + recus.size() + " article(s)" + (lot == null ? "" : ", lot " + lot) + " ; " + identite);
         }
         return besoin.lister(fiche.getIdFiche());
     }
@@ -904,6 +909,16 @@ public class FicheMarcheService {
      */
     public FicheMarcheDto appliquerImport(Long idDmc, Map<String, Object> cadrageRecu, Map<String, Object> valeursRecues,
             String fichier, String empreinte) {
+        return appliquerImport(idDmc, cadrageRecu, valeursRecues, fichier, empreinte, false);
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (« identite-dao-importe », §B2) — la même application, sous le verdict d'identité de la lecture du fichier (même
+     * empreinte, même utilisateur, moins de quatre heures) : 409 {@code IMPORT_EXPIRE}, {@code DAO_ETRANGER}, ou
+     * {@code ATTESTATION_REQUISE} pour un DAO non prouvé que la PRMP n'atteste pas ({@code attestation}). Le journal note le verdict.
+     */
+    public FicheMarcheDto appliquerImport(Long idDmc, Map<String, Object> cadrageRecu, Map<String, Object> valeursRecues,
+            String fichier, String empreinte, boolean attestation) {
         Contexte ctx = contexteImport(idDmc);
         String typeMarche = ctx.forme().name();
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
@@ -920,6 +935,8 @@ public class FicheMarcheService {
         if (cadrageEnvoye.isEmpty() && valeursEnvoyees.isEmpty()) {
             erreurs.add(new ErrorResponse.FieldError("valeurs", "Rien à appliquer : aucune valeur ni réponse de cadrage retenue."));
         }
+        // B2 : le verdict d'identité de la lecture, dès que l'empreinte est lisible (les refus nominatifs d'abord).
+        String identite = erreurs.isEmpty() ? identiteImport.exiger(idDmc, emp, attestation) : null;
 
         // Le cadrage : seules les clés envoyées sont validées (celles de la fiche l'ont été à leur écriture), puis fusionnées.
         FicheMarche existante = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null);
@@ -1046,7 +1063,7 @@ public class FicheMarcheService {
         fiche = ficheRepository.save(fiche);
         journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_IMPORTEE, "fiche pré-remplie par import de "
                 + fichier.trim() + " (" + emp.substring(0, 12) + ") : " + aEcrire.size() + " valeurs, "
-                + cadrageValide.size() + " réponses de cadrage");
+                + cadrageValide.size() + " réponses de cadrage" + " ; " + identite);
         return toDto(ctx, fiche);
     }
 

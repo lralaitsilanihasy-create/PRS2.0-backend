@@ -6,8 +6,9 @@ import java.util.Map;
  * ⚠️ Import du DAO (demande front du 2026-09-28, §B2) — corps de {@code PUT /api/fiches-marche/{idDmc}/import/appliquer} :
  * uniquement les lignes que la PRMP a retenues. {@code cadrage} : réponses par clé (les autres restent) ; {@code valeurs} :
  * valeurs par code de champ, tous blocs confondus (un code absent n'est pas effacé) ; {@code fichier} et
- * {@code empreinte} : ceux de la lecture, pour le journal.
+ * {@code empreinte} : ceux de la lecture, pour le journal. ⚠️ 2026-10-17 (« identite-dao-importe », §B2) — {@code attestation} :
+ * la PRMP atteste qu'un DAO non prouvé est celui de la ligne (exigé pour ce verdict, 409 {@code ATTESTATION_REQUISE} sinon).
  */
 public record ImportDaoAppliquerRequest(Map<String, Object> cadrage, Map<String, Object> valeurs, String fichier,
-        String empreinte) {
+        String empreinte, Boolean attestation) {
 }

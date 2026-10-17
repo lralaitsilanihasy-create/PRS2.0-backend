@@ -864,6 +864,23 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
     }
 
     @Autowired protected cnm.prs.repository.PublicationAgpmRepository publicationAgpmRepository;
+    @Autowired protected cnm.prs.repository.ImportVerdictRepository importVerdictRepository;
+
+    /**
+     * ⚠️ 2026-10-17 (« identite-dao-importe », §B2) — la lecture d'un DAO telle que {@code POST …/import} l'aurait gardée : l'application
+     * de l'import ({@code …/import/appliquer}, {@code PUT …/articles} porteur de la trace) la relit pour l'empreinte et l'utilisateur.
+     */
+    protected void lectureImport(Long idDmc, String empreinte, String login, String verdict) {
+        cnm.prs.entity.ImportVerdict v = importVerdictRepository.findByIdDmcAndEmpreinteAndUtilisateur(idDmc, empreinte, login)
+                .orElseGet(cnm.prs.entity.ImportVerdict::new);
+        v.setIdDmc(idDmc);
+        v.setEmpreinte(empreinte);
+        v.setUtilisateur(login);
+        v.setVerdict(verdict);
+        v.setMotif("lecture de test");
+        v.setLuLe(java.time.LocalDateTime.now());
+        importVerdictRepository.save(v);
+    }
 
     protected void besoinDeTest(Long idDmc) throws Exception {
         String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))

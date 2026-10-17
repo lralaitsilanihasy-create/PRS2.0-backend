@@ -70,5 +70,7 @@ public class ArticleBesoinDto {
         /** ⚠️ 2026-10-16 (« import-specifications », §B2) — facultatifs : le fichier dont les articles sont repris et son SHA-256. */
         private String importFichier;
         private String importEmpreinte;
+        /** ⚠️ 2026-10-17 (« identite-dao-importe », §B2) — la PRMP atteste qu'un DAO non prouvé est celui de la ligne. */
+        private Boolean attestation;
     }
 }

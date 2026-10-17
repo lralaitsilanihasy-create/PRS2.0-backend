@@ -15,6 +15,12 @@ public interface DocumentFicheMarcheRepository extends JpaRepository<DocumentFic
     List<DocumentFicheMarche> findByIdFicheOrderByIdDocumentAsc(Integer idFiche);
 
     /**
+     * ⚠️ 2026-10-17 (« identite-dao-importe », §B4) — un document de ce type, à cette empreinte, a-t-il été produit ? La marque d'un DAO
+     * réimporté ne fait foi que s'il est resté tel que l'application l'a produit.
+     */
+    boolean existsByEmpreinteAndType(String empreinte, String type);
+
+    /**
      * ⚠️ 2026-09-30 — les documents de certains types (les publications : avis spécifique, ⚠️ 2026-10-01 lettres
      * d'invitation) de plusieurs versions, du plus récent au plus ancien.
      */

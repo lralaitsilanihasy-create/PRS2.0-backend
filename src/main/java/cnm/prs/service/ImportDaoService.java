@@ -70,11 +70,15 @@ public class ImportDaoService {
     private final FicheMarcheService fiches;
     private final ModelesDao modeles;
     private final ChampFicheMarcheRepository champRepository;
+    /** ⚠️ 2026-10-17 (« identite-dao-importe ») — le verdict d'identité du DAO lu, et sa garde. */
+    private final IdentiteImportService identite;
 
-    public ImportDaoService(FicheMarcheService fiches, ModelesDao modeles, ChampFicheMarcheRepository champRepository) {
+    public ImportDaoService(FicheMarcheService fiches, ModelesDao modeles, ChampFicheMarcheRepository champRepository,
+            IdentiteImportService identite) {
         this.fiches = fiches;
         this.modeles = modeles;
         this.champRepository = champRepository;
+        this.identite = identite;
     }
 
     /** §B1 — lit le fichier pour la fiche {@code idDmc}, gardes de la fiche d'abord, puis le format. */
@@ -99,7 +103,9 @@ public class ImportDaoService {
                 })
                 : java.util.concurrent.CompletableFuture.completedFuture(List.of());
         // ⚠️ Lot D4 (2026-09-30, §B6.3) — les paragraphes tels qu'écrits ; la lecture travaille sur leur forme normalisée.
-        List<String> origines = paragraphesDOrigine(nomFichier, contenu);
+        // ⚠️ 2026-10-17 (« identite-dao-importe ») — et, pour un PDF, la page de chaque paragraphe (l'extrait d'un critère d'identité).
+        LecturePdf.Pagines texte = paginesDOrigine(nomFichier, contenu);
+        List<String> origines = texte.paragraphes();
         List<String> paragraphes = origines.stream().map(LectureDao::norm).toList();
         ImportDaoResult r = lire(fiche, nomFichier, empreinte(contenu), paragraphes, origines, couvertures);
         List<String> avertissements = new ArrayList<>(r.avertissements());
@@ -111,8 +117,51 @@ public class ImportDaoService {
         } else {
             articles = articles(fiche, nom.endsWith(".pdf"), lus, avertissements);
         }
+        // ⚠️ 2026-10-17 (§B1, §B2) — le verdict d'identité, gardé pour l'application ; (§B3) le DAO périmé, en tête des avertissements.
+        Set<String> divergences = new LinkedHashSet<>();
+        r.divergences().forEach(d -> divergences.add(d.code()));
+        ImportDaoResult.Identite verdict = identite.juger(fiche, nomFichier, contenu, new IdentiteDao.Texte(origines, texte.pages()), divergences);
+        identite.enregistrer(idDmc, r.empreinte(), verdict);
+        String perime = perime(r.propositions(), fiche.getValeursPpm(), java.time.LocalDateTime.now());
+        if (perime != null) {
+            avertissements.add(0, perime);
+        }
         return new ImportDaoResult(r.fichier(), r.empreinte(), r.modeles(), r.cadrage(), r.propositions(), r.ambigus(), r.divergences(),
-                r.conflits(), r.nonTrouves(), avertissements, r.passages(), articles);
+                r.conflits(), r.nonTrouves(), avertissements, r.passages(), articles, verdict);
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (§B3) — {@code DAO_PERIME} : la date limite de remise des offres lue au DAO ({@code B04-CP-02}) est passée, ou
+     * antérieure à l'exercice du plan ({@code B01-AC-09}). Ce n'est pas un refus : un DAO relancé sur la même ligne est légitime, ses
+     * dates seront corrigées dans la fiche.
+     */
+    static String perime(List<ImportDaoResult.Proposition> propositions, Map<String, String> valeursPpm, java.time.LocalDateTime maintenant) {
+        ImportDaoResult.Proposition p = propositions.stream().filter(x -> "B04-CP-02".equals(x.code()) && x.lot() == null).findFirst().orElse(null);
+        if (p == null || p.valeur() == null) {
+            return null;
+        }
+        java.time.LocalDateTime limite;
+        try {
+            limite = java.time.LocalDateTime.parse(p.valeur());
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
+        String lue = limite.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy 'à' HH:mm"));
+        Integer exercice = null;
+        try {
+            String ex = valeursPpm == null ? null : valeursPpm.get("B01-AC-09");
+            exercice = ex == null ? null : Integer.valueOf(ex.trim());
+        } catch (NumberFormatException e) {
+            exercice = null;
+        }
+        if (exercice != null && limite.getYear() < exercice) {
+            return "DAO_PERIME : la date limite de remise des offres lue au DAO (" + lue + ") est antérieure à l'exercice du plan ("
+                    + exercice + ") ; corrigez les dates dans la fiche.";
+        }
+        if (limite.isBefore(maintenant)) {
+            return "DAO_PERIME : la date limite de remise des offres lue au DAO (" + lue + ") est passée ; corrigez les dates dans la fiche.";
+        }
+        return null;
     }
 
     /**
@@ -208,6 +257,27 @@ public class ImportDaoService {
     }
 
     /** ⚠️ Lot D4 (2026-09-30, §B6.3) — les mêmes unités TELLES QU'ÉCRITES (non normalisées), dans le même ordre. */
+    /** ⚠️ 2026-10-17 — les mêmes unités, avec la page de chacune pour un PDF (nulle pour un Word). */
+    static LecturePdf.Pagines paginesDOrigine(String nomFichier, byte[] contenu) {
+        String nom = nomFichier == null ? "" : nomFichier.toLowerCase(Locale.ROOT);
+        if (!nom.endsWith(".pdf")) {
+            return new LecturePdf.Pagines(paragraphesDOrigine(nomFichier, contenu), null);
+        }
+        if (contenu == null || contenu.length == 0) {
+            throw ImportRefuseException.format(MESSAGE_FORMAT + " Le fichier reçu est vide.");
+        }
+        LecturePdf.Pagines pdf;
+        try {
+            pdf = LecturePdf.paragraphesPagines(contenu);
+        } catch (Exception | LinkageError e) {
+            throw ImportRefuseException.format(MESSAGE_FORMAT + " Ce fichier ne se lit pas comme un document PDF.");
+        }
+        if (pdf.paragraphes().isEmpty()) {
+            throw ImportRefuseException.sansTexte();
+        }
+        return new LecturePdf.Pagines(pdf.paragraphes().stream().map(s -> s.replace('‑', '-')).toList(), pdf.pages());
+    }
+
     public static List<String> paragraphesDOrigine(String nomFichier, byte[] contenu) {
         // ⚠️ 2026-10-16 (charte, §B4) — le DAO généré rend insécables les traits d'union entre deux lettres (U+2011) : le texte
         // d'origine les ramène à « - », pour qu'une valeur relue soit celle de la fiche.
@@ -539,7 +609,7 @@ public class ImportDaoService {
         List<ImportDaoResult.Ambigu> ambigusSortie = ambigus.stream()
                 .map(a -> new ImportDaoResult.Ambigu(a.candidats(), a.texte())).toList();
         return new ImportDaoResult(nomFichier, empreinte, lus, cadrage, sortie, ambigusSortie, divergences, conflits,
-                nonTrouves, avertissements, passages, List.of());
+                nonTrouves, avertissements, passages, List.of(), null);
     }
 
     /** Un champ que l'import peut proposer : saisi, actif, de la forme et de la catégorie, ni pièce, ni calculé. */

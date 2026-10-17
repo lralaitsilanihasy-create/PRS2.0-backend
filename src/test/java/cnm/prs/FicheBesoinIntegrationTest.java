@@ -93,6 +93,7 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
         Long idDmc = creerDmc(9902);
         String corps = "{\"articles\":[" + article(null, "Kit Core i3", 8, 16, "Mémoire vive", "8 Go au minimum") + "]";
         String empreinte = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        lectureImport(idDmc, empreinte, "PRMP001", "CONFORME");
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/articles?lot=2").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(corps + ",\"importFichier\":\"DAO-2463.pdf\"}")).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.erreurs[0].champ").value("importEmpreinte"));
@@ -106,7 +107,7 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
         String journal = mvc.perform(get("/api/dossiers/9900/journal").header("Authorization", tokenPresident))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(journal, "$[?(@.typeAction=='FICHE_IMPORTEE')].detail"))
-                .containsExactly("besoin pré-rempli par import de DAO-2463.pdf (0123456789ab) : 1 article(s), lot 2");
+                .containsExactly("besoin pré-rempli par import de DAO-2463.pdf (0123456789ab) : 1 article(s), lot 2 ; identité : CONFORME");
     }
 
     @Test

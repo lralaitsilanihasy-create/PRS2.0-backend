@@ -61,6 +61,19 @@ public final class LecturePdf {
         return paragraphesDOrigine(morceaux(pdf));
     }
 
+    /**
+     * ⚠️ 2026-10-17 (« identite-dao-importe », §B1) — les paragraphes tels qu'écrits et la page de chacun (même ordre), pour l'extrait
+     * d'un critère d'identité.
+     */
+    public record Pagines(List<String> paragraphes, List<Integer> pages) {
+    }
+
+    public static Pagines paragraphesPagines(byte[] pdf) throws IOException {
+        List<Integer> pages = new ArrayList<>();
+        List<String> paragraphes = paragraphesDOrigine(morceaux(pdf), pages);
+        return new Pagines(paragraphes, pages);
+    }
+
     static List<String> paragraphes(List<Morceau> morceaux) {
         return paragraphesDOrigine(morceaux).stream().map(LectureDao::norm).toList();
     }
@@ -181,6 +194,10 @@ public final class LecturePdf {
     }
 
     static List<String> paragraphesDOrigine(List<Morceau> morceaux) {
+        return paragraphesDOrigine(morceaux, null);
+    }
+
+    private static List<String> paragraphesDOrigine(List<Morceau> morceaux, List<Integer> pagesDesParagraphes) {
         // Les en-têtes et pieds de page (même texte au même endroit sur trois pages au moins) et les numéros de page seuls.
         Map<String, Set<Integer>> hautBas = new HashMap<>();
         for (Morceau m : morceaux) {
@@ -289,6 +306,9 @@ public final class LecturePdf {
                 String t = CESURE.matcher(p.texte.toString()).replaceAll("$1$2");
                 if (!LectureDao.norm(t).isEmpty()) {
                     sortie.add(t);
+                    if (pagesDesParagraphes != null) {
+                        pagesDesParagraphes.add(page);
+                    }
                 }
             }
         }

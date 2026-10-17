@@ -20,10 +20,32 @@ import java.util.List;
  *                       dans les données particulières d'un DPAO, à proposer dans « Coller une liste » ; jamais appliqués
  * @param articles       ⚠️ 2026-10-16 (« import-specifications », §B1) — les articles lus dans les tableaux du DAO (bordereau, détail
  *                       quantitatif, spécifications, définition des prix) ; lecture seule : le front les écrit par {@code PUT …/articles}
+ * @param identite       ⚠️ 2026-10-17 (« identite-dao-importe », §B1) — le verdict d'identité : le DAO est-il celui de la ligne du plan ?
  */
 public record ImportDaoResult(String fichier, String empreinte, List<Modele> modeles, List<Cadrage> cadrage,
         List<Proposition> propositions, List<Ambigu> ambigus, List<Divergence> divergences, List<Conflit> conflits,
-        List<String> nonTrouves, List<String> avertissements, List<Passage> passages, List<Article> articles) {
+        List<String> nonTrouves, List<String> avertissements, List<Passage> passages, List<Article> articles,
+        Identite identite) {
+
+    /**
+     * ⚠️ 2026-10-17 (§B1) — {@code verdict} : {@code CONFORME} (tous les critères retrouvés), {@code NON_PROUVE} (aucun contredit, un
+     * introuvable : l'application exige l'attestation de la PRMP), {@code ETRANGER} (un critère contredit : l'application est refusée) ;
+     * {@code voisine} : la ligne de la même autorité à laquelle l'objet ressemble nettement plus, ou autant ; {@code motif} : prêt à
+     * afficher.
+     */
+    public record Identite(String verdict, List<Critere> criteres, Voisine voisine, String motif) {
+    }
+
+    /**
+     * Un critère : {@code OBJET}, {@code AUTORITE}, {@code MODE}, {@code FORME} (contrat-cadre), {@code LOTS} (ligne allotie) ; {@code plan} :
+     * la valeur du plan ; {@code etat} : {@code RETROUVE}, {@code CONTREDIT} ou {@code INTROUVABLE} ; {@code extrait} et {@code page} : le
+     * passage du document (la page d'un PDF seulement).
+     */
+    public record Critere(String critere, String plan, String etat, String extrait, Integer page) {
+    }
+
+    public record Voisine(Integer idDetail, String objet) {
+    }
 
     /**
      * ⚠️ 2026-10-16 (§B1, §B5) — un article lu. {@code lot} : le rang du lot au plan, nul sur une ligne non allotie ; {@code numero} :

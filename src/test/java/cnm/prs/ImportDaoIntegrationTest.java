@@ -46,11 +46,13 @@ import cnm.prs.service.ImportDaoService;
 class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
 
     private static final String JSON = MediaType.APPLICATION_JSON_VALUE;
+    private static final String EMPREINTE = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private static final String DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     private static final String CADRAGE_SOURCE = "{\"alloti\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\","
             + "\"typePrix\":\"UNITAIRES\",\"attributaires\":\"MULTI\"}";
 
     @Autowired private ChampFicheMarcheService champService;
+    @Autowired private cnm.prs.repository.DocumentFicheMarcheRepository documentFicheMarcheRepository;
 
     @BeforeEach
     void jeu() throws Exception {
@@ -101,7 +103,8 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(r, "$.empreinte")).matches("[0-9a-f]{64}");
         assertThat(JsonPath.<List<String>>read(r, "$.modeles[*].sigle")).containsExactly("DPAC-CC", "AE-CC");
         assertThat(JsonPath.<List<Integer>>read(r, "$.modeles[*].reconnues")).allMatch(n -> n > 80);
-        assertThat(JsonPath.<List<String>>read(r, "$.avertissements")).isEmpty();
+        // ⚠️ 17/10 (« identite-dao-importe », B3) — la date limite lue (10/04/2026) est passée : le DAO est signalé périmé, en tête.
+        assertThat(JsonPath.<List<String>>read(r, "$.avertissements")).singleElement().asString().startsWith("DAO_PERIME : ");
 
         // Les valeurs : aucune fausse en confiance haute ni moyenne ; les valeurs typées reviennent dans la forme de saisie.
         List<Map<String, Object>> propositions = JsonPath.read(r, "$.propositions");
@@ -238,6 +241,7 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
             + "400 nominatif et rien d'écrit ; journal FICHE_IMPORTEE ; champ repris du plan ou fermé par le cadrage → 400")
     void appliquer() throws Exception {
         Long cible = creerDmc(9914);
+        lectureImport(cible, EMPREINTE, "PRMP001", "CONFORME");
         cadrage(cible, "{\"groupement\":\"OUI\"}");
         mvc.perform(put("/api/fiches-marche/" + cible + "/blocs/B04").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"valeurs\":{\"B04-VO-01\":60}}")).andExpect(status().isOk());
@@ -277,18 +281,95 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(journal, "$[?(@.typeAction=='FICHE_IMPORTEE')].detail"))
                 .containsExactly("fiche pré-remplie par import de DAO-contrat-cadre.docx (0123456789ab) : 3 valeurs, "
-                        + "2 réponses de cadrage");
+                        + "2 réponses de cadrage ; identité : CONFORME");
     }
 
     @Test
     @DisplayName("B2 — une fiche jamais enregistrée : l'application la crée (défauts recopiés) et y écrit l'import")
     void appliquerSurFicheVirtuelle() throws Exception {
         Long cible = creerDmc(9914);
+        lectureImport(cible, EMPREINTE, "PRMP001", "CONFORME");
         String apres = mvc.perform(put("/api/fiches-marche/" + cible + "/import/appliquer").header("Authorization", tokenPrmp)
                 .contentType(JSON).content(appliquer("{\"attributaires\":\"MONO\"}", "{\"B07-MA-01\":3}")))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<Map<String, Object>>read(apres, "$.valeurs")).containsEntry("B07-MA-01", "3");
         assertThat(JsonPath.<Integer>read(apres, "$.version")).isEqualTo(1);
+    }
+
+    // ------------------------------------------------------------------ 2026-10-17 — l'identité du DAO importé
+
+    @Test
+    @DisplayName("⚠️ 17/10 (« identite-dao-importe », B1-B2) — la lecture rend le verdict et le garde ; l'application le relit : sans "
+            + "lecture ou après quatre heures 409 IMPORT_EXPIRE, un DAO étranger 409 DAO_ETRANGER, un DAO non prouvé 409 "
+            + "ATTESTATION_REQUISE sans l'attestation de la PRMP ; le journal note le verdict et l'attestation")
+    void identiteDuDaoImporte() throws Exception {
+        Long cible = creerDmc(9914);
+        String r = importer(cible, "DAO-9914.docx", docx(List.of("MINISTERE DE L'ECONOMIE ET DES FINANCES", "DOSSIER D'APPEL D'OFFRES OUVERT",
+                "Objet : Marché 9914 (contrat cadre)", "Le présent contrat cadre porte sur le marché 9914."))).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String empreinte = JsonPath.read(r, "$.empreinte");
+        assertThat(JsonPath.<String>read(r, "$.identite.verdict")).isIn("CONFORME", "NON_PROUVE");
+        assertThat(JsonPath.<List<String>>read(r, "$.identite.criteres[*].critere")).contains("OBJET", "AUTORITE", "MODE", "FORME");
+        assertThat(JsonPath.<List<String>>read(r, "$.identite.criteres[?(@.critere=='OBJET')].etat")).containsExactly("RETROUVE");
+        assertThat(importVerdictRepository.findByIdDmcAndEmpreinteAndUtilisateur(cible, empreinte, "PRMP001")).isPresent();
+
+        String corps = "{\"cadrage\":{\"attributaires\":\"MONO\"},\"valeurs\":{\"B07-MA-01\":3},\"fichier\":\"DAO-9914.docx\",\"empreinte\":\"" + EMPREINTE + "\"";
+        mvc.perform(put("/api/fiches-marche/" + cible + "/import/appliquer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(corps + "}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IMPORT_EXPIRE"));
+
+        lectureImport(cible, EMPREINTE, "PRMP001", "ETRANGER");
+        mvc.perform(put("/api/fiches-marche/" + cible + "/import/appliquer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(corps + ",\"attestation\":true}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DAO_ETRANGER"));
+        mvc.perform(put("/api/fiches-marche/" + cible + "/articles").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"articles\":[],\"importFichier\":\"DAO-9914.docx\",\"importEmpreinte\":\"" + EMPREINTE + "\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DAO_ETRANGER"));
+
+        lectureImport(cible, EMPREINTE, "PRMP001", "NON_PROUVE");
+        mvc.perform(put("/api/fiches-marche/" + cible + "/import/appliquer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(corps + "}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ATTESTATION_REQUISE"));
+        mvc.perform(put("/api/fiches-marche/" + cible + "/import/appliquer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(corps + ",\"attestation\":true}")).andExpect(status().isOk());
+        String journal = mvc.perform(get("/api/dossiers/9900/journal").header("Authorization", tokenPresident))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(journal, "$[?(@.typeAction=='FICHE_IMPORTEE')].detail"))
+                .anyMatch(d -> d.endsWith("; identité : NON_PROUVE, attestée par PRMP001"));
+
+        cnm.prs.entity.ImportVerdict ancienne = importVerdictRepository.findByIdDmcAndEmpreinteAndUtilisateur(cible, EMPREINTE, "PRMP001")
+                .orElseThrow();
+        ancienne.setVerdict("CONFORME");
+        ancienne.setLuLe(java.time.LocalDateTime.now().minusHours(5));
+        importVerdictRepository.save(ancienne);
+        mvc.perform(put("/api/fiches-marche/" + cible + "/import/appliquer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(corps + "}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IMPORT_EXPIRE"));
+    }
+
+    @Test
+    @DisplayName("⚠️ 17/10 (« identite-dao-importe », B4) — un DAO complet marqué par l'application, resté tel qu'elle l'a produit, est "
+            + "jugé à sa marque : conforme sur sa ligne, étranger ailleurs ; retouché (empreinte inconnue), il est jugé comme un autre")
+    void marqueDeLApplication() throws Exception {
+        Long cible = creerDmc(9914);
+        cadrage(cible, "{\"groupement\":\"NON\"}");
+        Integer idFiche = JsonPath.read(lire(cible), "$.idFiche");
+        byte[] marque = cnm.prs.service.MarqueDao.marquerDocx(docx(List.of("DOSSIER D'APPEL D'OFFRES", "Objet : un autre intitulé")),
+                new cnm.prs.service.MarqueDao.Marque(9914, idFiche, 1));
+        documentFicheMarcheRepository.save(new cnm.prs.entity.DocumentFicheMarche(null, idFiche, "DAO_COMPLET", "docx", "DAO_COMPLET_9914_v1.docx",
+                (long) marque.length, java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(marque)), java.time.LocalDateTime.now(), marque, null, null));
+
+        String surSaLigne = importer(cible, "DAO_COMPLET_9914_v1.docx", marque).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsString();
+        assertThat(JsonPath.<String>read(surSaLigne, "$.identite.verdict")).isEqualTo("CONFORME");
+        assertThat(JsonPath.<String>read(surSaLigne, "$.identite.motif")).contains("reconnu à sa marque");
+
+        Long autre = creerDmc(9911);
+        String ailleurs = importer(autre, "DAO_COMPLET_9914_v1.docx", marque).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsString();
+        assertThat(JsonPath.<String>read(ailleurs, "$.identite.verdict")).isEqualTo("ETRANGER");
+        assertThat(JsonPath.<Integer>read(ailleurs, "$.identite.voisine.idDetail")).isEqualTo(9914);
+
+        byte[] retouche = cnm.prs.service.MarqueDao.marquerDocx(docx(List.of("DOSSIER D'APPEL D'OFFRES", "Objet : Marché 9911")),
+                new cnm.prs.service.MarqueDao.Marque(9914, idFiche, 1));
+        String repris = importer(autre, "DAO-repris.docx", retouche).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(repris, "$.identite.motif")).doesNotContain("marque");
     }
 
     // ------------------------------------------------------------------ lot D2 (2026-09-29) — PDF et fournitures
@@ -466,7 +547,7 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
 
     private static String appliquer(String cadrage, String valeurs) {
         return "{\"cadrage\":" + cadrage + ",\"valeurs\":" + valeurs + ",\"fichier\":\"DAO-contrat-cadre.docx\","
-                + "\"empreinte\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"}";
+                + "\"empreinte\":\"" + EMPREINTE + "\"}";
     }
 
     private String lire(Long idDmc) throws Exception {
