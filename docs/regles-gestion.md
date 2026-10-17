@@ -496,6 +496,9 @@ en un seul document*.
 - **Les spécifications techniques** : la PRMP ou son UGPM joint un Word (`.docx`, 20 Mo au plus, sans macros) à la version en
   préparation. Il est figé à la validation et recopié à la révision. Tant qu'il manque, un **avertissement non bloquant**
   (`SPECIFICATIONS_ABSENTES`) le rappelle, en fournitures et services et en travaux.
+  - ⚠️ **17/10** : en fournitures et services, un besoin saisi suffit à donner au DAO son tableau des spécifications.
+    L'avertissement ne vaut alors que sans Word ni article. Avec des articles seuls, une simple information rappelle que le Word
+    est facultatif. En travaux, le Word du devis descriptif reste attendu.
 - **Condition technique** : l'assemblage se fait par Microsoft Word sur le serveur. Sans Word, la validation passe et les
   documents séparés restent servis comme avant.
 - ⚠️ **Depuis le 16/10 : une charte unique** (demande front « charte-dao », arbitrages du pilote du 16/10). Le DAO complet a la

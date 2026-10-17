@@ -9728,6 +9728,14 @@ dossier, le serveur assemble un **`DAO_COMPLET`** en `.docx` et en `.pdf` (deux 
   l'emportent en cas de nom commun).
 - **Avertissement** au bilan de la fiche, non bloquant : **`SPECIFICATIONS_ABSENTES`** (bloc B14), en fournitures et services et
   en travaux, tant que la version n'a pas de fichier. Muet en prestations intellectuelles.
+  - ⚠️ **17/10 (demande front « avertissement-specifications »)** : la même condition que la section du DAO complet.
+    - **En fournitures et services**, le tableau des spécifications tiré du besoin ouvre la section depuis la charte du 16/10.
+      L'avertissement ne vaut donc que **sans Word ni article**. Avec des articles et sans Word, une **information** arrive dans
+      la liste **`ok`** du bilan : **`SPECIFICATIONS_DU_BESOIN`** (bloc B14), « Le DAO complet portera le tableau des
+      spécifications tiré du besoin. Un devis descriptif, des prescriptions ou des plans peuvent y être joints en Word
+      (facultatif). ».
+    - **En travaux**, le besoin ne donne que le bordereau et le détail quantitatif. Sans Word, l'avertissement reste, au message
+      exact : la partie « Spécifications techniques » ne portera que les formulaires du candidat.
 
 #### ⚠️ 2026-10-16 — la charte des DAO générés (demande front « charte-dao »)
 

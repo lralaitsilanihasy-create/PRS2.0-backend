@@ -1698,11 +1698,27 @@ public class FicheMarcheService {
             ControlesFicheMarche.budgetPredetermine(valeurs, bilan);
         }
         // ⚠️ 2026-10-06 (DAO complet, §B2) — un DAO de fournitures ou de travaux porte ses spécifications techniques : avertissement.
-        if ((CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie()) || CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie()))
-                && (fiche.getIdFiche() == null || !specificationsRepository.existsById(fiche.getIdFiche()))) {
+        // ⚠️ 2026-10-17 (demande front « avertissement-specifications ») — la même condition que DaoCompletService.parties : en
+        // fournitures, le tableau des spécifications tiré du besoin ouvre la section (charte du 16/10), l'avertissement ne vaut que sans
+        // Word ni article ; avec des articles seuls, une information (§B2, liste ok). En travaux, la section porte toujours les
+        // formulaires du candidat, mais le besoin n'y met aucune spécification : sans Word, l'avertissement reste, au message exact.
+        boolean word = fiche.getIdFiche() != null && specificationsRepository.existsById(fiche.getIdFiche());
+        if (!word && CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie())) {
+            boolean articles = fiche.getIdFiche() != null && !besoin.lister(fiche.getIdFiche()).isEmpty();
+            if (articles) {
+                bilan.ok().add(new BilanControlesDto.Controle("SPECIFICATIONS_DU_BESOIN", List.of(), "B14",
+                        "Le DAO complet portera le tableau des spécifications tiré du besoin. Un devis descriptif, des prescriptions ou des "
+                                + "plans peuvent y être joints en Word (facultatif)."));
+            } else {
+                bilan.avertissements().add(new BilanControlesDto.Controle("SPECIFICATIONS_ABSENTES", List.of(), "B14",
+                        "Aucune spécification technique : ni article au besoin, ni Word joint. Le DAO complet n'aura pas de partie "
+                                + "« Spécifications techniques ». Saisissez le besoin, ou joignez le Word du devis descriptif, des prescriptions "
+                                + "et des plans."));
+            }
+        } else if (!word && CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
             bilan.avertissements().add(new BilanControlesDto.Controle("SPECIFICATIONS_ABSENTES", List.of(), "B14",
-                    "Aucune spécification technique n'est jointe : le DAO complet n'aura pas de partie « Spécifications techniques ». "
-                            + "Joignez le Word du devis descriptif, des prescriptions et des plans."));
+                    "Aucun devis descriptif n'est joint : la partie « Spécifications techniques » du DAO complet ne portera que les "
+                            + "formulaires du candidat. Joignez le Word du devis descriptif, des prescriptions et des plans."));
         }
         return new FicheMarcheDto(fiche.getIdFiche(), fiche.getIdDmc(), ctx.idDetail(), ctx.idDossier(),
                 ppm.ligne() == null ? ctx.idDetail() : ppm.ligne().getIdDetail(),

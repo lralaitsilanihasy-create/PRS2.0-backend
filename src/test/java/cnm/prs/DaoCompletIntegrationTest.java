@@ -85,6 +85,11 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
         String url = "/api/fiches-marche/" + idDmc + "/specifications";
         mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
         assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.avertissements[*].regle")).contains("SPECIFICATIONS_ABSENTES");
+        // ⚠️ 17/10 (« avertissement-specifications ») — un besoin saisi donne le tableau des spécifications : plus d'avertissement,
+        // une information (liste ok) rappelle que le Word est facultatif.
+        besoinDeTest(idDmc);
+        assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.avertissements[*].regle")).doesNotContain("SPECIFICATIONS_ABSENTES");
+        assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.ok[*].regle")).contains("SPECIFICATIONS_DU_BESOIN");
         deposer(url, "notes.docx", "bonjour".getBytes()).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FORMAT_INVALIDE"));
         deposer(url, "specs.docx", docx("Devis descriptif")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.nomFichier").value("specs.docx")).andExpect(jsonPath("$.deposePar").isNotEmpty());
