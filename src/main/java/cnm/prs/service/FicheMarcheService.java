@@ -481,6 +481,12 @@ public class FicheMarcheService {
         return brouillonOuNouvelle(contexteEcriture(idDmc)).getIdFiche();
     }
 
+    /** ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf ») — la catégorie de la fiche, au périmètre de lecture. */
+    @Transactional(readOnly = true)
+    public String categorie(Long idDmc) {
+        return contexte(idDmc).codeCategorie();
+    }
+
     /** ⚠️ 2026-10-06 — la version courante d'une fiche, au périmètre de lecture ; {@code null} pour une fiche virtuelle. */
     @Transactional(readOnly = true)
     public Integer ficheCourante(Long idDmc) {
@@ -1257,7 +1263,10 @@ public class FicheMarcheService {
         sousCriteres.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V84 — les sous-critères techniques aussi
         // ⚠️ 2026-10-06 (DAO complet, §B2) — les spécifications techniques suivent la version, comme le besoin.
         Integer idSuivante = suivante.getIdFiche();
-        specificationsRepository.findById(derniere.getIdFiche()).ifPresent(s -> specificationsRepository.save(new cnm.prs.entity.SpecificationsFiche(
+        // ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf ») — sauf ce que la catégorie n'admet plus (un Word en fournitures ou en
+        // travaux) : la version validée garde le sien, la révision repart sans.
+        specificationsRepository.findById(derniere.getIdFiche()).filter(s -> SpecificationsService.admis(s.getNomFichier(), ctx.codeCategorie()))
+                .ifPresent(s -> specificationsRepository.save(new cnm.prs.entity.SpecificationsFiche(
                 idSuivante, s.getNomFichier(), s.getTailleOctets(), s.getEmpreinte(), s.getContenu(), s.getDeposeLe(), s.getDeposePar())));
         return toDto(ctx, suivante);
     }
@@ -1702,23 +1711,26 @@ public class FicheMarcheService {
         // fournitures, le tableau des spécifications tiré du besoin ouvre la section (charte du 16/10), l'avertissement ne vaut que sans
         // Word ni article ; avec des articles seuls, une information (§B2, liste ok). En travaux, la section porte toujours les
         // formulaires du candidat, mais le besoin n'y met aucune spécification : sans Word, l'avertissement reste, au message exact.
-        boolean word = fiche.getIdFiche() != null && specificationsRepository.existsById(fiche.getIdFiche());
-        if (!word && CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie())) {
+        // ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf », §A3, §B3) — en fournitures, plus de Word : les spécifications sont le
+        // besoin ; en travaux, le devis descriptif et les plans se déposent en un seul PDF, joint d'office au dossier.
+        if (CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie())) {
             boolean articles = fiche.getIdFiche() != null && !besoin.lister(fiche.getIdFiche()).isEmpty();
             if (articles) {
                 bilan.ok().add(new BilanControlesDto.Controle("SPECIFICATIONS_DU_BESOIN", List.of(), "B14",
-                        "Le DAO complet portera le tableau des spécifications tiré du besoin. Un devis descriptif, des prescriptions ou des "
-                                + "plans peuvent y être joints en Word (facultatif)."));
+                        "Le DAO complet portera le tableau des spécifications tiré du besoin."));
             } else {
                 bilan.avertissements().add(new BilanControlesDto.Controle("SPECIFICATIONS_ABSENTES", List.of(), "B14",
-                        "Aucune spécification technique : ni article au besoin, ni Word joint. Le DAO complet n'aura pas de partie "
-                                + "« Spécifications techniques ». Saisissez le besoin, ou joignez le Word du devis descriptif, des prescriptions "
-                                + "et des plans."));
+                        "Aucune spécification technique : le besoin n'a pas d'article. Saisissez le besoin (bloc B12) : ses articles et "
+                                + "leurs caractéristiques font le tableau des spécifications du DAO complet."));
             }
-        } else if (!word && CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
-            bilan.avertissements().add(new BilanControlesDto.Controle("SPECIFICATIONS_ABSENTES", List.of(), "B14",
-                    "Aucun devis descriptif n'est joint : la partie « Spécifications techniques » du DAO complet ne portera que les "
-                            + "formulaires du candidat. Joignez le Word du devis descriptif, des prescriptions et des plans."));
+        } else if (CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
+            boolean pdf = fiche.getIdFiche() != null && specificationsRepository.findById(fiche.getIdFiche())
+                    .filter(s -> SpecificationsService.estPdf(s.getNomFichier())).isPresent();
+            if (!pdf) {
+                bilan.avertissements().add(new BilanControlesDto.Controle("SPECIFICATIONS_ABSENTES", List.of(), "B14",
+                        "Aucun devis descriptif ni plan n'est déposé : la pièce « " + DescriptifPlans.INTITULE + " » manquera au "
+                                + "dossier. Déposez-les en PDF."));
+            }
         }
         return new FicheMarcheDto(fiche.getIdFiche(), fiche.getIdDmc(), ctx.idDetail(), ctx.idDossier(),
                 ppm.ligne() == null ? ctx.idDetail() : ppm.ligne().getIdDetail(),

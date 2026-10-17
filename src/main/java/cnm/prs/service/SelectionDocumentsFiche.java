@@ -90,6 +90,9 @@ public final class SelectionDocumentsFiche {
 
     /** Intitulé d'un type de document ({@code DPAO} → « Données particulières de l'appel d'offres »). */
     public static String titre(String type) {
+        if (DescriptifPlans.CODE_PIECE.equals(type)) {
+            return DescriptifPlans.INTITULE;   // ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf », §B2)
+        }
         String t = TITRES.get(type);
         if (t == null) {
             t = FormulairesCandidat.titre(type);   // ⚠️ V46 — A1 à A4, C1, C2

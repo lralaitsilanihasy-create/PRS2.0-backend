@@ -201,8 +201,9 @@ public class ProceduresEnLigneService {
                 .map(d -> new ProcedureEnLigneDto.Document(d.nomFichier(), d.libelle(), d.version(),
                         d.tailleOctets() == null ? 0 : d.tailleOctets()))
                 .toList());
-        // ⚠️ V119 (2026-10-15, §B3, H2) — le descriptif technique et les plans des travaux, joints au dossier.
-        descriptifPlans.fichiers(idDmc).forEach(p -> liste.add(new ProcedureEnLigneDto.Document(p.getNomFichier(),
+        // ⚠️ V119 (2026-10-15, §B3, H2) — le descriptif technique et les plans des travaux, joints au dossier. ⚠️ 2026-10-17
+        // (« specifications-donnees-et-plans-pdf ») — sauf ceux que la fiche y a joints d'office : ils sont déjà dans la liste.
+        descriptifPlans.fichiers(idDmc).stream().filter(p -> p.getIdDocumentFiche() == null).forEach(p -> liste.add(new ProcedureEnLigneDto.Document(p.getNomFichier(),
                 DescriptifPlans.INTITULE + " — " + p.getNomFichier(), l.fiche().getNumeroVersion(), p.getTaille() == null ? 0 : p.getTaille())));
         return liste;
     }

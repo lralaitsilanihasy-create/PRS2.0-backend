@@ -149,11 +149,26 @@ public final class FormulairesTravaux {
 
     /** ⚠️ Q3 — la liste des plans : les titres de {@code B04-CD-03}, un par ligne ; « Néant » sans plan. */
     public static byte[] listePlans(String plans) {
+        return listePlans(plans, false);
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (demande front « specifications-donnees-et-plans-pdf », §B2) — et, quand le devis descriptif et les plans sont
+     * déposés en PDF ({@code annexe}), la phrase qui renvoie au document annexé : le PDF n'est jamais fondu dans le DAO (Word ne
+     * l'insère pas, ses pages en A1 casseraient la charte).
+     */
+    public static byte[] listePlans(String plans, boolean annexe) {
         List<String> titres = plans == null ? List.of()
                 : plans.lines().map(s -> s.replaceFirst("^\\s*(?:[-•*]|\\d+[.)/-])\\s*", "").trim()).filter(s -> !s.isEmpty()).toList();
         return document(doc -> {
+            if (annexe) {
+                corps(doc, "Le devis descriptif et les plans font l'objet du document annexé « " + DescriptifPlans.INTITULE
+                        + " », remis avec le présent dossier.");
+            }
             if (titres.isEmpty()) {
-                corps(doc, "Néant.");
+                if (!annexe) {
+                    corps(doc, "Néant.");   // avec l'annexe, la phrase de renvoi suffit
+                }
                 return;
             }
             List<List<String>> l = new ArrayList<>();

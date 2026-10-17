@@ -78,38 +78,29 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Spécifications techniques : .docx seul (type lu sur le contenu), avertissement tant qu'il manque, écrit sur le "
-            + "brouillon (409 une fois validée), recopié à la révision ; sans Word, les documents séparés restent servis")
+    @DisplayName("⚠️ 17/10 (« specifications-donnees-et-plans-pdf », A2-A3) — fournitures : plus de fichier de spécifications (409 "
+            + "SPECIFICATIONS_HORS_PERIMETRE) ; sans article, avertissement qui demande le besoin ; avec, une information sans Word ; les "
+            + "prescriptions générales (B12-BE-01) se saisissent au B12")
     void specifications() throws Exception {
         Long idDmc = creerDmc();
         String url = "/api/fiches-marche/" + idDmc + "/specifications";
         mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
-        assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.avertissements[*].regle")).contains("SPECIFICATIONS_ABSENTES");
-        // ⚠️ 17/10 (« avertissement-specifications ») — un besoin saisi donne le tableau des spécifications : plus d'avertissement,
-        // une information (liste ok) rappelle que le Word est facultatif.
+        assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.avertissements[?(@.regle=='SPECIFICATIONS_ABSENTES')].message"))
+                .singleElement().asString().contains("Saisissez le besoin").doesNotContain("Word");
+        deposer(url, "specs.docx", docx("Devis descriptif")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SPECIFICATIONS_HORS_PERIMETRE"));
         besoinDeTest(idDmc);
         assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.avertissements[*].regle")).doesNotContain("SPECIFICATIONS_ABSENTES");
-        assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.ok[*].regle")).contains("SPECIFICATIONS_DU_BESOIN");
-        deposer(url, "notes.docx", "bonjour".getBytes()).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FORMAT_INVALIDE"));
-        deposer(url, "specs.docx", docx("Devis descriptif")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.nomFichier").value("specs.docx")).andExpect(jsonPath("$.deposePar").isNotEmpty());
-        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.taille").isNumber());
-        byte[] f = mvc.perform(get(url + "/fichier").header("Authorization", tokenPrmp)).andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsByteArray();
-        assertThat(new String(f, 0, 2)).isEqualTo("PK");
-        assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.avertissements[*].regle")).doesNotContain("SPECIFICATIONS_ABSENTES");
+        assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.ok[?(@.regle=='SPECIFICATIONS_DU_BESOIN')].message"))
+                .containsExactly("Le DAO complet portera le tableau des spécifications tiré du besoin.");
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B12").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"valeurs\":{\"B12-BE-01\":\"Emballage d'origine scellé.\\nNotice en français.\"}}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.valeurs.B12-BE-01").value("Emballage d'origine scellé.\nNotice en français."));
 
         remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", new LinkedHashMap<>());
-        deposer(url, "specs.docx", docx("Autre")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FICHE_VALIDEE"));
-        mvc.perform(delete(url).header("Authorization", tokenPrmp)).andExpect(status().isConflict());
         String documents = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(documents, "$[*].type")).doesNotContain("DAO_COMPLET").contains("DPAO", "AE");
-
-        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
-        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.nomFichier").value("specs.docx"));
-        mvc.perform(delete(url).header("Authorization", tokenPrmp)).andExpect(status().isNoContent());
-        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        assertThat(JsonPath.<List<String>>read(documents, "$[*].type")).doesNotContain("DAO_COMPLET", "DESCRIPTIF_PLANS").contains("DPAO", "AE");
     }
 
     @Test
@@ -133,10 +124,10 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("⚠️ E2 (07/10) : un dossier qui porte le DAO complet n'a plus à joindre le CCAG, ni le CCTP quand la fiche a ses "
-            + "spécifications techniques ; sans DAO complet, rien n'est exempté")
+            + "spécifications techniques (⚠️ 17/10 : en fournitures, un besoin à caractéristiques) ; sans DAO complet, rien n'est exempté")
     void ccagEtCctpDansLeDaoComplet() throws Exception {
         Long idDmc = creerDmc();
-        deposer("/api/fiches-marche/" + idDmc + "/specifications", "specs.docx", docx("Devis descriptif")).andExpect(status().isOk());
+        besoinDeTest(idDmc);   // ⚠️ 17/10 — en fournitures, les spécifications sont le besoin (articles à caractéristiques), plus un Word
         remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", new LinkedHashMap<>());
         int idFiche = JsonPath.read(fiche(idDmc), "$.idFiche");
         int ccag = seedTypePiece("Cahier des clauses administratives générales", true, "DMC", 7);
@@ -159,9 +150,21 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
         p.setIdDocumentFiche(dao.getIdDocument());
         pieceJointeDossierRepository.save(p);
         assertThat(piecesExemptees.de(9910)).containsExactlyInAnyOrder(ccag, cctp);
-        specificationsRepository.deleteById(idFiche);
-        specificationsRepository.flush();
+        entityManager.flush();
+        jdbcTemplate.update("DELETE FROM t_fiche_caracteristique WHERE \"ID_ARTICLE\" IN (SELECT \"ID_ARTICLE\" FROM t_fiche_article WHERE \"ID_FICHE\" = ?)", idFiche);
+        entityManager.clear();
         assertThat(piecesExemptees.de(9910)).containsExactly(ccag);
+    }
+
+    @Test
+    @DisplayName("⚠️ 17/10 (« specifications-donnees-et-plans-pdf », B1) — la limite de 50 Mo ne vaut que pour la route des spécifications : "
+            + "ailleurs, un fichier de plus de 20 Mo reste refusé (400 « Fichier trop volumineux »)")
+    void limiteDeTailleAilleurs() throws Exception {
+        Long idDmc = creerDmc();
+        byte[] gros = new byte[20 * 1024 * 1024 + 1];
+        mvc.perform(multipart("/api/fiches-marche/" + idDmc + "/import").file(new MockMultipartFile("fichier", "DAO.pdf", "application/pdf", gros))
+                .header("Authorization", tokenPrmp)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Fichier trop volumineux : la taille maximale autorisée est dépassée."));
     }
 
     private ResultActions deposer(String url, String nom, byte[] contenu) throws Exception {

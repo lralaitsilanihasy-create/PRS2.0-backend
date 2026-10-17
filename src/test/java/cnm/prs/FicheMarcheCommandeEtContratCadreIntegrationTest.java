@@ -76,15 +76,15 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
         assertThat(f.rejets()).isEmpty();
-        assertThat(f.crees()).hasSize(154);   // V50 : + 26 champs de la remise électronique ; lot D2 (2026-09-29) : + 7 ;
+        assertThat(f.crees()).hasSize(155);   // ⚠️ 17/10 : + B12-BE-01 ; V50 : + 26 champs de la remise électronique ; lot D2 (2026-09-29) : + 7 ;
         // 01/10 (DAO du MEN) : − 2 (B02-AU-07, B06-EO-07 passés au fichier des travaux)
         ChampFicheMarcheService.BilanImport cc = importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         assertThat(cc.rejets()).isEmpty();
         assertThat(cc.crees()).hasSize(138);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D ; 30/09 : + B04-DS-11 (avis spécifique) ; 15/10 : + B05-MT-03, B05-PM-06, B07-MA-07, B02-DC-05 (durée, §B0.5), B07-MA-08 (maximum de titulaires, MT-b1)
 
-        assertThat(champs("QUANTITE_FIXE")).hasSize(161);   // 29/09 : − 23 champs non imprimés retirés, − B08-PA-08 (§B6) ; 30/09 : + 6 B04-DS (avis)
-        assertThat(champs("A_COMMANDE")).hasSize(164);   // 29/09 : − 25, − B08-PA-08 (§B6) ; 30/09 : + 6 B04-DS (avis)
-        assertThat(champs("CONTRAT_CADRE")).hasSize(162);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2) ; 30/09 : + B04-DS-11, + B05-GS-03 (avis) ; 15/10 (formulaire type) : − 20 + 3 ; + B02-DC-05, + B07-MA-08
+        assertThat(champs("QUANTITE_FIXE")).hasSize(162);   // ⚠️ 17/10 : + B12-BE-01 ; 29/09 : − 23 champs non imprimés retirés, − B08-PA-08 (§B6) ; 30/09 : + 6 B04-DS (avis)
+        assertThat(champs("A_COMMANDE")).hasSize(165);   // ⚠️ 17/10 : + B12-BE-01 ; 29/09 : − 25, − B08-PA-08 (§B6) ; 30/09 : + 6 B04-DS (avis)
+        assertThat(champs("CONTRAT_CADRE")).hasSize(163);   // ⚠️ 17/10 : + B12-BE-01 ; 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2) ; 30/09 : + B04-DS-11, + B05-GS-03 (avis) ; 15/10 (formulaire type) : − 20 + 3 ; + B02-DC-05, + B07-MA-08
         // ⚠️ 2026-09-29 (§B6 des champs non imprimés) — B08-PA-08 retiré des fournitures ; B08-FP-03, même avertissement
         // DELAI_PAIEMENT_75, reste servi au contrat-cadre.
         assertThat(champs("A_COMMANDE")).doesNotContain("B08-PA-08").contains("B05-TP-03");

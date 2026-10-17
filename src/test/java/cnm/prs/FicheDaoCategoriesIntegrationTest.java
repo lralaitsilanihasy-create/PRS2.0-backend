@@ -79,8 +79,8 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
             + "filtre) ; travaux : aucun champ saisi ni rubrique des fournitures, seules les 23 informations du plan ; "
             + "catégorie inconnue → 400")
     void referentielSurDeuxAxes() throws Exception {
-        assertThat(champs("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES")).hasSize(155);
-        assertThat(champs("typeMarche=QUANTITE_FIXE")).hasSize(155);
+        assertThat(champs("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES")).hasSize(156);   // ⚠️ 17/10 : + B12-BE-01 (prescriptions générales)
+        assertThat(champs("typeMarche=QUANTITE_FIXE")).hasSize(156);
 
         String travaux = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
         assertThat(JsonPath.<List<String>>read(travaux, "$.champs[?(@.source=='PPM')].code")).hasSize(23);

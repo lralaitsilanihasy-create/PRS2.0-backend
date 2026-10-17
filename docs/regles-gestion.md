@@ -499,6 +499,13 @@ en un seul document*.
   - ⚠️ **17/10** : en fournitures et services, un besoin saisi suffit à donner au DAO son tableau des spécifications.
     L'avertissement ne vaut alors que sans Word ni article. Avec des articles seuls, une simple information rappelle que le Word
     est facultatif. En travaux, le Word du devis descriptif reste attendu.
+  - ⚠️ **17/10, arbitrage du pilote (la donnée d'abord)** :
+    - **En fournitures et services**, plus aucun fichier : les spécifications sont le besoin (articles et caractéristiques), avec
+      un champ « Prescriptions générales applicables à tous les articles » imprimé en tête du tableau.
+    - **En travaux**, le devis descriptif et les plans se déposent en **un seul PDF** (50 Mo au plus). Il devient un document de la
+      version validée, que les candidats retirent avec le DAO, et la pièce « Descriptif technique et plans des travaux » du
+      dossier, jointe d'office. Le DAO complet le cite sans l'inclure.
+    - **En prestations intellectuelles**, le Word reste.
 - **Condition technique** : l'assemblage se fait par Microsoft Word sur le serveur. Sans Word, la validation passe et les
   documents séparés restent servis comme avant.
 - ⚠️ **Depuis le 16/10 : une charte unique** (demande front « charte-dao », arbitrages du pilote du 16/10). Le DAO complet a la

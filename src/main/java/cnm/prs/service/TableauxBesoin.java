@@ -110,7 +110,15 @@ public final class TableauxBesoin {
 
     /** Les spécifications techniques ; {@code null} sans article. Une caractéristique par ligne, « libellé : exigence ». */
     public static byte[] specifications(Contexte c, List<ArticleBesoinDto> articles) {
-        return document(c, articles, "SPECIFICATIONS TECHNIQUES", null, (doc, lot, as) -> {
+        return specifications(c, articles, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (demande front « specifications-donnees-et-plans-pdf », §A1) — et, en tête, les prescriptions générales applicables à
+     * tous les articles ({@code B12-BE-01}), un paragraphe par ligne saisie.
+     */
+    public static byte[] specifications(Contexte c, List<ArticleBesoinDto> articles, String prescriptions) {
+        return document(c, articles, "SPECIFICATIONS TECHNIQUES", null, prescriptions, (doc, lot, as) -> {
             List<List<List<String>>> lignes = new ArrayList<>();
             for (ArticleBesoinDto a : as) {
                 List<String> caracs = new ArrayList<>();
@@ -291,11 +299,25 @@ public final class TableauxBesoin {
 
     /** Le document : son titre, puis un tableau par lot (nouvelle page à chaque lot), sous « Lot k : … » sur une ligne allotie. */
     private static byte[] document(Contexte c, List<ArticleBesoinDto> articles, String titre, String sousTitre, Lotisseur lotisseur) {
+        return document(c, articles, titre, sousTitre, null, lotisseur);
+    }
+
+    /** {@code preambule} : un texte imprimé avant le premier lot, un paragraphe par ligne ; nul ou vide, rien. */
+    private static byte[] document(Contexte c, List<ArticleBesoinDto> articles, String titre, String sousTitre, String preambule,
+            Lotisseur lotisseur) {
         if (articles == null || articles.isEmpty()) {
             return null;
         }
         try (XWPFDocument doc = new XWPFDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             CharteDao.normalJustifie(doc);   // ⚠️ R3 : sans quoi Word perd l'alignement à gauche des cellules à l'insertion
+            if (preambule != null && !preambule.isBlank()) {
+                paragraphe(doc, "Prescriptions générales applicables à tous les articles", true, ParagraphAlignment.LEFT);
+                for (String ligne : preambule.split("\\R")) {
+                    if (!ligne.isBlank()) {
+                        paragraphe(doc, ligne.trim(), false, ParagraphAlignment.BOTH);
+                    }
+                }
+            }
             boolean premier = true;
             List<Lot> lots = c.lots() == null || c.lots().isEmpty() ? List.of(new Lot(null, null)) : c.lots();
             for (Lot lot : lots) {

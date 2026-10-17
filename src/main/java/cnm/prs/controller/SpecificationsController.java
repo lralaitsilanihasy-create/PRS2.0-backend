@@ -37,7 +37,10 @@ public class SpecificationsController {
         return service.lire(idDmc);
     }
 
-    /** 400 {@code FICHIER_ABSENT} / {@code FORMAT_INVALIDE} ; 403 ; 409 {@code FICHE_VALIDEE} ; 413 au-delà de 20 Mo. */
+    /**
+     * 400 {@code FICHIER_ABSENT} / {@code FORMAT_INVALIDE} ; 403 ; 409 {@code FICHE_VALIDEE}, ⚠️ 17/10 {@code SPECIFICATIONS_HORS_PERIMETRE}
+     * (fournitures et services) ; 413 au-delà de 20 Mo (Word), 50 Mo (PDF des travaux).
+     */
     @PutMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public SpecificationsDto deposer(@PathVariable Long idDmc, @RequestPart(value = "fichier", required = false) MultipartFile fichier) {
         return service.deposer(idDmc, fichier);
@@ -53,6 +56,6 @@ public class SpecificationsController {
     public ResponseEntity<byte[]> fichier(@PathVariable Long idDmc) {
         SpecificationsFiche s = service.fichier(idDmc);
         return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition(s.getNomFichier()))
-                .contentType(Telechargements.typeAutorise("docx")).body(s.getContenu());
+                .contentType(Telechargements.typeAutorise(SpecificationsService.estPdf(s.getNomFichier()) ? "pdf" : "docx")).body(s.getContenu());
     }
 }

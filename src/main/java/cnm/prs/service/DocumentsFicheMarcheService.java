@@ -96,6 +96,11 @@ public class DocumentsFicheMarcheService {
      */
     public static final String TYPE_BORDEREAU_ESTIMATIF = "BORDEREAU_ESTIMATIF";
     public static final String TYPE_DQE_ESTIMATIF = "DQE_ESTIMATIF";
+    /**
+     * ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf », §B2 ; V129) — le devis descriptif et les plans des travaux : le PDF déposé sur
+     * la fiche, devenu document de la version à la validation, listé avec le DAO complet et joint d'office sous la pièce de même code.
+     */
+    public static final String TYPE_DESCRIPTIF_PLANS = DescriptifPlans.CODE_PIECE;
     public static final Set<String> TYPES_ESTIMATIF = Set.of(TYPE_BORDEREAU_ESTIMATIF, TYPE_DQE_ESTIMATIF);
     static final String CODE_PIECE_BORDEREAU = "BORDEREAU_PRIX";
     static final String CODE_PIECE_DQE = "DQE";
@@ -150,6 +155,8 @@ public class DocumentsFicheMarcheService {
     private final ValeursPpmService valeursPpm;
     /** ⚠️ Lot C (2026-09-27) — la lettre de renvoi à laquelle rattacher les documents d'une révision (compléments). */
     private final cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository;
+    /** ⚠️ 2026-10-17 (§B2) — le PDF du devis descriptif et des plans déposé sur la fiche de travaux. */
+    private final cnm.prs.repository.SpecificationsFicheRepository specificationsRepository;
 
     public DocumentsFicheMarcheService(DocumentFicheMarcheRepository documentRepository,
             GenerateurDocumentsFiche generateur, ChampFicheMarcheRepository champRepository,
@@ -157,7 +164,9 @@ public class DocumentsFicheMarcheService {
             FicheMarcheRepository ficheRepository, DossierRepository dossierRepository,
             PieceJointeDossierRepository pieceRepository, TypePieceJointeRepository typePieceRepository,
             ParametreService parametres, ModelesCandidat modelesCandidat,
-            cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository, ModelesDao modelesDao, ValeursPpmService valeursPpm) {
+            cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository, ModelesDao modelesDao, ValeursPpmService valeursPpm,
+            cnm.prs.repository.SpecificationsFicheRepository specificationsRepository) {
+        this.specificationsRepository = specificationsRepository;
         this.valeursPpm = valeursPpm;
         this.modelesDao = modelesDao;
         this.lettreRenvoiRepository = lettreRenvoiRepository;
@@ -289,6 +298,13 @@ public class DocumentsFicheMarcheService {
         }
         // ⚠️ 2026-10-17 (demande front « retirer-classeurs-bp-tc », arbitrage du pilote) — plus de classeurs BP ni TC : le DAO complet
         // porte les mêmes tableaux (charte du 16/10). Les versions déjà validées gardent les leurs.
+        // ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf », §B2) — en travaux, le PDF du devis descriptif et des plans devient un
+        // document de la version : il est figé avec elle, listé, servi au retrait et joint d'office au dossier.
+        if (TRAVAUX.equals(etat.getCategorie()) && etat.getIdFiche() != null) {
+            specificationsRepository.findById(etat.getIdFiche()).filter(s -> SpecificationsService.estPdf(s.getNomFichier()))
+                    .ifPresent(s -> produits.add(new Produit(TYPE_DESCRIPTIF_PLANS, "pdf", nomFichier("DP", etat.getRefeDossier(),
+                            etat.getIdDetail(), null, etat.getVersion(), "pdf"), s.getContenu(), null)));
+        }
         return produits;
     }
 
@@ -681,7 +697,8 @@ public class DocumentsFicheMarcheService {
         // (xlsx : bordereau, DQE, conformité) restent servis à côté.
         boolean complet = tous.stream().anyMatch(d -> DaoCompletService.TYPE.equals(d.getType()));
         return tous.stream()
-                .filter(d -> !complet || DaoCompletService.TYPE.equals(d.getType()) || "xlsx".equals(d.getExtension()))
+                .filter(d -> !complet || DaoCompletService.TYPE.equals(d.getType()) || "xlsx".equals(d.getExtension())
+                        || TYPE_DESCRIPTIF_PLANS.equals(d.getType()))   // ⚠️ 17/10 (§B2) — le PDF annexé suit le DAO complet
                 .filter(d -> !TYPES_PUBLICATION.contains(d.getType()))   // ⚠️ 2026-09-30 — avis et lettres se listent à part (listerAvis)
                 .filter(d -> !TYPES_PROJET.contains(d.getType()))   // ⚠️ R3b — le projet n'est pas un document du DAO (route …/projet)
                 .filter(d -> !TYPES_ESTIMATIF.contains(d.getType()))   // ⚠️ V117 — l'estimatif n'est jamais publié (listerEstimatifs)
@@ -731,7 +748,10 @@ public class DocumentsFicheMarcheService {
         List<DocumentFicheMarche> projets = tousPdf.stream().filter(d -> TYPES_PROJET.contains(d.getType())).toList();
         // ⚠️ V117 (Q11, §B3) — les estimatifs (bordereau, DQE) sont joints sous leurs propres pièces, à côté du DAO.
         List<DocumentFicheMarche> estimatifs = tousPdf.stream().filter(d -> TYPES_ESTIMATIF.contains(d.getType())).toList();
-        List<DocumentFicheMarche> pdfs = tousPdf.stream().filter(d -> !TYPES_PROJET.contains(d.getType()) && !TYPES_ESTIMATIF.contains(d.getType())).toList();
+        // ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf », §B2) — le devis descriptif et les plans des travaux, sous leur propre pièce.
+        List<DocumentFicheMarche> descriptifs = tousPdf.stream().filter(d -> TYPE_DESCRIPTIF_PLANS.equals(d.getType())).toList();
+        List<DocumentFicheMarche> pdfs = tousPdf.stream().filter(d -> !TYPES_PROJET.contains(d.getType()) && !TYPES_ESTIMATIF.contains(d.getType())
+                && !TYPE_DESCRIPTIF_PLANS.equals(d.getType())).toList();
         // ⚠️ 2026-10-06 (DAO complet) — quand il existe, son PDF seul est joint au dossier, à la place des documents séparés.
         if (pdfs.stream().anyMatch(d -> DaoCompletService.TYPE.equals(d.getType()))) {
             pdfs = pdfs.stream().filter(d -> DaoCompletService.TYPE.equals(d.getType())).toList();
@@ -764,10 +784,19 @@ public class DocumentsFicheMarcheService {
                 typeParDocument.put(d.getIdDocument(), type.getIdTypePiece());
             }
         }
+        if (!descriptifs.isEmpty()) {
+            TypePieceJointe type = typePieceRepository.findFirstByCode(DescriptifPlans.CODE_PIECE).orElse(null);
+            if (type == null) {
+                log.warn("[FICHE_MARCHE] aucun type de pièce de code {} : descriptif et plans non joints au dossier {}",
+                        DescriptifPlans.CODE_PIECE, idDossier);
+            } else {
+                descriptifs.forEach(d -> typeParDocument.put(d.getIdDocument(), type.getIdTypePiece()));
+            }
+        }
         if (typeParDocument.isEmpty()) {
             return 0;   // version validée avant le lot 2 : aucun document à joindre
         }
-        List<DocumentFicheMarche> aJoindre = java.util.stream.Stream.of(pdfs, projets, estimatifs).flatMap(List::stream)
+        List<DocumentFicheMarche> aJoindre = java.util.stream.Stream.of(pdfs, projets, estimatifs, descriptifs).flatMap(List::stream)
                 .filter(d -> typeParDocument.containsKey(d.getIdDocument())).toList();
         List<PieceJointeDossier> actuelles = pieceRepository.findByIdDossierAndIdDocumentFicheIsNotNull(idDossier);
         Set<Integer> dejaJoints = new java.util.HashSet<>();

@@ -45,6 +45,18 @@ class TableauxBesoinTest {
     }
 
     @Test
+    @DisplayName("⚠️ 17/10 (« specifications-donnees-et-plans-pdf », A1) — les prescriptions générales en tête des spécifications, un "
+            + "paragraphe par ligne saisie, avant le tableau ; sans prescriptions, rien")
+    void prescriptionsGenerales() throws Exception {
+        TableauxBesoin.Contexte c = new TableauxBesoin.Contexte(false, false, "Fournitures de bureau", List.of());
+        List<ArticleBesoinDto> as = List.of(article(null, 1, "Rame de papier", "Rame", "10", null, null, "Grammage", "80 g"));
+        String t = texte(TableauxBesoin.specifications(c, as, "Emballage d'origine scellé.\n\nNotice en français."));
+        assertThat(t).contains("Prescriptions générales applicables à tous les articles", "Emballage d'origine scellé.", "Notice en français.");
+        assertThat(t.indexOf("Notice en français.")).isLessThan(t.indexOf("Rame de papier"));
+        assertThat(texte(TableauxBesoin.specifications(c, as, "  "))).doesNotContain("Prescriptions générales");
+    }
+
+    @Test
     @DisplayName("L'article défini de l'unité : « la rame », « le paquet », « l'unité » (défaut et voyelle), abréviations des travaux")
     void unites() {
         assertThat(TableauxBesoin.designationPrix("Rame de papier A4 80 g", "Rame", null)).isEqualTo("Rame de papier A4 80 g, la rame à ….Ariary");

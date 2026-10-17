@@ -9750,6 +9750,37 @@ dossier, le serveur assemble un **`DAO_COMPLET`** en `.docx` et en `.pdf` (deux 
       (facultatif). ».
     - **En travaux**, le besoin ne donne que le bordereau et le détail quantitatif. Sans Word, l'avertissement reste, au message
       exact : la partie « Spécifications techniques » ne portera que les formulaires du candidat.
+- ⚠️ **17/10 (demande front « specifications-donnees-et-plans-pdf », arbitrage du pilote) : le fichier dépend de la catégorie.** V129.
+  - **Fournitures et services, des données seulement.**
+    - `PUT …/specifications` → **409 `SPECIFICATIONS_HORS_PERIMETRE`** : les spécifications sont le besoin (B12).
+    - Un nouveau champ **`B12-BE-01`** « Prescriptions générales applicables à tous les articles » (texte long, facultatif, rubrique
+      `B12-BE`, quantité fixe, à commandes, contrat-cadre). Le DAO complet l'imprime en tête des spécifications, avant le
+      tableau, un paragraphe par ligne. Il est chargé par le CSV des fournitures (et sa copie du front) et par
+      `docs/referentiel/2026-10-17-prescriptions-generales.sql`.
+    - **Bilan B14** : avec des articles, l'information `SPECIFICATIONS_DU_BESOIN` dit « Le DAO complet portera le tableau des
+      spécifications tiré du besoin. ». Sans article, `SPECIFICATIONS_ABSENTES` demande de saisir le besoin. Aucun des deux ne parle
+      plus de Word.
+    - Le DAO complet n'insère plus de Word en fournitures, et la révision ne recopie pas un Word que la catégorie n'admet plus.
+  - **Travaux, le devis descriptif et les plans en un seul PDF.**
+    - **Le dépôt** : `PUT …/specifications` n'accepte qu'un PDF. Il doit être lisible, non chiffré, d'une page au moins, et de
+      **50 Mo** au plus (413 au-delà). Un Word est refusé (**400 `FORMAT_INVALIDE`**) : il s'exporte en PDF.
+      `GET …/specifications/fichier` le sert en `application/pdf`.
+    - **À la validation**, le PDF devient le document **`DESCRIPTIF_PLANS`** de la version (`DP_…_v<n>.pdf`, titre « Descriptif
+      technique et plans des travaux »). Il est listé par `GET …/documents`, même à côté du DAO complet, donc servi au retrait des
+      candidats.
+    - **Il est joint d'office** au dossier sous la pièce **`DESCRIPTIF_PLANS`**, comme le DAO complet, et ne se remplace plus à
+      la main (`PIECE_PRODUITE_PAR_FICHE`). Des fichiers déposés à la main avant le 17/10 restent ; le retrait ne sert pas deux
+      fois le fichier joint d'office.
+    - **Dans le DAO complet**, il n'est jamais fondu. L'annexe 1 « Liste des plans » le cite : « Le devis descriptif et les plans
+      font l'objet du document annexé « Descriptif technique et plans des travaux », remis avec le présent dossier. ».
+    - **Bilan B14** : sans PDF, `SPECIFICATIONS_ABSENTES` dit « Aucun devis descriptif ni plan n'est déposé : la pièce « Descriptif
+      technique et plans des travaux » manquera au dossier. Déposez-les en PDF. ».
+  - **Prestations intellectuelles** : inchangé, un `.docx` de 20 Mo au plus, inséré dans le DAO complet.
+  - **Limite multipart** : `spring.servlet.multipart.max-file-size` passe à 50MB (`max-request-size` à 55MB) pour la seule route
+    des spécifications. Partout ailleurs, `TailleFichiersConfig` maintient 20 Mo par fichier et 25 Mo par requête, avec la même
+    réponse qu'avant : 400 « Fichier trop volumineux ».
+  - **Exemption du CCTP** (`PiecesExemptees`, E2 du 07/10) : la fiche porte ses spécifications si un fichier est déposé, ou si
+    le besoin a un article doté de caractéristiques (le tableau des fournitures).
 
 #### ⚠️ 2026-10-16 — la charte des DAO générés (demande front « charte-dao »)
 

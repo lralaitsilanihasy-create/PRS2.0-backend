@@ -153,3 +153,4 @@ B04-OP-10;Modalité de la séance;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CO
 B04-OP-11;Lien de suivi de la séance pour les soumissionnaires;URL;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise = ELECTRONIQUE;non;;;;;;oui;non;FOURNITURES_SERVICES;
 B04-OP-12;Délai entre l'heure limite et l'ouverture (minutes);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise = ELECTRONIQUE;oui;;SE_OUVERTURE_PLIS:DELAI;;;;oui;non;FOURNITURES_SERVICES;60
 B04-OP-13;Publication du procès-verbal sur la plateforme;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise = ELECTRONIQUE;oui;;;;;;oui;non;FOURNITURES_SERVICES;OUI
+B12-BE-01;Prescriptions générales applicables à tous les articles;TEXTE_LONG;SAISIE;AUCUN;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;non;;;;;;oui;non;FOURNITURES_SERVICES;

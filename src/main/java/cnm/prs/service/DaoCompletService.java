@@ -39,6 +39,8 @@ public class DaoCompletService {
 
     private static final Logger log = LoggerFactory.getLogger(DaoCompletService.class);
     public static final String TYPE = "DAO_COMPLET";
+    /** ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf », §A1) — les prescriptions générales des fournitures, en tête des spécifications. */
+    static final String PRESCRIPTIONS = "B12-BE-01";
 
     /** Les intitulés des formulaires, tels que le sommaire général de l'ARMP les écrit (C3). */
     private static final Map<String, String> FORMULAIRES = Map.of(
@@ -236,7 +238,12 @@ public class DaoCompletService {
                     : "Cahier des Clauses Administratives Particulières (CCAP) et ses annexes", 3);
             p.documents(ccap);
         }
-        byte[] specifications = specificationsRepository.findById(idFiche).map(s -> s.getContenu()).orElse(null);
+        // ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf ») — seul un Word de prestations intellectuelles s'insère : en fournitures,
+        // les spécifications sont les données du besoin ; en travaux, le devis descriptif et les plans sont un PDF annexé, cité par la
+        // liste des plans (§B2), jamais fondu dans le DAO.
+        cnm.prs.entity.SpecificationsFiche deposees = specificationsRepository.findById(idFiche).orElse(null);
+        boolean pdfAnnexe = deposees != null && SpecificationsService.estPdf(deposees.getNomFichier());
+        byte[] specifications = deposees == null || !pi || pdfAnnexe ? null : deposees.getContenu();
         // ⚠️ 2026-10-16 (charte, §B3) — avec un besoin, la liste des fournitures est le tableau généré (le document LF, produit à part,
         // n'entre plus au DAO) ; le Word joint par la PRMP suit le tableau des spécifications, il ne le remplace pas.
         List<DocumentFicheMarche> lf = t.avecBesoin() ? List.of() : choisir(word, List.of("LF"));
@@ -257,7 +264,7 @@ public class DaoCompletService {
                 p.document(CharteDao.partie(d.getContenu()));
             }
             if (travaux) {
-                formulairesTravaux(p, etat, idFiche);
+                formulairesTravaux(p, etat, idFiche, pdfAnnexe);
             }
         }
         p.titre("2.3. - Cahier des Clauses Administratives Générales" + (pi ? " applicable aux marchés publics de prestations intellectuelles"
@@ -297,7 +304,7 @@ public class DaoCompletService {
         }
         boolean liste = !cc || "Marchés uniques non fractionnés".equals(valeurs.get("B07-FS-01"))
                 && "Fixés par l'autorité contractante".equals(valeurs.get("B07-DE-01"));
-        return new Tableaux(true, TableauxBesoin.bordereau(c, articles), TableauxBesoin.specifications(c, articles),
+        return new Tableaux(true, TableauxBesoin.bordereau(c, articles), TableauxBesoin.specifications(c, articles, valeurs.get(PRESCRIPTIONS)),
                 liste ? TableauxBesoin.liste(c, articles, valeurs) : null, null, null);
     }
 
@@ -306,7 +313,7 @@ public class DaoCompletService {
      * ({@code B04-CD-03}), le personnel et le matériel affectés (pré-remplis depuis la version validée), l'engagement de location,
      * les plannings (délai d'exécution {@code B09-DL-01} de chaque lot, délai de garantie {@code B09-GT-01}) et le plan de charge.
      */
-    private void formulairesTravaux(Plan p, FicheMarcheDto etat, Integer idFiche) {
+    private void formulairesTravaux(Plan p, FicheMarcheDto etat, Integer idFiche, boolean pdfAnnexe) {
         List<cnm.prs.dto.PersonnelExigeDto> personnel = moyens == null || idFiche == null ? List.of() : moyens.personnel(idFiche);
         List<cnm.prs.dto.MaterielExigeDto> materiel = moyens == null || idFiche == null ? List.of() : moyens.materiel(idFiche);
         TableauxBesoin.Contexte c = contexte(etat);
@@ -322,7 +329,7 @@ public class DaoCompletService {
             // un délai de garantie illisible : douze mois
         }
         p.titre("Annexe 1 : Liste des plans", 4);
-        p.document(FormulairesTravaux.listePlans(valeurLot(etat, "B04-CD-03", null)));
+        p.document(FormulairesTravaux.listePlans(valeurLot(etat, "B04-CD-03", null), pdfAnnexe));
         p.titre("Annexe 2 : Liste du personnel affecté aux lots et modèle de curriculum vitae", 4);
         p.document(FormulairesTravaux.personnel(c.lots(), personnel));
         p.titre("Annexe 3 : Liste du matériel affecté aux lots", 4);

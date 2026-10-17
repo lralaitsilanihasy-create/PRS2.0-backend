@@ -17,7 +17,8 @@ import cnm.prs.repository.TypePieceJointeRepository;
 /**
  * ⚠️ 2026-10-07 (constat E2 de la recette du DAO complet) — les pièces obligatoires qu'un dossier n'a plus à porter à part, parce que le
  * <strong>DAO complet</strong> joint depuis la fiche les contient : le CCAG (code {@code CCAG}, partie 2.3, toujours recopiée du document
- * type), et le CCTP (code {@code CCTP}) quand la fiche a ses spécifications techniques (partie 2.2). Sans spécifications, le CCTP reste
+ * type), et le CCTP (code {@code CCTP}) quand la fiche a ses spécifications techniques (partie 2.2 ; ⚠️ 17/10 : fichier déposé ou
+ * besoin à caractéristiques). Sans spécifications, le CCTP reste
  * exigé. Les codes sont posés par V80 sur les types existants ; un type sans code n'est jamais exempté. Lu à la soumission du dossier et
  * au contrôle des pièces par le Secrétaire.
  */
@@ -32,9 +33,12 @@ public class PiecesExemptees {
     private final DocumentFicheMarcheRepository documents;
     private final SpecificationsFicheRepository specifications;
     private final TypePieceJointeRepository types;
+    /** ⚠️ 2026-10-17 — le besoin, dont les caractéristiques font le tableau des spécifications des fournitures. */
+    private final BesoinFiche besoin;
 
     public PiecesExemptees(PieceJointeDossierRepository pieces, DocumentFicheMarcheRepository documents,
-            SpecificationsFicheRepository specifications, TypePieceJointeRepository types) {
+            SpecificationsFicheRepository specifications, TypePieceJointeRepository types, BesoinFiche besoin) {
+        this.besoin = besoin;
         this.pieces = pieces;
         this.documents = documents;
         this.specifications = specifications;
@@ -51,7 +55,11 @@ public class PiecesExemptees {
             return exemptes;
         }
         types.findFirstByCode(CCAG).map(TypePieceJointe::getIdTypePiece).ifPresent(exemptes::add);
-        if (daoComplets.stream().anyMatch(d -> specifications.existsById(d.getIdFiche()))) {
+        // ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf ») — les spécifications de la fiche : un fichier déposé (Word des
+        // prestations intellectuelles, PDF des travaux), ou un besoin dont un article porte des caractéristiques (le tableau des
+        // spécifications des fournitures, imprimé au DAO complet, depuis qu'elles ne joignent plus de Word).
+        if (daoComplets.stream().anyMatch(d -> specifications.existsById(d.getIdFiche()) || besoin.lister(d.getIdFiche()).stream()
+                .anyMatch(a -> a.getCaracteristiques() != null && !a.getCaracteristiques().isEmpty()))) {
             types.findFirstByCode(CCTP).map(TypePieceJointe::getIdTypePiece).ifPresent(exemptes::add);
         }
         return exemptes;

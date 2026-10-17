@@ -47,11 +47,12 @@ class DaoCompletPartiesTest {
                 "1:DEUXIÈME PARTIE : MARCHÉ|2:2.1. - Acte d'Engagement|3:Lot 1",
                 "3:Lot 2",
                 "2:2.2. - Cahier des Prescriptions Spéciales|3:Cahier des Clauses Administratives Particulières (CCAP) et ses annexes",
-                "3:Spécifications techniques",
-                "4:Annexe : Liste des fournitures et calendrier de livraison",
+                // ⚠️ 17/10 (« specifications-donnees-et-plans-pdf », A2) — un Word de fournitures n'entre plus : le titre des
+                // spécifications rejoint la liste des fournitures.
+                "3:Spécifications techniques|4:Annexe : Liste des fournitures et calendrier de livraison",
                 "2:2.3. - Cahier des Clauses Administratives Générales applicable aux marchés publics de fournitures et de "
                         + "prestations de services courantes");
-        assertThat(p.subList(1, 10)).extracting(x -> (int) x.docx()[0]).containsExactly(6, 9, 5, 11, 4, 2, 3, 99, 1);
+        assertThat(p.subList(1, 9)).extracting(x -> (int) x.docx()[0]).containsExactly(6, 9, 5, 11, 4, 2, 3, 1);
     }
 
     @Test
@@ -76,9 +77,9 @@ class DaoCompletPartiesTest {
                 doc("CCAP", "docx", null, 2), doc("LF", "docx", null, 3)));
         String plan = p.stream().map(DaoCompletPartiesTest::titres).collect(Collectors.joining(" / "));
         assertThat(plan).contains("2:2.1. - Acte d'Engagement / 3:Annexe 1 : Cadre du bordereau des prix / 2:2.2.",
-                "3:Spécifications techniques /  / 4:Annexe : Liste des fournitures et calendrier de livraison");
-        int i = p.stream().map(DaoCompletPartiesTest::titres).toList().indexOf("3:Spécifications techniques");
-        assertThat(p.get(i + 1).docx()).containsExactly(99);   // le Word de la PRMP suit le tableau des spécifications
+                "3:Spécifications techniques / 4:Annexe : Liste des fournitures et calendrier de livraison");
+        // ⚠️ 17/10 (« specifications-donnees-et-plans-pdf », A2) — en fournitures, un Word n'entre plus : le besoin suffit.
+        assertThat(p).noneMatch(x -> x.docx() != null && x.docx().length == 1 && x.docx()[0] == 99);
         assertThat(p).noneMatch(x -> x.docx() != null && x.docx().length == 1 && x.docx()[0] == 3);   // le document LF n'entre plus
         assertThat(p.stream().filter(x -> x.titres().stream().anyMatch(t -> t.niveau() == 2)).allMatch(DaoCompletWord.Partie::separateur)).isTrue();
         String travaux = service.parties(etat("TRAVAUX", "QUANTITE_FIXE"), 7, List.of(doc("AE", "docx", null, 1))).stream()

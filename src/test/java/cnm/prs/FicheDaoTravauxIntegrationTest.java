@@ -121,7 +121,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<Boolean>>read(cc, "$.champs[?(@.code=='B08-FT-03')].obligatoire")).containsExactly(false);
         String fs = ref("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES");
         assertThat(JsonPath.<List<String>>read(fs, "$.blocs[*].code")).doesNotContain("B11");
-        assertThat(JsonPath.<List<String>>read(fs, "$.champs[*].code")).hasSize(157)   // 155 des fournitures (V50, lot D2 : + 7, 29/09 : − 23 non imprimés, − B08-PA-08) + B04-CD-01, -02 (2026-09-25)
+        assertThat(JsonPath.<List<String>>read(fs, "$.champs[*].code")).hasSize(158)   // ⚠️ 17/10 : + B12-BE-01 (prescriptions générales) ; 155 des fournitures (V50, lot D2 : + 7, 29/09 : − 23 non imprimés, − B08-PA-08) + B04-CD-01, -02 (2026-09-25)
                 .contains("B04-CD-01", "B04-CD-02").doesNotContain("B04-CD-03");
     }
 
@@ -671,6 +671,62 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
     private String ref(String requete) throws Exception {
         return mvc.perform(get("/api/champs-fiche-marche?" + requete).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+    }
+
+    @Autowired private cnm.prs.service.DocumentsFicheMarcheService documentsFiche;
+    @Autowired private cnm.prs.repository.PieceJointeDossierRepository pieceJointeDossierRepository;
+
+    @Test
+    @DisplayName("⚠️ 17/10 (« specifications-donnees-et-plans-pdf », B1-B3) — travaux : le devis descriptif et les plans en un seul PDF "
+            + "(un Word refusé) ; avertissement B14 tant qu'il manque ; à la validation, document DESCRIPTIF_PLANS de la version, "
+            + "joint d'office au dossier sous la pièce du même code ; recopié à la révision")
+    void descriptifEtPlansEnPdf() throws Exception {
+        long idDmc = creerDmc(9901);
+        cadrage(idDmc, "{\"tranches\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"garantieSoumission\":\"NON\"}");
+        String url = "/api/fiches-marche/" + idDmc + "/specifications";
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.avertissements[?(@.regle=='SPECIFICATIONS_ABSENTES')].message"))
+                .singleElement().asString().contains("Déposez-les en PDF");
+        deposer(url, "devis.docx", "PK".getBytes(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FORMAT_INVALIDE"));
+        deposer(url, "plans.pdf", pdf(), "application/pdf").andExpect(status().isOk()).andExpect(jsonPath("$.nomFichier").value("plans.pdf"));
+        mvc.perform(get(url + "/fichier").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType("application/pdf"));
+        fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.avertissements[*].regle")).doesNotContain("SPECIFICATIONS_ABSENTES");
+
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of());
+        String docs = documents(idDmc);
+        assertThat(JsonPath.<List<String>>read(docs, "$[?(@.type=='DESCRIPTIF_PLANS')].libelle"))
+                .containsExactly("Descriptif technique et plans des travaux");
+        assertThat(JsonPath.<List<String>>read(docs, "$[?(@.type=='DESCRIPTIF_PLANS')].extension")).containsExactly("pdf");
+
+        Dossier dossier = dossierLoc(9950, "BROUILLON", "ANT", "PRMP001");
+        dossier.setIdDmc(idDmc);
+        dossierRepository.save(dossier);
+        assertThat(documentsFiche.joindre(9950, idDmc)).isPositive();
+        Integer idType = typePieceJointeRepository.findFirstByCode("DESCRIPTIF_PLANS").orElseThrow().getIdTypePiece();
+        assertThat(pieceJointeDossierRepository.findByIdDossier(9950)).filteredOn(p -> idType.equals(p.getIdTypePiece()))
+                .singleElement().matches(p -> p.getIdDocumentFiche() != null);
+
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.nomFichier").value("plans.pdf"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions deposer(String url, String nom, byte[] contenu, String type) throws Exception {
+        return mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(org.springframework.http.HttpMethod.PUT, url)
+                .file(new org.springframework.mock.web.MockMultipartFile("fichier", nom, type, contenu)).header("Authorization", tokenPrmp));
+    }
+
+    private static byte[] pdf() throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument d = new org.apache.pdfbox.pdmodel.PDDocument();
+                java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream()) {
+            d.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            d.save(o);
+            return o.toByteArray();
+        }
     }
 
     private long creerDmc(int idDetail) throws Exception {
