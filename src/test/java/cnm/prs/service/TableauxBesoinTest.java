@@ -86,6 +86,40 @@ class TableauxBesoinTest {
     }
 
     @Test
+    @DisplayName("⚠️ R5 (17/10) — le Normal du tableau est justifié et ses cellules alignées à gauche : Word garde alors l'alignement à "
+            + "l'insertion ; les cellules d'un formulaire de modèle aussi, avec les marges intérieures")
+    void alignementGardeALInsertion() throws Exception {
+        TableauxBesoin.Contexte c = new TableauxBesoin.Contexte(false, false, "x", List.of(new TableauxBesoin.Lot(null, null)));
+        byte[] b = TableauxBesoin.specifications(c, List.of(article(null, 1, "Rame", "Rame", "1", null, null)));
+        try (XWPFDocument d = new XWPFDocument(new ByteArrayInputStream(b))) {
+            assertThat(d.getStyles().getStyle("Normal").getCTStyle().getPPr().getJc().getVal().toString()).isEqualTo("both");
+            assertThat(d.getTables().get(0).getRow(0).getCell(3).getParagraphs().get(0).getAlignment())
+                    .isEqualTo(org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT);
+        }
+        List<DocumentLibre.Element> el = List.of(new DocumentLibre.Tableau(2, List.of(List.of(List.of("Nom de la société"), List.of("x")))));
+        byte[] f = new GenerateurDocumentsFiche().generer(new DocumentLibre("A1", null, el, "p")).stream()
+                .filter(x -> "docx".equals(x.extension())).findFirst().orElseThrow().contenu();
+        try (XWPFDocument d = new XWPFDocument(new ByteArrayInputStream(CharteDao.partie(f)))) {
+            assertThat(d.getTables().get(0).getRow(0).getCell(0).getParagraphs().get(0).getAlignment())
+                    .isEqualTo(org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT);
+            assertThat(d.getTables().get(0).getCTTbl().getTblPr().getTblCellMar().getLeft().getW().toString()).isEqualTo("85");
+        }
+    }
+
+    @Test
+    @DisplayName("⚠️ R6 (17/10) — « No. d'appel d'offres » des formulaires : en contrat-cadre, B02-OE-01 (le numéro du DPAC)")
+    void numeroDuContratCadre() {
+        cnm.prs.dto.FicheMarcheDto cc = new cnm.prs.dto.FicheMarcheDto();
+        cc.setTypeMarche("CONTRAT_CADRE");
+        cc.setValeurs(Map.of("B02-OE-01", "07-CC/MEF/SG/PRMP.2027"));
+        assertThat(FormulairesCandidat.resolveur(cc, Map.of(), null).apply("B02-OB-03")).isEqualTo("07-CC/MEF/SG/PRMP.2027");
+        cnm.prs.dto.FicheMarcheDto qf = new cnm.prs.dto.FicheMarcheDto();
+        qf.setTypeMarche("QUANTITE_FIXE");
+        qf.setValeurs(Map.of("B02-OE-01", "ignoré"));
+        assertThat(FormulairesCandidat.resolveur(qf, Map.of(), null).apply("B02-OB-03")).isNotEqualTo("ignoré");
+    }
+
+    @Test
     @DisplayName("Contrat-cadre non alloti : l'objet en titre, quantités indicatives ; liste à délai fixé par l'autorité ; besoin vide : rien")
     void contratCadre() throws Exception {
         TableauxBesoin.Contexte c = new TableauxBesoin.Contexte(false, true, "Fourniture d'articles de bureau", List.of(new TableauxBesoin.Lot(null, null)));

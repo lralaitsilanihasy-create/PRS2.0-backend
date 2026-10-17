@@ -9602,6 +9602,15 @@ national, travaux en deux tableaux, aucun champ nouveau. Pas de migration, pas d
     valent désormais aussi pour le contrat-cadre (fichier de correspondance des travaux, commun aux trois catégories ; script
     `docs/referentiel/2026-10-16-formulaires-contrat-cadre.sql`). Une fiche de contrat-cadre qui les renseigne a sa section
     1.3, comme les autres formes. Une fiche validée avant reste sans formulaires : il faut une révision.
+- ⚠️ **Contre-recette du front du 17/10 (fiche 2 v2), R5 et R6** :
+  - **R5 — le justifié qui restait** :
+    - Cause : le correctif de R3 ne posait pas l'alignement du Normal. POI recopie un style au moment de l'ajout, et
+      l'alignement était posé après. Il est désormais posé avant (`CharteDao.normalJustifie`).
+    - Les cellules des tableaux des modèles (formulaires A1…) sont alignées à gauche explicitement, un centrage du modèle étant
+      gardé. Elles ont aussi les marges intérieures de la charte (1 mm, 1,5 mm).
+    - Vérifié dans Word après insertion : alignement à gauche gardé, marge de 4,25 pt.
+  - **R6 — le numéro dans les formulaires** : en contrat-cadre, le jeton `{{B02-OB-03}}` vide prend `B02-OE-01`, le numéro de
+    R1 (« No. d'appel d'offres et titre » des formulaires A1 et A3). Les modèles, copies de ceux du front, ne changent pas.
 - **Pas encore** (second temps, lot distinct) : la même charte pour l'avis spécifique, les lettres d'invitation, le projet de
   marché et les marchés subséquents.
 

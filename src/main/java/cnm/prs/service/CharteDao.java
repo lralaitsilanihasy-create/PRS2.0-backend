@@ -96,15 +96,17 @@ public final class CharteDao {
         org.apache.poi.xwpf.usermodel.XWPFStyle normal = styles.getStyle("Normal");
         org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle ct;
         if (normal == null) {
+            // ⚠️ R5 (contre-recette du 17/10) — addStyle recopie le style : l'alignement se pose AVANT, sinon il est perdu.
             ct = org.openxmlformats.schemas.wordprocessingml.x2006.main.CTStyle.Factory.newInstance();
             ct.setStyleId("Normal");
             ct.setType(org.openxmlformats.schemas.wordprocessingml.x2006.main.STStyleType.PARAGRAPH);
             ct.setDefault(true);
             ct.addNewName().setVal("Normal");
+            ct.addNewPPr().addNewJc().setVal(org.openxmlformats.schemas.wordprocessingml.x2006.main.STJc.BOTH);
             styles.addStyle(new org.apache.poi.xwpf.usermodel.XWPFStyle(ct, styles));
-        } else {
-            ct = normal.getCTStyle();
+            return;
         }
+        ct = normal.getCTStyle();
         var ppr = ct.isSetPPr() ? ct.getPPr() : ct.addNewPPr();
         (ppr.isSetJc() ? ppr.getJc() : ppr.addNewJc()).setVal(org.openxmlformats.schemas.wordprocessingml.x2006.main.STJc.BOTH);
     }
@@ -194,6 +196,19 @@ public final class CharteDao {
             // Filets noirs de 0,5 pt ; l'en-tête grisé est réservé aux tableaux du besoin (TableauxBesoin), dont la première ligne
             // est un en-tête : un tableau de modèle peut commencer par une ligne « clé / valeur ».
             filets(t);
+            // ⚠️ R5 (contre-recette du 17/10) — les cellules des modèles (formulaires A1…) : marges intérieures de la charte et
+            // alignement à gauche explicite (sans lui, elles prennent le Normal justifié du DAO) ; un centrage du modèle est gardé.
+            t.setCellMargins(57, 85, 57, 85);
+            for (XWPFTableRow l : lignes) {
+                for (XWPFTableCell c : l.getTableCells()) {
+                    for (XWPFParagraph p : c.getParagraphs()) {
+                        if (p.getAlignment() == ParagraphAlignment.LEFT || p.getAlignment() == ParagraphAlignment.BOTH
+                                || !p.getCTP().isSetPPr() || !p.getCTP().getPPr().isSetJc()) {
+                            p.setAlignment(ParagraphAlignment.LEFT);
+                        }
+                    }
+                }
+            }
         }
         for (int i = 0; i < lignes.size(); i++) {
             CTTrPr pr = lignes.get(i).getCtRow().isSetTrPr() ? lignes.get(i).getCtRow().getTrPr() : lignes.get(i).getCtRow().addNewTrPr();

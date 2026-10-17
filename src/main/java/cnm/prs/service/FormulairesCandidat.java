@@ -60,6 +60,9 @@ public final class FormulairesCandidat {
 
     /** Les champs qui commandent les formulaires ou alimentent les dérivés (§B8). */
     static final String FICHES_EXIGEES = "B04-CD-01";
+    /** ⚠️ R6 (17/10) — le numéro du DAO, et celui du contrat-cadre qui le remplace. */
+    static final String NUMERO_DAO = "B02-OB-03";
+    static final String NUMERO_CONTRAT_CADRE = "B02-OE-01";
     static final String FORME_GARANTIE = "B04-CD-02";
     static final String VALIDITE_GARANTIE = "B05-GS-04";
     static final String REMISE_OFFRES = "B04-LR-03";
@@ -749,6 +752,11 @@ public final class FormulairesCandidat {
                 return lignesParLot(code, c, lot);
             }
             String brut = valeur(fiche, code, c != null && Boolean.TRUE.equals(c.getParLot()) ? lot : null);
+            if (brut == null && NUMERO_DAO.equals(code) && cnm.prs.enums.TypeMarcheDao.CONTRAT_CADRE.name().equals(fiche.getTypeMarche())) {
+                // ⚠️ 2026-10-17 (contre-recette de la charte, R6) — le contrat-cadre n'a pas de B02-OB-03 : son numéro est B02-OE-01
+                // (« NUMÉRO » du DPAC), celui du DAO complet (R1). « No. d'appel d'offres et titre » des formulaires A1, A3.
+                brut = valeur(fiche, NUMERO_CONTRAT_CADRE, null);
+            }
             if (brut == null && c != null && c.getCleCadrage() != null && !c.getCleCadrage().isBlank()) {
                 // ⚠️ Lot D4 (2026-09-29, §B3) — un reflet que le modèle cite hors de sa catégorie (le contrat-cadre de travaux
                 // cite B02-LV-05, reflet des fournitures) : sa valeur est celle de la clé de cadrage qu'il reflète.
