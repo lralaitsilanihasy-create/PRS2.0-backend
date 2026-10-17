@@ -8588,14 +8588,15 @@ sous-type). Aucune dépendance ajoutée.
   - **`GET …/fiche-presentation/pdf`** la rend en PDF, pour l'impression.
   - **Garde** : celle de la lecture du dossier.
   - **Refus** : 404, et 409 **`FICHE_PRESENTATION_INDISPONIBLE`** pour un dossier sans fiche validée.
-  - **Le contenu** : la dernière version validée de la fiche, et la ligne du plan en vigueur. Une ligne sans valeur n'est pas
+  - **Le contenu** : la dernière version validée de la fiche, et la ligne du plan en vigueur. Une section sans ligne et une ligne sans valeur ne sont pas
     servie. Une ligne prend le premier champ qui vaut pour la catégorie et la forme de la fiche.
 
   | Section | Lignes |
   |---|---|
   | `IDENTIFICATION` | `AUTORITE`, `MINISTERE`, `PRMP`, `PLAN` (référence, exercice, mise à jour), `LIGNE`, `DOSSIER` |
-  | `MARCHE` | `OBJET`, `CATEGORIE`, `NATURE`, `MODE`, `FORME`, `NB_LOTS`, `LOTS`, `MONTANT_ESTIMATIF`, `FINANCEMENT`, `IMPUTATION` |
-  | `PROCEDURE` | `NUMERO_DAO`, `MODE_REMISE`, `PLATEFORME`, `DATE_LIMITE`, `LIEU_REMISE`, `OUVERTURE`, `LIEU_OUVERTURE`, `VALIDITE_OFFRES`, `GARANTIE`, `GARANTIE_FORME`, `GARANTIE_MONTANT`, `GARANTIE_VALIDITE`, les dates `B04-CP-01` à `08` (contrat-cadre), `DATES_PREVISIONNELLES` (du plan) |
+  | `MARCHE` | `OBJET`, `CATEGORIE`, `NATURE`, `MODE`, `FORME`, `NB_LOTS`, `LOTS`, `MONTANT_ESTIMATIF`, `FINANCEMENT`, `IMPUTATION` (les lignes d'imputation du plan, `B01-AC-16`, sans montants), `COMPTE` (`B01-AC-17`) |
+  | `PROCEDURE` | `NUMERO_DAO`, `MODE_REMISE`, `PLATEFORME`, `DATE_LIMITE`, `LIEU_REMISE`, `OUVERTURE`, `LIEU_OUVERTURE`, `VALIDITE_OFFRES`, `GARANTIE`, `GARANTIE_FORME`, `GARANTIE_MONTANT`, `GARANTIE_VALIDITE`, les dates `B04-CP-01` et `03` à `08` (contrat-cadre ; `B04-CP-02` est servie comme `DATE_LIMITE`) |
+  | `CALENDRIER_PLAN` | les étapes du DAO du calendrier du plan (`B01-AC-18`), une ligne chacune : `ETABLISSEMENT_DAO`, `TRANSMISSION_DAO`, `LANCEMENT`, `REMISE_OFFRES`, `OUVERTURE_PLIS` (libellé du plan coupé au premier « : », période en jj/mm/aaaa) |
   | `COHERENCE` | `LANCEMENT_PREVU` (plan), `DAO_DISPONIBLE` (date de lancement `B04-CP-01`, à défaut validation de la fiche), `RETARD` (« n jour(s) » ou « aucun ») |
   | `VALIDATION` | `VERSION`, `DATE_VALIDATION`, `VALIDEE_PAR` (nom) |
 

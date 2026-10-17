@@ -113,7 +113,10 @@ public class FichePresentationService {
                 ligne("LOTS", "Désignation des lots", p.get("LOTS_DESIGNATION")),
                 ligne("MONTANT_ESTIMATIF", "Montant estimatif du plan", p.get("MONTANT_ESTIMATIF")),
                 ligne("FINANCEMENT", "Source de financement", p.get("FINANCEMENT")),
-                ligne("IMPUTATION", "Imputation budgétaire", p.get("COMPTES")))));
+                // ⚠️ Recette du 17/10 (remarque 1) — l'imputation est B01-AC-16 (les lignes d'imputation du plan, sans leurs
+                // montants, comme T1 sur la garde), le compte B01-AC-17 a sa propre ligne.
+                ligne("IMPUTATION", "Imputation budgétaire", imputation(p.get("BENEFICIAIRES"))),
+                ligne("COMPTE", "Compte budgétaire", p.get("COMPTES")))));
         List<Ligne> procedure = new ArrayList<>(lignes(
                 ligne("NUMERO_DAO", "Numéro du dossier d'appel d'offres", premier(ev, "B02-OB-03")),
                 ligne("MODE_REMISE", "Mode de remise des offres", premier(ev, "B04-SE-01")),
@@ -128,13 +131,19 @@ public class FichePresentationService {
                 ligne("GARANTIE_FORME", "Forme de la garantie de soumission", premier(ev, "B05-GS-02", "B05-GQ-02")),
                 ligne("GARANTIE_MONTANT", "Montant de la garantie de soumission (Ariary)", premier(ev, "B05-GS-03", "B05-GQ-03")),
                 ligne("GARANTIE_VALIDITE", "Validité de la garantie de soumission (jours)", premier(ev, "B05-GS-04"))));
-        // Le calendrier de la procédure du contrat-cadre (B04-CP, huit étapes), sous les libellés du référentiel.
+        // Le calendrier de la procédure du contrat-cadre (B04-CP, huit étapes), sous les libellés du référentiel ; ⚠️ recette du 17/10
+        // (remarque 2) : sans B04-CP-02, déjà servie comme date limite de remise.
         for (int i = 1; i <= 8; i++) {
             String code = "B04-CP-0" + i;
-            procedure.add(ligne(code, ev.libelle(code), ev.valeur(code)));
+            if (i != 2) {
+                procedure.add(ligne(code, ev.libelle(code), ev.valeur(code)));
+            }
         }
-        procedure.add(ligne("DATES_PREVISIONNELLES", "Dates prévisionnelles du plan", p.get("DATES_PREVISIONNELLES")));
         sections.add(section("PROCEDURE", "Procédure", procedure));
+        // ⚠️ Recette du 17/10 (remarque 3) — du calendrier du plan (B01-AC-18, une trentaine d'étapes), les seules étapes du DAO, une
+        // ligne chacune.
+        sections.add(section("CALENDRIER_PLAN", "Calendrier prévisionnel du plan (étapes du DAO)",
+                etapesDuDao(p.get("DATES_PREVISIONNELLES"))));
 
         // Le manuel : « relever l'éventuel retard de la date de disponibilité du DAO » au regard de l'AGPM. Le DAO est disponible à la
         // date de lancement de la fiche (contrat-cadre) ou, à défaut, à la validation de la fiche.
@@ -155,7 +164,7 @@ public class FichePresentationService {
                 ligne("DATE_VALIDATION", "Validée le", ev.etat().getDateValidation() == null ? null
                         : ev.etat().getDateValidation().format(JOUR_HEURE)),
                 ligne("VALIDEE_PAR", "Validée par", validePar == null ? null : acteurs.nom(validePar)))));
-        return new FichePresentationDto(idDossier, d.getIdDmc(), ev.version(), sections);
+        return new FichePresentationDto(idDossier, d.getIdDmc(), ev.version(), sections.stream().filter(s -> !s.lignes().isEmpty()).toList());
     }
 
     DocumentLibre document(FichePresentationDto f, LocalDateTime le) {
@@ -200,6 +209,64 @@ public class FichePresentationService {
             }
         }
         return null;
+    }
+
+    /** Les étapes du DAO, par début de libellé (accents et casse neutralisés) : code de ligne, préfixe. */
+    private static final List<String[]> ETAPES_DAO = List.of(
+            new String[] {"ETABLISSEMENT_DAO", "ETABLISSEMENT DU DAO"},
+            new String[] {"TRANSMISSION_DAO", "TRANSMISSION DU DAO"},
+            new String[] {"LANCEMENT", "LANCEMENT"},
+            new String[] {"REMISE_OFFRES", "REMISE DES OFFRES"},
+            new String[] {"OUVERTURE_PLIS", "OUVERTURE"});
+
+    /**
+     * Les étapes du DAO du calendrier du plan (« libellé : période ; … », {@link ValeursPpmService}) : une ligne par étape, la première
+     * qui commence par son préfixe ; libellé coupé à son premier « : », dates au format jj/mm/aaaa.
+     */
+    static List<Ligne> etapesDuDao(String dates) {
+        if (dates == null) {
+            return List.of();
+        }
+        List<Ligne> out = new ArrayList<>();
+        for (String[] e : ETAPES_DAO) {
+            for (String part : dates.split(" ; ")) {
+                int sep = part.lastIndexOf(" : ");
+                if (sep < 0) {
+                    continue;
+                }
+                String libelle = part.substring(0, sep).trim();
+                String cle = java.text.Normalizer.normalize(libelle, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "")
+                        .toUpperCase(java.util.Locale.FRENCH);
+                if (cle.startsWith(e[1])) {
+                    int deuxPoints = libelle.indexOf(" :");
+                    String court = deuxPoints < 0 ? libelle : libelle.substring(0, deuxPoints).trim();
+                    court = court.equals(court.toUpperCase(java.util.Locale.FRENCH))
+                            ? court.charAt(0) + court.substring(1).toLowerCase(java.util.Locale.FRENCH) : court;
+                    out.add(new Ligne(e[0], court, periode(part.substring(sep + 3).trim())));
+                    break;
+                }
+            }
+        }
+        return out;
+    }
+
+    /** « 2026-03-02 → 2026-03-20 » en « 02/03/2026 → 20/03/2026 » ; « sans objet » et « — » tels quels. */
+    private static String periode(String p) {
+        StringBuilder sb = new StringBuilder();
+        for (String morceau : p.split(" → ")) {
+            LocalDate d = date(morceau);
+            sb.append(sb.length() == 0 ? "" : " → ").append(d == null ? morceau : d.format(JOUR));
+        }
+        return sb.toString();
+    }
+
+    /** Les lignes d'imputation du plan, sans leurs montants entre parenthèses (comme la garde du DAO complet, T1). */
+    private static String imputation(String beneficiaires) {
+        if (beneficiaires == null) {
+            return null;
+        }
+        String s = beneficiaires.replaceAll("\\s*\\([^)]*\\)", "").trim();
+        return s.isEmpty() ? null : s;
     }
 
     private static String avecHeure(String date, String heure) {

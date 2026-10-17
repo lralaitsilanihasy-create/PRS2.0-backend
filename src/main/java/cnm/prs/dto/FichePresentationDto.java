@@ -10,7 +10,7 @@ import java.util.List;
  * @param idDossier     le dossier présenté
  * @param idDmc         la fiche
  * @param versionFiche  la version validée présentée
- * @param sections      {@code IDENTIFICATION}, {@code MARCHE}, {@code PROCEDURE}, {@code COHERENCE}, {@code VALIDATION}
+ * @param sections      {@code IDENTIFICATION}, {@code MARCHE}, {@code PROCEDURE}, {@code CALENDRIER_PLAN}, {@code COHERENCE}, {@code VALIDATION} ; une section sans ligne n'est pas servie
  */
 public record FichePresentationDto(Integer idDossier, Long idDmc, Integer versionFiche, List<Section> sections) {
 
