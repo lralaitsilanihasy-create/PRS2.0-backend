@@ -61,15 +61,24 @@ public class DaoCompletService {
     /** ⚠️ 2026-10-16 (charte, §B3) — le besoin de la version validée et le taux de TVA, pour les tableaux imprimés. */
     private final BesoinFiche besoin;
     private final ParametreService parametres;
+    /** ⚠️ 2026-10-17 (charte travaux, T6) — le personnel et le matériel exigés, qui pré-remplissent les formulaires du candidat. */
+    private final MoyensFiche moyens;
 
     public DaoCompletService(DaoCompletWord word, DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository,
             SpecificationsFicheRepository specificationsRepository, ValeursPpmService valeursPpm) {
         this(word, documents, documentRepository, specificationsRepository, valeursPpm, null, null);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public DaoCompletService(DaoCompletWord word, DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository,
             SpecificationsFicheRepository specificationsRepository, ValeursPpmService valeursPpm, BesoinFiche besoin, ParametreService parametres) {
+        this(word, documents, documentRepository, specificationsRepository, valeursPpm, besoin, parametres, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public DaoCompletService(DaoCompletWord word, DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository,
+            SpecificationsFicheRepository specificationsRepository, ValeursPpmService valeursPpm, BesoinFiche besoin, ParametreService parametres,
+            MoyensFiche moyens) {
+        this.moyens = moyens;
         this.word = word;
         this.documents = documents;
         this.documentRepository = documentRepository;
@@ -196,6 +205,11 @@ public class DaoCompletService {
                 p.titre(forfaitaire(etat) ? "Annexe : Décomposition du prix global et forfaitaire" : "Annexe : Détail quantitatif et estimatif", 3);
                 p.document(t.dqe());
             }
+            // ⚠️ 2026-10-17 (charte travaux, T5) — le coefficient K1 et le cadre du sous-détail des prix, annexes de l'acte d'engagement.
+            p.titre("Annexe : Mode de calcul du coefficient de majoration des déboursés K1", 3);
+            p.document(FormulairesTravaux.k1(parametres == null ? null : parametres.tauxTva()));
+            p.titre("Annexe : Cadre du sous-détail des prix", 3);
+            p.document(FormulairesTravaux.sousDetail(contexte(etat), articles(idFiche)));
         } else if (t.bordereau() != null) {
             p.titre("Annexe 1 : Cadre du bordereau des prix", 3);
             p.document(t.bordereau());
@@ -211,7 +225,7 @@ public class DaoCompletService {
         // ⚠️ 2026-10-16 (charte, §B3) — avec un besoin, la liste des fournitures est le tableau généré (le document LF, produit à part,
         // n'entre plus au DAO) ; le Word joint par la PRMP suit le tableau des spécifications, il ne le remplace pas.
         List<DocumentFicheMarche> lf = t.avecBesoin() ? List.of() : choisir(word, List.of("LF"));
-        if (specifications != null || !lf.isEmpty() || t.specifications() != null || t.liste() != null) {
+        if (specifications != null || !lf.isEmpty() || t.specifications() != null || t.liste() != null || travaux) {
             p.titre(pi ? "Termes de références" : "Spécifications techniques", 3);
             if (t.specifications() != null) {
                 p.document(t.specifications());
@@ -226,6 +240,9 @@ public class DaoCompletService {
             for (DocumentFicheMarche d : lf) {
                 p.titre("Annexe : Liste des fournitures et calendrier de livraison", 4);
                 p.document(CharteDao.partie(d.getContenu()));
+            }
+            if (travaux) {
+                formulairesTravaux(p, etat, idFiche);
             }
         }
         p.titre("2.3. - Cahier des Clauses Administratives Générales" + (pi ? " applicable aux marchés publics de prestations intellectuelles"
@@ -267,6 +284,51 @@ public class DaoCompletService {
                 && "Fixés par l'autorité contractante".equals(valeurs.get("B07-DE-01"));
         return new Tableaux(true, TableauxBesoin.bordereau(c, articles), TableauxBesoin.specifications(c, articles),
                 liste ? TableauxBesoin.liste(c, articles, valeurs) : null, null, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (charte travaux, T6-T7) — les annexes des spécifications techniques des travaux : la liste des plans
+     * ({@code B04-CD-03}), le personnel et le matériel affectés (pré-remplis depuis la version validée), l'engagement de location,
+     * les plannings (délai d'exécution {@code B09-DL-01} de chaque lot, délai de garantie {@code B09-GT-01}) et le plan de charge.
+     */
+    private void formulairesTravaux(Plan p, FicheMarcheDto etat, Integer idFiche) {
+        List<cnm.prs.dto.PersonnelExigeDto> personnel = moyens == null || idFiche == null ? List.of() : moyens.personnel(idFiche);
+        List<cnm.prs.dto.MaterielExigeDto> materiel = moyens == null || idFiche == null ? List.of() : moyens.materiel(idFiche);
+        TableauxBesoin.Contexte c = contexte(etat);
+        Map<Integer, String> delais = new java.util.HashMap<>();
+        for (TableauxBesoin.Lot lot : c.lots()) {
+            delais.put(lot.numero(), valeurLot(etat, "B09-DL-01", lot.numero()));
+        }
+        Integer garantie = null;
+        try {
+            String g = valeurLot(etat, "B09-GT-01", null);
+            garantie = g == null ? null : Integer.valueOf(g.replaceAll("[^0-9]", ""));
+        } catch (NumberFormatException e) {
+            // un délai de garantie illisible : douze mois
+        }
+        p.titre("Annexe 1 : Liste des plans", 4);
+        p.document(FormulairesTravaux.listePlans(valeurLot(etat, "B04-CD-03", null)));
+        p.titre("Annexe 2 : Liste du personnel affecté aux lots et modèle de curriculum vitae", 4);
+        p.document(FormulairesTravaux.personnel(c.lots(), personnel));
+        p.titre("Annexe 3 : Liste du matériel affecté aux lots", 4);
+        p.document(FormulairesTravaux.materiel(materiel));
+        p.titre("Annexe 4 : Modèle d'engagement de location de matériel", 4);
+        p.document(FormulairesTravaux.location());
+        p.titre("Annexe 5 : Modèles de plannings d'exécution", 4);
+        p.document(FormulairesTravaux.plannings(c, articles(idFiche), personnel, materiel, delais, garantie));
+        p.titre("Annexe 6 : Modèle de plan de charge", 4);
+        p.document(FormulairesTravaux.planDeCharge());
+    }
+
+    /** Le contexte d'impression des tableaux et des formulaires : la forme, l'objet, les lots du plan. */
+    private TableauxBesoin.Contexte contexte(FicheMarcheDto etat) {
+        return new TableauxBesoin.Contexte(TypeMarcheDao.A_COMMANDE.name().equals(etat.getTypeMarche()), contratCadre(etat), objet(etat),
+                lots(etat), forfaitaire(etat));
+    }
+
+    /** Le besoin de la version validée, vide sans besoin. */
+    private List<cnm.prs.dto.ArticleBesoinDto> articles(Integer idFiche) {
+        return besoin == null || idFiche == null ? List.of() : besoin.lister(idFiche);
     }
 
     /** ⚠️ 17/10 (T4) — un prix global et forfaitaire (cadrage {@code typePrix}) : son détail est une décomposition du prix. */
@@ -313,7 +375,8 @@ public class DaoCompletService {
         private DaoCompletWord.Partie partie(byte[] docx) {
             boolean separateur = titres.stream().anyMatch(t -> t.niveau() == 2);
             boolean ouvre = titres.stream().anyMatch(t -> t.niveau() == 1);
-            String section = titres.stream().filter(t -> t.niveau() == 2).map(DaoCompletWord.Titre::texte).findFirst().orElse(null);
+            // La dernière section ouverte par la partie : des titres restés sans document la précèdent parfois (une DPAO absente).
+            String section = titres.stream().filter(t -> t.niveau() == 2).map(DaoCompletWord.Titre::texte).reduce((a, b) -> b).orElse(null);
             return new DaoCompletWord.Partie(titres, docx, separateur, separateur && !ouvre ? partieCourante : null,
                     section == null ? null : intituleCourt(section));
         }
@@ -450,14 +513,48 @@ public class DaoCompletService {
         boolean alloti = lots != null && lots.contains(" ; ");
         String objet = objet(etat);
         ligne(l, objet == null ? null : "Objet : " + objet + (garde && !alloti ? ", en un lot unique" : ""), 12, true, true);
+        if (garde && !alloti) {
+            localisation(l, etat, null);
+        }
         if (garde && alloti) {
             String[] parts = lots.split(" ; ");
             for (int i = 0; i < parts.length; i++) {
                 String d = parts[i].trim();
                 ligne(l, d.toLowerCase(Locale.FRENCH).startsWith("lot") ? d : "Lot " + (i + 1) + " : " + d, 11, false, true);
+                localisation(l, etat, i + 1);
             }
         }
         return l;
+    }
+
+    /**
+     * ⚠️ 2026-10-17 (charte travaux, T1, Q1) — sous l'objet ou sous la ligne du lot, en travaux : « {lieu}, {PK} » ({@code B02-OT-03},
+     * {@code B02-OT-04}) puis « Coordonnées GPS : début … — fin … » ({@code B02-OT-05}, {@code B02-OT-06}) ; rien sans valeur.
+     */
+    private static void localisation(List<DaoCompletWord.LigneGarde> l, FicheMarcheDto etat, Integer lot) {
+        if (!CategorieDao.TRAVAUX.name().equals(categorie(etat))) {
+            return;
+        }
+        java.util.function.Function<String, String> v = code -> valeurLot(etat, code, lot);
+        String lieu = java.util.stream.Stream.of(v.apply("B02-OT-03"), v.apply("B02-OT-04")).filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.joining(", "));
+        ligne(l, lieu.isEmpty() ? null : lieu, 10, false, true);
+        String debut = v.apply("B02-OT-05");
+        String fin = v.apply("B02-OT-06");
+        if (debut != null || fin != null) {
+            ligne(l, "Coordonnées GPS : " + (debut == null ? "" : "début " + debut) + (debut != null && fin != null ? " — " : "")
+                    + (fin == null ? "" : "fin " + fin), 9, false, true);
+        }
+    }
+
+    /** La valeur d'un champ pour un lot ({@code CODE#k}, à défaut le code nu), {@code null} si vide. */
+    static String valeurLot(FicheMarcheDto etat, String code, Integer lot) {
+        Map<String, String> vs = etat.getValeurs() == null ? Map.of() : etat.getValeurs();
+        String x = lot == null ? null : vs.get(LotsFiche.cle(code, lot));
+        if (x == null || x.isBlank()) {
+            x = vs.get(code);
+        }
+        return x == null || x.isBlank() ? null : x.trim();
     }
 
     /** « Lancé le » : {@code B04-CP-01} (date de lancement) quand elle est saisie, à défaut la date de validation. */

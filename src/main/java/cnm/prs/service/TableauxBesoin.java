@@ -75,7 +75,7 @@ public final class TableauxBesoin {
 
     /** Largeur du texte (21 cm − 4,4 cm de marges), en vingtièmes de point. */
     static final int LARGEUR = 9412;
-    private static final String POINTILLES = "……………………";
+    static final String POINTILLES = "……………………";
 
     // ------------------------------------------------------------------ fournitures et services
 
@@ -163,7 +163,7 @@ public final class TableauxBesoin {
         return document(c, articles, "BORDEREAU DES PRIX UNITAIRES", null, (doc, lot, as) -> {
             List<List<List<String>>> lignes = new ArrayList<>();
             List<Integer> genres = new ArrayList<>();
-            travaux(as, lignes, genres, a -> List.of(List.of(texte(a.getNumeroPrix())),
+            travaux(as, lignes, genres, a -> List.of(List.of(numeroPrix(a)),
                     List.of(texte(a.getDesignation()), lignePrix(a.getUnite(), a.getLibelleBordereau())), List.of(texte(a.getUnite())), List.of("")),
                     4, false);
             XWPFTable t = tableMulti(doc, BPU, new int[] { 900, 5600, 1100, 1812 }, lignes);
@@ -182,7 +182,7 @@ public final class TableauxBesoin {
                 (doc, lot, as) -> {
                     List<List<List<String>>> lignes = new ArrayList<>();
                     List<Integer> genres = new ArrayList<>();
-                    travaux(as, lignes, genres, a -> List.of(List.of(texte(a.getNumeroPrix())), List.of(texte(a.getDesignation())),
+                    travaux(as, lignes, genres, a -> List.of(List.of(numeroPrix(a)), List.of(texte(a.getDesignation())),
                             List.of(texte(a.getUnite())), List.of(nombre(a.getQuantite())), List.of(""), List.of("")), 6, true);
                     XWPFTable t = tableMulti(doc, DQE, new int[] { 900, 4100, 900, 1100, 1200, 1212 }, lignes);
                     griser(t, genres);
@@ -255,6 +255,27 @@ public final class TableauxBesoin {
         return l;
     }
 
+    /**
+     * ⚠️ 2026-10-17 (charte travaux, T5, Q2) — le n° de prix, suivi d'un astérisque quand l'article est à sous-détailler (case
+     * {@code sousDetail} du besoin) ; la relecture le retire ({@link LectureTableaux}).
+     */
+    static String numeroPrix(ArticleBesoinDto a) {
+        return texte(a.getNumeroPrix()) + (Boolean.TRUE.equals(a.getSousDetail()) ? "*" : "");
+    }
+
+    /** Les prix à sous-détailler d'un lot : ceux de la série d'installation de chantier et ceux marqués d'un astérisque. */
+    static List<String> prixASousDetailler(List<ArticleBesoinDto> as) {
+        List<String> out = new ArrayList<>();
+        for (ArticleBesoinDto a : as) {
+            boolean installation = texte(a.getSerieLibelle()).toLowerCase(Locale.FRENCH).contains("installation")
+                    || texte(a.getDesignation()).toLowerCase(Locale.FRENCH).startsWith("installation");
+            if (installation || Boolean.TRUE.equals(a.getSousDetail())) {
+                out.add(numeroPrix(a));
+            }
+        }
+        return out;
+    }
+
     /** « Le mètre cube à : …………… Ariary » : le libellé du bordereau quand il est saisi, sinon l'unité et son article défini. */
     static String lignePrix(String unite, String libelleBordereau) {
         String l = texte(libelleBordereau);
@@ -311,7 +332,7 @@ public final class TableauxBesoin {
         }
     }
 
-    private static XWPFTable table(XWPFDocument doc, List<String> entete, int[] largeurs, List<List<String>> lignes) {
+    static XWPFTable table(XWPFDocument doc, List<String> entete, int[] largeurs, List<List<String>> lignes) {
         List<List<List<String>>> multi = new ArrayList<>();
         for (List<String> l : lignes) {
             multi.add(l.stream().map(List::of).toList());
@@ -320,7 +341,7 @@ public final class TableauxBesoin {
     }
 
     /** Un tableau : en-tête gras sur gris répété sur chaque page, lignes insécables, filets de 0,5 pt, 9,5 pt. */
-    private static XWPFTable tableMulti(XWPFDocument doc, List<String> entete, int[] largeurs, List<List<List<String>>> lignes) {
+    static XWPFTable tableMulti(XWPFDocument doc, List<String> entete, int[] largeurs, List<List<List<String>>> lignes) {
         XWPFTable t = doc.createTable(lignes.size() + 1, entete.size());
         CTTblWidth w = t.getCTTbl().getTblPr().isSetTblW() ? t.getCTTbl().getTblPr().getTblW() : t.getCTTbl().getTblPr().addNewTblW();
         w.setType(STTblWidth.DXA);
@@ -367,7 +388,7 @@ public final class TableauxBesoin {
     }
 
     /** Les lignes de série en gras sur gris ; ⚠️ T4 : les sous-totaux en italique gras sur gris. */
-    private static void griser(XWPFTable t, List<Integer> genres) {
+    static void griser(XWPFTable t, List<Integer> genres) {
         for (int i = 0; i < genres.size(); i++) {
             if (genres.get(i) != ARTICLE) {
                 boolean italique = genres.get(i) == SOUS_TOTAL;
@@ -383,7 +404,7 @@ public final class TableauxBesoin {
     }
 
     /** Une ligne de total en gras, son libellé dans la colonne de la désignation. */
-    private static void ligneTotale(XWPFTable t, int colonnes, String libelle, boolean grise) {
+    static void ligneTotale(XWPFTable t, int colonnes, String libelle, boolean grise) {
         XWPFTableRow r = t.createRow();
         CTTrPr pr = r.getCtRow().isSetTrPr() ? r.getCtRow().getTrPr() : r.getCtRow().addNewTrPr();
         pr.addNewCantSplit();
@@ -402,7 +423,7 @@ public final class TableauxBesoin {
         }
     }
 
-    private static XWPFParagraph paragraphe(XWPFDocument doc, String texte, boolean gras, ParagraphAlignment alignement) {
+    static XWPFParagraph paragraphe(XWPFDocument doc, String texte, boolean gras, ParagraphAlignment alignement) {
         XWPFParagraph p = doc.createParagraph();
         p.setAlignment(alignement);
         p.setSpacingAfter(100);
@@ -415,7 +436,7 @@ public final class TableauxBesoin {
         return p;
     }
 
-    private static void signature(XWPFDocument doc) {
+    static void signature(XWPFDocument doc) {
         paragraphe(doc, "Fait à " + POINTILLES + ", le " + POINTILLES, false, ParagraphAlignment.LEFT).setSpacingBefore(160);
         paragraphe(doc, "Le candidat", true, ParagraphAlignment.RIGHT);
     }
@@ -464,7 +485,7 @@ public final class TableauxBesoin {
         return a.getOrdre() == null ? "" : String.valueOf(a.getOrdre());
     }
 
-    private static String texte(String s) {
+    static String texte(String s) {
         return s == null ? "" : s.trim();
     }
 

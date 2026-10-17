@@ -5,6 +5,10 @@ B02-MW-03;Imputation budgétaire;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVA
 B02-MW-04;Maître d'ouvrage délégué : nom et coordonnées (laisser vide s'il n'y en a pas);TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
 B02-OT-01;Projet ou opération plus vaste dont le marché fait partie;TEXTE_LONG;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B02-OT-02;Consistance des travaux à exécuter;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B02-OT-03;Localisation des travaux : lieu, commune, district, région (garde du DAO);TEXTE;SAISIE;AUCUN;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;oui;
+B02-OT-04;Points kilométriques de début et de fin d'un ouvrage linéaire (ex. « PK 0 à PK 32 »);TEXTE;SAISIE;AUCUN;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;oui;
+B02-OT-05;Coordonnées GPS du début des travaux;TEXTE;SAISIE;AUCUN;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;oui;
+B02-OT-06;Coordonnées GPS de la fin des travaux;TEXTE;SAISIE;AUCUN;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;oui;
 B02-LT-01;Description du projet global;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = OUI;oui;;;;;;oui
 B02-LT-02;Attribution des lots;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = OUI;oui;;;Divisible,Totalité des lots;;;oui
 B02-LT-03;Objet et montant de la tranche ferme;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;tranches = OUI;oui;;;;;;oui

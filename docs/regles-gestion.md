@@ -511,6 +511,19 @@ en un seul document*.
     ni calendrier, renvoyés à chaque bon de commande ou marché subséquent, sauf quand ses marchés subséquents uniques ont un
     délai fixé par l'autorité.
   - **Le dossier se relit** : un DAO produit par l'application, réimporté dans sa fiche, rend ses articles.
+  - ⚠️ **Travaux (17/10, demande front « charte-dao-travaux »)** :
+    - La garde porte la localisation de chaque lot (lieu, PK, coordonnées GPS : champs facultatifs de la fiche).
+    - Le détail quantitatif a un sous-total par série et une récapitulation par lot.
+    - Le prix en lettres du bordereau est sur sa propre ligne.
+    - Le dossier intègre les **formulaires techniques du candidat** que le CCAP cite sans en donner le modèle :
+      - coefficient K1 et sous-détail des prix (les prix à sous-détailler sont l'installation de chantier et les prix marqués
+        d'un astérisque) ;
+      - liste des plans ;
+      - personnel et matériel affectés, **pré-remplis avec ce que la fiche exige** ;
+      - engagement de location, cinq plannings (la grille suit le délai d'exécution du lot) et plan de charge.
+
+      Les colonnes du candidat restent vides.
+  - ⚠️ **En-tête courant (17/10, toutes catégories)** : la partie en cours à gauche, le n° du DAO à droite.
   - La charte vaut pour les DAO assemblés après le 16/10 ; un DAO déjà produit est gardé.
 
 #### Le DAO complet sur les documents types officiels (lot D, demande front du 2026-09-28, feu vert du pilote)

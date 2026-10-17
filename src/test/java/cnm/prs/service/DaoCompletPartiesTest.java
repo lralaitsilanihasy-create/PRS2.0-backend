@@ -96,8 +96,18 @@ class DaoCompletPartiesTest {
         assertThat(p).extracting(DaoCompletPartiesTest::titres).containsSubsequence(
                 "2:1.3. - Formulaires de soumission|3:B. - Modèles de garantie de soumission|4:B2 - Caution de soumission",
                 "1:DEUXIÈME PARTIE : MARCHÉ|2:2.1. - Acte d'Engagement",
-                "2:2.2. - Cahier des Prescriptions Spéciales|2:2.3. - Cahier des Clauses Administratives Générales applicable aux "
-                        + "marchés publics de travaux");
+                // ⚠️ 17/10 (charte travaux, T5 à T7) — K1 et sous-détail en annexe de l'AE, formulaires du candidat en annexe des
+                // spécifications techniques.
+                "3:Annexe : Mode de calcul du coefficient de majoration des déboursés K1", "3:Annexe : Cadre du sous-détail des prix",
+                "2:2.2. - Cahier des Prescriptions Spéciales|3:Spécifications techniques|4:Annexe 1 : Liste des plans",
+                "4:Annexe 2 : Liste du personnel affecté aux lots et modèle de curriculum vitae", "4:Annexe 3 : Liste du matériel affecté aux lots",
+                "4:Annexe 4 : Modèle d'engagement de location de matériel", "4:Annexe 5 : Modèles de plannings d'exécution",
+                "4:Annexe 6 : Modèle de plan de charge",
+                "2:2.3. - Cahier des Clauses Administratives Générales applicable aux marchés publics de travaux");
+        // La fourniture n'en a aucun.
+        assertThat(new DaoCompletService(null, null, null, specs, null).parties(etat("FOURNITURES_SERVICES", "QUANTITE_FIXE"), 7,
+                List.of(doc("AE", "docx", null, 3))).stream().map(DaoCompletPartiesTest::titres).collect(Collectors.joining(" / ")))
+                .doesNotContain("K1", "Liste des plans", "plannings");
     }
 
     @Test
@@ -173,6 +183,17 @@ class DaoCompletPartiesTest {
         assertThat(new DaoCompletService(null, null, null, null, null).garde(etat, Map.of("MINISTERE", "MINISTÈRE DES TRAVAUX PUBLICS",
                 "ENTITE", "Ministere des  travaux publics")).stream().map(DaoCompletWord.LigneGarde::texte)
                 .filter(t -> t.contains("TRAVAUX"))).containsExactly("MINISTÈRE DES TRAVAUX PUBLICS");
+        // ⚠️ 17/10 (charte travaux, T1, Q1) — la localisation sous chaque lot des travaux, rien sans valeur.
+        FicheMarcheDto tx = etat("TRAVAUX", "QUANTITE_FIXE");
+        tx.setDesignationMarche("Entretien des routes");
+        tx.setValeurs(Map.of("B02-OT-03#1", "Région Ihorombe", "B02-OT-04#1", "PK 0 à PK 32", "B02-OT-05#1", "22°11'58\"S 45°18'04\"E",
+                "B02-OT-06#1", "22°20'37\"S 45°45'03\"E", "B02-OT-03#2", "Région Ihorombe"));
+        List<String> lignes = new DaoCompletService(null, null, null, null, null).garde(tx, Map.of("LOTS_DESIGNATION",
+                "Lot 1 : Ankily – Mahasoa ; Lot 2 : Mahasoa – Ihosy")).stream().map(DaoCompletWord.LigneGarde::texte).toList();
+        assertThat(lignes).containsSubsequence("Lot 1 : Ankily – Mahasoa", "Région Ihorombe, PK 0 à PK 32",
+                "Coordonnées GPS : début 22°11'58\"S 45°18'04\"E — fin 22°20'37\"S 45°45'03\"E", "Lot 2 : Mahasoa – Ihosy",
+                "Région Ihorombe", "MARCHES PUBLICS DE TRAVAUX");
+        assertThat(lignes.stream().filter(x -> x.startsWith("Coordonnées GPS"))).hasSize(1);
     }
 
     private static String titres(DaoCompletWord.Partie p) {

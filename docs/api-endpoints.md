@@ -9673,6 +9673,54 @@ national, travaux en deux tableaux, aucun champ nouveau. Pas de migration, pas d
       forfaitaire ».
   - **À noter** : le DAO des bâtiments scolaires (MEN, `daolance.DAO_2026_4SDC_vf.pdf`) ne rend aucun article à la relecture.
     Son détail quantitatif numérote ses chapitres en chiffres romains (I à XIV), que la lecture des tableaux ne reconnaît pas.
+- ⚠️ **Volet travaux, tranche B (même demande, T5 à T7, Q1 à Q3 ; arbitrage 4 du pilote du 17/10)**. Ce sont les formulaires
+  techniques du candidat, générés par `FormulairesTravaux` (POI, charte).
+  - **Origine des textes** : ils sont repris du DAO routier réel (p. 45-46 et 95-101). Ils ne contiennent aucune clause,
+    seulement des consignes au candidat. Ce qui y nommait un service ou une commune renvoie à l'autorité contractante.
+  - **Annexes du cadre d'acte d'engagement**, après le détail quantitatif :
+    - « Annexe : Mode de calcul du coefficient de majoration des déboursés K1 » : la TVA est le paramètre `FICHE_TAUX_TVA` ;
+    - « Annexe : Cadre du sous-détail des prix » : les consignes 1 à 4, puis, par lot, les **prix à sous-détailler**
+      (série d'installation de chantier, et articles marqués `sousDetail` au besoin), puis le cadre.
+  - **L'astérisque (Q2)** : un article marqué `sousDetail` porte un astérisque au n° de prix (« 540* ») du bordereau et du
+    détail quantitatif. `LectureTableaux` le retire du code à la relecture, ce qui vaut aussi pour les DAO réels marqués
+    ainsi.
+  - **Annexes des spécifications techniques** (section « Spécifications techniques » de 2.2, toujours présente en travaux) :
+    - **Annexe 1, liste des plans (Q3)** : les titres du champ existant `B04-CD-03` « Plans joints au dossier », un par
+      ligne, numérotés ; vide, « Néant. ». Aucun champ nouveau.
+    - **Annexe 2, personnel affecté et modèle de CV** :
+      - une ligne par poste exigé (`…/personnel` de la version validée) : nombre, diplôme, « n ans d'expérience
+        (domaine) » ;
+      - une colonne « Nom proposé — lot k » par lot quand un poste est exigé par lot sur une ligne allotie, une seule sinon.
+    - **Annexe 3, matériel affecté** : une ligne par engin exigé (`…/materiel`), avec la caractéristique, le nombre (« par
+      lot » s'il l'est) et « Dont en propre » (« — » si nul). Les colonnes « Statut proposé » et « Localisation » sont pour le
+      candidat.
+    - **Annexe 4** : engagement de location de matériel.
+    - **Annexe 5, plannings** : les consignes, puis :
+      - **8-a**, un par lot : lignes = séries de son détail quantitatif, plus « Repli de chantier » ;
+      - **8-b**, mobilisation, pré-remplie avec les postes et les engins exigés ;
+      - **8-c**, approvisionnement, avec une liste indicative ;
+      - **8-d**, échéancier de paiement, une ligne par période ;
+      - **8-e**, intervention pendant la garantie (`B09-GT-01`, 12 mois à défaut).
+    - **Colonnes des plannings** : la grille compte autant de colonnes que la durée lue dans le délai d'exécution du lot
+      (`B09-DL-01`, texte libre : « six (06) mois » → 6, « 120 jours » → 4, « 2 ans » → 24) :
+      - une colonne par mois jusqu'à 12 mois, par trimestre jusqu'à 36, par semestre au-delà ;
+      - 12 mois sans durée chiffrée.
+    - **Annexe 6** : plan de charge (« NEANT » s'il n'y a pas de travaux en cours).
+  - **Données pré-remplies** : le personnel et le matériel exigés, les séries, les délais, les plans. Les colonnes du
+    candidat restent vides, et une liste vide imprime le cadre seul.
+  - **Localisation (Q1)** : quatre champs facultatifs par lot, en travaux (quantité fixe et à commandes) :
+    - `B02-OT-03`, lieu ;
+    - `B02-OT-04`, PK de début et de fin ;
+    - `B02-OT-05` et `B02-OT-06`, coordonnées GPS de début et de fin.
+
+    Ils sont ajoutés au CSV des travaux et à sa copie du front, et chargés sur une base existante par
+    `docs/referentiel/2026-10-17-localisation-travaux.sql`, sans migration. Leur document maître est AUCUN : seule la garde
+    les imprime, sous l'objet ou sous la ligne du lot (« {lieu}, {PK} », puis « Coordonnées GPS : début … — fin … »).
+  - **Correctif T2** : l'en-tête courant prend la dernière section de la partie (des titres restés sans document peuvent la
+    précéder).
+  - **Recette par Word** : une fiche de travaux à deux lots, avec besoin, personnel et matériel, donne un DAO de 94 pages. Les
+    grilles des plannings tiennent dans la largeur, le PDF se relit en 12 articles sur 12, astérisques compris, et les deux
+    tableaux du sous-détail sont séparés (contigus, Word les fusionnait).
 - **Pas encore** (second temps, lot distinct) : la même charte pour l'avis spécifique, les lettres d'invitation, le projet de
   marché et les marchés subséquents.
 

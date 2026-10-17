@@ -566,9 +566,15 @@ public final class LectureTableaux {
         return c == null ? null : c.texte();
     }
 
+    /**
+     * La première cellule d'une ligne ; ⚠️ 2026-10-17 (charte travaux, T5) : sans l'astérisque qui marque un prix à sous-détailler
+     * (« 531* » se lit 531).
+     */
     private static String premiere(Ligne l) {
-        return l.cellules().isEmpty() ? "" : l.cellules().get(0).texte();
+        return l.cellules().isEmpty() ? "" : ASTERISQUE.matcher(l.cellules().get(0).texte()).replaceFirst("");
     }
+
+    private static final Pattern ASTERISQUE = Pattern.compile("\\s*\\*+$");
 
     static Integer lotDe(String texte) {
         Matcher m = LOT.matcher(texte == null ? "" : texte);
