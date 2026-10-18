@@ -1468,6 +1468,13 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   contrat-cadre (p. 32-33 : critères d'élimination et d'attribution, cohérence avec les pièces de candidature). Ses délais
 >   sont les délais standards, comme ceux de `DAOO`. Sa référence porte `DAOO-CC`.
 > - **Les dossiers existants (Q1)** : un dossier déjà soumis garde son sous-type. Le dossier 100380 reste en `DAOO`.
+>   ⚠️ **Revu le 2026-10-18 par le pilote (V132)** : la référence doit refléter le sous-type. Une **requalification
+>   ponctuelle** fait passer en `DAOO-CC` les dossiers de contrat-cadre déjà nés en `DAOO`, non clôturés et sans PV signé
+>   (le 100380 : `00001/DAOO/CNM/2026` → `00001/DAOO-CC/CNM/2026`). Le **numéro ne change pas** : le compteur est celui de
+>   la famille et de l'exercice, le sous-type n'est que le libellé du segment. Les références de ses réceptions, versions
+>   archivées et PV non signés suivent ; le journal du dossier le trace (`SOUS_TYPE_REQUALIFIE`). Le dossier garde son étape et
+>   ses délais ; les écrans figés et les notifications envoyées gardent l'ancienne référence. Un dossier dont le PV est signé, ou
+>   clôturé, n'est jamais requalifié. Pour l'avenir, la règle ci-dessous (Q2) reste : après la soumission, jamais.
 > - **Une forme qui change (Q2)** : un dossier encore en **brouillon** suit le sous-type de sa fiche à chaque validation et au
 >   rattachement, dans les deux sens. Jamais après la soumission.
 > - **Les autres modes (Q3)** : un contrat-cadre en appel d'offres restreint ou international garde `DAOR` ou `DAOOI` ; leurs

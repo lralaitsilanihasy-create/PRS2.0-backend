@@ -133,6 +133,8 @@ public class JournalTraitementService {
             // la validation qui la porte, avant toute réception.
             case JournalDossierService.FICHE_REVISEE -> 28;
             case JournalDossierService.RECEPTION -> 30;
+            // ⚠️ 2026-10-18 (V132) — la requalification d'un dossier reçu : après sa réception, avant son dispatch.
+            case JournalDossierService.SOUS_TYPE_REQUALIFIE -> 31;
             case JournalDossierService.DISPATCH -> 40;
             case JournalDossierService.REATTRIBUTION, JournalDossierService.REPRISE -> 45;
             case JournalDossierService.RETRAIT_DISPATCH -> 47;

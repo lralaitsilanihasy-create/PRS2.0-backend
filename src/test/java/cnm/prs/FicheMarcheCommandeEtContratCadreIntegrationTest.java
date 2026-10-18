@@ -216,6 +216,56 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.idSousType").value("DAOO-CC"));
     }
 
+    @Test
+    @DisplayName("⚠️ 18/10 (« requalification-contrat-cadre », V132) — un dossier de contrat-cadre reçu en DAOO passe en DAOO-CC, "
+            + "même numéro, réception comprise, trace au journal ; un dossier clôturé n'est pas touché ; seconde passe sans effet")
+    void requalificationV132() throws Exception {
+        importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
+        Long idDmc = creerDmc(9903);
+        remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", null, Map.of("B05-MT-01", "250000000"));
+        int id = JsonPath.<Integer>read(mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.idDossier");
+        // L'état d'avant V131 : né en DAOO, soumis et reçu, référence numérotée.
+        Dossier d = dossierRepository.findById(id).orElseThrow();
+        d.setIdSousType("DAOO");
+        d.setStatut("PRET_DISPATCH");
+        d.setRefeDossier("00007/DAOO/CNM/2026");
+        d.setVersionFicheSoumise(1);
+        dossierRepository.saveAndFlush(d);
+        cnm.prs.entity.Reception r = reception(9961, id, "CTRCC1", true);
+        r.setReference("00007/DAOO/CNM/2026");
+        receptionRepository.saveAndFlush(r);
+        // Un dossier clôturé de la même forme reste tel quel (Q2).
+        Dossier clos = dossierLoc(9962, "CLOTURE", "ANT", "PRMP001");
+        clos.setIdTypeDossier("DMC");
+        clos.setIdSousType("DAOO");
+        clos.setRefeDossier("00008/DAOO/CNM/2026");
+        clos.setIdDmc(idDmc);
+        clos.setIdEntiteContract(1);
+
+        Runnable v132 = () -> org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(
+                org.springframework.jdbc.datasource.DataSourceUtils.getConnection(jdbcTemplate.getDataSource()),
+                new ClassPathResource("db/migration/V132__requalification_contrat_cadre.sql"));
+        v132.run();
+        assertThat(jdbcTemplate.queryForMap("select \"ID_SOUS_TYPE\" st, \"REFE_DOSSIER\" ref from t_dossier where \"ID_DOSSIER\" = ?", id))
+                .containsEntry("st", "DAOO-CC").containsEntry("ref", "00007/DAOO-CC/CNM/2026");
+        assertThat(jdbcTemplate.queryForObject("select \"REFERENCE\" from t_reception where \"ID_RECEPTION\" = 9961", String.class))
+                .isEqualTo("00007/DAOO-CC/CNM/2026");
+        assertThat(jdbcTemplate.queryForList("select \"DETAIL\" from t_action_dossier where \"ID_DOSSIER\" = ? and \"TYPE_ACTION\" = "
+                + "'SOUS_TYPE_REQUALIFIE'", String.class, id)).singleElement().asString()
+                .contains("00007/DAOO/CNM/2026 → 00007/DAOO-CC/CNM/2026", "même numéro");
+        v132.run();
+        assertThat(jdbcTemplate.queryForObject("select count(*) from t_action_dossier where \"TYPE_ACTION\" = 'SOUS_TYPE_REQUALIFIE'",
+                Integer.class)).isEqualTo(1);
+
+        // Le clôturé : le même ID_DMC n'est pas admis deux fois (unicité) ; on le rattache après avoir détaché le premier.
+        jdbcTemplate.update("update t_dossier set \"ID_DMC\" = null, \"ID_SOUS_TYPE\" = 'DAOO' where \"ID_DOSSIER\" = ?", id);
+        dossierRepository.saveAndFlush(clos);
+        v132.run();
+        assertThat(jdbcTemplate.queryForObject("select \"REFE_DOSSIER\" from t_dossier where \"ID_DOSSIER\" = 9962", String.class))
+                .isEqualTo("00008/DAOO/CNM/2026");
+    }
+
     // ------------------------------------------------------------------ 5. quantité fixe inchangée
 
     @Test

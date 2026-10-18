@@ -103,6 +103,12 @@ public class JournalDossierService {
      */
     public static final String FICHE_REVISION_OUVERTE = "FICHE_REVISION_OUVERTE";
     public static final String FICHE_REVISION_ABANDONNEE = "FICHE_REVISION_ABANDONNEE";
+    /**
+     * ⚠️ 2026-10-18 (demande front « requalification-contrat-cadre », §B1 ; V132) — le sous-type du dossier a été requalifié (DAOO →
+     * DAOO-CC) et le segment de sa référence remplacé, même numéro ; détail : ancienne et nouvelle référence, motif. Écrit par la
+     * migration, sans opérateur.
+     */
+    public static final String SOUS_TYPE_REQUALIFIE = "SOUS_TYPE_REQUALIFIE";
     /** ⚠️ R6b (manuel révisé, lot 2, §B1 règle 5 ; V107) — le plan est réputé approuvé (art. 26-IV), posé par le planificateur. */
     public static final String PLAN_REPUTE_APPROUVE = "PLAN_REPUTE_APPROUVE";
     /**

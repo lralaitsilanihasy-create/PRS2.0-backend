@@ -2835,6 +2835,14 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 >   (facultatif), reprise de `DAOO` avec les mêmes conditions.
 > - **Grille et motifs-types** (`GET /api/points-ctrls?sousType=DAOO-CC`, motifs-types) : ceux de `DAOO` par la grille de base, filtrés
 >   par la forme de la fiche. Délais : standards. Contrainte `ck_dossier_dmc_dao` étendue à `DAOO-CC`.
+>
+> ⚠️ **2026-10-18 (demande front « requalification-contrat-cadre » ; V132)** — migration ponctuelle, aucune route nouvelle : les
+> dossiers `DMC` nés d'une fiche en `DAOO`, dont la version soumise (à défaut la dernière validée) est un contrat-cadre, non
+> clôturés et sans PV signé, passent en `DAOO-CC`. `refeDossier` remplace son segment `/DAOO/` par `/DAOO-CC/`, **même numéro**
+> (de même la référence des réceptions, des versions archivées et des PV non signés). Le journal du dossier
+> (`GET /api/dossiers/{id}/journal`) porte une action **`SOUS_TYPE_REQUALIFIE`** (rang 31, après la réception), sans opérateur,
+> auteur `migration V132`, détail « Requalification contrat-cadre (sous-type DAOO-CC, V131) : DAOO → DAOO-CC ; référence A → B,
+> même numéro ».
 | PATCH | /api/marches/{idDetail}/supprimer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
 | PATCH | /api/marches/{idDetail}/restaurer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
 
