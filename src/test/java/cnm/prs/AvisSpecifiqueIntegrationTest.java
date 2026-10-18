@@ -185,6 +185,52 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<Boolean>>read(liste, ici + ".dejaImprime")).containsExactly(true);
     }
 
+    @Test
+    @DisplayName("« avis-a-imprimer » §B3 — accueil « À faire » : une ligne AVIS_A_IMPRIMER / IMPRIMER_AVIS (document, SANS_DELAI) sur "
+            + "un dossier clôturé, comptée dans aFaire et la pastille, servie aussi par …/gestes ; l'UGPM la voit, le Président non ; "
+            + "elle disparaît à la première impression")
+    void aFaireAvisAImprimer() throws Exception {
+        ugpmRepository.save(ugpm("UG9901", "PRMP001", "RABE", "Hery"));
+        compteAuthRepository.save(new cnm.prs.entity.CompteAuth("ugpm.afaire", "x", "UGPM", "UG9901", true));
+        String tokenUgpm = bearer("ugpm.afaire", cnm.prs.enums.ProfilUtilisateur.UGPM, cnm.prs.enums.TypeActeur.UGPM, "PRMP001", "ANT");
+        int idDossier = creerDossier();
+        String ligne = "$.taches[?(@.section=='AVIS_A_IMPRIMER' && @.dossier.idDossier==" + idDossier + ")]";
+        assertThat(JsonPath.<List<Object>>read(aFaire(tokenPrmp), ligne)).isEmpty();   // PV non signé : rien à imprimer
+
+        pvSigne(idDossier, "FAV", "CLOTURE");   // clôturé : hors des statuts actifs de l'accueil
+        for (String jeton : List.of(tokenPrmp, tokenUgpm)) {
+            String corps = aFaire(jeton);
+            assertThat(JsonPath.<List<String>>read(corps, ligne + ".geste")).containsExactly("IMPRIMER_AVIS");
+            assertThat(JsonPath.<List<String>>read(corps, ligne + ".document")).containsExactly("AVIS_SPECIFIQUE");
+            assertThat(JsonPath.<List<String>>read(corps, ligne + ".urgence")).containsExactly("SANS_DELAI");
+            assertThat(JsonPath.<List<String>>read(corps, ligne + ".mode")).containsExactly("TITULAIRE");
+            assertThat(JsonPath.<List<String>>read(corps, "$.sections[?(@.code=='AVIS_A_IMPRIMER')].code")).hasSize(1);
+            assertThat(JsonPath.<List<Object>>read(corps, "$.taches[?(@.section!='AVIS_A_IMPRIMER')].document")).isEmpty();
+        }
+        String prmp = aFaire(tokenPrmp);
+        int aFaire = JsonPath.read(prmp, "$.compteurs.aFaire");
+        assertThat(aFaire).isEqualTo(JsonPath.<List<Object>>read(prmp,
+                "$.taches[?(@.section!='EN_COURS_CNM' && @.section!='EN_ATTENTE_PRMP')]").size()).isPositive();
+        String badges = mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat((Integer) JsonPath.read(badges, "$.aFaire")).isEqualTo(aFaire);
+        String gestes = mvc.perform(get("/api/dossiers/" + idDossier + "/gestes").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(gestes, "$.taches[*].geste")).containsExactly("IMPRIMER_AVIS");
+        assertThat(JsonPath.<List<Object>>read(aFaire(tokenPresident), "$.taches[?(@.section=='AVIS_A_IMPRIMER')]")).isEmpty();
+
+        imprimer(idDmc).andExpect(status().isCreated());   // la première impression retire la ligne
+        assertThat(JsonPath.<List<Object>>read(aFaire(tokenPrmp), ligne)).isEmpty();
+        gestes = mvc.perform(get("/api/dossiers/" + idDossier + "/gestes").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(gestes, "$.taches")).isEmpty();
+    }
+
+    private String aFaire(String jeton) throws Exception {
+        return mvc.perform(get("/api/dossiers/a-faire").header("Authorization", jeton)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+    }
+
     private void deposerPublication() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/dossiers/9900/publication-agpm")
                 .file(new org.springframework.mock.web.MockMultipartFile("fichier", "jmp.pdf", "application/pdf",

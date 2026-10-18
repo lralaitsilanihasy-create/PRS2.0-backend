@@ -74,7 +74,13 @@ public record AFaireDto(
             Faits faits,
             Refs refs,
             String interimDe,
-            Integer idInterim) {
+            Integer idInterim,
+            /**
+             * ⚠️ 2026-10-18 (« avis-a-imprimer », §B3) — sur une ligne {@code AVIS_A_IMPRIMER} seulement : {@code AVIS_SPECIFIQUE} ou
+             * {@code LETTRES_INVITATION} ; absent ailleurs.
+             */
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            String document) {
     }
 
     /**

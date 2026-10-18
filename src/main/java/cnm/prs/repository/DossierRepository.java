@@ -561,6 +561,25 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     @Query(SELECT_A_FAIRE + " where d.idDossier = :idDossier")
     List<Object[]> findAFaireParId(@Param("idDossier") Integer idDossier);
 
+    /** ⚠️ 2026-10-18 (« avis-a-imprimer », §B3) — les lignes de {@link #SELECT_A_FAIRE} de plusieurs dossiers, sans autre filtre. */
+    @Query(SELECT_A_FAIRE + " where d.idDossier in :ids")
+    List<Object[]> findAFaireParIds(@Param("ids") java.util.Collection<Integer> ids);
+
+    /**
+     * ⚠️ 2026-10-18 (« avis-a-imprimer », §B3) — les dossiers d'une PRMP nés d'une fiche, {@code [idDossier, idDmc]}, tous statuts
+     * sauf brouillon, retiré et remplacé (clôturé compris) : même prédicat de propriété que {@link #findAFairePourPrmp}.
+     */
+    @Query("""
+            select d.idDossier, d.idDmc from Dossier d
+             where d.idDmc is not null and d.statut not in ('BROUILLON', 'RETIRE', 'REMPLACE')
+               and (
+                  d.idPrmp = :idPrmp
+                  or exists (select 1 from Ppm pp where pp.idDossier = d.idDossier and pp.idPrmp = :idPrmp)
+                  or exists (select 1 from Marche mp, Ppm pp2
+                             where mp.idDossier = d.idDossier and mp.idPpm = pp2.idPpm and pp2.idPrmp = :idPrmp))
+            """)
+    List<Object[]> findNesDeFichePourPrmp(@Param("idPrmp") String idPrmp);
+
     /** Prochaine PK dossier, allouée par la séquence serveur (Voie B — l'id client est ignoré). */
     @Query(value = "select nextval('seq_dossier')", nativeQuery = true)
     Long nextIdDossier();

@@ -409,7 +409,7 @@ class GestesDossierIntegrationTest extends CnmIntegrationTestSupport {
         // peuvent être intérimaires — leurs suppléances actives sont lues une fois par requête (contexte d'intérim).
         assertThat(mesures).containsExactly(Map.entry("PRESIDENT", 12L), Map.entry("CHEF_COMMISSION", 14L),
                 Map.entry("SECRETAIRE", 13L), Map.entry("MEMBRE", 14L), Map.entry("VERIFICATEUR", 14L),
-                Map.entry("ASSISTANT_CONTROLEUR", 15L), Map.entry("PRMP", 8L), Map.entry("UGPM", 8L));
+                Map.entry("ASSISTANT_CONTROLEUR", 15L), Map.entry("PRMP", 9L), Map.entry("UGPM", 9L));   // 18/10 (§B3) : +1, la fiche du dossier
 
         // Et le calcul a bien porté sur des dossiers qui servent des lignes.
         assertThat(JsonPath.<List<String>>read(gestes(tokenPresident, 7601), "$.taches[*].geste")).containsExactly("VISER");

@@ -76,6 +76,7 @@ public class OutilsTransversesIa {
             Map.entry("PIECES_DEPOT_A_COMPLETER", "pièces du dépôt à compléter"),
             Map.entry("COMPLEMENTS_A_TRANSMETTRE", "pièces complémentaires à transmettre"),
             Map.entry("A_RECTIFIER", "à rectifier"),
+            Map.entry("AVIS_A_IMPRIMER", "avis à imprimer"),
             Map.entry("EN_COURS_CNM", "en cours à la CNM"));
 
     /**

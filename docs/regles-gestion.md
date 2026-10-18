@@ -797,9 +797,10 @@ d'offres*.
     disponibilité renotifie. Rien n'est envoyé pour les dossiers déjà imprimables à la mise en service (Q1) ;
   - le tableau de suivi de la PRMP et de l'UGPM porte, pour chaque dossier né d'une fiche, le document à imprimer, s'il l'est,
     et s'il l'a déjà été (`impressionAvis`) ;
-  - **non retenu pour l'instant (Q2)** : une tâche « À faire » pour l'impression. L'accueil « À faire » écarte les dossiers
-    clôturés, où l'avis peut pourtant rester à imprimer, et ses règles ne lisent pas encore la fiche ; la décision revient au
-    pilote.
+  - ~~non retenu pour l'instant (Q2)~~ ⚠️ **18/10, §B3 (le pilote dit oui)** : l'avis imprimable et jamais imprimé est une tâche de
+    l'accueil « À faire » de la PRMP et de l'UGPM (section `AVIS_A_IMPRIMER`, geste `IMPRIMER_AVIS`), **dossier clôturé
+    compris**, non chronométrée, comptée dans la pastille ; elle disparaît à la première impression (la réimpression reste au
+    tableau de suivi et à la page du dossier). Même règle que le bouton du suivi.
 
 #### Un champ qu'aucun document n'utilise n'est pas demandé (arbitrage du pilote du 2026-09-30)
 
@@ -2178,10 +2179,11 @@ localité, sauf là où la garde exige la localité stricte.
 | `EN_ATTENTE_PRMP` | Attente PRMP (suivi, hors `aFaire`) | Porteur de la reprise : Secrétaire (dépôt), attributaire (lettre de renvoi), Vérificateur cible ou de la localité s'il a déjà vérifié (rectification) | — | `VOIR` |
 | `BROUILLONS` | BROUILLON | PRMP (`SOUMETTRE`) ; UGPM de la tutelle (`COMPLETER_BROUILLON`, arbitrage 6) | — | voir colonne |
 | `PIECES_DEPOT_A_COMPLETER` / `COMPLEMENTS_A_TRANSMETTRE` / `A_RECTIFIER` | EN_ATTENTE_COMPLEMENTS_DEPOT / EN_ATTENTE_PIECES / EN_ATTENTE_DECISION_PRMP | PRMP propriétaire (gestes réservés à la PRMP : l'UGPM ne les reçoit pas) | — | `COMPLETER_PIECES_DEPOT` / `TRANSMETTRE_COMPLEMENTS` / `RECTIFIER` |
+| `AVIS_A_IMPRIMER` (⚠️ 18/10) | Dossier né d'une fiche, **tout statut sauf brouillon, retiré, remplacé** (clôturé compris) : avis spécifique ou lettres d'invitation imprimables et jamais produits | PRMP ou UGPM propriétaire (toutes deux impriment) | — | `IMPRIMER_AVIS` |
 | `EN_COURS_CNM` | SOUMIS à DECISION_TRANSMISE_SIGMP, hors attente (suivi, hors `aFaire`) | PRMP ou UGPM propriétaire | — | `SUIVRE` |
 
-Exclus : statuts `CLOTURE`, `RETIRE`, `REMPLACE` et `PV_SIGNE` (transitoire), lettres de renvoi non lues et décisions
-de retrait (déjà badgées), brouillon de lettre du Membre.
+Exclus : statuts `CLOTURE`, `RETIRE`, `REMPLACE` et `PV_SIGNE` (transitoire) — sauf pour `AVIS_A_IMPRIMER` —, lettres de
+renvoi non lues et décisions de retrait (déjà badgées), brouillon de lettre du Membre.
 
 **Bloc délégation (arbitrage 1).** Les lignes réalisables par délégation, intérim, collègue ou suppléance sont
 **repliées** : servies seulement sur `?delegations=true`, jamais dans `compteurs` ni dans le badge. Sans ce repli, le

@@ -616,7 +616,9 @@ class AFaireIntegrationTest extends CnmIntegrationTestSupport {
         // Valeurs mesurées (2026-09-15) : 12 pour la CNM, 13 pour le Vérificateur et 14 pour l'Assistant
         // (rattachements), 7 pour la PRMP. Une hausse n'est pas une faute en soi, mais elle doit être voulue : ce test
         // la rend visible.
-        assertThat(List.of(presidentUn, verificateurUn, assistantUn, prmpUn)).containsExactly(12L, 13L, 14L, 7L);
+        // ⚠️ 2026-10-18 (« avis-a-imprimer », §B3) : +1 pour la PRMP — ses dossiers nés d'une fiche, lus une fois (les avis à
+        // imprimer, clôturés compris) ; rien de plus tant qu'aucun n'a de PV favorable.
+        assertThat(List.of(presidentUn, verificateurUn, assistantUn, prmpUn)).containsExactly(12L, 13L, 14L, 8L);
         // Et le calcul a bien porté sur les quarante décors.
         assertThat(JsonPath.<List<Object>>read(aFaire(tokenPresident),
                 "$.taches[?(@.section == 'PV_A_VISER')]")).hasSizeGreaterThanOrEqualTo(40);

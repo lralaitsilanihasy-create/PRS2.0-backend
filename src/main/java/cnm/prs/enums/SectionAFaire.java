@@ -52,6 +52,11 @@ public enum SectionAFaire {
     COMPLEMENTS_A_TRANSMETTRE(null, NatureDelai.PAUSE),
     /** EN_ATTENTE_DECISION_PRMP — PRMP propriétaire. */
     A_RECTIFIER(null, NatureDelai.PAUSE),
+    /**
+     * ⚠️ 2026-10-18 (« avis-a-imprimer », §B3, pilote) — avis spécifique (ou lettres d'invitation) imprimable et jamais imprimé
+     * — PRMP et UGPM ; dossier clôturé compris ; la ligne disparaît à la première impression. Non chronométré.
+     */
+    AVIS_A_IMPRIMER(null, NatureDelai.SANS_DELAI),
     /** De SOUMIS à DECISION_TRANSMISE_SIGMP, hors attente — PRMP ou UGPM propriétaire ; hors {@code aFaire}. */
     EN_COURS_CNM(null, NatureDelai.SUIVI);
 

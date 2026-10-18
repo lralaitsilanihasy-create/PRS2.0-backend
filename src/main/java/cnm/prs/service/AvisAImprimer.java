@@ -182,6 +182,27 @@ public class AvisAImprimer {
         return etats;
     }
 
+    /**
+     * ⚠️ 2026-10-18 (« avis-a-imprimer », §B3) — l'accueil « À faire » : parmi les dossiers donnés ({@code idDossier → idDmc}), ceux
+     * dont le document est imprimable et n'a jamais été produit, avec ce document. Deux requêtes en lot ; la règle ne s'évalue que
+     * pour les dossiers à PV favorable signé et sans document produit (la pastille du menu refait ce calcul à chaque page).
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, String> aImprimer(Map<Integer, Long> dmcParDossier) {
+        Map<Integer, String> aImprimer = new java.util.LinkedHashMap<>();
+        if (dmcParDossier.isEmpty()) {
+            return aImprimer;
+        }
+        Set<Integer> favorables = new HashSet<>(pvRepository.dossiersAvecPvFavorableSigne(dmcParDossier.keySet()));
+        Set<Long> imprimes = new HashSet<>(documentRepository.dmcsImprimes(dmcParDossier.values()));
+        dmcParDossier.forEach((idDossier, idDmc) -> {
+            if (favorables.contains(idDossier) && !imprimes.contains(idDmc)) {
+                etat(idDmc).filter(Etat::disponible).ifPresent(e -> aImprimer.put(idDossier, e.document()));
+            }
+        });
+        return aImprimer;
+    }
+
     /** Sans PV favorable signé : le document de la fiche, indisponible (sans évaluer la suite de la règle). */
     private Optional<Etat> documentSeul(FicheMarcheDto f) {
         if (avis.sansModele(f, false) == null) {

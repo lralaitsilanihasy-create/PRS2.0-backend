@@ -117,6 +117,8 @@ public class AFaireService {
     /** ⚠️ 2026-09-15 — page dossier : la garde de visibilité du dossier, réutilisée telle quelle. */
     private final DossierService dossierService;
     private final Clock clock;
+    /** ⚠️ 2026-10-18 (« avis-a-imprimer », §B3) — les avis imprimables et jamais imprimés (fournisseur : cycle par AvisSpecifiqueService). */
+    private final org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer;
 
     public AFaireService(DossierRepository dossierRepository, DispatchRepository dispatchRepository,
             PvExamenRepository pvExamenRepository, LettreRenvoiRepository lettreRenvoiRepository,
@@ -124,7 +126,9 @@ public class AFaireService {
             ControleurRepository controleurRepository, ProfileRepository profileRepository,
             ExamenRepository examenRepository, TransmissionSigmpRepository transmissionSigmpRepository,
             ChronometrageService chronometrage, DelaiStandardService delaiStandardService,
-            PermissionService permissionService, DossierService dossierService, Clock clock) {
+            PermissionService permissionService, DossierService dossierService, Clock clock,
+            org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer) {
+        this.avisAImprimer = avisAImprimer;
         this.dossierService = dossierService;
         this.dossierRepository = dossierRepository;
         this.dispatchRepository = dispatchRepository;
@@ -195,11 +199,19 @@ public class AFaireService {
         Object[] d = lignesDossiers.get(0);
         String statut = (String) d[9];
         // Statuts actifs de l'appelant : ceux de perimetre(), appliqués ici à la ligne déjà lue.
-        Set<String> statutsActifs = profilCourant == ProfilUtilisateur.PRMP || profilCourant == ProfilUtilisateur.UGPM
+        boolean partieControlee = profilCourant == ProfilUtilisateur.PRMP || profilCourant == ProfilUtilisateur.UGPM;
+        Set<String> statutsActifs = partieControlee
                 ? ReglesAFaire.STATUTS_ACTIFS_PARTIE_CONTROLEE : ReglesAFaire.STATUTS_ACTIFS_CNM;
+        // ⚠️ 2026-10-18 (« avis-a-imprimer », §B3) — l'avis à imprimer, servi quel que soit le statut (clôturé compris).
+        List<Candidat> avis = List.of();
+        if (partieControlee) {
+            Long idDmc = dossierRepository.findById(idDossier).map(cnm.prs.entity.Dossier::getIdDmc).orElse(null);
+            List<Object[]> neDeFiche = idDmc == null ? List.of() : List.<Object[]>of(new Object[] {idDossier, idDmc});
+            avis = candidatsAvis(acteurCourant(), neDeFiche, maintenant);
+        }
         if (profilCourant == null || !PROFILS_CONCERNES.contains(profilCourant) || statut == null
                 || !statutsActifs.contains(statut)) {
-            return new GestesDossierDto(idDossier, profil, maintenant, null, List.of());
+            return new GestesDossierDto(idDossier, profil, maintenant, null, classer(avis));
         }
         Acteur acteur = acteurCourant();
         boolean cnm = !acteur.partieControlee();
@@ -208,7 +220,7 @@ public class AFaireService {
         Chrono chrono = chrono(lot, d, etat, maintenant);
 
         List<Ligne> lignes = ReglesAFaire.lignes(acteur, etat);
-        List<Candidat> candidats = new ArrayList<>();
+        List<Candidat> candidats = new ArrayList<>(avis);
         if (!lignes.isEmpty()) {
             candidats.addAll(taches(lot, cnm, d, etat, lignes, chrono, maintenant, idDossier, null));
         }
@@ -299,14 +311,18 @@ public class AFaireService {
         String profil = acteur.profil() == null ? null : acteur.profil().name();
         List<Object[]> lignesDossiers = acteur.profil() == null || !PROFILS_CONCERNES.contains(acteur.profil())
                 ? List.of() : perimetre(acteur);
-        if (lignesDossiers.isEmpty()) {
+        // ⚠️ 2026-10-18 (« avis-a-imprimer », §B3) — les avis à imprimer, hors des statuts actifs (clôturés compris).
+        List<Candidat> avis = acteur.profil() == null || !PROFILS_CONCERNES.contains(acteur.profil()) || !acteur.partieControlee()
+                || acteur.im() == null ? List.of()
+                : candidatsAvis(acteur, dossierRepository.findNesDeFichePourPrmp(acteur.im()), maintenant);
+        if (lignesDossiers.isEmpty() && avis.isEmpty()) {
             return new AFaireDto(profil, maintenant, new AFaireDto.Compteurs(0, 0, 0, 0, 0, 0, 0), List.of(), List.of(),
                     new AFaireDto.Delegations(0, List.of(), List.of()));
         }
         boolean cnm = !acteur.partieControlee();
-        Lot lot = charger(acteur, cnm, lignesDossiers);
+        Lot lot = lignesDossiers.isEmpty() ? null : charger(acteur, cnm, lignesDossiers);
 
-        List<Candidat> candidats = new ArrayList<>();
+        List<Candidat> candidats = new ArrayList<>(avis);
         for (Object[] d : lignesDossiers) {
             Integer idDossier = (Integer) d[0];
             EtatDossier etat = etat(lot, d);
@@ -325,10 +341,45 @@ public class AFaireService {
         List<Candidat> titulaires = candidats.stream().filter(c -> c.mode() == ModeTache.TITULAIRE).toList();
         List<Candidat> delegues = candidats.stream().filter(c -> c.mode() != ModeTache.TITULAIRE).toList();
 
-        return new AFaireDto(profil, maintenant, compteurs(titulaires), sections(titulaires, lot.delais().base()),
+        return new AFaireDto(profil, maintenant, compteurs(titulaires),
+                sections(titulaires, lot == null ? Map.of() : lot.delais().base()),
                 classer(titulaires),
                 new AFaireDto.Delegations(delegues.size(), totauxParSection(delegues),
                         servirDelegations ? classer(delegues) : List.of()));
+    }
+
+    /**
+     * ⚠️ 2026-10-18 (« avis-a-imprimer », §B3) — les lignes {@code AVIS_A_IMPRIMER} des dossiers donnés ({@code [idDossier, idDmc]}),
+     * quel que soit leur statut : l'état d'impression en lot ({@link AvisAImprimer#aImprimer}), puis le chargement des seuls dossiers
+     * retenus, et la même construction de tâche que les autres lignes, le document en plus.
+     */
+    private List<Candidat> candidatsAvis(Acteur acteur, List<Object[]> nesDeFiche, LocalDateTime maintenant) {
+        Map<Integer, Long> dmcParDossier = new LinkedHashMap<>();
+        for (Object[] r : nesDeFiche) {
+            dmcParDossier.put((Integer) r[0], (Long) r[1]);
+        }
+        Map<Integer, String> aImprimer = dmcParDossier.isEmpty() ? Map.of() : avisAImprimer.getObject().aImprimer(dmcParDossier);
+        if (aImprimer.isEmpty()) {
+            return List.of();
+        }
+        List<Object[]> lignesDossiers = dossierRepository.findAFaireParIds(aImprimer.keySet());
+        Lot lot = charger(acteur, false, lignesDossiers);
+        List<Candidat> candidats = new ArrayList<>();
+        for (Object[] d : lignesDossiers) {
+            Integer idDossier = (Integer) d[0];
+            List<Ligne> lignes = ReglesAFaire.avisAImprimer(acteur, true, false);
+            if (lignes.isEmpty()) {
+                continue;
+            }
+            EtatDossier etat = etat(lot, d);
+            for (Candidat c : taches(lot, false, d, etat, lignes, chrono(lot, d, etat, maintenant), maintenant, idDossier, null)) {
+                AFaireDto.Tache t = c.tache();
+                candidats.add(new Candidat(new AFaireDto.Tache(t.section(), t.geste(), t.gestesSecondaires(), t.mode(), t.urgence(),
+                        t.rang(), t.dossier(), t.delai(), t.faits(), t.refs(), t.interimDe(), t.idInterim(), aImprimer.get(idDossier)),
+                        c.urgence(), c.section(), c.mode(), c.idDossier(), c.cleIntraUrgence()));
+            }
+        }
+        return candidats;
     }
 
     /** Dossiers du périmètre aux statuts actifs, avec libellés et agrégats — une requête. */
@@ -572,7 +623,7 @@ public class AFaireService {
                     ligne.gestesSecondaires().stream().map(Enum::name).toList(), ligne.mode().name(), urgence.name(),
                     0, dossier, delai, faits, refs,
                     parInterimDe == null ? null : parInterimDe.imTitulaire(),
-                    parInterimDe == null ? null : parInterimDe.idInterim());
+                    parInterimDe == null ? null : parInterimDe.idInterim(), null);
             candidats.add(new Candidat(tache, urgence, section, ligne.mode(), idDossier,
                     cleIntraUrgence(urgence, delai, d)));
         }
@@ -685,7 +736,7 @@ public class AFaireService {
         for (Candidat c : candidats) {
             AFaireDto.Tache t = c.tache();
             classees.add(new AFaireDto.Tache(t.section(), t.geste(), t.gestesSecondaires(), t.mode(), t.urgence(),
-                    rang++, t.dossier(), t.delai(), t.faits(), t.refs(), t.interimDe(), t.idInterim()));
+                    rang++, t.dossier(), t.delai(), t.faits(), t.refs(), t.interimDe(), t.idInterim(), t.document()));
         }
         return classees;
     }

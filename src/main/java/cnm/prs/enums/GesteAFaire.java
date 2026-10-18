@@ -56,6 +56,11 @@ public enum GesteAFaire {
     TRANSMETTRE_COMPLEMENTS,
     /** Rectifier puis resoumettre — {@code POST /api/dossiers/{id}/resoumettre}. */
     RECTIFIER,
+    /**
+     * ⚠️ 2026-10-18 (« avis-a-imprimer », §B3) — imprimer l'avis spécifique ou les lettres d'invitation (selon {@code Tache.document}) —
+     * {@code POST /api/fiches-marche/{idDmc}/avis-specifique} ou {@code POST /api/fiches-marche/{idDmc}/lettres-invitation}.
+     */
+    IMPRIMER_AVIS,
     /** Suivre l'avancement à la CNM. */
     SUIVRE
 }

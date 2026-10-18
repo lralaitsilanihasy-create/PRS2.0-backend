@@ -479,6 +479,18 @@ public final class ReglesAFaire {
         }
     }
 
+    /**
+     * ⚠️ 2026-10-18 (« avis-a-imprimer », §B3, pilote) — l'avis spécifique (ou les lettres d'invitation) d'un dossier né d'une fiche,
+     * imprimable et jamais imprimé : une ligne pour la PRMP et l'UGPM (toutes deux impriment), quel que soit le statut du dossier,
+     * clôturé compris. L'état d'impression est lu par l'appelant ({@code AvisAImprimer.etats}, la règle du bouton du suivi).
+     */
+    public static List<Ligne> avisAImprimer(Acteur a, boolean imprimable, boolean dejaImprime) {
+        if (a == null || !a.partieControlee() || !imprimable || dejaImprime) {
+            return List.of();
+        }
+        return List.of(ligne(SectionAFaire.AVIS_A_IMPRIMER, GesteAFaire.IMPRIMER_AVIS, ModeTache.TITULAIRE));
+    }
+
     /** De SOUMIS à DECISION_TRANSMISE_SIGMP, hors attente PRMP et hors PV_SIGNE (transitoire, §7). */
     static final Set<String> STATUTS_EN_COURS_CNM = Set.of(
             StatutDossier.SOUMIS.name(), StatutDossier.PRET_DISPATCH.name(), StatutDossier.DISPATCHE.name(),

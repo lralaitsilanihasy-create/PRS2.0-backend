@@ -2415,11 +2415,21 @@ ni matricule de contrôleur, et seulement les dossiers dont la tutelle (`ref`) e
 - `section`, dans l'ordre servi : `A_RECEPTIONNER`, `A_DISPATCHER`, `A_EXAMINER`, `A_REEXAMINER`, `PV_A_SOUMETTRE`,
   `PV_A_REPRENDRE`, `PV_A_ACCEPTER`, `PV_A_VISER`, `PV_A_SIGNER`, `LETTRES_A_SIGNER`, `RETRAITS_A_DECIDER`,
   `A_VERIFIER`, `A_TRANSMETTRE_SIGMP`, `A_ARCHIVER`, `LETTRES_A_ARCHIVER`, `EN_ATTENTE_PRMP`, `BROUILLONS`,
-  `PIECES_DEPOT_A_COMPLETER`, `COMPLEMENTS_A_TRANSMETTRE`, `A_RECTIFIER`, `EN_COURS_CNM`.
+  `PIECES_DEPOT_A_COMPLETER`, `COMPLEMENTS_A_TRANSMETTRE`, `A_RECTIFIER`, `AVIS_A_IMPRIMER` (⚠️ 18/10), `EN_COURS_CNM`.
 - `geste` : `NUMEROTER`, `DISPATCHER`, `EXAMINER`, `REATTRIBUER`, `REEXAMINER`, `SOUMETTRE_PV`, `REPRENDRE_EXAMEN`,
   `ACCEPTER`, `RETOURNER`, `VISER`, `SIGNER`, `SIGNER_LETTRE`, `DECIDER_RETRAIT`, `VERIFIER`, `TRANSMETTRE_DECISION`,
   `TRANSMETTRE_SIGMP`, `ARCHIVER_PV`, `ARCHIVER_LETTRE`, `VOIR`, `SOUMETTRE`, `COMPLETER_BROUILLON`,
-  `COMPLETER_PIECES_DEPOT`, `TRANSMETTRE_COMPLEMENTS`, `RECTIFIER`, `SUIVRE`.
+  `COMPLETER_PIECES_DEPOT`, `TRANSMETTRE_COMPLEMENTS`, `RECTIFIER`, `IMPRIMER_AVIS` (⚠️ 18/10), `SUIVRE`.
+- ⚠️ **2026-10-18 (« avis-a-imprimer », §B3, pilote)** — section **`AVIS_A_IMPRIMER`**, geste **`IMPRIMER_AVIS`** : PRMP et UGPM
+  propriétaires, `mode = TITULAIRE`, `urgence = SANS_DELAI` (délai sans chronomètre : `entree`, `standardHeures`, `ecouleHeures`, `restantHeures` et `echeance` nuls ;
+  `etape` reste celle du chronométrage du dossier, comme pour les lettres ; la section n'a pas de `standardHeures`), comptée dans
+  `compteurs.aFaire` et la pastille (`GET /api/kpis/badges`). Une ligne par dossier né d'une fiche dont l'avis spécifique (ou les
+  lettres d'invitation) est imprimable et **n'a jamais été produit** — la règle de `impressionAvis` (`disponible` et non
+  `dejaImprime`) — **quel que soit le statut du dossier, clôturé compris** (seuls brouillon, retiré et remplacé sont écartés). La
+  ligne porte **`document`** (`AVIS_SPECIFIQUE` ou `LETTRES_INVITATION`), champ de la tâche absent de toute autre ligne. Elle
+  disparaît à la première impression. `GET /api/dossiers/{id}/gestes` la sert aussi, même sur un dossier clôturé (où il ne sert
+  qu'elle). Coût : une requête de plus pour la PRMP (ses dossiers nés d'une fiche), puis deux en lot (PV favorables signés,
+  documents produits) ; la règle entière ne s'évalue que pour les dossiers à PV favorable sans document.
 - `mode` : `TITULAIRE`, `DELEGATION` (paire active de `t_delegation_profil`), `INTERIM` (visa d'un P/CC autre que le
   dispatcheur), `COLLEGUE` (dossier ciblé sur un collègue par rattachement), `SUPPLEANCE` (pré-dispatch régional par
   le Président).
