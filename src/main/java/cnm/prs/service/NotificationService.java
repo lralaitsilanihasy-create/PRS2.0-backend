@@ -36,14 +36,24 @@ public class NotificationService {
     private final NotificationStreamRegistry streamRegistry;
     /** ⚠️ Intérim désigné (2026-09-21, §B4.7) — le suppléant actif d'un titulaire notifié reçoit une copie. */
     private final InterimService interimService;
+    /** ⚠️ 2026-10-18 (« avis-a-imprimer ») — l'identifiant de l'UGPM connectée se lit sur son compte (son jeton porte la tutelle). */
+    private final cnm.prs.repository.CompteAuthRepository compteRepository;
 
     public NotificationService(NotificationRepository repository, PrmpRepository prmpRepository,
-            EmailService emailService, NotificationStreamRegistry streamRegistry, InterimService interimService) {
+            EmailService emailService, NotificationStreamRegistry streamRegistry, InterimService interimService,
+            cnm.prs.repository.CompteAuthRepository compteRepository) {
         this.repository = repository;
         this.prmpRepository = prmpRepository;
         this.emailService = emailService;
         this.streamRegistry = streamRegistry;
         this.interimService = interimService;
+        this.compteRepository = compteRepository;
+    }
+
+    /** L'identifiant de l'UGPM connectée (la référence de son compte), ou vide. */
+    private java.util.Optional<String> idUgpmCourant() {
+        return CurrentUser.login().flatMap(compteRepository::findByLogin)
+                .filter(c -> TypeActeur.UGPM.name().equals(c.getTypeActeur())).map(c -> c.getRefActeur());
     }
 
     /**
@@ -139,6 +149,21 @@ public class NotificationService {
             Integer idObjet, TypeObjet typeObjet, Integer idDossier, String titre, String corps) {
         return creer(type, idPrmp, TypeActeur.PRMP.name(), null, email, idObjet,
                 typeObjet != null ? typeObjet.name() : null, idDossier, titre, corps);
+    }
+
+    /**
+     * ⚠️ 2026-10-18 (demande front « avis-a-imprimer », §B1) — vers une <strong>UGPM</strong> (clé {@code ref} = son identifiant,
+     * type {@code UGPM}). Son jeton porte la PRMP de tutelle en {@code ref} : c'est sous ce nom que son flux temps réel est ouvert,
+     * il est donc poussé aussi.
+     */
+    public Notification emettreUgpm(TypeNotification type, String idUgpm, String idPrmpTutelle, String email,
+            Integer idObjet, TypeObjet typeObjet, Integer idDossier, String titre, String corps) {
+        Notification n = creer(type, idUgpm, TypeActeur.UGPM.name(), null, email, idObjet,
+                typeObjet != null ? typeObjet.name() : null, idDossier, titre, corps);
+        if (idPrmpTutelle != null) {
+            streamRegistry.push(idPrmpTutelle);
+        }
+        return n;
     }
 
     /**
@@ -318,6 +343,10 @@ public class NotificationService {
             String email = prmpRepository.findById(ref).map(Prmp::getEmailPrmp).orElse(null);
             return repository.findPourPrmp(ref, email);
         }
+        if (TypeActeur.UGPM.name().equals(CurrentUser.acteurType().orElse(null))) {
+            // ⚠️ 2026-10-18 (« avis-a-imprimer ») — l'UGPM lit ce qui lui est adressé, sous son identifiant (son « ref » est la tutelle).
+            return idUgpmCourant().map(id -> repository.findPourRefEtType(id, TypeActeur.UGPM.name())).orElse(List.of());
+        }
         String typeExterne = CurrentUser.acteurType().filter(t -> TypeActeur.MEMBRE_CAO.name().equals(t) || TypeActeur.DEPOSITAIRE.name().equals(t))
                 .orElse(null);
         if (typeExterne != null) {   // ⚠️ V67 (lot 2a) ; ⚠️ 2026-10-05 : le dépositaire aussi
@@ -336,6 +365,10 @@ public class NotificationService {
             String email = prmpRepository.findById(ref).map(Prmp::getEmailPrmp).orElse(null);
             boolean parEmail = email != null && email.equals(n.getDestinataireEmail());
             return parRef || parEmail;
+        }
+        if (TypeActeur.UGPM.name().equals(CurrentUser.acteurType().orElse(null))) {
+            return TypeActeur.UGPM.name().equals(n.getDestinataireType())
+                    && idUgpmCourant().map(id -> id.equals(n.getDestinataireRef())).orElse(false);
         }
         String typeExterne = CurrentUser.acteurType().filter(t -> TypeActeur.MEMBRE_CAO.name().equals(t) || TypeActeur.DEPOSITAIRE.name().equals(t))
                 .orElse(null);

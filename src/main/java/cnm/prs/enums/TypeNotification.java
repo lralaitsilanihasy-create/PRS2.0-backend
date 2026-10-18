@@ -251,5 +251,10 @@ public enum TypeNotification {
     /** ⚠️ R7 (manuel révisé, lot 2, §B2 ; V109) — un candidat ayant retiré le DAO pose une question (art. 35-II) : vers la PRMP. */
     QUESTION_POSEE,
     /** ⚠️ R7 (manuel révisé, lot 2, §B2 ; V109) — la PRMP a répondu à une question : vers chaque candidat ayant retiré le DAO. */
-    QUESTION_REPONDUE
+    QUESTION_REPONDUE,
+    /**
+     * ⚠️ 2026-10-18 (demande front « avis-a-imprimer », §B1) — l'avis spécifique (ou les lettres d'invitation, nommées dans le texte)
+     * d'un dossier né d'une fiche devient imprimable : vers la PRMP du plan et ses UGPM, objet = le dossier.
+     */
+    AVIS_A_IMPRIMER
 }

@@ -90,11 +90,16 @@ public class CeremonieService {
     private final ProceduresEnLigneService procedures;
     private final ParametreService parametres;
 
+    /** ⚠️ 2026-10-18 (« avis-a-imprimer », §B1) — en mode électronique, la clôture peut rendre l'avis imprimable. */
+    private final org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer;
+
     public CeremonieService(CeremonieClesRepository ceremonieRepository, CleDetenteurRepository cleRepository,
             DefiCleRepository defiRepository, ParametresInternesService internes, ControleurRepository controleurRepository,
             DossierMecRepository dmcRepository, MarcheRepository marcheRepository, DossierRepository dossierRepository,
             PrmpRepository prmpRepository, NotificationService notifications, NotificationRepository notificationRepository,
-            FicheMarcheService fiches, ProceduresEnLigneService procedures, ParametreService parametres) {
+            FicheMarcheService fiches, ProceduresEnLigneService procedures, ParametreService parametres,
+            org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer) {
+        this.avisAImprimer = avisAImprimer;
         this.ceremonieRepository = ceremonieRepository;
         this.cleRepository = cleRepository;
         this.defiRepository = defiRepository;
@@ -232,10 +237,12 @@ public class CeremonieService {
             throw new BusinessRuleException("Clés manquantes : " + String.join(", ", manquants) + ". La cérémonie se clôt quand les "
                     + (i.membres().size() + 1) + " clés sont publiées.", "CLES_INCOMPLETES");
         }
+        java.util.Set<Long> avant = avisAImprimer.getObject().disponibles(List.of(idDmc));   // ⚠️ « avis-a-imprimer »
         ceremonie.setEtat(CeremonieCles.CLOSE);
         ceremonie.setDateCloture(LocalDateTime.now());
         ceremonie.setDateMaj(LocalDateTime.now());
         ceremonieRepository.save(ceremonie);
+        avisAImprimer.getObject().notifierDevenues(List.of(idDmc), avant);
         internes.journaliser(idDmc, CEREMONIE_CLOSE, null, empreintes(actives));
         String titre = "Cérémonie des clés close : clés publiées";
         String corps = "La cérémonie des clés de la procédure " + idDmc + " est close : les " + actives.size()

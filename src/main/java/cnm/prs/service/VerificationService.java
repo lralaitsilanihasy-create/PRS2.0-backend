@@ -57,14 +57,19 @@ public class VerificationService {
     /** ⚠️ Chronométrage des délais (2026-09-01) — clôture VERIFICATION et suspension PRMP. */
     private final ChronometrageService chronometrageService;
 
+    /** ⚠️ 2026-10-18 (« avis-a-imprimer », §B1) — des observations levées rendent imprimable l'avis d'un PV FAVR. */
+    private final org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer;
+
     public VerificationService(VerificationRepository repository, ReceptionRepository receptionRepository,
             DossierRepository dossierRepository, PvExamenRepository pvExamenRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
             AuditLogRepository auditLogRepository, PrmpRepository prmpRepository,
             ObservationPvRepository observationPvRepository,
             cnm.prs.security.PermissionService permissionService,
-            ChronometrageService chronometrageService) {
+            ChronometrageService chronometrageService,
+            org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer) {
         this.chronometrageService = chronometrageService;
+        this.avisAImprimer = avisAImprimer;
         this.permissionService = permissionService;
         this.observationPvRepository = observationPvRepository;
         this.repository = repository;
@@ -257,8 +262,11 @@ public class VerificationService {
             // à personne à la CNM.
             chronometrageService.cloturer(idDossier, EtapeCircuit.VERIFICATION);
             if (Boolean.TRUE.equals(verification.getObsLevees())) {
+                List<Long> fiche = avisAImprimer.getObject().dmcDuDossier(idDossier).stream().toList();   // ⚠️ « avis-a-imprimer »
+                java.util.Set<Long> avant = avisAImprimer.getObject().disponibles(fiche);
                 dossier.setStatut(StatutDossier.OBSERVATIONS_LEVEES.name());
                 dossierRepository.save(dossier);
+                avisAImprimer.getObject().notifierDevenues(fiche, avant);
                 log.info("[CIRCUIT] verification observations levees dossier={} acteur={} verification={} statut={}",
                         idDossier, CurrentUser.login().orElse(null), verification.getIdVerification(),
                         StatutDossier.OBSERVATIONS_LEVEES.name());

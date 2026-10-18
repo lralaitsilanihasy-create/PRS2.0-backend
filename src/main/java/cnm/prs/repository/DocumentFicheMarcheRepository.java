@@ -47,4 +47,14 @@ public interface DocumentFicheMarcheRepository extends JpaRepository<DocumentFic
              group by coalesce(m.idLigneOrigine, m.idDetail)
             """)
     List<Object[]> premiersAvisParOrigine();
+
+    /**
+     * ⚠️ 2026-10-18 (demande front « avis-a-imprimer », §B2) — les fiches ({@code idDmc}) dont un avis spécifique ou une lettre
+     * d'invitation a déjà été produit, parmi celles données, en une requête.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            select distinct f.idDmc from DocumentFicheMarche doc, FicheMarche f
+             where doc.type in ('AVIS', 'LETTRE_INVITATION') and doc.idFiche = f.idFiche and f.idDmc in :idDmcs
+            """)
+    List<Long> dmcsImprimes(@org.springframework.data.repository.query.Param("idDmcs") java.util.Collection<Long> idDmcs);
 }

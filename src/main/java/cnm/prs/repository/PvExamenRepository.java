@@ -147,6 +147,16 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
             """)
     List<PvExamen> findSignesParDossierRows(@Param("idDossier") Integer idDossier);
 
+    /**
+     * ⚠️ 2026-10-18 (demande front « avis-a-imprimer », §B2) — parmi les dossiers donnés, ceux qui ont un PV signé favorable
+     * ({@code FAV} ou {@code FAVR}) : le seul cas où l'avis peut être imprimable, en une requête.
+     */
+    @Query("""
+            select distinct pv.examen.dispatch.reception.idDossier from PvExamen pv
+             where pv.statutPv = 'SIGNE' and pv.idAvis in ('FAV', 'FAVR') and pv.examen.dispatch.reception.idDossier in :ids
+            """)
+    List<Integer> dossiersAvecPvFavorableSigne(@Param("ids") java.util.Collection<Integer> ids);
+
     /** PV <strong>SIGNÉS</strong> d'un dossier (⚠️ spec navette 2026-08-01 — transmission SIGMP / archivage). */
     @Query("select pv from PvExamen pv where pv.statutPv = 'SIGNE' and pv.examen.dispatch.reception.idDossier = :idDossier")
     List<PvExamen> findSignesParDossier(@Param("idDossier") Integer idDossier);

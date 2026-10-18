@@ -50,6 +50,7 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
 
     @Autowired private FicheMarcheValeurRepository valeurRepository;
     @Autowired private cnm.prs.service.ChampFicheMarcheService champService;
+    @Autowired private cnm.prs.repository.NotificationRepository notificationRepository;
 
     private Long idDmc;
 
@@ -134,6 +135,62 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/avis-specifique").header("Authorization", tokenMembre)
                 .contentType(JSON).content(CORPS)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("« avis-a-imprimer » : impressionAvis sur la liste (PRMP ; absent pour le Président) ; AVIS_A_IMPRIMER au passage "
+            + "(dépôt de la publication de l'AGPM), vers la PRMP et son UGPM, une seule fois ; déjà imprimé après l'impression")
+    void avisAImprimer() throws Exception {
+        ugpmRepository.save(ugpm("UG9901", "PRMP001", "RABE", "Hery"));
+        compteAuthRepository.save(new cnm.prs.entity.CompteAuth("ugpm.avis", "x", "UGPM", "UG9901", true));
+        String tokenUgpm = bearer("ugpm.avis", cnm.prs.enums.ProfilUtilisateur.UGPM, cnm.prs.enums.TypeActeur.UGPM, "PRMP001", "ANT");
+        Dossier plan = dossierRepository.findById(9900).orElseThrow();
+        plan.setIdTypeDossier("DDP");   // la publication de l'AGPM se dépose sur un plan
+        plan.setIdSousType("PPM");
+        dossierRepository.save(plan);
+        int idDossier = creerDossier();
+        publicationAgpmRepository.deleteAll();
+        pvSigne(idDossier, "FAV", "EN_VERIFICATION");   // posé à la main : aucune notification (l'avis attend la publication)
+
+        String liste = mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String ici = "$[?(@.idDossier==" + idDossier + ")].impressionAvis";
+        assertThat(JsonPath.<List<String>>read(liste, ici + ".document")).containsExactly("AVIS_SPECIFIQUE");
+        assertThat(JsonPath.<List<Boolean>>read(liste, ici + ".disponible")).containsExactly(false);
+        assertThat(JsonPath.<List<Boolean>>read(liste, ici + ".dejaImprime")).containsExactly(false);
+        String president = mvc.perform(get("/api/dossiers").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(president, "$[?(@.idDossier==" + idDossier + ")].impressionAvis")).isEmpty();
+
+        // Le dépôt de la publication de l'AGPM rend l'avis imprimable : la PRMP et son UGPM sont prévenues.
+        deposerPublication();
+        List<cnm.prs.entity.Notification> notes = notificationRepository.findAll().stream()
+                .filter(n -> "AVIS_A_IMPRIMER".equals(n.getTypeNotif())).toList();
+        assertThat(notes).extracting(n -> n.getDestinataireType() + ":" + n.getDestinataireRef())
+                .containsExactlyInAnyOrder("PRMP:PRMP001", "UGPM:UG9901");
+        assertThat(notes).allMatch(n -> "DOSSIER".equals(n.getTypeObjet()) && Integer.valueOf(idDossier).equals(n.getIdObjet())
+                && n.getCorps().contains("Fourniture de mobilier de bureau") && n.getCorps().contains("peut être imprimé"));
+        String boite = mvc.perform(get("/api/notifications/mes").header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(boite, "$[*].typeNotif")).contains("AVIS_A_IMPRIMER");
+
+        // Toujours imprimable : un nouveau dépôt ne renotifie pas.
+        deposerPublication();
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "AVIS_A_IMPRIMER".equals(n.getTypeNotif())).hasSize(2);
+
+        imprimer(idDmc).andExpect(status().isCreated());
+        liste = mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(liste, ici + ".disponible")).containsExactly(true);
+        assertThat(JsonPath.<List<Boolean>>read(liste, ici + ".dejaImprime")).containsExactly(true);
+    }
+
+    private void deposerPublication() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/dossiers/9900/publication-agpm")
+                .file(new org.springframework.mock.web.MockMultipartFile("fichier", "jmp.pdf", "application/pdf",
+                        "%PDF-1.4\n%%EOF\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII)))
+                .param("journal", "Journal des marchés publics").param("dateParution", "2026-01-15").param("referenceAgpm", "AGPM-9900")
+                .header("Authorization", tokenPrmp)).andExpect(status().isCreated());
     }
 
     @Test

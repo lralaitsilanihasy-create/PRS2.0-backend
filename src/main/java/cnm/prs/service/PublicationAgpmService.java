@@ -72,10 +72,17 @@ public class PublicationAgpmService {
     private final JournalDossierService journal;
     private final ObjectProvider<DossierService> dossierService;
 
+    /**
+     * ⚠️ 2026-10-18 (« avis-a-imprimer », §B1) — le dépôt peut rendre imprimable l'avis de toutes les fiches du plan (et de ses
+     * versions) : les fiches des dossiers de la PRMP sont relevées avant et après, seules celles qui changent sont notifiées.
+     */
+    private final ObjectProvider<AvisAImprimer> avisAImprimer;
+
     public PublicationAgpmService(PublicationAgpmRepository publications, DossierRepository dossiers, DossierMecRepository dmcs,
             MarcheRepository marches, AttributionRepository attributions, PieceJointeDossierRepository pieces,
             TypePieceJointeRepository typesPiece, ValeursPpmService valeursPpm, PiecesExigees piecesExigees, JournalDossierService journal,
-            ObjectProvider<DossierService> dossierService) {
+            ObjectProvider<DossierService> dossierService, ObjectProvider<AvisAImprimer> avisAImprimer) {
+        this.avisAImprimer = avisAImprimer;
         this.publications = publications;
         this.dossiers = dossiers;
         this.dmcs = dmcs;
@@ -146,6 +153,8 @@ public class PublicationAgpmService {
             throw new ChampsInvalidesException(erreurs);
         }
         LocalDateTime maintenant = LocalDateTime.now();
+        List<Long> fiches = avisAImprimer.getObject().dmcsDeLaPrmp(plan.getIdPrmp());
+        java.util.Set<Long> avant = avisAImprimer.getObject().disponibles(fiches);
         publications.findFirstByIdDossierAndRemplaceeLeIsNull(idDossier).ifPresent(p -> {
             p.setRemplaceeLe(maintenant);
             publications.saveAndFlush(p);
@@ -165,6 +174,7 @@ public class PublicationAgpmService {
         p = publications.save(p);
         journal.tracer(idDossier, "PUBLICATION_AGPM_DEPOSEE", "Publication de l'AGPM déposée : " + j + (n == null ? "" : " n° " + n)
                 + " du " + d + ", AGPM " + r);
+        avisAImprimer.getObject().notifierDevenues(fiches, avant);
         return dto(p, false);
     }
 

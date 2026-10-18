@@ -141,6 +141,8 @@ public class DossierService {
     private final org.springframework.beans.factory.ObjectProvider<PiecesFournies> piecesFournies;
     /** ⚠️ M3 (manuel de contrôle) — la grille du dossier. */
     private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
+    /** ⚠️ 2026-10-18 (« avis-a-imprimer », §B2) — l'avis ou les lettres à imprimer, sur la liste de la PRMP et de l'UGPM. */
+    private final org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer;
     /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
     private final MiseAJourPpmService miseAJourPpmService;
     /** ⚠️ Demande front (2026-08-19) — résolution login → nom lisible pour creePar / soumisPar. */
@@ -183,6 +185,7 @@ public class DossierService {
             LettreRenvoiRepository lettreRenvoiRepository,
             VerificationPieceDepotService verificationPieceDepotService, PiecesExigees piecesExigees,
             org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle,
+            org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer,
             MiseAJourPpmService miseAJourPpmService, JournalDossierService journalDossier,
             ExamenRepository examenRepository, TransmissionSigmpRepository transmissionSigmpRepository,
             ControleurRepository controleurRepository,
@@ -222,6 +225,7 @@ public class DossierService {
         this.verificationPieceDepotService = verificationPieceDepotService;
         this.piecesExigees = piecesExigees;
         this.grilleControle = grilleControle;
+        this.avisAImprimer = avisAImprimer;
         this.miseAJourPpmService = miseAJourPpmService;
         this.journalDossier = journalDossier;
         this.examenRepository = examenRepository;
@@ -625,7 +629,32 @@ public class DossierService {
         }
         enrichirCibles(dtos);
         masquerActeursInternesPourPrmp(dtos);
+        enrichirImpressionAvis(dtos);
         return dtos;
+    }
+
+    /**
+     * ⚠️ 2026-10-18 (demande front « avis-a-imprimer », §B2) — {@code impressionAvis} sur les dossiers nés d'une fiche, pour la PRMP
+     * et l'UGPM seulement (la liste leur est déjà bornée à leur périmètre). En lot ({@link AvisAImprimer#etats}).
+     */
+    private void enrichirImpressionAvis(List<DossierDto> dtos) {
+        if (!Visibilite.estPrmp()) {
+            return;
+        }
+        Map<Integer, Long> dmcParDossier = new HashMap<>();
+        for (DossierDto dto : dtos) {
+            if (dto.getIdDmc() != null && dto.getIdDossier() != null) {
+                dmcParDossier.put(dto.getIdDossier(), dto.getIdDmc());
+            }
+        }
+        if (dmcParDossier.isEmpty()) {
+            return;
+        }
+        Map<Integer, AvisAImprimer.Impression> etats = avisAImprimer.getObject().etats(dmcParDossier);
+        for (DossierDto dto : dtos) {
+            AvisAImprimer.Impression e = dto.getIdDossier() == null ? null : etats.get(dto.getIdDossier());
+            dto.setImpressionAvis(e == null ? null : new DossierDto.ImpressionAvis(e.document(), e.disponible(), e.dejaImprime()));
+        }
     }
 
     /**

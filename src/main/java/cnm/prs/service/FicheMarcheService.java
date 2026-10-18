@@ -195,6 +195,33 @@ public class FicheMarcheService {
         return d;
     }
 
+    /**
+     * ⚠️ 2026-10-18 (demande front « avis-a-imprimer ») — l'essentiel de la fiche pour juger l'avis spécifique ou la lettre
+     * d'invitation (ligne, catégorie, cadrage de la dernière version, dossier soumis, désignation), <strong>sans</strong> contrôle de
+     * l'appelant ni bilan : la notification part pendant la signature d'un PV ou le dépôt d'une publication, faits par d'autres que
+     * la PRMP. Vide, sans exception (rien ne doit marquer la transaction de l'appelant), pour un DMC inconnu ou qui n'est pas un DAO.
+     */
+    @Transactional(readOnly = true)
+    public Optional<FicheMarcheDto> essentiel(Long idDmc) {
+        DossierMec dmc = idDmc == null ? null : dmcRepository.findById(idDmc).orElse(null);
+        TypeDmc type = dmc == null ? null : typeDmcRepository.findById(dmc.getIdTypeDmc()).orElse(null);
+        if (type == null || !"DAO".equalsIgnoreCase(type.getCode())) {
+            return Optional.empty();
+        }
+        Contexte ctx = contexte(idDmc, false);
+        FicheMarche fiche = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null);
+        FicheMarcheDto d = new FicheMarcheDto();
+        d.setIdDmc(idDmc);
+        d.setIdFiche(fiche == null ? null : fiche.getIdFiche());
+        d.setIdDetail(ctx.idDetail());
+        d.setCategorie(ctx.codeCategorie());
+        d.setTypeMarche(fiche == null ? null : fiche.getTypeMarche());
+        d.setCadrage(fiche == null ? Map.of() : lireJson(fiche.getCadrage()));
+        d.setIdDossierSoumis(dossierRepository.findIdDossierByIdDmc(idDmc).orElse(null));
+        d.setDesignationMarche(marcheRepository.findById(ctx.idDetail()).map(Marche::getDesignationMarche).orElse(null));
+        return Optional.of(d);
+    }
+
     @Transactional(readOnly = true)
     public BilanControlesDto controler(Long idDmc) {
         return lire(idDmc).getBilanControles();

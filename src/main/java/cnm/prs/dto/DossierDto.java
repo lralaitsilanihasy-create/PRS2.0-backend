@@ -195,6 +195,23 @@ public class DossierDto {
     private FicheMarcheResumeDto ficheMarche;
 
     /**
+     * ⚠️ 2026-10-18 (demande front « avis-a-imprimer », §B2) — pour la PRMP et l'UGPM, sur un dossier né d'une fiche qui imprime un
+     * avis spécifique ou des lettres d'invitation : le document, s'il est imprimable (la règle de {@code …/disponibilite}, sans la
+     * raison), s'il a déjà été produit. <strong>Absent</strong> sinon (autres profils, dossier sans fiche). Servi sur les listes et
+     * la lecture unitaire.
+     */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private ImpressionAvis impressionAvis;
+
+    /**
+     * @param document    {@code AVIS_SPECIFIQUE} ou {@code LETTRES_INVITATION}
+     * @param disponible  le document peut être imprimé
+     * @param dejaImprime un avis ou une lettre a déjà été produit pour la fiche (le front propose « Réimprimer »)
+     */
+    public record ImpressionAvis(String document, boolean disponible, boolean dejaImprime) {
+    }
+
+    /**
      * ⚠️ 2026-10-17 (« pieces-dmc-par-les-donnees », §B3) — pour un dossier né d'une fiche, sur la lecture unitaire : le dossier de
      * planification qui porte sa ligne en vigueur, et le PV <strong>signé</strong> de son examen ; nuls sinon.
      */

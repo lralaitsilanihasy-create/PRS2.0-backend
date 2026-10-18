@@ -2038,6 +2038,15 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | GET | /api/dossiers/{id}/journal | — | `ActionDossierDto[]` | 200, 403, 404 | Authentifié (périmètre de visibilité du dossier) — ⚠️ **2026-09-14 : 403 pour la PRMP et l'UGPM** (vue interne CNM) |
 
 `{id}` = idDossier (number). **`DossierResoumissionRequest`** = `{ motifRectification }` (String, **@NotBlank**, max 255).
+⚠️ **2026-10-18 (demande front « avis-a-imprimer », §B2)** — `DossierDto.impressionAvis`, sur les listes (paginées ou non) et la
+lecture unitaire, pour la **PRMP et l'UGPM** seulement, sur un dossier né d'une fiche (`idDmc`) qui imprime un avis ou des
+lettres : `{ "document": "AVIS_SPECIFIQUE" | "LETTRES_INVITATION", "disponible": bool, "dejaImprime": bool }`. `disponible` suit la
+règle de `…/avis-specifique/disponibilite` (ou `…/lettres-invitation/disponibilite`), sans la raison ; `dejaImprime` : un avis ou
+une lettre a déjà été produit pour la fiche. **Absent** pour les autres profils, un dossier sans fiche, une fiche sans avis ni
+lettre. Calcul : une requête pour les dossiers dont un PV favorable est signé (les seuls où le document peut être imprimable), une
+pour les documents déjà produits ; la règle entière n'est évaluée que pour les premiers (la catégorie et le mode se lisent par
+fiche).
+
 ⚠️ **2026-09-27 (lot C)** — sur un dossier qui porte une fiche marché (`idDmc`), `POST …/resoumettre` et
 `POST …/transmettre-complements` répondent **409 `FICHE_NON_REVISEE`** tant que la fiche n'a pas une version **validée
 postérieure** à `ficheMarche.versionSoumise` ; voir *La rectification d'un dossier DAO — lot C*.
@@ -10606,6 +10615,18 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | DELETE | /api/notifications/{id} | — | — | 204, 403, 404 | ADMINISTRATEUR |
 
 `{id}` = idNotification (number). `?lu=true|false` filtre lues/non-lues ; `POST /{id}/lu` refuse (403) une notification qui ne vous appartient pas.
+
+> ⚠️ **2026-10-18 (demande front « avis-a-imprimer », §B1)** — type **`AVIS_A_IMPRIMER`** : l'avis spécifique, ou les lettres
+> d'invitation (nommées dans le titre et le texte : « Lettres d'invitation à imprimer »), d'un dossier né d'une fiche devient
+> imprimable. Vers la **PRMP du plan** et **chacune de ses UGPM** ; `typeObjet = DOSSIER`, `idObjet` = `idDossier` = le dossier
+> soumis de la fiche. Texte : « L'avis spécifique du dossier {référence} ({désignation}) peut être imprimé. » Émise au **passage**
+> d'indisponible à imprimable, par la signature d'un PV, les observations levées, la transmission au SIGMP, l'archivage, le dépôt
+> de la publication de l'AGPM (toutes les fiches de la PRMP concernées sont relevées) ou la clôture de la cérémonie des clés : une
+> fois par passage ; une réimpression ou un nouveau dépôt ne renotifie pas ; un retour à l'indisponibilité suivi d'une nouvelle
+> disponibilité renotifie ; rien de rétroactif (Q1). Un statut posé à la main par l'Administrateur (`PUT /api/dossiers/{id}`) ne
+> notifie pas. **L'UGPM** reçoit désormais ses propres notifications (destinataire de type `UGPM`, identifiant de l'UGPM) :
+> `GET /api/notifications/mes`, le compteur et `POST /{id}/lu` les lui servent ; son flux temps réel (ouvert sous la PRMP de
+> tutelle) est poussé.
 
 **Types (`TYPE_NOTIF`) émis à la transmission**
 | Type | Événement | Destinataire | Objet |

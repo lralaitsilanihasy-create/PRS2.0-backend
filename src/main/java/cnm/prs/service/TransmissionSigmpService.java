@@ -58,12 +58,17 @@ public class TransmissionSigmpService {
     private final cnm.prs.repository.ControleurRepository controleurRepository;
     private final cnm.prs.security.PermissionService permissionService;
 
+    /** ⚠️ 2026-10-18 (« avis-a-imprimer », §B1) — la transmission au SIGMP rend imprimable l'avis d'un PV FAVR. */
+    private final org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer;
+
     public TransmissionSigmpService(TransmissionSigmpRepository repository, DossierRepository dossierRepository,
             PvExamenRepository pvExamenRepository, NotificationService notificationService,
             ControleurDirectory controleurDirectory, cnm.prs.security.PermissionService permissionService,
             RattachementService rattachementService, cnm.prs.repository.ControleurRepository controleurRepository,
-            ChronometrageService chronometrageService) {
+            ChronometrageService chronometrageService,
+            org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer) {
         this.chronometrageService = chronometrageService;
+        this.avisAImprimer = avisAImprimer;
         this.rattachementService = rattachementService;
         this.controleurRepository = controleurRepository;
         this.repository = repository;
@@ -156,8 +161,11 @@ public class TransmissionSigmpService {
         // après une levée d'observations, le passage l'a déjà close et une seconde fin serait un doublon.
         // ⚠️ AVANT le changement de statut : c'est le statut qui dit quelle étape est ouverte.
         chronometrageService.cloturerSiCourante(dossier.getIdDossier(), EtapeCircuit.VERIFICATION);
+        List<Long> fiche = avisAImprimer.getObject().dmcDuDossier(dossier.getIdDossier()).stream().toList();   // ⚠️ « avis-a-imprimer »
+        java.util.Set<Long> avant = avisAImprimer.getObject().disponibles(fiche);
         dossier.setStatut(StatutDossier.DECISION_TRANSMISE_SIGMP.name());
         dossierRepository.save(dossier);
+        avisAImprimer.getObject().notifierDevenues(fiche, avant);
         // ⚠️ Chronométrage (2026-09-01) — la transmission à SIGMP clôt l'étape TRANSMISSION_SIGMP et
         // ARRÊTE le compteur global : c'est la « validation sur SIGMP » de la règle du pilote.
         chronometrageService.cloturer(dossier.getIdDossier(), EtapeCircuit.TRANSMISSION_SIGMP);

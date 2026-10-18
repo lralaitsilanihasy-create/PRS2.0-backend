@@ -787,6 +787,18 @@ d'offres*.
   pièce du DAO soumis à la Commission.
 - **Catégories** : les fournitures et les travaux ont chacun leur modèle, pour les trois formes. Les prestations
   intellectuelles n'ont pas d'avis public ; leur lettre d'invitation fera l'objet d'une demande à part.
+- ⚠️ **Prévenir la PRMP (demande du pilote du 2026-10-18, « avis-a-imprimer »)** :
+  - quand l'avis (ou les lettres d'invitation) **devient** imprimable, la PRMP du plan et ses UGPM reçoivent la notification
+    `AVIS_A_IMPRIMER`, qui mène au dossier ;
+  - elle part au passage de l'indisponible à l'imprimable : signature du PV, observations levées, transmission au SIGMP,
+    archivage, dépôt de la publication de l'AGPM, clôture de la cérémonie des clés. Une fois par passage : ni une réimpression
+    ni un nouveau dépôt ne renotifient, mais un retour à l'indisponibilité (réexamen, nouvelle version) suivi d'une nouvelle
+    disponibilité renotifie. Rien n'est envoyé pour les dossiers déjà imprimables à la mise en service (Q1) ;
+  - le tableau de suivi de la PRMP et de l'UGPM porte, pour chaque dossier né d'une fiche, le document à imprimer, s'il l'est,
+    et s'il l'a déjà été (`impressionAvis`) ;
+  - **non retenu pour l'instant (Q2)** : une tâche « À faire » pour l'impression. L'accueil « À faire » écarte les dossiers
+    clôturés, où l'avis peut pourtant rester à imprimer, et ses règles ne lisent pas encore la fiche ; la décision revient au
+    pilote.
 
 #### Un champ qu'aucun document n'utilise n'est pas demandé (arbitrage du pilote du 2026-09-30)
 

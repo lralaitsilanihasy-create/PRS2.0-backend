@@ -85,6 +85,8 @@ public class PvExamenService {
     private final CircuitDossierService circuitService;
     /** ⚠️ R5 (manuel révisé, lot 1, §B6) — une non-conformité automatique non levée interdit l'avis « Favorable » sans réserve. */
     private final org.springframework.beans.factory.ObjectProvider<ControlesService> controles;
+    /** ⚠️ 2026-10-18 (« avis-a-imprimer », §B1) — la signature d'un PV favorable et l'archivage rendent l'avis imprimable. */
+    private final org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer;
     private final ControleurDirectory controleurDirectory;
     private final DossierRepository dossierRepository;
     private final ControleurRepository controleurRepository;
@@ -107,8 +109,10 @@ public class PvExamenService {
             cnm.prs.security.PermissionService permissionService,
             org.springframework.context.ApplicationEventPublisher evenements,
             PvDocumentTache documentTache, ChronometrageService chronometrageService,
-            CircuitDossierService circuitService, org.springframework.beans.factory.ObjectProvider<ControlesService> controles) {
+            CircuitDossierService circuitService, org.springframework.beans.factory.ObjectProvider<ControlesService> controles,
+            org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer) {
         this.controles = controles;
+        this.avisAImprimer = avisAImprimer;
         this.chronometrageService = chronometrageService;
         this.circuitService = circuitService;
         this.observationPvService = observationPvService;
@@ -1398,6 +1402,9 @@ public class PvExamenService {
         // (« le Membre a signé, et l'un des deux P/CC aussi ») aurait clos un PV désigné P + CC + Membre
         // dès la signature du Membre, en laissant ouverte une part de CC sur un PV déjà définitif.
         if (partsCompletes(pv)) {
+            // ⚠️ 2026-10-18 (« avis-a-imprimer », §B1) — le relevé d'avant ; la notification suit le branchement.
+            List<Long> fiche = avisAImprimer.getObject().dmcDuDossier(dossierDuPv(pv.getIdPv())).stream().toList();
+            java.util.Set<Long> avant = avisAImprimer.getObject().disponibles(fiche);
             pv.setStatutPv(StatutPv.SIGNE.name());
             pv.setDatePv(today);
             log.info("[CIRCUIT] signature PV dossier={} acteur={} pv={} statutPv={}",
@@ -1412,6 +1419,7 @@ public class PvExamenService {
             PvExamenDto dto = PvExamenMapper.toDto(repository.save(pv));
             // [Auto] ⚠️ Règle ajoutée — branchement du circuit selon l'avis du PV.
             brancherSelonAvis(pv);
+            avisAImprimer.getObject().notifierDevenues(fiche, avant);
             return dto;
         }
         // ⚠️ 2026-09-04 — plus de notification ici. Elle prévenait le Membre après une signature P/CC,
@@ -1448,11 +1456,14 @@ public class PvExamenService {
                     + "transmise à SIGMP par le vérificateur (statut « "
                     + (dossier == null ? "?" : dossier.getStatut()) + " »).");
         }
+        List<Long> fiche = avisAImprimer.getObject().dmcDuDossier(idDossier).stream().toList();   // ⚠️ « avis-a-imprimer »
+        java.util.Set<Long> avant = avisAImprimer.getObject().disponibles(fiche);
         pv.setDateArchivage(LocalDate.now());
         pv.setImArchiveur(CurrentUser.ref().orElse(null));
         PvExamen saved = repository.save(pv);
         dossier.setStatut(StatutDossier.CLOTURE.name());
         dossierRepository.save(dossier);
+        avisAImprimer.getObject().notifierDevenues(fiche, avant);
         // ⚠️ Chronométrage (2026-09-01) — l'archivage clôt l'étape ARCHIVAGE, chronométrée par profil
         // mais HORS compteur global : la règle du pilote arrête le chronomètre à la validation SIGMP.
         chronometrageService.cloturer(idDossier, EtapeCircuit.ARCHIVAGE);
