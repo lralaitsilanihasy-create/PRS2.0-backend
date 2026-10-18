@@ -48,7 +48,7 @@ B03-NT-01;Comptable assignataire des paiements (désignation seule);TEXTE_LONG;S
 B04-CD-01;Modèles de fiches de renseignements joints au dossier (A1, A2…);LISTE_MULTIPLE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;TRAVAUX,FOURNITURES_SERVICES,PRESTATIONS_INTELLECTUELLES;;oui;;;A1,A2,A3,A4;;;oui
 B04-CD-02;Modèle de garantie de soumission joint au dossier;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;TRAVAUX,FOURNITURES_SERVICES,PRESTATIONS_INTELLECTUELLES;;non;;GARANTIE_MANQUANTE:FORME;C1,C2,C1 et C2;;;oui
 B04-CD-03;Plans joints au dossier;TEXTE_LONG;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
-B04-EQ-01;Délai d'envoi des demandes d'éclaircissement par les candidats (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B04-EQ-01;Délai d'envoi des demandes d'éclaircissement par les candidats (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;DELAI_QUESTIONS:DELAI;;;;oui
 B04-EQ-02;Délai de réponse du représentant de la PRMP (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-PI-01;Documents et pièces constitutifs de l'offre;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;PIECES_OFFRE_EXIGEES:TEXTE;;;;oui
 B04-DV-01;Délai de validité des offres (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
@@ -58,8 +58,8 @@ B04-RP-01;Réunion préparatoire prévue;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_CO
 B04-RP-02;Lieu, date et heure de la réunion préparatoire;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B04-VL-01;Modalités d'accès des candidats aux lieux d'exécution des travaux;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-VL-02;Visite des lieux obligatoire;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
-B04-FP-01;Nombre de copies de l'offre;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B04-FP-02;Mention et numéro du dossier d'appel d'offres à porter sur les plis;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B04-FP-01;Nombre de copies de l'offre;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;modeRemise != ELECTRONIQUE;oui;;;;;;oui
+B04-FP-02;Mention et numéro du dossier d'appel d'offres à porter sur les plis;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;modeRemise != ELECTRONIQUE;oui;;;;;;oui
 B04-FP-03;Référence et numéro du lot à porter sur les plis;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = OUI;non;;;;;;oui
 B04-OV-01;Lieu de l'ouverture des plis;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-OV-02;Date et heure limites de remise des offres;DATE_HEURE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;DATES_ORDRE:REMISE;;;;oui

@@ -48,6 +48,7 @@ import cnm.prs.enums.TypeChampFiche;
  * <tr><td>PIECES_EN_DOUBLE (⚠️ V61, retiré le 2026-10-07 : constat E1)</td><td>—</td><td>—</td></tr>
  * <tr><td>MATERIEL_EXIGE (⚠️ V60)</td><td>TEXTE (B03-QT-09) — ou la liste du matériel ; travaux seulement</td><td>bloquant</td></tr>
  * <tr><td>DUREE_CONTRAT_CADRE_MAX (⚠️ 2026-10-15)</td><td>MOIS, PERIODE (mois), ANS (années), JUSTIFICATION (texte)</td><td>bloquant</td></tr>
+ * <tr><td>DELAI_QUESTIONS (⚠️ 2026-10-18)</td><td>DELAI (jours avant la date limite, ≥ délai légal n° 3)</td><td>bloquant</td></tr>
  * </table>
  */
 public final class ControlesFicheMarche {
@@ -68,6 +69,12 @@ public final class ControlesFicheMarche {
      */
     public static final String DUREE_CONTRAT_CADRE_MAX = "DUREE_CONTRAT_CADRE_MAX";
     static final int DUREE_CONTRAT_CADRE_MOIS = 24;
+    /**
+     * ⚠️ 2026-10-18 (« dao-electronique », §B5) — art. 35-II ({@link DelaisLegaux} n° 3) : les questions des candidats sont reçues
+     * jusqu'à 10 jours avant la date limite de remise, et la plateforme les clôt à J−10. Un délai d'envoi plus court promettrait au
+     * candidat une fenêtre que la plateforme lui ferme.
+     */
+    public static final String DELAI_QUESTIONS = "DELAI_QUESTIONS";
     /**
      * ⚠️ 2026-10-02 (demande front « référentiel des travaux routiers », §B2) — l'assurance décennale, exigée pour des
      * travaux de bâtiment seulement : le CCAP-T ne l'imprime que sous {@code BATIMENT}.
@@ -292,6 +299,7 @@ public final class ControlesFicheMarche {
         interetsMoratoires(roles.get(INTERETS_MORATOIRES_TAUX), valeurs, avertissements, ok);
         delaiPaiement(roles.get(DELAI_PAIEMENT_75), valeurs, avertissements, ok);
         dureeContratCadre(roles.get(DUREE_CONTRAT_CADRE_MAX), valeurs, bloquants, ok);
+        delaiQuestions(roles.get(DELAI_QUESTIONS), valeurs, bloquants, ok);
         assuranceDecennale(roles.get(ASSURANCE_DECENNALE), valeurs, bloquants, ok);
         liquiditeDouble(roles.get(LIQUIDITE_DOUBLE), valeurs, nbLots, bloquants, ok);
         caMoyenne(roles.get(CA_MOYENNE), valeurs, nbLots, bloquants, ok);
@@ -1225,6 +1233,25 @@ public final class ControlesFicheMarche {
      * ⚠️ 2026-10-15 (§B0.5) — la plus longue des durées saisies (maximale et première période en mois, maximale en années) au-delà de
      * {@value #DUREE_CONTRAT_CADRE_MOIS} mois exige la justification du décret ; sans aucune durée saisie, la règle attend.
      */
+    /** ⚠️ 2026-10-18 (§B5) — le délai d'envoi des questions (jours avant la date limite) n'est pas plus court que celui de la loi. */
+    private static void delaiQuestions(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, List<Controle> bloquants,
+            List<Controle> ok) {
+        ChampFicheMarche delai = r == null ? null : r.get("DELAI");
+        BigDecimal d = delai == null ? null : nombre(valeurs.get(delai.getCode()));
+        if (d == null) {
+            return;
+        }
+        int legal = DelaisLegaux.par(DelaisLegaux.QUESTIONS_CANDIDATS).orElseThrow().valeur();
+        if (d.compareTo(BigDecimal.valueOf(legal)) < 0) {
+            bloquants.add(new Controle(DELAI_QUESTIONS, List.of(delai.getCode()), delai.codeBloc(),
+                    "Questions reçues jusqu'à " + d.stripTrailingZeros().toPlainString() + " jours avant la date limite : la loi les arrête "
+                            + legal + " jours avant (art. 35-II), et la plateforme les clôt à cette date."));
+        } else {
+            ok.add(new Controle(DELAI_QUESTIONS, List.of(delai.getCode()), delai.codeBloc(),
+                    "Délai des questions ≥ " + legal + " jours avant la date limite."));
+        }
+    }
+
     private static void dureeContratCadre(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, List<Controle> bloquants,
             List<Controle> ok) {
         if (r == null) {

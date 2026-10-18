@@ -791,7 +791,8 @@ d'offres*.
   - quand l'avis (ou les lettres d'invitation) **devient** imprimable, la PRMP du plan et ses UGPM reçoivent la notification
     `AVIS_A_IMPRIMER`, qui mène au dossier ;
   - elle part au passage de l'indisponible à l'imprimable : signature du PV, observations levées, transmission au SIGMP,
-    archivage, dépôt de la publication de l'AGPM, clôture de la cérémonie des clés. Une fois par passage : ni une réimpression
+    archivage, dépôt de la publication de l'AGPM, clôture de la cérémonie des clés, réglage du compte bancaire de l'ARMP
+    (⚠️ 18/10, « dao-electronique », Q4 : un dossier payant n'imprime rien tant que le compte n'est pas réglé). Une fois par passage : ni une réimpression
     ni un nouveau dépôt ne renotifient, mais un retour à l'indisponibilité (réexamen, nouvelle version) suivi d'une nouvelle
     disponibilité renotifie. Rien n'est envoyé pour les dossiers déjà imprimables à la mise en service (Q1) ;
   - le tableau de suivi de la PRMP et de l'UGPM porte, pour chaque dossier né d'une fiche, le document à imprimer, s'il l'est,
@@ -1030,6 +1031,21 @@ reste identique texte pour texte, à la seule ligne « Mode de remise des offres
   provisoire nominative tient la place jusqu'à ce que l'Administrateur les charge.
 - **Les classeurs Excel du candidat restent provisoires** (décision du pilote, Q14) : les formulaires deviendront des
   formulaires en ligne de la plateforme ; rien n'est retiré aujourd'hui.
+- ⚠️ **2026-10-18 — le DAO dit le canal de la plateforme** (demande front « dao-electronique ») :
+  - **en remise électronique, le DAO reste nécessaire** (règlement, pièces, bordereau, spécifications, CCAP), mais ses
+    clauses papier n'ont plus d'objet : retrait et consultation au guichet, original et copies, pli cacheté, séance en
+    salle. Leurs champs ne s'appliquent qu'en papier ; le DAO, l'avis et la lettre AOR disent la plateforme, et l'avis
+    dit la remise électronique **exclusive** ;
+  - la clause de remise électronique est **rédigée à partir des champs saisis** (plateforme, heure de référence,
+    signature, formats, tailles, remplacement, sauvegarde, prorogation, assistance), à valider par le juriste ;
+  - **le délai d'envoi des questions n'est jamais plus court que celui de la loi** (10 jours avant la date limite,
+    art. 35-II) : la plateforme les clôt à cette date ; un délai plus court bloque la validation de la fiche ;
+  - **un dossier payant n'imprime son avis qu'une fois le compte de l'ARMP réglé** : sinon le candidat lirait des
+    pointillés à la place du compte où verser les frais ;
+  - **le numéro de la procédure servi au candidat est celui du DAO** (`B02-OE-01` du contrat-cadre, sinon `B02-OB-03`) ;
+  - **les procédures déjà lancées gardent leur DAO** : il a été retiré par les candidats ; le modifier après publication
+    reviendrait à modifier le dossier hors de la procédure prévue (art. 3.4 du DPAC). La correction vaut à la prochaine
+    validation.
 
 ⚠️ **2026-10-04, soumission en ligne (lots 2a et 2b, V66-V67) — qui détient les parts de clé, et ce qui bloque la validation.**
 Décision du pilote (Q11) : les détenteurs sont les membres de la **commission d'appel d'offres** (qualité `MEMBRE`), désignés

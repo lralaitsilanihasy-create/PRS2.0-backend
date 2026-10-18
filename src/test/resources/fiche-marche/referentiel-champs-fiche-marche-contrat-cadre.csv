@@ -28,18 +28,18 @@ B03-SS-02;Modalités de paiement direct des sous-traitants;TEXTE_LONG;SAISIE;AE;
 B04-DS-01;Contenu du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B04-DS-02;Langue du dossier de consultation et des offres;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;non
 B04-DS-03;Modalités d'acquisition du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;non
-B04-DS-04;Adresse de retrait du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B04-DS-04;Adresse de retrait du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;modeRemise != ELECTRONIQUE;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B04-DS-05;Montant à payer pour le dossier de consultation (Ariary);MONTANT;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;non;;MONTANT_POSITIF;;;;oui;FOURNITURES_SERVICES,TRAVAUX;oui;
 B04-DS-06;Modification du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;non
 B04-PO-01;Pièces constitutives de la candidature (capacités technique et professionnelle);TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B04-PO-02;Pièces constitutives de l'offre;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
-B04-RQ-01;Modalités de remise des offres sous support papier;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
-B04-RQ-02;Objet du contrat-cadre à porter sur le pli;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
-B04-RQ-03;Adresse exacte de remise des offres;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B04-RQ-01;Modalités de remise des offres sous support papier;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;modeRemise != ELECTRONIQUE;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B04-RQ-02;Objet du contrat-cadre à porter sur le pli;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;modeRemise != ELECTRONIQUE;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B04-RQ-03;Adresse exacte de remise des offres;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;modeRemise != ELECTRONIQUE;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B04-RQ-04;Transmission électronique des offres admise;OUI_NON;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;non
 B04-RQ-05;Modalités d'envoi des dossiers par voie électronique;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;non
 B04-RC-01;Adresse à laquelle adresser les demandes d'informations;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
-B04-RC-02;Délai de réponse aux demandes d'informations (jours);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B04-RC-02;Délai d'envoi des demandes d'informations (jours avant la date limite);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DELAI_QUESTIONS:DELAI;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B04-CP-01;Date de lancement de la mise en concurrence;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DATES_ORDRE:LANCEMENT;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B04-CP-02;Date et heure limites de remise des offres;DATE_HEURE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DATES_ORDRE:REMISE;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B04-CP-03;Date de début de la séance d'évaluation des offres et candidatures;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DATES_ORDRE:OUVERTURE;;;;oui;FOURNITURES_SERVICES,TRAVAUX
@@ -144,11 +144,11 @@ B05-PM-04;Plafond d'augmentation des prix à chaque complétude ou remise en con
 B05-PM-05;Catalogue joint au contrat-cadre;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B05-PM-06;Indice d'actualisation des prix des marchés subséquents (laisser vide sans actualisation);TEXTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B07-DU-07;Préavis de la décision de reconduction (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
-B04-DS-07;Adresse de consultation du dossier : nom du responsable;TEXTE;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
-B04-DS-08;Adresse de consultation du dossier : fonction;TEXTE;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
-B04-DS-09;Adresse de consultation du dossier : bureau, n° de porte, étage;TEXTE;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
+B04-DS-07;Adresse de consultation du dossier : nom du responsable;TEXTE;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise != ELECTRONIQUE;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
+B04-DS-08;Adresse de consultation du dossier : fonction;TEXTE;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise != ELECTRONIQUE;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
+B04-DS-09;Adresse de consultation du dossier : bureau, n° de porte, étage;TEXTE;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise != ELECTRONIQUE;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B04-DS-10;Adresse de consultation du dossier : localité;TEXTE_LONG;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
-B04-DS-11;Adresse de consultation du dossier : e-mail;TEXTE;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
+B04-DS-11;Adresse de consultation du dossier : e-mail;TEXTE;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise != ELECTRONIQUE;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B09-GP-03;Délai de garantie des prestations (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B09-GP-04;Point de départ du délai de garantie;LISTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;À partir de l'admission,À partir de la date de mise en service;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B09-GP-05;Garantie exécutée conformément au CCAG;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;

@@ -8,6 +8,9 @@ CONDITION	GARANTIE-LOTScategorie != TRAVAUX et garantieSoumission = OUI et allo
 CONDITION	GARANTIE-UNIQUEcategorie != TRAVAUX et garantieSoumission = OUI et alloti != OUI
 CONDITION	GARANTIE-Tcategorie = TRAVAUX et garantieSoumission = OUI
 CONDITION	SANS-GARANTIEgarantieSoumission != OUI
+CONDITION	PAPIERmodeRemise != ELECTRONIQUE
+CONDITION	ELECTRONIQUEmodeRemise = ELECTRONIQUE
+CONDITION	SE-OUVERTUREB04-SE-03 renseigne
 CENTRE	{{IMAGE:embleme}}
 CENTRE	{{B01-AC-01}}
 CENTRE	LA PERSONNE RESPONSABLE DES MARCHES PUBLICS
@@ -26,6 +29,7 @@ PARA	{{FINSI:T}}
 PARA	Nous vous invitons en conséquence, par la présente, ainsi que les autres candidats de la liste restreinte, à présenter une offre pour l’exécution de ce marché.
 PARA	2. La présente lettre d’invitation, accompagnée du Dossier d’Appel d’Offres, a été adressée aux candidats dont les noms figurent ci-après :
 PARA	{{LETTRE.candidats}}
+PARA	{{SI:PAPIER}}
 PARA	3. Le Dossier d’Appel d’Offres complet, rédigé en langue française, peut être consulté à l’adresse ci-après :
 PARA	- Nom du Responsable : {{B04-DS-07}}
 PARA	- Fonction : {{B04-DS-08}}
@@ -33,7 +37,16 @@ PARA	- Adresse : {{B04-DS-09}}, {{B04-DS-10}}
 PARA	{{SI:CONSULTATION-EMAIL}}
 PARA	- E-mail : {{B04-DS-11}}
 PARA	{{FINSI:CONSULTATION-EMAIL}}
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:ELECTRONIQUE}}
+PARA	3. Le Dossier d’Appel d’Offres complet, rédigé en langue française, peut être consulté sur la plateforme de dépôt des offres : {{B04-SE-02}}.
+PARA	{{FINSI:ELECTRONIQUE}}
+PARA	{{SI:PAPIER}}
 PARA	4. Le Dossier d’Appel d’Offres doit être retiré auprès de {{B01-AC-01}} moyennant le paiement d’un montant non remboursable de :
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:ELECTRONIQUE}}
+PARA	4. Le Dossier d’Appel d’Offres est retiré sur la plateforme de dépôt des offres, une fois le reçu du versement validé, moyennant le paiement d’un montant non remboursable de :
+PARA	{{FINSI:ELECTRONIQUE}}
 PARA	{{SI:DAO-LOTS}}
 PARA	{{B04-DS-05.lignesParLot}}
 PARA	ou son équivalent en monnaie librement convertible à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}.
@@ -41,12 +54,25 @@ PARA	{{FINSI:DAO-LOTS}}
 PARA	{{SI:DAO-UNIQUE}}
 PARA	- {{B04-DS-05.lettres}} (Ar {{B04-DS-05.chiffres}}) ou son équivalent en monnaie librement convertible à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}.
 PARA	{{FINSI:DAO-UNIQUE}}
+PARA	{{SI:PAPIER}}
 PARA	{{SI:F}}
 PARA	5. Les offres devront parvenir à {{B04-LR-02}} au plus tard le {{B04-LR-03}}, {{B04-LR-04}} et seront ouvertes immédiatement après l’heure limite de remise des offres en présence des candidats ou de leurs représentants qui souhaitent y assister. Les offres hors délai ne seront pas recevables.
 PARA	{{FINSI:F}}
 PARA	{{SI:T}}
 PARA	5. Les offres devront parvenir à {{B01-AC-02}} au plus tard le {{B04-OV-02.heureLocale}} et seront ouvertes immédiatement après l’heure limite de remise des offres en présence des candidats ou de leurs représentants qui souhaitent y assister. Les offres hors délai ne seront pas recevables.
 PARA	{{FINSI:T}}
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:ELECTRONIQUE}}
+PARA	{{SI:F}}
+PARA	5. Les offres sont déposées sur la plateforme de dépôt ({{B04-SE-02}}) au plus tard le {{B04-LR-03}}, {{B04-LR-04}} et sont ouvertes en séance après l’heure limite de remise des offres. Les offres hors délai ne sont pas recevables.
+PARA	{{FINSI:F}}
+PARA	{{SI:T}}
+PARA	5. Les offres sont déposées sur la plateforme de dépôt ({{B04-SE-02}}) au plus tard le {{B04-OV-02.heureLocale}} et sont ouvertes en séance après l’heure limite de remise des offres. Les offres hors délai ne sont pas recevables.
+PARA	{{FINSI:T}}
+PARA	{{SI:SE-OUVERTURE}}
+PARA	Les dépôts sont ouverts à compter du {{B04-SE-03}}.
+PARA	{{FINSI:SE-OUVERTURE}}
+PARA	{{FINSI:ELECTRONIQUE}}
 PARA	{{SI:GARANTIE-LOTS}}
 PARA	6. Chaque offre doit être accompagnée d’une garantie de soumission d’un montant de {{B05-GS-03.parLot}}, ou son équivalent en monnaie librement convertible, présentée sous l’une des formes suivantes : soit par caution personnelle et solidaire d’un organisme agréé par le Ministère chargé des Finances, soit par garantie bancaire, soit par chèque de banque.
 PARA	{{FINSI:GARANTIE-LOTS}}

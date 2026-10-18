@@ -332,13 +332,15 @@ public class ProceduresEnLigneService {
         String etatProcedure = limite == null && ouvertureDepots == null ? null
                 : limite != null && !maintenant.isBefore(limite) ? CLOSE
                 : ouvertureDepots != null && maintenant.isBefore(ouvertureDepots) ? A_VENIR : OUVERTE;
-        String numeroDao = brute(etat, DocumentsFicheMarcheService.CHAMP_NUMERO_DAO);
+        // ⚠️ 2026-10-18 (« dao-electronique », §B6) — le numéro imprimé au DAO et à l'avis (règle R1 du DAO complet) : B02-OE-01
+        // pour un contrat-cadre, puis B02-OB-03, à défaut la référence du plan. Les listes de la CAO et du dépositaire le reprennent.
+        String numeroDao = DaoCompletService.numero(etat.etat());
         List<ProcedureEnLigneDto.Lot> lots = lots(etat);
         List<ProcedureEnLigneDto.Frais> frais = frais(etat, lots);
         boolean payant = frais != null && !avis.isEmpty() && apresBascule(avis.get(avis.size() - 1).dateGeneration());
         ParametreService.CompteDao compte = frais == null ? null : parametres.compteDao();
         return new ProcedureEnLigneDto(idDmc,
-                numeroDao != null ? numeroDao : etat.etat().getRefeDossier(),
+                numeroDao,
                 etat.etat().getDesignationMarche(),
                 etat.valeur(CHAMP_AUTORITE),
                 etat.categorie(),

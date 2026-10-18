@@ -22,9 +22,12 @@ import cnm.prs.service.ParametreService;
 public class ParametreController {
 
     private final ParametreService service;
+    /** ⚠️ 2026-10-18 (« dao-electronique », Q4) — régler le compte de l'ARMP peut rendre des avis imprimables : relevé avant/après. */
+    private final cnm.prs.service.AvisAImprimer avisAImprimer;
 
-    public ParametreController(ParametreService service) {
+    public ParametreController(ParametreService service, cnm.prs.service.AvisAImprimer avisAImprimer) {
         this.service = service;
+        this.avisAImprimer = avisAImprimer;
     }
 
     /** État de l'interrupteur (tout authentifié — le front s'en sert pour l'écran Admin). */
@@ -122,7 +125,11 @@ public class ParametreController {
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @PutMapping("/compte-dao")
     public ParametreService.CompteDao fixerCompteDao(@RequestBody(required = false) ParametreService.CompteDaoRequest corps) {
-        return service.fixerCompteDao(corps);
+        java.util.List<Long> fiches = avisAImprimer.dmcsAPvFavorable();
+        java.util.Set<Long> avant = avisAImprimer.disponibles(fiches);
+        ParametreService.CompteDao compte = service.fixerCompteDao(corps);
+        avisAImprimer.notifierDevenues(fiches, avant);
+        return compte;
     }
 
 

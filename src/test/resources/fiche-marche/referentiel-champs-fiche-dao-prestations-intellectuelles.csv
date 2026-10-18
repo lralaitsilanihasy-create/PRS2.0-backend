@@ -21,7 +21,7 @@ B03-SP-04;Numéro de l'annexe de demande d'acceptation des sous-traitants;TEXTE;
 B03-NP-01;Montant maximum nanti, en chiffres et en lettres (Ariary);MONTANT;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;MONTANT_POSITIF;;;;oui
 B04-EP-01;Adresse de la PRMP pour les demandes d'éclaircissement;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B04-EP-02;Adresse électronique pour les demandes d'éclaircissement;TEXTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
-B04-EP-03;Délai d'envoi des demandes par les candidats (jours);NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-EP-03;Délai d'envoi des demandes par les candidats (jours);NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;DELAI_QUESTIONS:DELAI;;;;oui
 B04-EP-04;Délai de réponse de la PRMP aux demandes d'éclaircissement (jours avant la date limite);NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B04-AI-01;Intrants à fournir par le client pendant la consultation;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B04-NP-01;Contenu des propositions;LISTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Une proposition technique et une proposition financière sous enveloppes distinctes,Uniquement une proposition technique;;;oui
@@ -33,8 +33,8 @@ B04-LP-02;Seconde langue admise pour la proposition;TEXTE;SAISIE;DPIC;;QUANTITE_
 B04-DP-01;Délai de validité des propositions (jours);NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B04-RU-01;Réunion préparatoire prévue;OUI_NON;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B04-RU-02;Adresse et date de la réunion préparatoire (au moins 21 jours avant la remise);TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
-B04-FL-01;Nombre de copies de la proposition;NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
-B04-FL-02;Nom et numéro à porter sur l'enveloppe de la proposition;TEXTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-FL-01;Nombre de copies de la proposition;NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;modeRemise != ELECTRONIQUE;oui;;;;;;oui
+B04-FL-02;Nom et numéro à porter sur l'enveloppe de la proposition;TEXTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;modeRemise != ELECTRONIQUE;oui;;;;;;oui
 B04-FL-03;Adresse du client à porter sur l'enveloppe;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B04-LH-01;Adresse de l'autorité contractante pour la remise des propositions;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B04-LH-02;Date et heure limites de remise des propositions;DATE_HEURE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;DATES_ORDRE:REMISE;;;;oui

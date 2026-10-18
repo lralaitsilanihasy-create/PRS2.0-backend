@@ -269,9 +269,14 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         String dpao = texteDocx(contenu(documents, "DPAO", "docx"));
         // ⚠️ Lot D2 (2026-09-29) — le DPAO des fournitures est le document type rempli : la clause 7.3 porte la remise
         // électronique (clause du juriste et ses valeurs), plus la liste « libellé : valeur » du lot 2a.
+        // ⚠️ 2026-10-18 (« dao-electronique », B1-B3) — la clause rédigée à partir des champs remplace la réserve du juriste ; les
+        // clauses papier (forme des plis, adresse de remise) ne s'impriment plus, la séance d'ouverture dit ses modalités.
         assertThat(dpao).contains("7.3. Remise des offres par voie électronique",
-                "CLAUSE À FOURNIR PAR LE JURISTE : conditions et modalités de la remise électronique — plateforme (https://depot.cnm.mg)")
-                .doesNotContain("n'est pas possible dans le cadre du présent Appel d'Offres", "INT-SE", "CTRMEM", "quorum", "{{");
+                "La remise électronique est le seul mode de remise des offres de la présente procédure d’appel d’offres",
+                "Les offres sont déposées sur la plateforme de dépôt : https://depot.cnm.mg.",
+                "Les offres déposées sur la plateforme sont ouvertes en séance")
+                .doesNotContain("n'est pas possible dans le cadre du présent Appel d'Offres", "INT-SE", "CTRMEM", "quorum", "{{",
+                        "CLAUSE À FOURNIR", "Outre l’original de l’offre");
         String c1 = texteDocx(contenu(documents, "C1", "docx"));
         assertThat(c1).contains("CLAUSE À FOURNIR PAR LE JURISTE : remise électronique",
                 "Téléversement avec code de vérification (voie B)").doesNotContain("{{");
@@ -292,9 +297,37 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         remplirObligatoiresEtValider(papier, "QUANTITE_FIXE", "FOURNITURES_SERVICES", d2);
         String docsPapier = mvc.perform(get("/api/fiches-marche/" + papier + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(texteDocx(contenu(docsPapier, "DPAO", "docx"))).contains("Le mode de remise des offres par voie électronique n'est pas possible dans le cadre du présent Appel d'Offres.")   // lot D2
+        assertThat(texteDocx(contenu(docsPapier, "DPAO", "docx"))).contains("Le mode de remise des offres par voie électronique n'est pas possible dans le cadre du présent Appel d'Offres.",   // lot D2
+                        "Outre l’original de l’offre")   // 18/10 : la forme des plis reste en papier
                 .doesNotContain("plateforme", "CLAUSE À FOURNIR");
         assertThat(texteDocx(contenu(docsPapier, "C1", "docx"))).doesNotContain("CLAUSE À FOURNIR", "{{");
+    }
+
+    @Test
+    @DisplayName("⚠️ 18/10 (« dao-electronique », B1, B5) — les champs des plis (copies, mentions) sont attendus en papier et fermés "
+            + "en électronique ; un délai des questions sous les 10 jours de la loi est bloquant (DELAI_QUESTIONS), 10 passe")
+    void clausesPapierEtDelaiQuestions() throws Exception {
+        String ref = mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "QUANTITE_FIXE")
+                .param("categorie", "FOURNITURES_SERVICES").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B04-RO-01')].condition"))
+                .containsExactly("modeRemise != ELECTRONIQUE");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B04-DE-02')].controle")).containsExactly("DELAI_QUESTIONS:DELAI");
+
+        Long idDmc = creerDmc(9901);
+        cadrage(idDmc, "");
+        String papier = bloc(idDmc, "B04", "{\"B04-DE-02\":7}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(papier, "$.bilanControles.bloquants[?(@.regle=='OBLIGATOIRE')].champs[0]"))
+                .contains("B04-RO-01", "B04-RO-02");
+        assertThat(JsonPath.<List<String>>read(papier, "$.bilanControles.bloquants[?(@.regle=='DELAI_QUESTIONS')].message"))
+                .singleElement().asString().contains("7 jours", "10 jours", "art. 35-II");
+        papier = bloc(idDmc, "B04", "{\"B04-DE-02\":10}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(papier, "$.bilanControles.bloquants[*].regle")).doesNotContain("DELAI_QUESTIONS");
+        assertThat(JsonPath.<List<String>>read(papier, "$.bilanControles.ok[*].regle")).contains("DELAI_QUESTIONS");
+
+        cadrage(idDmc, "\"modeRemise\":\"ELECTRONIQUE\"");
+        assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.bloquants[?(@.regle=='OBLIGATOIRE')].champs[0]"))
+                .doesNotContain("B04-RO-01", "B04-RO-02");
     }
 
     // ------------------------------------------------------------------ 3. droits

@@ -985,7 +985,7 @@ Demande front `demande-backend-2026-10-04-soumission-en-ligne.md`, lot 1c (§B8)
 
   | Champ | Source |
   |---|---|
-  | `reference` | `B02-OB-03` (numéro du DAO) ; à défaut, la référence du plan |
+  | `reference` | ⚠️ 18/10 (« dao-electronique », §B6 ; règle R1 du DAO complet) : `B02-OE-01` pour un contrat-cadre, puis `B02-OB-03` (numéro du DAO) ; à défaut, la référence du plan. Les listes de la CAO (`/api/cao/mes-procedures`), du dépositaire (`/api/depositaire/procedures`) et des invitations la reprennent |
   | `objet` | désignation de la ligne courante |
   | `autoriteContractante` | `B01-AC-01` |
   | `lots` | lots du plan sur la ligne courante, numérotés de 1 à n ; liste vide si le marché n'est pas alloti |
@@ -5479,6 +5479,12 @@ PRMP et UGPM. Corps :
   `publication` garde aussi `journal` et `referenceAgpm`. Sans publication sur le plan (ni sur une version précédente, H2) : 409
   `AVIS_INDISPONIBLE`, `details.raison` = **`PUBLICATION_AGPM_ABSENTE`** (servie aussi par `…/disponibilite`). Seule `datePublication`
   reste exigée.
+- ⚠️ **2026-10-18 (« dao-electronique », Q4)** — un dossier **payant** (`B04-DS-05`, unique ou par lot, positif) dont le compte bancaire
+  de l'ARMP n'est pas réglé par l'Administrateur (`PUT /api/parametres/compte-dao`) n'imprime ni avis ni lettre AOR : 409
+  `AVIS_INDISPONIBLE` (ou `LETTRES_INDISPONIBLES`), `details.raison` = **`COMPTE_ARMP_ABSENT`**, servie aussi par `…/disponibilite`,
+  `impressionAvis` et la notification `AVIS_A_IMPRIMER` : le réglage du compte est une écriture relevée avant et après, sur toutes
+  les fiches dont le dossier a un PV favorable signé ; celles qu'il rend imprimables sont notifiées à leur PRMP et à ses UGPM. Un
+  dossier gratuit ne l'exige pas. Jugée après la publication de l'AGPM.
 
 Rendu :
 - l'avis se rend sur la **dernière version validée** de la fiche ;
@@ -9541,6 +9547,51 @@ remet l'original signé de son acte d'engagement avant la signature du marché. 
 régénérés : la clause vaut à la prochaine validation. **Le front doit resynchroniser ses copies des quatre gabarits.** Pas de section
 « Signature de l'offre » dans les gabarits : la clause suit la remise électronique.
 
+#### Le DAO d'une procédure en remise électronique (⚠️ 2026-10-18)
+
+Demande front `demande-backend-2026-10-18-dao-electronique.md` (recette de la fiche des articles de bureau, ligne 303337). Pas de
+migration ; référentiel : fichiers de correspondance et `docs/referentiel/2026-10-18-dao-electronique.sql` ; pom inchangé.
+**Les documents des versions déjà validées ne sont pas régénérés** (Q2) : tout vaut à la prochaine validation.
+
+- **B1 — Les clauses papier ne valent qu'en papier.** Champs conditionnés à `modeRemise != ELECTRONIQUE` (une fiche sans mode est
+  papier), donc ni servis, ni attendus au bilan, ni imprimés en électronique :
+  - contrat-cadre : `B04-RQ-01/02/03`, `B04-DS-04`, `B04-DS-07/08/09/11` ;
+  - fournitures : `B04-RO-01/02` ; travaux : `B04-FP-01/02` ; prestations intellectuelles : `B04-FL-01/02`.
+
+  Restent ouverts dans les deux modes : `B04-DS-10` (localité : elle date la signature de l'avis et de la lettre AOR),
+  `B04-LR-02` (lieu de remise de l'original de la garantie), `B04-OP-01…03`, `B04-OV-01/02` (lus par les échéances de la remise).
+  Les modèles `DPAC-CC`, `DPAO-F`, `DPAO-T`, `DPIC-PI` séparent `{{SI:PAPIER}}` / `{{SI:B04-SE}}` : consultation et retrait du
+  dossier (DPAC 3.2-3.3), forme et lieu des plis (DPAO 7.1-7.2, DPIC 8.1-8.2, DPAC 5.1), adresse des éclaircissements (DPAO, DPIC
+  5.2) ; en électronique, ils disent la plateforme (`B04-SE-02`), le retrait « une fois le reçu du versement validé », et que la
+  transmission sous support papier n'est pas admise. ⚠️ Les mentions papier des **IC** (enveloppes « RETRAIT / REMPLACEMENT »,
+  séance en salle) sont des textes fixes du DAO complet : non conditionnables, elles restent.
+- **B2 — La clause rédigée** remplace `[[CLAUSE À FOURNIR PAR LE JURISTE …]]` (DPAC 5.2, DPAO 7.3, DPIC 8.3), une phrase par champ :
+  seul mode de remise, plateforme, ouverture des dépôts (`B04-SE-03`, si saisie), heure de référence et heure de la plateforme
+  qui fait foi, niveau de signature (`B04-SE-05`, prestataires `B04-SE-06` si saisis), formats et tailles (`B04-SE-07/08/09`),
+  remplacement ou non (`B04-SE-10`), copie de sauvegarde (`B04-SE-11`, sauf « Non »), prorogation (`B04-SE-12/13/16`),
+  assistance (`B04-SE-14`, date limite `B04-SE-15` si saisie). Les clauses de re-matérialisation et de l'art. 31 restent.
+  **Rédaction à valider par le juriste (Q1)**. Les modèles candidat C1/C2 gardent leur réserve (hors demande).
+- **B3 — La séance en ligne** (DPAC 6.1.1, DPAO 8) : ouverture en séance après l'heure limite, délai `B04-OP-12`, modalité
+  `B04-OP-10`, lien `B04-OP-11`, PV publié si `B04-OP-13 = OUI` (chaque phrase seulement si le champ est saisi ; les champs
+  `B04-OP-1x` ne sont ouverts qu'aux fournitures). La séance publique « en présence des candidats » est en section papier.
+- **B4 — L'avis** (`AVIS-F`, `AVIS-T`) **et la lettre AOR** : en électronique, consultation et retrait sur la plateforme, dépôt
+  sur la plateforme avant la date limite (heure de référence), ouverture des dépôts, séance ; §7 « La remise des offres se fait
+  exclusivement par voie électronique ». Les mentions `ADRESSE_CONSULTATION`, `ADRESSE_RETRAIT`, `DATE_HEURE_LIMITE` et
+  `HEURE_OUVERTURE` (`…/mentions`, avis en données) se lisent aussi sur ces phrases.
+- **B5 — Le délai des questions.** Le « 7 jours » du DPAC n'était pas écrit au modèle : c'est la valeur saisie de `B04-RC-02`
+  (libellé corrigé : « Délai d'envoi des demandes d'informations (jours avant la date limite) »). Règle **bloquante
+  `DELAI_QUESTIONS`** (rôle `DELAI`) sur `B04-RC-02`, `B04-DE-02`, `B04-EQ-01`, `B04-EP-03` : un délai inférieur au délai légal
+  n° 3 (10 jours, art. 35-II, celui où la plateforme clôt les questions) bloque la validation. En électronique, la question se
+  pose sur la plateforme (DPAC art. 10, DPAO/DPIC 5.2). Le « 6 jours » des modifications de détail (DPAC 3.4) reste écrit au
+  modèle : aucun délai légal ne lui correspond dans `DelaisLegaux`. ⚠️ En recette, 7 fiches validées portent 7 jours : non
+  réévaluées, une révision devra les corriger.
+- **B6** : voir `ProcedureEnLigneDto.reference`. **Q3** : en électronique, l'art. 4 du DPAC ajoute que les pièces sont déposées en
+  fichiers et que la soumission par la plateforme vaut signature (art. 5.2). **Q4** : voir `COMPTE_ARMP_ABSENT` (avis spécifique).
+
+Compteurs de conditions des modèles : DPAC-CC 28, DPAO-F 57, DPAO-T 63, DPIC-PI 39, AVIS-F 28, AVIS-T 32. **Le front doit
+resynchroniser ses copies** de `DPAC-CC`, `DPAO-F`, `DPAO-T`, `DPIC-PI`, `AVIS-F`, `AVIS-T` et `LETTRE-AOR`, ainsi que ses fichiers de
+correspondance (conditions, contrôle, libellé de `B04-RC-02`).
+
 #### L'original de l'acte d'engagement
 
 - **Exigé** quand le mode figé de la procédure est la **remise électronique** (offre déposée et scellée en ligne) ; rien en papier.
@@ -10621,7 +10672,8 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > imprimable. Vers la **PRMP du plan** et **chacune de ses UGPM** ; `typeObjet = DOSSIER`, `idObjet` = `idDossier` = le dossier
 > soumis de la fiche. Texte : « L'avis spécifique du dossier {référence} ({désignation}) peut être imprimé. » Émise au **passage**
 > d'indisponible à imprimable, par la signature d'un PV, les observations levées, la transmission au SIGMP, l'archivage, le dépôt
-> de la publication de l'AGPM (toutes les fiches de la PRMP concernées sont relevées) ou la clôture de la cérémonie des clés : une
+> de la publication de l'AGPM (toutes les fiches de la PRMP concernées sont relevées), la clôture de la cérémonie des clés ou
+> (⚠️ 18/10, « dao-electronique », Q4) le réglage du compte bancaire de l'ARMP (toutes les fiches à PV favorable signé) : une
 > fois par passage ; une réimpression ou un nouveau dépôt ne renotifie pas ; un retour à l'indisponibilité suivi d'une nouvelle
 > disponibilité renotifie ; rien de rétroactif (Q1). Un statut posé à la main par l'Administrateur (`PUT /api/dossiers/{id}`) ne
 > notifie pas. **L'UGPM** reçoit désormais ses propres notifications (destinataire de type `UGPM`, identifiant de l'UGPM) :

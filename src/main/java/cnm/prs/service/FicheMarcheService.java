@@ -217,6 +217,12 @@ public class FicheMarcheService {
         d.setCategorie(ctx.codeCategorie());
         d.setTypeMarche(fiche == null ? null : fiche.getTypeMarche());
         d.setCadrage(fiche == null ? Map.of() : lireJson(fiche.getCadrage()));
+        // ⚠️ 2026-10-18 (« dao-electronique », Q4) — les valeurs brutes : la règle de l'avis lit les frais du dossier (B04-DS-05).
+        Map<String, String> valeurs = new LinkedHashMap<>();
+        if (fiche != null) {
+            valeurRepository.findByIdFiche(fiche.getIdFiche()).forEach(v -> valeurs.put(v.getCodeChamp(), v.getValeur()));
+        }
+        d.setValeurs(valeurs);
         d.setIdDossierSoumis(dossierRepository.findIdDossierByIdDmc(idDmc).orElse(null));
         d.setDesignationMarche(marcheRepository.findById(ctx.idDetail()).map(Marche::getDesignationMarche).orElse(null));
         return Optional.of(d);

@@ -319,6 +319,10 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     @Query("select distinct d.idDmc from Dossier d where d.idDmc is not null and d.idPrmp = :idPrmp")
     List<Long> findIdDmcsParPrmp(@Param("idPrmp") String idPrmp);
 
+    /** ⚠️ 2026-10-18 (« dao-electronique », Q4) — les dossiers nés d'une fiche : {@code [idDossier, idDmc]}. */
+    @Query("select d.idDossier, d.idDmc from Dossier d where d.idDmc is not null")
+    List<Object[]> findDossiersNesDeFiche();
+
     /**
      * ⚠️ LOT 3a (2026-08-26) — §1 : identifiants des dossiers visibles d'une localité, projection de
      * {@link #findVisiblesParLocalite} sur la seule PK. Sert à scoper les ressources

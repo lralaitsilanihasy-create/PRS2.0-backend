@@ -18,6 +18,16 @@ CONDITION	PAPIERmodeRemise = PAPIER
 CONDITION	B04-SEmodeRemise = ELECTRONIQUE
 CONDITION	DEVISEB05-UM-01 renseigne
 CONDITION	SANS-DEVISEB05-UM-01 vide
+CONDITION	SE-OUVERTUREB04-SE-03 renseigne
+CONDITION	SE-PRESTATAIRESB04-SE-06 renseigne
+CONDITION	SE-REMPLACEMENTB04-SE-10 = OUI
+CONDITION	SE-SANS-REMPLACEMENTB04-SE-10 = NON
+CONDITION	SE-SAUVEGARDEB04-SE-11 renseigne et B04-SE-11 != Non
+CONDITION	SE-ASSISTANCE-LIMITEB04-SE-15 renseigne
+CONDITION	OP-DELAIB04-OP-12 renseigne
+CONDITION	OP-MODALITEB04-OP-10 renseigne
+CONDITION	OP-LIENB04-OP-11 renseigne
+CONDITION	OP-PVB04-OP-13 = OUI
 CENTRE	{{B01-AC-01}}
 CENTRE	{{B01-AC-02}}
 CENTRE	Personne responsable des marchés publics : {{B01-AC-05}}
@@ -99,49 +109,111 @@ PARA	le cahier des clauses administratives particulières (CCAP)
 PARA	le document portant clauses techniques particulières ou son équivalent, et ses annexes
 PARA	{{B04-DS-01}}
 SOUS_TITRE	3.2.Langue de rédaction du dossier de consultation (1)
+PARA	{{SI:PAPIER}}
 PARA	Le Dossier complet, rédigé en langue française, peut être consulté par tout candidat désirant prendre connaissance ou obtenir des informations à l’adresse ci-après :
 PARA	Nom du Responsable : {{B04-DS-07}}
 PARA	Fonction : {{B04-DS-08}}
 PARA	Bureau, N° porte, étage : {{B04-DS-09}}
 PARA	Localité : {{B04-DS-10}}
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:B04-SE}}
+PARA	Le Dossier complet, rédigé en langue française, peut être consulté par tout candidat sur la plateforme de dépôt des offres : {{B04-SE-02}}.
+PARA	{{FINSI:B04-SE}}
 SOUS_TITRE	3. 3.Modalités d’acquisition du dossier de consultation (1)
+PARA	{{SI:PAPIER}}
 PARA	{{SI:MONTANT-LOTS}}
 PARA	Pour tout candidat désirant soumissionner, le règlement de la consultation (1) est retiré auprès de {{B04-DS-04}} moyennant le paiement d’un montant non remboursable de {{B04-DS-05.parLot}} à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}.
 PARA	{{FINSI:MONTANT-LOTS}}
 PARA	{{SI:MONTANT-UNIQUE}}
 PARA	Pour tout candidat désirant soumissionner, le règlement de la consultation (1) est retiré auprès de {{B04-DS-04}} moyennant le paiement d’un montant non remboursable de {{B04-DS-05.lettres}} ({{B04-DS-05}}) à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}.
 PARA	{{FINSI:MONTANT-UNIQUE}}
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:B04-SE}}
+PARA	{{SI:MONTANT-LOTS}}
+PARA	Pour tout candidat désirant soumissionner, le règlement de la consultation (1) est retiré sur la plateforme de dépôt des offres ({{B04-SE-02}}) moyennant le paiement d’un montant non remboursable de {{B04-DS-05.parLot}} à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}. Le retrait est ouvert au candidat une fois le reçu de son versement validé.
+PARA	{{FINSI:MONTANT-LOTS}}
+PARA	{{SI:MONTANT-UNIQUE}}
+PARA	Pour tout candidat désirant soumissionner, le règlement de la consultation (1) est retiré sur la plateforme de dépôt des offres ({{B04-SE-02}}) moyennant le paiement d’un montant non remboursable de {{B04-DS-05.lettres}} ({{B04-DS-05}}) à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}. Le retrait est ouvert au candidat une fois le reçu de son versement validé.
+PARA	{{FINSI:MONTANT-UNIQUE}}
+PARA	{{FINSI:B04-SE}}
 SOUS_TITRE	3.4.Modification du dossier de consultation (1)
 PARA	L’Autorité contractante se réserve le droit d'apporter des modifications de détail au dossier de consultation(1) au plus tard 6 jours avant la date limite de réception des offres. Ce délai est décompté à partir de la date d'envoi par l’Autorité contractante des modifications aux candidats ayant retiré le dossier initial. Les candidats devront alors répondre sur la base du dossier modifié sans pouvoir élever de réclamation à ce sujet.
 PARA	Si la date limite de réception des offres est reportée, la disposition précédente est applicable en fonction de cette nouvelle date.
 SOUS_TITRE	ARTICLE 4 : PRESENTATION DES OFFRES
 PARA	Les soumissionnaires remettent un dossier complet comprenant les pièces mentionnées ci-après. Les documents demandés doivent être signés par le soumissionnaire, le mandataire du groupement momentané d'entreprise ou chacun des membres de ce même groupement.
+PARA	{{SI:B04-SE}}
+PARA	Les pièces sont déposées en fichiers sur la plateforme de dépôt des offres ; la soumission par la plateforme vaut signature des documents dans les conditions de l’article 5.2.
+PARA	{{FINSI:B04-SE}}
 SOUS_TITRE	4.1.Pièces constitutives de la candidature (capacités technique et professionnelle) :
 PARA	{{B04-PO-01}}
 SOUS_TITRE	4.2.Pièces constitutives de l’offre :
 PARA	{{B04-PO-02}}
 SOUS_TITRE	ARTICLE 5 : MODALITES DE REMISE DES OFFRES
 SOUS_TITRE	5.1 - Transmission sous support papier
+PARA	{{SI:PAPIER}}
 PARA	{{B04-RQ-01}}
 PARA	Les candidats transmettent leur offre sous pli cacheté portant les mentions :
 PARA	Offre pour : {{B04-RQ-02}}
 CENTRE	NE PAS OUVRIR QU’EN SEANCE D’OUVERTURE DES PLIS
 PARA	Ce pli doit contenir les pièces de la candidature et les pièces de l'offre définies au présent règlement de la consultation. Il devra être remis contre récépissé ou envoyé par pli recommandé avec avis de réception, à l'adresse suivante : {{B04-RQ-03}}
 PARA	Les plis qui seraient remis ou dont l'avis de réception serait délivré après la date et l'heure limites précitées ainsi que remis sous enveloppe non cachetée, ne seront pas retenus.
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:B04-SE}}
+PARA	La transmission des offres sous support papier n’est pas admise : la remise électronique est le seul mode de remise de la présente consultation (article 5.2).
+PARA	{{FINSI:B04-SE}}
 SOUS_TITRE	5.2 - Transmission électronique
 PARA	{{SI:PAPIER}}
 PARA	La transmission de dossiers par voie électronique n’est pas admise
 PARA	{{FINSI:PAPIER}}
 PARA	{{SI:B04-SE}}
-PARA	La transmission par voie électronique est admise dans les conditions suivantes
-PARA	[[CLAUSE À FOURNIR PAR LE JURISTE : conditions de la transmission électronique — plateforme ({{B04-SE-02}}), heure de référence ({{B04-SE-04}}), signature exigée ({{B04-SE-05}}), formats ({{B04-SE-07}}) et tailles admis ({{B04-SE-08}} Mo par fichier, {{B04-SE-09}} Mo par offre), assistance ({{B04-SE-14}}), indisponibilité et prorogation ({{B04-SE-12}} h, {{B04-SE-13}} jours ouvrables)]]
+PARA	La remise électronique est le seul mode de remise des offres de la présente consultation : aucun pli sous support papier n’est reçu. Les offres sont déposées sur la plateforme de dépôt : {{B04-SE-02}}.
+PARA	{{SI:SE-OUVERTURE}}
+PARA	Les dépôts sont ouverts à compter du {{B04-SE-03}}.
+PARA	{{FINSI:SE-OUVERTURE}}
+PARA	Les dates et heures de la procédure s’entendent selon l’heure de référence suivante : {{B04-SE-04}}. Seule l’heure de la plateforme fait foi : une offre dont le dépôt n’est pas achevé à la date et à l’heure limites n’est pas recevable.
+PARA	Niveau de signature électronique exigé : {{B04-SE-05}}.
+PARA	{{SI:SE-PRESTATAIRES}}
+PARA	Prestataires de certification acceptés : {{B04-SE-06}}.
+PARA	{{FINSI:SE-PRESTATAIRES}}
+PARA	Les fichiers sont déposés aux formats suivants : {{B04-SE-07}}, dans la limite de {{B04-SE-08}} Mo par fichier et de {{B04-SE-09}} Mo par offre.
+PARA	{{SI:SE-REMPLACEMENT}}
+PARA	Jusqu’à la date et à l’heure limites, le candidat peut remplacer ou retirer son offre sur la plateforme ; seul son dernier dépôt est ouvert.
+PARA	{{FINSI:SE-REMPLACEMENT}}
+PARA	{{SI:SE-SANS-REMPLACEMENT}}
+PARA	Une offre déposée ne peut être ni remplacée ni retirée.
+PARA	{{FINSI:SE-SANS-REMPLACEMENT}}
+PARA	{{SI:SE-SAUVEGARDE}}
+PARA	Une copie de sauvegarde est admise sous la forme suivante : {{B04-SE-11}}.
+PARA	{{FINSI:SE-SAUVEGARDE}}
+PARA	Si la plateforme est indisponible pendant plus de {{B04-SE-12}} heures au cours des {{B04-SE-16}} heures qui précèdent la date limite de remise, cette date est prorogée de {{B04-SE-13}} jours ouvrables.
+PARA	Assistance aux candidats : {{B04-SE-14}}.
+PARA	{{SI:SE-ASSISTANCE-LIMITE}}
+PARA	Les demandes d’assistance sont reçues jusqu’au {{B04-SE-15}}.
+PARA	{{FINSI:SE-ASSISTANCE-LIMITE}}
 PARA	Même si l’offre du candidat à la présente procédure a fait l'objet d'une transmission électronique, le candidat s'engage, notamment dans le cas où son offre est retenue, à accepter la re-matérialisation conforme, sous forme papier, de tous les documents constitutifs à valeur contractuelle. A ce titre, il s'engage également à ce que la personne physique auteur de leur signature électronique procède à leur signature manuscrite sans procéder à la moindre modification de ceux-ci et les renvoie à l’Autorité contractante sous cette forme. Il s'engage enfin à en accepter la notification, selon les procédés habituellement en cours, sous forme papier.
 PARA	La soumission par la plateforme, effectuée depuis le compte authentifié du candidat et scellée par celle-ci, vaut signature de l'offre et de l'acte d'engagement au sens de l'article 31 du Code. L'attributaire remet l'original signé de son acte d'engagement avant la signature du marché.
 PARA	{{FINSI:B04-SE}}
 SOUS_TITRE	ARTICLE 6 : EXAMEN DES CANDIDATURES ET DES OFFRES
 SOUS_TITRE	6.1 - Sélection des candidatures
+PARA	{{SI:PAPIER}}
 PARA	6.1.1. Les plis seront ouverts par le Représentant de l’Autorité contractante.
 PARA	La séance d'ouverture des plis est publique, les candidats ou leurs représentants sont admis à y assister. Seuls peuvent être ouverts les plis qui ont été reçus dans les conditions prévues ci-dessus au plus tard à la date et à l’heure qui a été fixées pour la réception des offres.
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:B04-SE}}
+PARA	6.1.1. Les offres déposées sur la plateforme sont ouvertes en séance par le Représentant de l’Autorité contractante, après l’heure limite de remise des offres. Seules peuvent être ouvertes les offres dont le dépôt est achevé à la date et à l’heure fixées pour la réception des offres.
+PARA	{{SI:OP-DELAI}}
+PARA	La séance d’ouverture se tient {{B04-OP-12}} minutes après l’heure limite de remise des offres.
+PARA	{{FINSI:OP-DELAI}}
+PARA	{{SI:OP-MODALITE}}
+PARA	Modalité de la séance : {{B04-OP-10}}.
+PARA	{{FINSI:OP-MODALITE}}
+PARA	{{SI:OP-LIEN}}
+PARA	Les soumissionnaires peuvent suivre la séance à l’adresse suivante : {{B04-OP-11}}.
+PARA	{{FINSI:OP-LIEN}}
+PARA	{{SI:OP-PV}}
+PARA	Le procès-verbal de la séance est publié sur la plateforme.
+PARA	{{FINSI:OP-PV}}
+PARA	{{FINSI:B04-SE}}
 PARA	Avant de procéder à l'examen des candidatures, si l'on constate que des pièces du dossier de candidature sont manquantes ou incomplètes, l’Autorité contractante peut décider de demander à tous les candidats concernés de produire ou compléter ces pièces dans un délai maximum de 10 jours. Les autres candidats, qui ont la possibilité de compléter leur candidature, en seront informés dans le même délai.
 PARA	Les candidatures conformes et recevables seront examinées, à partir des seuls renseignements et documents exigés dans le cadre de cette consultation(1), pour évaluer leur situation juridique ainsi que leurs capacités professionnelles, techniques et financières.
 SOUS_TITRE	6.1.2. Critères d’élimination des candidatures :
@@ -190,7 +262,12 @@ PARA	Le montant total remisé HT de la commande
 PARA	Le montant TTC de la commande
 PARA	Le devis ou la facture pro-forma devra répondre strictement aux renseignements sollicités dans la demande de devis. Pour les devis ou factures pro-forma incomplets, le candidat devra les compléter dans les 24 heures ouvrées. A défaut son offre sera rejetée.
 SOUS_TITRE	ARTICLE 10 : AUTRES RENSEIGNEMENTS ET INFORMATIONS COMPLEMENTAIRES
+PARA	{{SI:PAPIER}}
 PARA	Toute demande d’informations complémentaires sur des points techniques ou administratifs du dossier devra être adressée à {{B04-RC-01}} au plus tard {{B04-RC-02}} jours avant la date limite de remise des offres.
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:B04-SE}}
+PARA	Toute demande d’informations complémentaires sur des points techniques ou administratifs du dossier est posée sur la plateforme de dépôt des offres ({{B04-SE-02}}) au plus tard {{B04-RC-02}} jours avant la date limite de remise des offres ; la plateforme n’en reçoit plus au-delà.
+PARA	{{FINSI:B04-SE}}
 PARA	Si une question est posée par un candidat, les autres candidats sont destinataires des éléments en réponse à la question posée par un candidat.
 SOUS_TITRE	ARTICLE 11 : VOIES ET DÉLAIS DE RECOURS
 PARA	L'instance chargée des procédures de recours est {{B06-AN-03}}

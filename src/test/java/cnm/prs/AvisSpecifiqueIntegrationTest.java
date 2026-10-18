@@ -430,6 +430,33 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ 18/10 (« dao-electronique », Q4) — dossier payant, compte de l'ARMP non réglé : indisponible, 409 "
+            + "COMPTE_ARMP_ABSENT nommé ; le compte réglé, l'avis s'imprime ; un dossier gratuit ne l'exige pas")
+    void compteArmpExigeSiPayant() throws Exception {
+        int idDossier = creerDossier();
+        pvSigne(idDossier, "FAV", "PV_SIGNE");
+        disponibilite(idDmc).andExpect(jsonPath("$.disponible").value(true));   // gratuit : le compte n'est pas exigé
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        int idFiche = JsonPath.read(fiche, "$.idFiche");
+        valeurRepository.save(new cnm.prs.entity.FicheMarcheValeur(null, idFiche, "B04-DS-05", "150000"));
+        disponibilite(idDmc).andExpect(jsonPath("$.disponible").value(false)).andExpect(jsonPath("$.raison").value("COMPTE_ARMP_ABSENT"));
+        imprimer(idDmc).andExpect(status().isConflict()).andExpect(jsonPath("$.details.raison").value("COMPTE_ARMP_ABSENT"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("compte bancaire de l'ARMP")));
+        long avant = notificationRepository.findAll().stream().filter(n -> "AVIS_A_IMPRIMER".equals(n.getTypeNotif())).count();
+        mvc.perform(put("/api/parametres/compte-dao").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"banque\":\"BNI Madagascar\",\"titulaire\":\"ARMP\",\"numeroCompte\":\"00005 00001 12345678901 23\"}"))
+                .andExpect(status().isOk());
+        disponibilite(idDmc).andExpect(jsonPath("$.disponible").value(true));
+        // Le réglage du compte rend l'avis imprimable : la PRMP en est prévenue (relevé avant/après, « avis-a-imprimer »).
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "AVIS_A_IMPRIMER".equals(n.getTypeNotif())
+                && Integer.valueOf(idDossier).equals(n.getIdObjet())).isNotEmpty();
+        assertThat(notificationRepository.findAll().stream().filter(n -> "AVIS_A_IMPRIMER".equals(n.getTypeNotif())).count())
+                .isGreaterThan(avant);
+        imprimer(idDmc).andExpect(status().isCreated());
+    }
+
+    @Test
     @DisplayName("§B7.5 / §B8 (2026-10-01) — impression sans numéro de JMP ni supports : 201, pas de « et dans », pointillés ; "
             + "le compte bancaire de l'ARMP réglé par l'Administrateur est imprimé, des pointillés tant qu'il ne l'est pas")
     void publicationMinimaleEtCompte() throws Exception {

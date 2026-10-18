@@ -70,6 +70,37 @@ class ModelesAvisTest {
     }
 
     @Test
+    @DisplayName("⚠️ 18/10 (« dao-electronique », B4) — contrat-cadre en remise électronique : consultation, retrait et dépôt sur la "
+            + "plateforme, ouverture des dépôts, séance en ligne, remise exclusive ; ni secrétariat, ni plis, ni « autorisée » ; les "
+            + "mentions de consultation, de retrait, de date limite et d'ouverture se lisent sur ces phrases")
+    void contratCadreElectronique() {
+        FicheMarcheDto f = fiche("FOURNITURES_SERVICES", "CONTRAT_CADRE", Map.of("typePrix", "UNITAIRES", "alloti", "NON",
+                "garantieSoumission", "NON", "modeRemise", "ELECTRONIQUE"));
+        f.getValeurs().putAll(Map.of("B02-OE-01", "12-CC/MEF/SG/PRMP.2027", "B04-DS-05", "150000", "B04-CP-02", "2027-03-01T10:00",
+                "B04-RQ-03", "Secrétariat de la PRMP, porte 07", "B04-DS-07", "Le Secrétaire de la PRMP", "B04-DS-10", "Antananarivo",
+                "B04-SE-02", "https://prs.cnm.mg/depot", "B04-SE-03", "2027-02-01T08:00", "B04-SE-04", "Heure du serveur"));
+        f.getValeurs().putAll(Map.of("B04-OP-10", "En ligne", "B04-OP-11", "https://prs.cnm.mg/seances/1", "B04-OP-12", "30",
+                "B04-OP-13", "OUI"));
+        DocumentLibre d = rendre("AVIS-F", f, publication(false));
+        String t = texte(d);
+        assertThat(t).contains("peut être consulté par tout candidat sur la plateforme de dépôt des offres : https://prs.cnm.mg/depot.",
+                "est retiré sur la plateforme de dépôt des offres, une fois le reçu du versement validé",
+                "Les offres sont déposées sur la plateforme de dépôt (https://prs.cnm.mg/depot) au plus tard le 01/03/2027 à 10 h 00 "
+                        + "(heure locale) (heure de référence : Heure du serveur).",
+                "Les dépôts sont ouverts à compter du", "La séance d’ouverture se tient 30 minutes après l’heure limite",
+                "Modalité de la séance : En ligne.", "suivre la séance à l’adresse suivante : https://prs.cnm.mg/seances/1.",
+                "Le procès-verbal de la séance est publié sur la plateforme.",
+                "La remise des offres se fait exclusivement par voie électronique, sur la plateforme de dépôt : https://prs.cnm.mg/depot.",
+                "à Antananarivo, le 05/10/2026")
+                .doesNotContain("{{", "Les plis devront parvenir", "Secrétariat de la PRMP", "Nom du Responsable", "sera autorisée",
+                        "en présence des candidats", "retiré auprès de");
+        assertNumerotationContinue(t);
+        cnm.prs.dto.MentionsDto m = MentionsPublication.verifier("AVIS-F", dao.modele("AVIS-F"), d, f);
+        assertThat(m.mentions()).filteredOn(x -> List.of("ADRESSE_CONSULTATION", "ADRESSE_RETRAIT", "DATE_HEURE_LIMITE", "HEURE_OUVERTURE")
+                .contains(x.code())).hasSize(4).allSatisfy(x -> assertThat(x.renseignee()).as(x.code()).isTrue());
+    }
+
+    @Test
     @DisplayName("Passe finale : un repère d'image inconnu est omis (jamais imprimé tel quel) ; {{NUM}} numérote dans l'ordre "
             + "des paragraphes imprimés")
     void passeFinale() {

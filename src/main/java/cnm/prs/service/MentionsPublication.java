@@ -46,6 +46,8 @@ public final class MentionsPublication {
     }
 
     private static final String P = FormulairesCandidat.POINTILLES;
+    // ⚠️ 2026-10-18 (« dao-electronique », B4) — en remise électronique, l'avis et la lettre AOR disent la plateforme : la
+    // consultation, le retrait, la date limite et l'ouverture se lisent aussi sur ces phrases (seconde alternative des motifs).
 
     // ------------------------------------------------------------------ avis (2-II-A P11)
     static final Mention OBJET = new Mention("OBJET", "Objet du marché", "«\\s*\\{\\{B02-OB-01\\}\\}\\s*»",
@@ -55,14 +57,15 @@ public final class MentionsPublication {
     static final Mention FORME_PRIX = new Mention("FORME_PRIX", "Forme des prix", "conclu à prix (unitaire|forfaitaire)",
             "(conclu à prix (?:unitaire|forfaitaire)(?: et à prix forfaitaire)?)");
     static final Mention ADRESSE_CONSULTATION = new Mention("ADRESSE_CONSULTATION", "Adresse de consultation du dossier",
-            "Adresse : \\{\\{B04-DS-09\\}\\}", "^- Adresse : (.+)$");
+            "Adresse : \\{\\{B04-DS-09\\}\\}", "^- Adresse : (.+)$|consulté (?:par tout candidat )?sur la plateforme de dépôt des offres : (.+?)\\.?$");
     static final Mention ADRESSE_RETRAIT = new Mention("ADRESSE_RETRAIT", "Lieu de retrait (achat) du dossier",
-            "retiré auprès de \\{\\{B01-AC-01\\}\\}", "retiré auprès de (.+?) moyennant");
+            "retiré auprès de \\{\\{B01-AC-01\\}\\}", "retiré auprès de (.+?) moyennant|retiré (sur la plateforme de dépôt des offres)");
     static final Mention DATE_HEURE_LIMITE = new Mention("DATE_HEURE_LIMITE", "Date et heure limites de remise des offres",
             "au plus tard le \\{\\{(?:B04-LR-03\\}\\}, \\{\\{B04-LR-04|B04-OV-02\\.heureLocale|B04-CP-02\\.heureLocale)\\}\\}",
-            "au plus tard le (.+?) et seront ouvert");
+            "au plus tard le (.+?)(?: et (?:seront|sont) ouvert| \\(heure de référence)");
     static final Mention HEURE_OUVERTURE = new Mention("HEURE_OUVERTURE", "Heure d'ouverture des plis",
-            "ouvert(?:s|es) immédiatement après l’heure limite", "(ouvert(?:s|es) immédiatement après l’heure limite)");
+            "ouvert(?:s|es) immédiatement après l’heure limite",
+            "(ouvert(?:s|es) immédiatement après l’heure limite)|(ouvertes en séance,? après l’heure limite)");
     static final Mention COUT_DOSSIER = new Mention("COUT_DOSSIER", "Coût du dossier", "\\{\\{B04-DS-05", "\\(Ar ([^)]+)\\)");
     static final Mention COMPTE_PAIEMENT = new Mention("COMPTE_PAIEMENT",
             "Modalités de paiement : compte bancaire de l'ARMP (tient lieu des trois formes de paiement et de l'adresse de l'agent comptable)",

@@ -71,6 +71,9 @@ public class AvisSpecifiqueService {
     public static final String MODE_SANS_AVIS = "MODE_SANS_AVIS";
     /** ⚠️ V118 (2026-10-15, §B2, H1) — le plan ne porte pas de publication de l'AGPM : le journal de l'avis général ne se lit nulle part. */
     public static final String PUBLICATION_AGPM_ABSENTE = PublicationAgpmService.CODE_ABSENTE;
+    /** ⚠️ 2026-10-18 (« dao-electronique », Q4) — dossier payant, compte de l'ARMP non réglé par l'Administrateur. */
+    public static final String COMPTE_ARMP_ABSENT = "COMPTE_ARMP_ABSENT";
+    static final String CHAMP_FRAIS_DOSSIER = "B04-DS-05";
 
     /** Journal du dossier : une impression de l'avis. */
     public static final String JOURNAL_AVIS_IMPRIME = "AVIS_SPECIFIQUE_IMPRIME";
@@ -108,13 +111,17 @@ public class AvisSpecifiqueService {
 
     /** ⚠️ V118 (§B2, H1) — la publication de l'AGPM du plan : numéro et date du journal de l'avis général. */
     private final PublicationAgpmService publicationAgpm;
+    /** ⚠️ 2026-10-18 (« dao-electronique », Q4) — le compte de l'ARMP où se versent les frais du dossier. */
+    private final ParametreService parametres;
 
     public AvisSpecifiqueService(FicheMarcheService fiches, FicheMarcheRepository ficheRepository,
             DossierRepository dossierRepository, PvExamenRepository pvRepository, DocumentsFicheMarcheService documents,
             DossierIntegriteService dossierIntegrite, JournalDossierService journal,
             cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, CeremonieService ceremonie, ValeursPpmService valeursPpm,
-            DelaisPublicite delaisPublicite, DaoCompletService daoComplet, PublicationAgpmService publicationAgpm) {
+            DelaisPublicite delaisPublicite, DaoCompletService daoComplet, PublicationAgpmService publicationAgpm,
+            ParametreService parametres) {
+        this.parametres = parametres;
         this.publicationAgpm = publicationAgpm;
         this.daoComplet = daoComplet;
         this.delaisPublicite = delaisPublicite;
@@ -402,7 +409,26 @@ public class AvisSpecifiqueService {
         if (raison == null && !lettre && publicationAgpm.enVigueurPourDmc(idDmc).isEmpty()) {
             raison = PUBLICATION_AGPM_ABSENTE;
         }
+        // ⚠️ 2026-10-18 (« dao-electronique », Q4) — un dossier payant imprime le compte de l'ARMP où verser les frais : tant que
+        // l'Administrateur ne l'a pas réglé, le document porterait des pointillés. Avis et lettres AOR : même garde.
+        if (raison == null && payant(courante) && parametres.compteDaoTexte() == null) {
+            raison = COMPTE_ARMP_ABSENT;
+        }
         return new AvisDisponibiliteDto(raison == null, raison, avis, pv.getStatutPv(), statutDossier, idDossier);
+    }
+
+    /** Le dossier est payant : un montant de {@code B04-DS-05} (unique ou par lot, {@code B04-DS-05#n}) est positif. */
+    static boolean payant(FicheMarcheDto fiche) {
+        Map<String, String> v = fiche.getValeurs() == null ? Map.of() : fiche.getValeurs();
+        return v.entrySet().stream()
+                .filter(e -> e.getKey().equals(CHAMP_FRAIS_DOSSIER) || e.getKey().startsWith(CHAMP_FRAIS_DOSSIER + LotsFiche.SEPARATEUR))
+                .anyMatch(e -> {
+                    try {
+                        return e.getValue() != null && new java.math.BigDecimal(e.getValue().trim().replace(" ", "")).signum() > 0;
+                    } catch (NumberFormatException ex) {
+                        return false;
+                    }
+                });
     }
 
     private FicheMarche derniereValideeOuNull(Long idDmc) {
@@ -487,6 +513,8 @@ public class AvisSpecifiqueService {
                     + "reçoivent une lettre d'invitation à soumissionner.";
             case PUBLICATION_AGPM_ABSENTE -> "La publication de l'AGPM n'est pas déposée sur le plan de passation : l'avis spécifique cite le "
                     + "numéro et la date du journal de l'avis général, qui se lisent sur elle. Déposez-la sur le plan contrôlé.";
+            case COMPTE_ARMP_ABSENT -> "Le dossier est payant et le compte bancaire de l'ARMP où verser les frais n'est pas réglé : "
+                    + quoi.toLowerCase(java.util.Locale.ROOT) + " " + accord + " une fois le compte réglé par l'Administrateur.";
             default -> "La fiche marché n'a aucune version validée : " + (lettre ? "pas de lettre d'invitation." : "pas d'avis spécifique.");
         };
     }

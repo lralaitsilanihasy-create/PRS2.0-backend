@@ -112,6 +112,19 @@ public class AvisAImprimer {
         return idPrmp == null ? List.of() : dossierRepository.findIdDmcsParPrmp(idPrmp);
     }
 
+    /**
+     * ⚠️ 2026-10-18 (« dao-electronique », Q4) — les fiches dont le dossier a un PV favorable signé, toutes PRMP confondues : celles
+     * qu'un réglage global (le compte bancaire de l'ARMP) peut rendre imprimables.
+     */
+    public List<Long> dmcsAPvFavorable() {
+        Map<Integer, Long> dmcParDossier = new HashMap<>();
+        for (Object[] r : dossierRepository.findDossiersNesDeFiche()) {
+            dmcParDossier.put((Integer) r[0], (Long) r[1]);
+        }
+        return dmcParDossier.isEmpty() ? List.of()
+                : pvRepository.dossiersAvecPvFavorableSigne(dmcParDossier.keySet()).stream().map(dmcParDossier::get).distinct().toList();
+    }
+
     /** Notifie les fiches devenues imprimables depuis le relevé {@code avant}. */
     public void notifierDevenues(Collection<Long> idDmcs, Set<Long> avant) {
         for (Long id : idDmcs) {

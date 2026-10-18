@@ -26,6 +26,11 @@ CONDITION	SANS-GARANTIEgarantieSoumission != OUI
 CONDITION	LOTS-MAXalloti = OUI et B02-AU-07 renseigne
 CONDITION	VISITEB04-VL-02 = OUI
 CONDITION	REUNIONB04-RP-01 = OUI
+CONDITION	SE-OUVERTUREB04-SE-03 renseigne
+CONDITION	OP-DELAIB04-OP-12 renseigne
+CONDITION	OP-MODALITEB04-OP-10 renseigne
+CONDITION	OP-LIENB04-OP-11 renseigne
+CONDITION	OP-PVB04-OP-13 = OUI
 CENTRE	{{IMAGE:embleme}}
 CENTRE	{{B01-AC-01}}
 CENTRE	LA PERSONNE RESPONSABLE DES MARCHES PUBLICS
@@ -85,6 +90,7 @@ PARA	{{FINSI:CC-FORFAITAIRE}}
 PARA	{{SI:CC-MIXTE}}
 PARA	{{NUM}} La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché « contrat-cadre » conclu à prix unitaire et à prix forfaitaire.
 PARA	{{FINSI:CC-MIXTE}}
+PARA	{{SI:PAPIER}}
 PARA	{{NUM}} Le Dossier d’Appel d’Offres complet, rédigé en langue française, peut être consulté par tout candidat désirant prendre connaissance ou obtenir des informations à l’adresse ci-après :
 PARA	- Nom du Responsable : {{B04-DS-07}}
 PARA	- Fonction : {{B04-DS-08}}
@@ -92,7 +98,16 @@ PARA	- Adresse : {{B04-DS-09}}, {{B04-DS-10}}
 PARA	{{SI:CONSULTATION-EMAIL}}
 PARA	- E-mail : {{B04-DS-11}}
 PARA	{{FINSI:CONSULTATION-EMAIL}}
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:ELECTRONIQUE}}
+PARA	{{NUM}} Le Dossier d’Appel d’Offres complet, rédigé en langue française, peut être consulté par tout candidat sur la plateforme de dépôt des offres : {{B04-SE-02}}.
+PARA	{{FINSI:ELECTRONIQUE}}
+PARA	{{SI:PAPIER}}
 PARA	{{NUM}} Pour le (ou les) candidat(s) désirant soumissionner, le Dossier d’Appel d’Offres doit être retiré auprès de {{B01-AC-01}} moyennant le paiement d’un montant non remboursable de :
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:ELECTRONIQUE}}
+PARA	{{NUM}} Pour le (ou les) candidat(s) désirant soumissionner, le Dossier d’Appel d’Offres est retiré sur la plateforme de dépôt des offres, une fois le reçu du versement validé, moyennant le paiement d’un montant non remboursable de :
+PARA	{{FINSI:ELECTRONIQUE}}
 PARA	{{SI:DAO-LOTS}}
 PARA	{{B04-DS-05.lignesParLot}}
 PARA	ou son équivalent en monnaie librement convertible à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}.
@@ -100,12 +115,38 @@ PARA	{{FINSI:DAO-LOTS}}
 PARA	{{SI:DAO-UNIQUE}}
 PARA	- {{B04-DS-05.lettres}} (Ar {{B04-DS-05.chiffres}}) ou son équivalent en monnaie librement convertible à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}.
 PARA	{{FINSI:DAO-UNIQUE}}
+PARA	{{SI:PAPIER}}
 PARA	{{SI:ORDINAIRE}}
 PARA	{{NUM}} Les plis devront parvenir à {{B01-AC-02}} au plus tard le {{B04-OV-02.heureLocale}} et seront ouverts immédiatement après l’heure limite de remise des offres en présence des candidats ou leurs représentants qui souhaitent y assister. Les offres hors délai ne seront pas recevables.
 PARA	{{FINSI:ORDINAIRE}}
 PARA	{{SI:CC}}
 PARA	{{NUM}} Les plis devront parvenir à {{B04-RQ-03}} au plus tard le {{B04-CP-02.heureLocale}} et seront ouverts immédiatement après l’heure limite de remise des offres en présence des candidats ou leurs représentants qui souhaitent y assister. Les offres hors délai ne seront pas recevables.
 PARA	{{FINSI:CC}}
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:ELECTRONIQUE}}
+PARA	{{SI:ORDINAIRE}}
+PARA	{{NUM}} Les offres sont déposées sur la plateforme de dépôt ({{B04-SE-02}}) au plus tard le {{B04-OV-02.heureLocale}} (heure de référence : {{B04-SE-04}}). Les offres hors délai ne sont pas recevables.
+PARA	{{FINSI:ORDINAIRE}}
+PARA	{{SI:CC}}
+PARA	{{NUM}} Les offres sont déposées sur la plateforme de dépôt ({{B04-SE-02}}) au plus tard le {{B04-CP-02.heureLocale}} (heure de référence : {{B04-SE-04}}). Les offres hors délai ne sont pas recevables.
+PARA	{{FINSI:CC}}
+PARA	{{SI:SE-OUVERTURE}}
+PARA	Les dépôts sont ouverts à compter du {{B04-SE-03}}.
+PARA	{{FINSI:SE-OUVERTURE}}
+PARA	Les offres sont ouvertes en séance, après l’heure limite de remise des offres.
+PARA	{{SI:OP-DELAI}}
+PARA	La séance d’ouverture se tient {{B04-OP-12}} minutes après l’heure limite de remise des offres.
+PARA	{{FINSI:OP-DELAI}}
+PARA	{{SI:OP-MODALITE}}
+PARA	Modalité de la séance : {{B04-OP-10}}.
+PARA	{{FINSI:OP-MODALITE}}
+PARA	{{SI:OP-LIEN}}
+PARA	Les soumissionnaires peuvent suivre la séance à l’adresse suivante : {{B04-OP-11}}.
+PARA	{{FINSI:OP-LIEN}}
+PARA	{{SI:OP-PV}}
+PARA	Le procès-verbal de la séance est publié sur la plateforme.
+PARA	{{FINSI:OP-PV}}
+PARA	{{FINSI:ELECTRONIQUE}}
 PARA	{{SI:VISITE}}
 PARA	{{NUM}} La visite des lieux est obligatoire pour les candidats.
 PARA	{{FINSI:VISITE}}
@@ -113,7 +154,7 @@ PARA	{{SI:REUNION}}
 PARA	{{NUM}} Une réunion préparatoire est prévue : {{B04-RP-02}}.
 PARA	{{FINSI:REUNION}}
 PARA	{{SI:ELECTRONIQUE}}
-PARA	{{NUM}} La soumission des offres par voie électronique sera autorisée.
+PARA	{{NUM}} La remise des offres se fait exclusivement par voie électronique, sur la plateforme de dépôt : {{B04-SE-02}}.
 PARA	{{FINSI:ELECTRONIQUE}}
 PARA	{{SI:PAPIER}}
 PARA	{{NUM}} La soumission des offres par voie électronique ne sera pas autorisée.

@@ -68,23 +68,23 @@ class ModelesDaoTest {
             + "illisible ou une section mal refermée fait échouer le chargement, nommément")
     void chargement() {
         ModelesDao dao = new ModelesDao();
-        assertThat(dao.modele("DPAC-CC").conditions()).hasSize(18);   // D4 : + CCAG-FOURNITURES, CCAG-TRAVAUX ; 01/10 : + MONTANT-LOTS/-UNIQUE
+        assertThat(dao.modele("DPAC-CC").conditions()).hasSize(28);   // 18/10 (« dao-electronique ») : + SE-* (6), OP-* (4) ; D4 : + CCAG-FOURNITURES, CCAG-TRAVAUX ; 01/10 : + MONTANT-LOTS/-UNIQUE
         assertThat(dao.modele("AE-CC").conditions()).hasSize(56);   // 15/10 (articles vides, §B2) : - AVANCE, AVANCE-SOUS-TRAITANT ; 15/10 (formulaire type) : + ACTUALISATION, MINIMUM, SANS-MINIMUM
         // ⚠️ Lot D2 (2026-09-29) — les trois documents des fournitures, un modèle pour la quantité fixe et à commande.
-        assertThat(dao.modele("DPAO-F").conditions()).hasSize(47);   // 03/10 (V62, pièces des fournitures) : + PIECES-OFFRE-LISTE/-TEXTE, PIECES-ADM, -ADM-LISTE/-TEXTE
+        assertThat(dao.modele("DPAO-F").conditions()).hasSize(57);   // 18/10 : + SE-* (6), OP-* (4) ; 03/10 (V62, pièces des fournitures) : + PIECES-OFFRE-LISTE/-TEXTE, PIECES-ADM, -ADM-LISTE/-TEXTE
         assertThat(dao.modele("AE-F").conditions()).hasSize(22);
         assertThat(dao.modele("CCAP-F").conditions()).hasSize(67);   // 29/09 : + VARIATION-COMMANDE, SANS-VARIATION-COMMANDE
         // ⚠️ Lot D3 (2026-09-29) — les trois documents des prestations intellectuelles.
-        assertThat(dao.modele("DPIC-PI").conditions()).hasSize(33);
+        assertThat(dao.modele("DPIC-PI").conditions()).hasSize(39);   // 18/10 : + SE-* (6)
         assertThat(dao.modele("AE-PI").conditions()).hasSize(17);
         assertThat(dao.modele("CPS-PI").conditions()).hasSize(30);
         // ⚠️ Lot D4 (2026-09-29) — les trois documents des travaux.
-        assertThat(dao.modele("DPAO-T").conditions()).hasSize(53);   // 03/10 (V61, pièces de l'offre) : + PIECES-OFFRE-LISTE/-TEXTE, PIECES-ADM-LISTE/-TEXTE ; 03/10 (V60, matériel et personnel) : + MATERIEL-LISTE/-TEXTE, PERSONNEL-LISTE/-TEXTE ; 03/10 (seuils calculés, V59) : + CA-MOYENNE, REFERENCES-UN/-CUMUL, LIQUIDITE-POURCENT ; 01/10 (DAO du MEN) : + GARANTIE-LOTS/-UNIQUE, PERSONNEL-CLE, LIQUIDITE ; §B4.1 : + LIMITE-LOTS, OFFRES-ANORMALES ; 02/10 : + CHIFFRE-AFFAIRES
+        assertThat(dao.modele("DPAO-T").conditions()).hasSize(63);   // 18/10 : + SE-* (6), OP-* (4) ; 03/10 (V61, pièces de l'offre) : + PIECES-OFFRE-LISTE/-TEXTE, PIECES-ADM-LISTE/-TEXTE ; 03/10 (V60, matériel et personnel) : + MATERIEL-LISTE/-TEXTE, PERSONNEL-LISTE/-TEXTE ; 03/10 (seuils calculés, V59) : + CA-MOYENNE, REFERENCES-UN/-CUMUL, LIQUIDITE-POURCENT ; 01/10 (DAO du MEN) : + GARANTIE-LOTS/-UNIQUE, PERSONNEL-CLE, LIQUIDITE ; §B4.1 : + LIMITE-LOTS, OFFRES-ANORMALES ; 02/10 : + CHIFFRE-AFFAIRES
         assertThat(dao.modele("AE-T").conditions()).hasSize(30);
         assertThat(dao.modele("CCAP-T").conditions()).hasSize(73);   // 30/09 : + PLANS (B04-CD-03) ; 02/10 : + LIBERATION-PROVISOIRE, + ACTUALISATION (B5.2)
         // ⚠️ 2026-09-30 — les deux avis spécifiques (fournitures, travaux), imprimés à la demande, hors des couvertures.
-        assertThat(dao.modele("AVIS-F").conditions()).hasSize(23);   // 01/10 : aligné sur un avis réel (§B7) ; 13/10 (R3c) : + LOTS-MAX
-        assertThat(dao.modele("AVIS-T").conditions()).hasSize(27);   // 13/10 (R3c) : + LOTS-MAX, VISITE, REUNION
+        assertThat(dao.modele("AVIS-F").conditions()).hasSize(28);   // 18/10 : + SE-OUVERTURE, OP-* (4) ; 01/10 : aligné sur un avis réel (§B7) ; 13/10 (R3c) : + LOTS-MAX
+        assertThat(dao.modele("AVIS-T").conditions()).hasSize(32);   // 18/10 : + SE-OUVERTURE, OP-* (4) ; 13/10 (R3c) : + LOTS-MAX, VISITE, REUNION
         assertThat(ModelesDao.COUVERTURES).noneMatch(c -> c.sigle().startsWith("AVIS"));
         assertThat(dao.modeles()).hasSize(15);   // 01/10 : + LETTRE-PI (lot AV-4.1), hors couvertures ; 13/10 (R3c) : + LETTRE-AOR
         // ⚠️ R3c — la lettre de l'appel d'offres restreint : par le mode, pas par la catégorie.
@@ -286,17 +286,32 @@ class ModelesDaoTest {
                 "B05-PM-06", "indice des prix à la consommation (INSTAT)", "B05-MT-03", "5000000",
                 "B08-FP-01", "Les demandes de paiement sont présentées en trois exemplaires.",
                 "B08-FP-05", "après livraison de chaque commande"));
+        // ⚠️ 18/10 (« dao-electronique », B2, B3, B5) — séance en ligne, remplacement admis, pas de sauvegarde, questions à J−10.
+        fiche.getValeurs().putAll(v("B04-OP-10", "En ligne", "B04-OP-12", "30", "B04-OP-13", "OUI", "B04-SE-10", "OUI",
+                "B04-SE-11", "Non", "B04-RC-02", "10", "B04-SE-04", "Heure du serveur"));
         fiche.setValeursPpm(new HashMap<>(v("B01-AC-13", "Appel d'offres restreint")));
         fiche.setValeursCadrage(new HashMap<>(v("B08-AV-02", "15", "B02-LV-05", "2")));
         String dpac = FormulairesCandidat.rendreModele("DPAC", null, fiche, champs(), dao.modele("DPAC-CC"), null).texte();
+        assertThat(dpac).contains("Les pièces sont déposées en fichiers sur la plateforme de dépôt des offres",
+                "Les dates et heures de la procédure s’entendent selon l’heure de référence suivante : Heure du serveur.",
+                "le candidat peut remplacer ou retirer son offre sur la plateforme",
+                "Les offres déposées sur la plateforme sont ouvertes en séance", "Modalité de la séance : En ligne.",
+                "La séance d’ouverture se tient 30 minutes après l’heure limite", "Le procès-verbal de la séance est publié sur la plateforme.",
+                "est posée sur la plateforme de dépôt des offres (https://depot.cnm.mg) au plus tard 10 jours avant la date limite")
+                .doesNotContain("copie de sauvegarde", "ne peut être ni remplacée", "Nom du Responsable", "est retiré auprès de",
+                        "devra être adressée à");
         assertThat(dpac).contains("à plusieurs titulaires (multi attributaire)", "selon le calendrier fixé ci-après",
                 "chaque trimestre", "Cette période de validité peut être reconduite",
-                "La transmission par voie électronique est admise dans les conditions suivantes",
-                "[[CLAUSE À FOURNIR PAR LE JURISTE : conditions de la transmission électronique — plateforme (https://depot.cnm.mg)",
+                // ⚠️ 2026-10-18 (« dao-electronique », B1-B2) — la clause rédigée remplace la réserve du juriste ; retrait sur la plateforme.
+                "La remise électronique est le seul mode de remise des offres de la présente consultation",
+                "Les offres sont déposées sur la plateforme de dépôt : https://depot.cnm.mg.",
+                "est retiré sur la plateforme de dépôt des offres (https://depot.cnm.mg)",
+                "La transmission des offres sous support papier n’est pas admise",
                 // 01/10 : le montant du DAO par lot (DPAC-CC du front, 40f2b4a)
                 "montant non remboursable de Lot n° 1 : 100 000 Ariary ; Lot n° 2 : 150 000 Ariary à verser sur le compte bancaire de "
                         + "l’ARMP : " + FormulairesCandidat.POINTILLES + ".")   // compte non réglé : pointillés
-                .doesNotContain("n’est pas admise", "mono-attributaire", "Sans objet.", "{{");
+                .doesNotContain("par voie électronique n’est pas admise", "mono-attributaire", "Sans objet.", "{{", "CLAUSE À FOURNIR",
+                        "sous pli cacheté", "admis à y assister");
         for (int lot = 1; lot <= 2; lot++) {
             String ae = FormulairesCandidat.rendreModele("AE", lot, fiche, champs(), dao.modele("AE-CC"), null).texte();
             assertThat(ae).as("lot " + lot).contains("CONTRAT-CADRE Valant acte d’engagement et CCAP LOT n°" + lot,
