@@ -63,6 +63,13 @@ class MentionsPublicationTest {
         MentionsDto ok = verifier("AVIS-F", pleine, Map.of(FormulairesCandidat.JETON_COMPTE_DAO, "BNI, compte n° 1 au nom de ARMP"));
         assertThat(ok.documentComplet()).as(String.join(", ", nonRenseignees(ok))).isTrue();
         assertThat(ok.mentions()).allSatisfy(x -> assertThat(x.presenteAuGabarit()).isTrue());
+        // ⚠️ 2026-10-18 (« avis-specifique-en-donnees », §B1, Q2) — la valeur imprimée ; nulle en pointillés.
+        assertThat(valeur(ok, "OBJET")).isEqualTo("Fourniture de mobilier");
+        assertThat(valeur(ok, "LOTS_MAX")).isEqualTo("lot unique indivisible");
+        assertThat(valeur(ok, "MONTANT_GARANTIE")).isEqualTo("garantie de soumission n’est pas requise");
+        assertThat(valeur(ok, "ADRESSE_RETRAIT")).isEqualTo("Région Analamanga");
+        assertThat(valeur(m, "OBJET")).isNull();
+        assertThat(valeur(m, "FORME_PRIX")).startsWith("conclu à prix unitaire");
 
         // Travaux, alloti sans maximum de lots, visite prévue mais réunion non : LOTS_MAX manque, VISITE renseignée, REUNION sans objet.
         FicheMarcheDto travaux = fiche("TRAVAUX");
@@ -79,6 +86,10 @@ class MentionsPublicationTest {
         DocumentLibre rendu = FormulairesCandidat.rendreModele(lettre ? "LETTRE_INVITATION" : "AVIS", null, f, Map.of(), dao.modele(sigle),
                 null, jetons);
         return MentionsPublication.verifier(sigle, dao.modele(sigle), rendu, f);
+    }
+
+    private static String valeur(MentionsDto m, String code) {
+        return m.mentions().stream().filter(x -> code.equals(x.code())).findFirst().orElseThrow().valeur();
     }
 
     private static List<String> ecarts(MentionsDto m) {

@@ -219,11 +219,13 @@ public class FicheMarcheController {
 
     /**
      * ⚠️ V45 (2026-09-25, formulaires du candidat, §B1) — le besoin de la version courante (fournitures), trié par lot
-     * puis ordre, avec les caractéristiques de chaque article. Même lecture que la fiche.
+     * puis ordre, avec les caractéristiques de chaque article. Même lecture que la fiche. ⚠️ 2026-10-18 (« avis-specifique-en-donnees »,
+     * §B2) — {@code ?version=n} : le besoin de la version n (figée ou courante), mêmes champs ; 404 si la version n'existe pas.
      */
     @GetMapping("/{idDmc}/articles")
-    public List<cnm.prs.dto.ArticleBesoinDto> articles(@PathVariable Long idDmc) {
-        return service.articles(idDmc);
+    public List<cnm.prs.dto.ArticleBesoinDto> articles(@PathVariable Long idDmc,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Integer version) {
+        return version == null ? service.articles(idDmc) : service.articles(idDmc, version);
     }
 
     /**

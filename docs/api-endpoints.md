@@ -8627,6 +8627,30 @@ sous-type). Aucune dépendance ajoutée.
   quand la Commission des marchés a examiné une autre version.
 - **`BORDEREAU_PRIX` et `DQE`** sont inchangés : les estimatifs sont joints d'office au dossier depuis V117.
 
+⚠️ **2026-10-18 (demande front « avis-specifique-en-donnees »)** — le projet d'avis spécifique en données, et les articles d'une
+version.
+- **`GET /api/dossiers/{id}/avis-specifique`** (B1) rend le projet d'avis (ou de lettre d'invitation) du dossier en données.
+  - **Garde** : celle de la lecture du dossier.
+  - **Refus** : 404, et 409 **`AVIS_INDISPONIBLE`**, `details.raison` = `FICHE_NON_VALIDEE` (dossier qui n'est pas né d'une fiche
+    validée) ou `CATEGORIE_SANS_AVIS` (aucun modèle pour la catégorie et le mode).
+  - **La version** : la version soumise par le dossier, à défaut la dernière validée — celle du PDF joint sous `AVIS_SPECIFIQUE`
+    (Q1).
+  - **La forme** : `AvisEnDonneesDto { idDossier, idDmc, versionFiche, gabarit, lettre, autoriteContractante, numero,
+    documentComplet, mentions: [{ code, libelle, presenteAuGabarit, renseignee, sansObjet, detail, valeur }] }`.
+    - `gabarit` : `AVIS-F`, `AVIS-T`, `LETTRE-PI` (prestations intellectuelles) ou `LETTRE-AOR` (appel d'offres restreint) ;
+      `lettre` vrai pour les deux derniers.
+    - `autoriteContractante` : `B01-AC-01` ; `numero` : `B02-OB-03`, le « N° » imprimé sous le titre.
+    - `mentions` : les codes de `…/avis-specifique/mentions`, dans le même ordre.
+    - `valeur` : la valeur telle que le projet l'imprime ; **nulle** en pointillés (Q2 : l'écran écrit « à compléter »).
+      Une mention qui imprime une phrase quand elle ne s'applique pas la garde (`LOTS_MAX` « lot unique indivisible »,
+      `MONTANT_GARANTIE` « garantie de soumission n’est pas requise »). Deux groupes imprimés sont joints par « — »
+      (`ADRESSE_ACCUSE`).
+- **`GET /api/fiches-marche/{idDmc}/avis-specifique/mentions`** et **`…/lettres-invitation/mentions`** portent aussi `valeur` sur
+  chaque mention (version courante, comme avant).
+- **`GET /api/fiches-marche/{idDmc}/articles?version=n`** (B2) rend le besoin de la version `n` (figée ou courante), mêmes champs
+  qu'`ArticleBesoinDto`, prix unitaire estimé compris ; 404 si la version n'existe pas. Sans `version`, la version courante, comme
+  avant.
+
 - **`TypePieceJointeDto`** gagne `categorie` (`FOURNITURES_SERVICES` | `TRAVAUX` | `PRESTATIONS_INTELLECTUELLES`, nul : toutes) et
   `forme` (`CONTRAT_CADRE` | `AUTRE` — toute autre forme —, nul : toutes). `GET /api/type-piece-jointes?typeDossier=` est inchangé
   (pièces de la famille).

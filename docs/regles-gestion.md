@@ -2687,6 +2687,18 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   - Le **bordereau des prix estimatifs** et le **DQE estimatif** restent, comme depuis V117, des documents produits par la fiche et
     **joints d'office** au dossier sous leurs pièces : ils ne sont pas à téléverser. Le **tableau des coûts estimatifs** des
     prestations intellectuelles reste à téléverser, car la fiche ne le produit pas (H3 du 14/10).
+  - ⚠️ **2026-10-18 — Le projet d'avis spécifique se lit aussi en données** (demande du pilote). Le dossier né d'une fiche
+    validée présente les mentions que le manuel fait contrôler sur l'avis (ou sur la lettre d'invitation), avec la valeur que le
+    projet imprime.
+    - **La version** : celle du projet joint au dossier, c'est-à-dire la version soumise, à défaut la dernière validée. Le projet
+      joint est remplacé à chaque validation tant que le dossier est en constitution (Q1). En rectification, la nouvelle version est
+      jointe comme version corrigée. En examen, rien ne change.
+    - **Une mention non renseignée** (pointillés) a une valeur nulle : l'écran écrit « à compléter » (Q2). Une mention qui imprime
+      une phrase quand elle ne s'applique pas (« lot unique indivisible », « garantie de soumission n'est pas requise ») garde
+      cette phrase.
+    - **Le PDF reste la pièce** ; les données n'en sont que la lecture.
+    - **Le bordereau** se lit sur la même version : les articles d'une version donnée de la fiche sont servis tels qu'elle les a
+      figés.
 - CCAG et descriptif des travaux [Action] ⚠️ **Décisions du pilote (2026-10-15 ; V119)**
   - Le CCAG n'est plus une pièce exigée : le dossier d'appel d'offres complet le recopie (partie 2.3, CCAG de la catégorie).
   - Le **descriptif technique et les plans** d'un marché de travaux restent de vrais documents : une pièce du dossier d'appel

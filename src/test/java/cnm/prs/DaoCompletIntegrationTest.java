@@ -286,6 +286,43 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ 18/10 (« avis-specifique-en-donnees ») — B1 : l'avis spécifique du dossier né d'une fiche, en données (mentions du "
+            + "modèle type et leur valeur imprimée, version présentée) ; B2 : les articles d'une version donnée, 404 version inconnue")
+    void avisEnDonneesEtArticlesDUneVersion() throws Exception {
+        Long idDmc = creerDmc();
+        besoinDeTest(idDmc);
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", new LinkedHashMap<>());
+        String cree = mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int id = JsonPath.<Integer>read(cree, "$.idDossier");
+
+        String a = mvc.perform(get("/api/dossiers/" + id + "/avis-specifique").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(a, "$.gabarit")).isEqualTo("AVIS-F");
+        assertThat(JsonPath.<Boolean>read(a, "$.lettre")).isFalse();
+        assertThat(JsonPath.<Integer>read(a, "$.versionFiche")).isEqualTo(1);
+        assertThat(JsonPath.<List<String>>read(a, "$.mentions[*].code")).containsExactly("OBJET", "LOTS_MAX", "FORME_PRIX",
+                "ADRESSE_CONSULTATION", "ADRESSE_RETRAIT", "DATE_HEURE_LIMITE", "HEURE_OUVERTURE", "COUT_DOSSIER", "COMPTE_PAIEMENT",
+                "FORMES_GARANTIE", "MONTANT_GARANTIE");
+        assertThat(JsonPath.<List<String>>read(a, "$.mentions[?(@.code=='OBJET')].valeur"))
+                .containsExactly("Acquisition de matériels informatiques");
+        // Q2 : une mention non renseignée a une valeur nulle.
+        assertThat(JsonPath.<List<Object>>read(a, "$.mentions[?(@.renseignee==false)].valeur")).allSatisfy(v -> assertThat(v).isNull());
+
+        String courants = mvc.perform(get("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String v1 = mvc.perform(get("/api/fiches-marche/" + idDmc + "/articles").param("version", "1").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(v1, "$")).isNotEmpty();
+        assertThat(v1).isEqualTo(courants);
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/articles").param("version", "99").header("Authorization", tokenPrmp))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/dossiers/9900/avis-specifique").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AVIS_INDISPONIBLE"));
+    }
+
+    @Test
     @DisplayName("⚠️ 17/10 (« pieces-dmc-par-les-donnees ») — dossier né d'une fiche validée, remise papier : fiche de présentation, "
             + "calendrier et contrôle du plan fournis par l'application (plus exigés à la soumission) ; fiche de présentation en données "
             + "et en PDF ; plan et PV sur le dossier ; un dossier sans fiche n'a pas de fiche de présentation")

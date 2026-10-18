@@ -544,6 +544,18 @@ public class FicheMarcheService {
     }
 
     /**
+     * ⚠️ 2026-10-18 (demande front « avis-specifique-en-donnees », §B2) — le besoin d'une version donnée (le bordereau de la version
+     * soumise), mêmes champs ; 404 si la version n'existe pas.
+     */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.ArticleBesoinDto> articles(Long idDmc, Integer numero) {
+        contexte(idDmc);
+        FicheMarche fiche = ficheRepository.findByIdDmcAndNumeroVersion(idDmc, numero)
+                .orElseThrow(() -> new ResourceNotFoundException("Version " + numero + " introuvable pour le DMC " + idDmc + "."));
+        return besoin.lister(fiche.getIdFiche());
+    }
+
+    /**
      * ⚠️ V45 (2026-09-25, §B1) — remplacement en bloc du besoin d'un lot ({@code lot}) ou de toute la fiche
      * ({@code lot} nul). Gardes, dans l'ordre : écriture de la fiche (profil, mandat, forme et catégorie outillées) ;
      * catégorie hors fournitures → 409 {@code BESOIN_HORS_PERIMETRE} ; rang de lot (400 {@code lot} ou

@@ -141,7 +141,9 @@ public final class MentionsPublication {
                     : Boolean.TRUE.equals(renseignee) ? null : "non renseignée sur la fiche (pointillés) : saisie à compléter";
             gabaritComplet &= presente;
             documentComplet &= presente && (sansObjet || Boolean.TRUE.equals(renseignee));
-            resultats.add(new MentionsDto.Mention(m.code(), m.libelle(), presente, renseignee, sansObjet, detail));
+            // ⚠️ 2026-10-18 (« avis-specifique-en-donnees », §B1, Q2) — la valeur telle que le document l'imprime, nulle en pointillés.
+            String valeur = presente && (sansObjet || Boolean.TRUE.equals(renseignee)) ? valeur(m.document(), document) : null;
+            resultats.add(new MentionsDto.Mention(m.code(), m.libelle(), presente, renseignee, sansObjet, detail, valeur));
         }
         return new MentionsDto(sigle, gabaritComplet, documentComplet, resultats);
     }
@@ -167,6 +169,32 @@ public final class MentionsPublication {
             }
         }
         return false;
+    }
+
+    /**
+     * ⚠️ 2026-10-18 (« avis-specifique-en-donnees », §B1) — la valeur imprimée : les groupes capturés de la première occurrence
+     * renseignée (un seul groupe : sa valeur ; plusieurs : jointes par « — »), ou {@code null} si aucune ne l'est (Q2).
+     */
+    static String valeur(Pattern document, String texte) {
+        Matcher m = document.matcher(texte);
+        while (m.find()) {
+            List<String> groupes = new ArrayList<>();
+            boolean ok = true;
+            for (int g = 1; g <= m.groupCount(); g++) {
+                String v = m.group(g);
+                if (v == null) {
+                    continue;
+                }
+                if (v.contains(P) || v.contains("{{") || v.isBlank()) {
+                    ok = false;
+                }
+                groupes.add(v.trim());
+            }
+            if (ok && !groupes.isEmpty()) {
+                return String.join(" — ", groupes);
+            }
+        }
+        return null;
     }
 
     static String normaliser(String s) {

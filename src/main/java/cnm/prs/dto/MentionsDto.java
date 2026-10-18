@@ -19,7 +19,11 @@ public record MentionsDto(String gabarit, boolean gabaritComplet, boolean docume
      * @param renseignee        la valeur rendue n'est pas en pointillés ; {@code null} si la mention est absente du gabarit ou sans objet
      * @param sansObjet         la mention ne s'applique pas à cette fiche (lot unique, pas de visite des lieux…)
      * @param detail            l'écart nommé, ou {@code null}
+     * @param valeur            ⚠️ 2026-10-18 (« avis-specifique-en-donnees », §B1, Q2) — la valeur telle que le document l'imprime
+     *                          (« lot unique indivisible », « garantie de soumission n'est pas requise » compris) ; {@code null}
+     *                          en pointillés, absente du gabarit ou sans rien d'imprimé
      */
-    public record Mention(String code, String libelle, boolean presenteAuGabarit, Boolean renseignee, boolean sansObjet, String detail) {
+    public record Mention(String code, String libelle, boolean presenteAuGabarit, Boolean renseignee, boolean sansObjet, String detail,
+            String valeur) {
     }
 }
