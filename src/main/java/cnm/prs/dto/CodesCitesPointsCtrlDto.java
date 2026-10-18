@@ -23,8 +23,9 @@ public record CodesCitesPointsCtrlDto(int pointsCites, int codesCites, List<Poin
      *
      * @param code  le code tel que le texte le cite ({@code B05-GS-03}, une rubrique {@code B08-AV}, un bloc {@code B12})
      * @param motif {@code INCONNU} (absent du référentiel), {@code INACTIF} (retiré), {@code HORS_CATEGORIE} (aucune catégorie du
-     *              point), {@code HORS_FORME} (absent pour la forme {@code forme})
-     * @param forme pour {@code HORS_FORME} : {@code CONTRAT_CADRE} ou {@code AUTRE} ; nul sinon
+     *              point), {@code HORS_FORME} (absent pour la forme {@code forme}), ⚠️ §B3 {@code HORS_RUBRIQUE} (présent pour la
+     *              forme, mais sa rubrique ou son bloc ne l'est pas : le champ n'est pas affiché)
+     * @param forme pour {@code HORS_FORME} et {@code HORS_RUBRIQUE} : {@code CONTRAT_CADRE} ou {@code AUTRE} ; nul sinon
      */
     public record Ecart(String code, String motif, String forme) {
     }

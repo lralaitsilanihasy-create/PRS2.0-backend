@@ -1480,7 +1480,10 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   exister, actif, au référentiel pour **chaque forme** du point (contrat-cadre, autres formes ; les deux sans forme) et dans
 >   **au moins une** de ses catégories (toutes sans catégorie). Sinon l'enregistrement par l'Administrateur est refusé (400
 >   `CODES_ABSENTS`, codes nommés) ; le bilan de l'existant se lit à `GET /api/points-ctrls/controle-codes` (vide en recette après
->   V133). **Non traité (Q2)** : en travaux, la même grille cite surtout des codes du DAO de fournitures (42 sur 54 absents d'une
+>   V133). ⚠️ **Recette du front (§B3, V134)** : un champ ne compte que si sa **rubrique et son bloc** l'admettent aussi (motif
+>   `HORS_RUBRIQUE`) ; la rubrique « Composition du dossier » (`B04-CD`) s'ouvre au contrat-cadre, comme ses champs `B04-CD-01`
+>   (obligatoire) et `B04-CD-02` depuis le 16/10 ; et l'Administrateur ne peut plus ouvrir un champ à une forme ou une catégorie
+>   que sa rubrique ou son bloc n'admet pas (400), puisqu'un tel champ est évalué sans être proposé à la saisie. **Non traité (Q2)** : en travaux, la même grille cite surtout des codes du DAO de fournitures (42 sur 54 absents d'une
 >   fiche de travaux, toutes formes) ; la règle « au moins une catégorie » ne le relève pas — lot à venir, sur avis du pilote. Les
 >   prestations intellectuelles ne sont pas touchées : la grille `DC` ne cite aucun code et le contrat-cadre n'existe pas en PI.
 > - **Les dossiers existants (Q1)** : un dossier déjà soumis garde son sous-type. Le dossier 100380 reste en `DAOO`.

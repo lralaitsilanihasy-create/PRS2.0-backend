@@ -34,8 +34,9 @@ class GrilleContratCadreIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private PointsCtrlRepository points;
 
     private void champ(String code, String typesMarche, String categories, boolean actif) {
-        jdbcTemplate.update("INSERT INTO tr_rubrique_fiche_marche (\"CODE\", \"CODE_BLOC\", \"CODE_COURT\", \"LIBELLE\", \"RANG\") "
-                + "VALUES (?, 'B09', ?, 'Rubrique d''essai', 99) ON CONFLICT DO NOTHING", code.substring(0, 6), code.substring(4, 6));
+        jdbcTemplate.update("INSERT INTO tr_rubrique_fiche_marche (\"CODE\", \"CODE_BLOC\", \"CODE_COURT\", \"LIBELLE\", \"RANG\", "
+                + "\"CATEGORIES\") VALUES (?, 'B09', ?, 'Rubrique d''essai', 99, 'FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES') "
+                + "ON CONFLICT DO NOTHING", code.substring(0, 6), code.substring(4, 6));
         ChampFicheMarche c = new ChampFicheMarche();
         c.setCode(code);
         c.setCodeRubrique(code.substring(0, 6));
@@ -119,6 +120,50 @@ class GrilleContratCadreIntegrationTest extends CnmIntegrationTestSupport {
                 .containsExactly("HORS_FORME", "INACTIF");
         assertThat(JsonPath.<List<String>>read(bilan, "$.points[?(@.idPointCtrl==97001)].ecarts[0].forme")).containsExactly("CONTRAT_CADRE");
         assertThat(JsonPath.<Integer>read(bilan, "$.pointsCites")).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("B3 : un champ hors de sa rubrique — HORS_RUBRIQUE au contrôle des codes, 400 à l'écriture du champ ; V134 ouvre B04-CD")
+    void champHorsDeSaRubrique() throws Exception {
+        // Une rubrique des seules autres formes, un champ ouvert au contrat-cadre (comme B04-CD-01 avant V134).
+        jdbcTemplate.update("INSERT INTO tr_rubrique_fiche_marche (\"CODE\", \"CODE_BLOC\", \"CODE_COURT\", \"LIBELLE\", \"RANG\", "
+                + "\"TYPES_MARCHE\", \"CATEGORIES\") VALUES ('B09-WW', 'B09', 'WW', 'Rubrique fermée', 99, 'QUANTITE_FIXE,A_COMMANDE', "
+                + "'FOURNITURES_SERVICES') ON CONFLICT DO NOTHING");
+        champ("B09-WW-01", "QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE", "FOURNITURES_SERVICES", true);
+
+        mvc.perform(post("/api/points-ctrls").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content(corps("Composition", "Fiches jointes (B09-WW-01) ?", "CONTRAT_CADRE", null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.ecarts[0].motif").value("HORS_RUBRIQUE"))
+                .andExpect(jsonPath("$.details.ecarts[0].forme").value("CONTRAT_CADRE"))
+                .andExpect(jsonPath("$.message").value(Matchers.containsString("sa rubrique n'est pas ouverte au contrat-cadre")));
+        mvc.perform(post("/api/points-ctrls").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content(corps("Composition", "Fiches jointes (B09-WW-01) ?", "AUTRE", null)))
+                .andExpect(status().isCreated());
+
+        // L'Administrateur ne peut plus ouvrir un champ au-delà de sa rubrique.
+        String champ = "{\"code\":\"B09-WW-02\",\"libelle\":\"Modèle joint\",\"type\":\"TEXTE\",\"source\":\"SAISIE\","
+                + "\"documentMaitre\":\"DPAO\",\"typesMarche\":[\"A_COMMANDE\",\"CONTRAT_CADRE\"],\"obligatoire\":false}";
+        mvc.perform(post("/api/champs-fiche-marche").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content(champ))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("typesMarche"))
+                .andExpect(jsonPath("$.erreurs[0].message").value(Matchers.containsString("CONTRAT_CADRE")));
+        mvc.perform(post("/api/champs-fiche-marche").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content(champ.replace("\"typesMarche\":[\"A_COMMANDE\",\"CONTRAT_CADRE\"]", "\"typesMarche\":[\"A_COMMANDE\"],"
+                        + "\"categories\":[\"TRAVAUX\"]")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("categories"));
+        mvc.perform(post("/api/champs-fiche-marche").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content(champ.replace("\"A_COMMANDE\",\"CONTRAT_CADRE\"", "\"A_COMMANDE\"")))
+                .andExpect(status().isCreated());
+
+        // V134 : la rubrique B04-CD s'ouvre au contrat-cadre, une fois.
+        jdbcTemplate.update("UPDATE tr_rubrique_fiche_marche SET \"TYPES_MARCHE\" = 'QUANTITE_FIXE,A_COMMANDE' WHERE \"CODE\" = 'B04-CD'");
+        executerMigrationFlyway("V134__rubrique_composition_contrat_cadre.sql");
+        executerMigrationFlyway("V134__rubrique_composition_contrat_cadre.sql");
+        assertThat(jdbcTemplate.queryForList("SELECT \"TYPES_MARCHE\" FROM tr_rubrique_fiche_marche WHERE \"CODE\" = 'B04-CD'", String.class))
+                .allMatch("QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE"::equals);
     }
 
     @Test

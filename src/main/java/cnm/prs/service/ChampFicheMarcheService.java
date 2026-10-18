@@ -203,6 +203,28 @@ public class ChampFicheMarcheService {
                         + CategorieDao.toutes().replace(",", ", ") + ")."));
             }
         }
+        // ⚠️ 2026-10-18 (demande front « grille-contrat-cadre », recette, §B3) — un champ ne s'affiche que si sa rubrique et son
+        // bloc l'admettent : il ne s'ouvre pas à une forme ou une catégorie qu'ils n'ont pas (B04-CD-01 et B04-CD-02, ouverts au
+        // contrat-cadre le 16/10 dans une rubrique qui ne l'était pas, étaient exigés sans être proposés à la saisie).
+        if (r.isPresent()) {
+            List<String> categoriesEffectives = categories.isEmpty() ? ChampFicheMarche.liste(c.getCategories()) : categories;
+            BlocFicheMarche bloc = blocRepository.findById(r.get().getCodeBloc()).orElse(null);
+            String ouverture = "la rubrique " + r.get().getCode() + " « " + r.get().getLibelle() + " »";
+            for (String t : types) {
+                if (!admet(r.get().getTypesMarche(), t) || bloc != null && !admet(bloc.getTypesMarche(), t)) {
+                    erreurs.add(new ErrorResponse.FieldError("typesMarche", "Type de marché " + t + " non admis par "
+                            + (admet(r.get().getTypesMarche(), t) ? "le bloc " + bloc.getCode() : ouverture)
+                            + " : un champ ne s'ouvre pas au-delà de sa rubrique."));
+                }
+            }
+            for (String x : categoriesEffectives) {
+                if (!admet(r.get().getCategories(), x) || bloc != null && !admet(bloc.getCategories(), x)) {
+                    erreurs.add(new ErrorResponse.FieldError("categories", "Catégorie " + x + " non admise par "
+                            + (admet(r.get().getCategories(), x) ? "le bloc " + bloc.getCode() : ouverture)
+                            + " : un champ ne s'ouvre pas au-delà de sa rubrique."));
+                }
+            }
+        }
         if (!ConditionCadrage.lisible(dto.getCondition())) {
             erreurs.add(new ErrorResponse.FieldError("condition", "Condition illisible : attendu « cle = VALEUR » ou "
                     + "« cle != VALEUR » (valeur en lettres, chiffres ou _), combinés par « et » / « ou » "

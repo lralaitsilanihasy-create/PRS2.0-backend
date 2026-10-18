@@ -5046,6 +5046,13 @@ dans le journal applicatif, le reste passe).
 | POST | /api/champs-fiche-marche | `ChampFicheMarcheDto` | `ChampFicheMarcheDto` | 201, 400 (nominatifs), 403, 409 `CHAMP_EXISTANT` | **ADMINISTRATEUR** |
 | PUT | /api/champs-fiche-marche/{code} | `ChampFicheMarcheDto` | `ChampFicheMarcheDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
 
+> ⚠️ **2026-10-18 (demande front « grille-contrat-cadre », recette, §B3 ; V134)** — `POST` / `PUT` : un champ ne s'ouvre pas à
+> une forme (`typesMarche`) ni à une catégorie (`categories`, ou celles déjà portées) que **sa rubrique ou son bloc** n'admet
+> pas : **400** nominatif sur l'attribut (« Type de marché CONTRAT_CADRE non admis par la rubrique B04-CD « Composition du
+> dossier » : un champ ne s'ouvre pas au-delà de sa rubrique. »). Sans `typesMarche`, le champ vaut pour les trois formes : dans une rubrique fermée à l'une d'elles, il faut
+> donc les nommer. Le référentiel ne servait pas la rubrique d'un tel champ, et aucun écran ne le proposait, alors que la fiche
+> l'évaluait (`B04-CD-01`, obligatoire, ouvert au contrat-cadre le 16/10 sans sa rubrique ; V134 ouvre `B04-CD`).
+
 ### La fiche (`/api/fiches-marche`, `t_fiche_marche` + `t_fiche_marche_valeur`)
 
 Adressée par le **DMC** (`idDmc`), qui doit être de type `DAO` (sinon **409 `DMC_NON_DAO`**). **Lecture** : périmètre du
@@ -10762,6 +10769,9 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 >   `{ pointsCites, codesCites, points: [{ idPointCtrl, libelPointCtrl, idTypeDossier, idSousType, forme, categorie, ecarts: [{ code,
 >   motif, forme }] }] }`, les seuls points en écart. `motif` : `INCONNU`, `INACTIF`, `HORS_CATEGORIE`, `HORS_FORME` (`forme` :
 >   `CONTRAT_CADRE` ou `AUTRE`). En recette après V133 : 23 points citent des codes (les 12 de `DAOO` et 11 variantes), aucun en écart.
+> - ⚠️ **Recette du front, §B3 (V134)** — un champ ne compte que si **sa rubrique et son bloc** l'admettent aussi, pour la forme
+>   et la catégorie : sinon `motif = HORS_RUBRIQUE` (`forme` renseignée), au bilan comme à l'enregistrement (« B04-CD-01 non
+>   affiché : sa rubrique n'est pas ouverte au contrat-cadre »). V134 ouvre la rubrique `B04-CD` au contrat-cadre.
 
 **Exemple — requête** (point spécifique au sous-type PPM-AGPM)
 ```json
