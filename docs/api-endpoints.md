@@ -2820,6 +2820,21 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > dossier de marché restent saisissables. **H1** : les dossiers de ces sous-types déjà créés hors fiche gardent leur cycle (complétés,
 > soumis, rectifiés) ; seule la création est fermée. **H3** : les pièces `PAPIER` restent au référentiel (dossiers anciens, autres
 > sous-types).
+>
+> ⚠️ **2026-10-18 (demande front « sous-type-contrat-cadre » ; V131)** — **`DAOO-CC`** (« Dossier d'appel d'offres ouvert —
+> contrat-cadre », `GRILLE_BASE = DAOO`) rejoint `PRODUITS_PAR_FICHE` : sa saisie directe est refusée de même (409
+> `DOSSIER_PAR_FICHE`).
+> - **`POST /api/fiches-marche/{idDmc}/dossier`** produit un `DAOO-CC` pour un appel d'offres ouvert en contrat-cadre (forme du
+>   plan, à défaut `typeMarche` de la fiche) ; **`GET /api/dmcs/eligibles`** sert `sousType: "DAOO-CC"` pour ces lignes (forme du
+>   plan), et `?sousType=DAOO-CC` les filtre.
+> - **La requalification (Q1, Q2)** : un dossier en `BROUILLON` né d'une fiche reprend le sous-type de la fiche à la validation
+>   d'une nouvelle version et au rattachement (`PUT /api/dossiers/{id}/fiche-marche`), dans les deux sens. Un dossier soumis ne
+>   change jamais.
+> - **Pièces** (`GET /api/dossiers/{id}/pieces-exigees`) : la liste propre de `DAOO-CC` — `FICHE_PRESENTATION`, `CALENDRIER`,
+>   `AGPM_CONTROLE`, `PUBLICATION_AGPM`, `AVIS_SPECIFIQUE`, `DAO_COMPLET`, `DESCRIPTIF_PLANS` (travaux), `AUTRE_DOCUMENT`
+>   (facultatif), reprise de `DAOO` avec les mêmes conditions.
+> - **Grille et motifs-types** (`GET /api/points-ctrls?sousType=DAOO-CC`, motifs-types) : ceux de `DAOO` par la grille de base, filtrés
+>   par la forme de la fiche. Délais : standards. Contrainte `ck_dossier_dmc_dao` étendue à `DAOO-CC`.
 | PATCH | /api/marches/{idDetail}/supprimer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
 | PATCH | /api/marches/{idDetail}/restaurer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
 

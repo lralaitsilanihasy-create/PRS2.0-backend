@@ -193,6 +193,27 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
                 .containsOnly("Contrat-cadre valant acte d'engagement et CCAP");
         assertThat(JsonPath.<List<String>>read(documents(idDmc), "$[?(@.type=='DPAC')].libelle"))
                 .containsOnly("Données particulières d'appel à concurrence");
+
+        // ⚠️ 2026-10-18 (« sous-type-contrat-cadre », §B1 ; V131) — la ligne éligible et le dossier produit sont en DAOO-CC.
+        String cc = mvc.perform(get("/api/dmcs/eligibles").param("sousType", "DAOO-CC").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(cc, "$[*].idDetail")).containsExactly(9903);
+        assertThat(JsonPath.<List<String>>read(cc, "$[*].sousType")).containsOnly("DAOO-CC");
+        String daoo = mvc.perform(get("/api/dmcs/eligibles").param("sousType", "DAOO").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(daoo, "$[*].idDetail")).contains(9901, 9902).doesNotContain(9903);
+        // Q1 / Q2 : un brouillon DAOO rattaché à la fiche d'un contrat-cadre passe en DAOO-CC ; défait, il le reste (brouillon hors fiche).
+        Dossier brouillon = dossierLoc(9960, "BROUILLON", "ANT", "PRMP001");
+        brouillon.setIdTypeDossier("DMC");
+        brouillon.setIdSousType("DAOO");
+        brouillon.setIdEntiteContract(1);
+        dossierRepository.save(brouillon);
+        mvc.perform(put("/api/dossiers/9960/fiche-marche").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"idDmc\":" + idDmc + "}")).andExpect(status().isOk()).andExpect(jsonPath("$.idSousType").value("DAOO-CC"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/dossiers/9960/fiche-marche")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.idSousType").value("DAOO-CC"));
     }
 
     // ------------------------------------------------------------------ 5. quantité fixe inchangée

@@ -415,6 +415,40 @@ public class FicheMarcheService {
     }
 
     /**
+     * ⚠️ M1 (manuel de contrôle, §B1) et ⚠️ 2026-10-18 (« sous-type-contrat-cadre », §B1) — le sous-type du dossier que produit la
+     * fiche : selon le mode du plan, la catégorie de la dernière version validée et la forme du marché (celle du plan, à défaut le
+     * type de la fiche) ; {@code DAOO-CC} pour un appel d'offres ouvert en contrat-cadre. Sans contrôle de périmètre.
+     */
+    @Transactional(readOnly = true)
+    public String sousTypeDossier(Long idDmc) {
+        Contexte ctx = contexte(idDmc, false);
+        java.util.Optional<EtatVersion> ev = etatValide(idDmc);
+        boolean pi = ev.map(v -> ModelesDao.sigleLettre(v.categorie()) != null).orElse(false);
+        boolean contratCadre = ctx.forme() != null ? ctx.forme() == FormeMarche.CONTRAT_CADRE
+                : ev.map(v -> TypeMarcheDao.CONTRAT_CADRE.name().equals(v.type())).orElse(false);
+        return SousTypesDossier.dossierMiseEnConcurrence(valeursPpm.lire(ctx.idDetail()).valeurs().get("MODE"), pi, contratCadre);
+    }
+
+    /**
+     * ⚠️ 2026-10-18 (« sous-type-contrat-cadre », Q1 et Q2) — un dossier encore en <strong>brouillon</strong> suit le sous-type
+     * de la fiche à chaque validation (la forme a pu changer ; un brouillon de contrat-cadre né en {@code DAOO} passe en
+     * {@code DAOO-CC}). Jamais après la soumission ; un brouillon n'a pas encore de référence (elle naît à la réception).
+     */
+    @Transactional
+    public void requalifierSiBrouillon(Integer idDossier, Long idDmc) {
+        cnm.prs.entity.Dossier d = dossierRepository.findById(idDossier).orElse(null);
+        if (d == null || !cnm.prs.enums.StatutDossier.BROUILLON.name().equals(d.getStatut())
+                || !SousTypesDossier.PRODUITS_PAR_FICHE.contains(d.getIdSousType())) {
+            return;
+        }
+        String sousType = sousTypeDossier(idDmc);
+        if (!sousType.equals(d.getIdSousType())) {
+            d.setIdSousType(sousType);
+            dossierRepository.save(d);
+        }
+    }
+
+    /**
      * ⚠️ 2026-10-17 (« canevas-rapport-evaluation », §B1) — la version que le dossier présente à la Commission : sa version
      * <strong>soumise</strong> si elle est validée, sinon la dernière version validée ({@code empty} si aucune). Sans contrôle de
      * périmètre ; avec son identifiant de fiche, pour lire le besoin et les sous-critères de cette version.
@@ -1164,6 +1198,7 @@ public class FicheMarcheService {
         // Le dossier soumis que porte déjà la fiche reçoit les documents de cette version (lot 2a, §B3/§B4).
         Integer idDossierSoumis = dossierRepository.findIdDossierByIdDmc(idDmc).orElse(null);
         if (idDossierSoumis != null) {
+            requalifierSiBrouillon(idDossierSoumis, idDmc);   // ⚠️ 2026-10-18 (« sous-type-contrat-cadre », Q2)
             int remplacees = documents.joindre(idDossierSoumis, idDmc);
             // ⚠️ Lot C (2026-09-27, §B2) — la révision validée d'une fiche dont le dossier existe : le journal du dossier
             // soumis dit la version, ce qui a changé et ce qui a été remplacé.

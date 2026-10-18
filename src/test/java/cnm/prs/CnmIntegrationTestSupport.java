@@ -204,6 +204,10 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
             sousTypeDossierRepository.save(new SousTypeDossier(s[0], s[1], "DMC"));
         }
         sousTypeDossierRepository.save(new SousTypeDossier("DAOR", "Dossier d'Appel d'Offres Restreint", "DMC"));
+        // ⚠️ 2026-10-18 (« sous-type-contrat-cadre », V131) — l'appel d'offres ouvert en contrat-cadre, grille de base DAOO.
+        SousTypeDossier daooCc = new SousTypeDossier("DAOO-CC", "Dossier d'appel d'offres ouvert — contrat-cadre", "DMC");
+        daooCc.setGrilleBase("DAOO");
+        sousTypeDossierRepository.save(daooCc);
         // ⚠️ 2026-10-15 (dossier-par-fiche) — un sous-type de la famille qu'aucune fiche ne produit : sa saisie directe reste permise.
         sousTypeDossierRepository.save(new SousTypeDossier("DP", "Demande de propositions", "DMC"));
 

@@ -284,7 +284,8 @@ public class DmcService {
                     : caches.natures.getOrDefault(m.getIdNature(), Optional.empty()).orElse(null);
             // ⚠️ 2026-10-14 (§B1) — la règle de la validation, sur le mode et la catégorie de la ligne en vigueur.
             String sousTypeLigne = SousTypesDossier.dossierMiseEnConcurrence(mode == null ? null : mode.getLibelle(),
-                    cat.categorie() == cnm.prs.enums.CategorieDao.PRESTATIONS_INTELLECTUELLES);
+                    cat.categorie() == cnm.prs.enums.CategorieDao.PRESTATIONS_INTELLECTUELLES,
+                    m.formeMarcheSaisie() == cnm.prs.enums.FormeMarche.CONTRAT_CADRE);   // ⚠️ 2026-10-18 (« sous-type-contrat-cadre », §B1) : DAOO-CC
             if (filtre != null && !filtre.equals(sousTypeLigne)) {
                 continue;
             }

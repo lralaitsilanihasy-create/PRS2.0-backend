@@ -104,9 +104,9 @@ public class FicheMarcheDossierService {
         preselection.exigerListePourDossier(idDmc);   // ⚠️ AMI-b (Q4) : la liste définitive avant le dossier de la demande de propositions
 
         ValeursPpmService.EnTete enTete = valeursPpm.enTete(dmc.getIdDetail());
-        // ⚠️ M1 (manuel de contrôle, §B1) — DAOO, DAOR, DAOOI, DAORI, DAOOPREQUAL ou DC, selon le mode du plan et la catégorie.
-        String sousType = SousTypesDossier.dossierMiseEnConcurrence(valeursPpm.lire(dmc.getIdDetail()).valeurs().get("MODE"),
-                ficheMarcheService.etatValide(idDmc).map(v -> ModelesDao.sigleLettre(v.categorie()) != null).orElse(false));
+        // ⚠️ M1 (manuel de contrôle, §B1) — DAOO, DAOR, DAOOI, DAORI, DAOOPREQUAL ou DC, selon le mode du plan et la catégorie ;
+        // ⚠️ 2026-10-18 (« sous-type-contrat-cadre », §B1) — DAOO-CC pour un appel d'offres ouvert en contrat-cadre.
+        String sousType = ficheMarcheService.sousTypeDossier(idDmc);
         Dossier dossier = saisieService.creerDossierDao(sousType, enTete.idLocalite(), enTete.idEntiteContract(), idDmc);
         journal.tracer(dossier, JournalDossierService.DOSSIER_CREE_DEPUIS_FICHE, detail(fiche, idDmc));
         // ⚠️ R3b (manuel révisé, lot 1, §B3) — une version validée avant R3b reçoit son projet d'avis (ou de lettre) au premier besoin.
@@ -146,6 +146,7 @@ public class FicheMarcheDossierService {
         preselection.exigerListePourDossier(idDmc);   // ⚠️ AMI-b (Q4)
         dossier.setIdDmc(idDmc);
         dossierRepository.saveAndFlush(dossier);
+        ficheMarcheService.requalifierSiBrouillon(idDossier, idDmc);   // ⚠️ 2026-10-18 (« sous-type-contrat-cadre », §B1)
         journal.tracer(dossier, JournalDossierService.FICHE_MARCHE_RATTACHEE, detail(fiche, idDmc));
         ficheMarcheService.etatValide(idDmc).ifPresent(v -> documents.assurerProjet(fiche, v.etat()));   // ⚠️ R3b
         documents.joindre(idDossier, idDmc);   // lot 2a

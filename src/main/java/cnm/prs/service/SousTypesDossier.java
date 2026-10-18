@@ -17,6 +17,8 @@ public final class SousTypesDossier {
 
     // Famille DMC — les dossiers de mise en concurrence produits par une fiche marché.
     public static final String DAOO = "DAOO";
+    /** ⚠️ 2026-10-18 (« sous-type-contrat-cadre », §B1 ; arbitrage du pilote : le contrat-cadre garde son sous-type) — V131. */
+    public static final String DAOO_CC = "DAOO-CC";
     public static final String DAOR = "DAOR";
     public static final String DAOOI = "DAOOI";
     public static final String DAORI = "DAORI";
@@ -32,7 +34,7 @@ public final class SousTypesDossier {
     public static final String MPI = "MPI";
 
     /** Les sous-types qu'une fiche marché produit (le dossier porte alors {@code ID_DMC}). */
-    public static final Set<String> PRODUITS_PAR_FICHE = Set.of(DAOO, DAOR, DAOOI, DAORI, DAOOPREQUAL, DC);
+    public static final Set<String> PRODUITS_PAR_FICHE = Set.of(DAOO, DAOO_CC, DAOR, DAOOI, DAORI, DAOOPREQUAL, DC);
 
     private SousTypesDossier() {
     }
@@ -69,6 +71,16 @@ public final class SousTypesDossier {
             return DAOOPREQUAL;
         }
         return restreint ? DAOR : DAOO;
+    }
+
+    /**
+     * ⚠️ 2026-10-18 (demande front « sous-type-contrat-cadre », §B1) — la même règle, avec la forme du marché : un appel d'offres
+     * ouvert ({@code DAOO}) en contrat-cadre produit un {@code DAOO-CC}. Les autres modes gardent leur sous-type (Q3 : pas de
+     * {@code DAOR-CC} ni de {@code DAOOI-CC} tant que le référentiel ne les porte pas).
+     */
+    public static String dossierMiseEnConcurrence(String mode, boolean prestationsIntellectuelles, boolean contratCadre) {
+        String s = dossierMiseEnConcurrence(mode, prestationsIntellectuelles);
+        return contratCadre && DAOO.equals(s) ? DAOO_CC : s;
     }
 
     /** Le sous-type du dossier de marché, par la même règle : {@code MPI}, {@code MAORI}, {@code MAOOI}, {@code MAOOPREQUAL}, {@code MAOR}, {@code MAOO}. */

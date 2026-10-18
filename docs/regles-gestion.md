@@ -1456,6 +1456,23 @@ et ne pouvait rien en dire : aucune colonne ne reliait les deux objets. Le lien 
 DMC, objet de préparation. **Unique** dans les deux sens ; **sous-type `DAO` seulement** (contrainte en base et garde
 de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM — lot 1b*.
 
+> ⚠️ **2026-10-18 — le contrat-cadre garde son sous-type : `DAOO-CC` (arbitrage du pilote ; V131).** Un appel d'offres ouvert
+> dont la forme est le **contrat-cadre** produit un dossier « Dossier d'appel d'offres ouvert — contrat-cadre » (`DAOO-CC`), et
+> non `DAOO`. La forme est celle du plan, à défaut le type de la fiche. Comme les autres sous-types produits par une fiche, il ne
+> se crée pas à la main.
+> - **Ses pièces** sont celles du manuel (p. 32) : fiche de présentation, calendrier, AGPM contrôlé, publication de l'AGPM,
+>   projet d'avis, DAO complet, descriptif et plans en travaux, tout autre document (facultatif). Ni canevas de rapport ni
+>   estimatif. Les règles déjà en place s'y appliquent : pièces fournies par l'application, publication de l'AGPM reprise
+>   d'office, documents joints d'office par la fiche.
+> - **Ses points de contrôle et ses motifs-types** sont ceux de `DAOO` (grille de base), y compris les points propres au
+>   contrat-cadre (p. 32-33 : critères d'élimination et d'attribution, cohérence avec les pièces de candidature). Ses délais
+>   sont les délais standards, comme ceux de `DAOO`. Sa référence porte `DAOO-CC`.
+> - **Les dossiers existants (Q1)** : un dossier déjà soumis garde son sous-type. Le dossier 100380 reste en `DAOO`.
+> - **Une forme qui change (Q2)** : un dossier encore en **brouillon** suit le sous-type de sa fiche à chaque validation et au
+>   rattachement, dans les deux sens. Jamais après la soumission.
+> - **Les autres modes (Q3)** : un contrat-cadre en appel d'offres restreint ou international garde `DAOR` ou `DAOOI` ; leurs
+>   listes filtrent déjà les pièces par forme.
+>
 > ⚠️ **2026-10-08 — les sous-types du Manuel de contrôle a priori (tranche M1, V94).** Le sous-type `DAO` s'appelle
 > désormais **`DAOO`** (dossier d'appel d'offres ouvert), références des dossiers existants comprises. La fiche produit le
 > dossier dans le sous-type que dit le **mode** de la ligne du plan : appel d'offres ouvert → `DAOO`, restreint → `DAOR`,

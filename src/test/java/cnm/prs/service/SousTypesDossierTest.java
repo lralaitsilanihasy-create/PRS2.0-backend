@@ -19,6 +19,12 @@ class SousTypesDossierTest {
         assertThat(SousTypesDossier.dossierMiseEnConcurrence("APPEL D'OFFRE AVEC PRE-QUALIFICATION", false)).isEqualTo("DAOOPREQUAL");
         assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres avec pré-qualification", false)).isEqualTo("DAOOPREQUAL");
         assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres restreint", true)).isEqualTo("DC");
+        // ⚠️ 2026-10-18 (« sous-type-contrat-cadre ») — l'appel d'offres ouvert en contrat-cadre seul ; Q3 : les autres modes gardent le leur.
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres ouvert", false, true)).isEqualTo("DAOO-CC");
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres ouvert", false, false)).isEqualTo("DAOO");
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres restreint", false, true)).isEqualTo("DAOR");
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("APPEL D'OFFRE OUVERT INTERNATIONAL", false, true)).isEqualTo("DAOOI");
+        assertThat(SousTypesDossier.PRODUITS_PAR_FICHE).contains("DAOO-CC");
         assertThat(SousTypesDossier.dossierMarche("Appel d'offres ouvert", false)).isEqualTo("MAOO");
         assertThat(SousTypesDossier.dossierMarche("Appel d'offres restreint", false)).isEqualTo("MAOR");
         assertThat(SousTypesDossier.dossierMarche("APPEL D'OFFRE OUVERT INTERNATIONAL", false)).isEqualTo("MAOOI");

@@ -526,6 +526,12 @@ class DossierVisibiliteIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"idTypeDossier\":\"DMC\",\"idSousType\":\"DC\",\"statut\":\"BROUILLON\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DOSSIER_PAR_FICHE"));
+        // ⚠️ 2026-10-18 (« sous-type-contrat-cadre », §B1) — le contrat-cadre aussi.
+        mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"DAOO-CC\",\"idEntiteContract\":1}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DOSSIER_PAR_FICHE"));
         // Le type PPM est refusé par cette façade (utiliser /api/saisies/ppm).
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
