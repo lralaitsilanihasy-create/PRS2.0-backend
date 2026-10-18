@@ -48,8 +48,8 @@ public class PointsCtrlController {
      * inconnu, retiré, hors des catégories du point ou absent pour l'une de ses formes est en écart.
      */
     @GetMapping("/controle-codes")
-    public cnm.prs.dto.CodesCitesPointsCtrlDto controleCodes() {
-        return service.controleCodes();
+    public cnm.prs.dto.CodesCitesPointsCtrlDto controleCodes(@RequestParam(required = false) String categorie) {
+        return service.controleCodes(categorie);   // ⚠️ « grille-travaux » : ?categorie= filtre les alertes
     }
 
     @GetMapping("/{id}")

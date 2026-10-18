@@ -10772,6 +10772,18 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > - ⚠️ **Recette du front, §B3 (V134)** — un champ ne compte que si **sa rubrique et son bloc** l'admettent aussi, pour la forme
 >   et la catégorie : sinon `motif = HORS_RUBRIQUE` (`forme` renseignée), au bilan comme à l'enregistrement (« B04-CD-01 non
 >   affiché : sa rubrique n'est pas ouverte au contrat-cadre »). V134 ouvre la rubrique `B04-CD` au contrat-cadre.
+> - ⚠️ **2026-10-18 (demande front « grille-travaux » ; V135)** :
+>   - un code de **bloc** (`B12`) ou de **rubrique** (`B12-DQ`) existe là où le référentiel sert ce bloc ou cette rubrique, même
+>     sans champ (le DQE des travaux) ;
+>   - **`?categorie=`** (`FOURNITURES_SERVICES`, `TRAVAUX`, `PRESTATIONS_INTELLECTUELLES` ; inconnue → 400) filtre les alertes ;
+>   - **`alertes`** : `[{ idPointCtrl, libelPointCtrl, idSousType, formePoint, codes, forme, categorie, motif }]`, `motif =
+>     SANS_EQUIVALENT_CATEGORIE`. Une **notion** est une parenthèse du texte (un code hors parenthèse en est une à lui seul) ; elle
+>     est en alerte pour une forme (`CONTRAT_CADRE`, `AUTRE`) et une catégorie que le point touche (l'un de ses codes y existe ;
+>     catégories bornées par le sous-type : fournitures et travaux pour les appels d'offres, prestations intellectuelles pour `DC`)
+>     quand **aucun** de ses codes n'y existe, sauf mention « travaux : non saisi » (« fournitures : non saisi »…) dans la
+>     parenthèse. Une alerte ne bloque pas l'enregistrement. En recette après V135 : aucun écart, aucune alerte (11 alertes avant,
+>     10 en travaux, 1 en fournitures).
+>   - `DECRIPT_POINT_CTRL` passe à **1000** caractères.
 
 **Exemple — requête** (point spécifique au sous-type PPM-AGPM)
 ```json

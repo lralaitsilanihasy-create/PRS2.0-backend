@@ -167,6 +167,54 @@ class GrilleContratCadreIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("« grille-travaux » : rubrique sans champ servie, alerte SANS_EQUIVALENT_CATEGORIE par notion, mention « non saisi », filtre par catégorie ; V135")
+    void grilleTravaux() throws Exception {
+        champ("B09-VV-01", "QUANTITE_FIXE,A_COMMANDE", "FOURNITURES_SERVICES", true);
+        champ("B09-VV-02", "QUANTITE_FIXE,A_COMMANDE", "TRAVAUX", true);
+        // Une rubrique sans champ (comme le DQE, B12-DQ) : servie là où elle est ouverte.
+        jdbcTemplate.update("INSERT INTO tr_rubrique_fiche_marche (\"CODE\", \"CODE_BLOC\", \"CODE_COURT\", \"LIBELLE\", \"RANG\", "
+                + "\"TYPES_MARCHE\", \"CATEGORIES\") VALUES ('B09-UU', 'B09', 'UU', 'DQE d''essai', 99, 'QUANTITE_FIXE,A_COMMANDE', "
+                + "'TRAVAUX') ON CONFLICT DO NOTHING");
+        mvc.perform(post("/api/points-ctrls").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content(corps("DQE", "Quantités (B09-UU) ?", "AUTRE", null)))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/points-ctrls").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content(corps("DQE", "Quantités (B09-UU) ?", "CONTRAT_CADRE", null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details.ecarts[0].motif").value("HORS_FORME"));
+
+        // Trois notions : la première ne mène à rien en travaux ; la deuxième l'assume en fournitures ; la troisième a ses deux codes.
+        PointsCtrl p = point(97201, "Délais", "Remise (B09-VV-01) ; visite (B09-VV-02 ; fournitures : non saisi) ; "
+                + "ouverture (B09-VV-01 ; travaux : B09-VV-02) ?", 5, "AUTRE", null);
+        String bilan = mvc.perform(get("/api/points-ctrls/controle-codes").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(bilan, "$.points[*].idPointCtrl")).doesNotContain(p.getIdPointCtrl());
+        assertThat(JsonPath.<List<List<String>>>read(bilan, "$.alertes[?(@.idPointCtrl==97201)].codes")).containsExactly(List.of("B09-VV-01"));
+        assertThat(JsonPath.<List<String>>read(bilan, "$.alertes[?(@.idPointCtrl==97201)].categorie")).containsExactly("TRAVAUX");
+        assertThat(JsonPath.<List<String>>read(bilan, "$.alertes[?(@.idPointCtrl==97201)].forme")).containsExactly("AUTRE");
+        assertThat(JsonPath.<List<String>>read(bilan, "$.alertes[?(@.idPointCtrl==97201)].motif")).containsExactly("SANS_EQUIVALENT_CATEGORIE");
+        String fournitures = mvc.perform(get("/api/points-ctrls/controle-codes").param("categorie", "FOURNITURES_SERVICES")
+                .header("Authorization", tokenAdmin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(fournitures, "$.alertes[*].idPointCtrl")).doesNotContain(97201);
+        mvc.perform(get("/api/points-ctrls/controle-codes").param("categorie", "AUTRE").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest());
+
+        // V135 : le texte de V133 est remplacé (deux passes), un texte modifié par l'Administrateur ne l'est pas.
+        PointsCtrl garantie = point(97202, "Garantie de soumission", "Garantie exigée et forme de remise (B05-GS-01, B05-GS-10) conformes "
+                + "au CMP ; montant (B05-GS-03 ; travaux : B05-GQ-03) entre 1 et 2 % du montant indicatif ; modèle joint (B04-CD-02) ; "
+                + "validité des offres (B04-VO-01) ?", 4, "CONTRAT_CADRE", null);
+        PointsCtrl modifie = point(97203, "Exécution et livraison", "Texte revu par l'Administrateur (B09-VV-01) ?", 10, "AUTRE", null);
+        executerMigrationFlyway("V135__grille_travaux.sql");
+        executerMigrationFlyway("V135__grille_travaux.sql");
+        assertThat(points.findById(garantie.getIdPointCtrl()).orElseThrow().getDecriptPointCtrl())
+                .contains("(B05-GS-01, B05-GS-10 ; travaux : non saisi)");
+        assertThat(points.findById(modifie.getIdPointCtrl()).orElseThrow().getDecriptPointCtrl())
+                .isEqualTo("Texte revu par l'Administrateur (B09-VV-01) ?");
+        assertThat(jdbcTemplate.queryForObject("SELECT character_maximum_length FROM information_schema.columns "
+                + "WHERE table_name = 'tr_points_ctrl' AND column_name = 'DECRIPT_POINT_CTRL'", Integer.class)).isEqualTo(1000);
+    }
+
+    @Test
     @DisplayName("B1 : V133 crée la variante contrat-cadre, l'original passe en AUTRE ; la grille de DAOO-CC ne sert que la variante")
     void variantesContratCadre() throws Exception {
         PointsCtrl allotissement = point(97101, "Allotissement", "Lots (B02-AU-02) ; garantie (B09-DG-01, B09-DG-02) ?", 2, null, null);

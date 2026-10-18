@@ -77,8 +77,14 @@ public class PointsCtrlService {
 
     /** ⚠️ 2026-10-18 (demande front « grille-contrat-cadre », §B2) — le bilan des codes cités sur l'existant. */
     @Transactional(readOnly = true)
-    public cnm.prs.dto.CodesCitesPointsCtrlDto controleCodes() {
-        return codesCites.bilan();
+    public cnm.prs.dto.CodesCitesPointsCtrlDto controleCodes(String categorie) {
+        // ⚠️ 2026-10-18 (« grille-travaux », §B2, Q2) — les alertes d'une seule catégorie ; inconnue → 400.
+        String cat = categorie == null || categorie.isBlank() ? null : categorie.trim().toUpperCase();
+        if (cat != null && java.util.Arrays.stream(cnm.prs.enums.CategorieDao.values()).noneMatch(c -> c.name().equals(cat))) {
+            throw new BadRequestException("Catégorie inconnue : « " + categorie + " » ("
+                    + cnm.prs.enums.CategorieDao.toutes().replace(",", ", ") + ").");
+        }
+        return codesCites.bilan(cat);
     }
 
     @Transactional(readOnly = true)

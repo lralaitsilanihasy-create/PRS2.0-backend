@@ -10,8 +10,9 @@ import java.util.List;
  * @param pointsCites le nombre de points qui citent au moins un code
  * @param codesCites  le nombre de citations (un code par point)
  * @param points      les seuls points en écart, dans l'ordre de la grille
+ * @param alertes     ⚠️ « grille-travaux », §B2 — les notions qui ne mènent à rien pour une catégorie et une forme (sans blocage)
  */
-public record CodesCitesPointsCtrlDto(int pointsCites, int codesCites, List<Point> points) {
+public record CodesCitesPointsCtrlDto(int pointsCites, int codesCites, List<Point> points, List<Alerte> alertes) {
 
     /** Un point dont un code cité au moins est en écart. */
     public record Point(Integer idPointCtrl, String libelPointCtrl, String idTypeDossier, String idSousType, String forme,
@@ -28,5 +29,22 @@ public record CodesCitesPointsCtrlDto(int pointsCites, int codesCites, List<Poin
      * @param forme pour {@code HORS_FORME} et {@code HORS_RUBRIQUE} : {@code CONTRAT_CADRE} ou {@code AUTRE} ; nul sinon
      */
     public record Ecart(String code, String motif, String forme) {
+    }
+
+    /**
+     * ⚠️ 2026-10-18 (demande front « grille-travaux », §B2) — une notion du point (une parenthèse de son texte) dont aucun code
+     * n'existe pour une forme et une catégorie que le point touche, sans la mention « &lt;catégorie&gt; : non saisi ».
+     *
+     * @param idPointCtrl    le point
+     * @param libelPointCtrl son libellé
+     * @param idSousType     son sous-type
+     * @param formePoint     sa forme ({@code CONTRAT_CADRE}, {@code AUTRE}, nul : toutes)
+     * @param codes          les codes de la notion
+     * @param forme          la forme de fiche en défaut : {@code CONTRAT_CADRE} ou {@code AUTRE}
+     * @param categorie      la catégorie de fiche en défaut
+     * @param motif          {@code SANS_EQUIVALENT_CATEGORIE}
+     */
+    public record Alerte(Integer idPointCtrl, String libelPointCtrl, String idSousType, String formePoint, List<String> codes,
+            String forme, String categorie, String motif) {
     }
 }
