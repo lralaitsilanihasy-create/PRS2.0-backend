@@ -29,11 +29,15 @@ public class PointsCtrlService {
     private final SousTypeDossierRepository sousTypeDossierRepository;
     /** ⚠️ M3 (manuel de contrôle) — la grille d'un sous-type : base, grille propre, conditions. */
     private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
+    /** ⚠️ 2026-10-18 (demande front « grille-contrat-cadre », §B2) — les codes de la fiche cités par le texte du point. */
+    private final CodesCitesPointsCtrl codesCites;
 
     public PointsCtrlService(PointsCtrlRepository repository,
             SousTypeDossierRepository sousTypeDossierRepository,
-            org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle) {
+            org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle,
+            CodesCitesPointsCtrl codesCites) {
         this.grilleControle = grilleControle;
+        this.codesCites = codesCites;
         this.repository = repository;
         this.sousTypeDossierRepository = sousTypeDossierRepository;
     }
@@ -71,6 +75,12 @@ public class PointsCtrlService {
         return repository.findAll().stream().map(PointsCtrlMapper::toDto).toList();
     }
 
+    /** ⚠️ 2026-10-18 (demande front « grille-contrat-cadre », §B2) — le bilan des codes cités sur l'existant. */
+    @Transactional(readOnly = true)
+    public cnm.prs.dto.CodesCitesPointsCtrlDto controleCodes() {
+        return codesCites.bilan();
+    }
+
     @Transactional(readOnly = true)
     public PointsCtrlDto findById(Integer id) {
         PointsCtrl entity = repository.findById(id)
@@ -81,6 +91,7 @@ public class PointsCtrlService {
     public PointsCtrlDto create(PointsCtrlDto dto) {
         exigerCoherenceSousType(dto.getIdTypeDossier(), dto.getIdSousType());
         PointsCtrl entity = PointsCtrlMapper.toEntity(dto);
+        codesCites.exiger(entity);   // ⚠️ 2026-10-18 (§B2) — 400 CODES_ABSENTS
         // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
         entity.setIdPointCtrl(ClePrimaire.reallouer(dto.getIdPointCtrl(), repository::existsById, repository::nextIdPointCtrl));
         return PointsCtrlMapper.toDto(repository.save(entity));
@@ -90,6 +101,14 @@ public class PointsCtrlService {
         PointsCtrl existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PointsCtrl introuvable : " + id));
         exigerCoherenceSousType(dto.getIdTypeDossier(), dto.getIdSousType());
+        // ⚠️ 2026-10-18 (§B2) — 400 CODES_ABSENTS, contrôlé sur le texte proposé AVANT de toucher l'entité gérée (la forme et la
+        // catégorie restent celles du point : la modification ne les change pas).
+        PointsCtrl propose = new PointsCtrl();
+        propose.setLibelPointCtrl(dto.getLibelPointCtrl());
+        propose.setDecriptPointCtrl(dto.getDecriptPointCtrl());
+        propose.setForme(existing.getForme());
+        propose.setCategorie(existing.getCategorie());
+        codesCites.exiger(propose);
         existing.setLibelPointCtrl(dto.getLibelPointCtrl());
         existing.setDecriptPointCtrl(dto.getDecriptPointCtrl());
         existing.setOrdrePointCtrl(dto.getOrdrePointCtrl());

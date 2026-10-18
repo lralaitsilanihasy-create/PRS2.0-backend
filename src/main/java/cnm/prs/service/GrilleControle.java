@@ -41,8 +41,20 @@ public class GrilleControle {
         this.pieces = pieces;
     }
 
-    /** La grille d'un sous-type (conditions non résolues), triée par ordre. */
+    /**
+     * La grille d'un sous-type (conditions non résolues), triée par ordre. ⚠️ 2026-10-18 (demande front « grille-contrat-cadre ») —
+     * la forme qu'impose le sous-type est résolue, elle : la grille de {@code DAOO-CC} ne sert pas les points {@code AUTRE} de
+     * {@code DAOO}, seulement leurs variantes contrat-cadre (V133).
+     */
     public List<PointsCtrl> duSousType(String famille, String sousType) {
+        String forme = SousTypesDossier.formeImposee(sousType);
+        PiecesExigees.Contexte impose = new PiecesExigees.Contexte(null, forme, false);
+        return grilleBrute(famille, sousType).stream()
+                .filter(p -> forme == null || p.getForme() == null || !Boolean.FALSE.equals(PiecesExigees.vaut(null, p.getForme(), impose)))
+                .toList();
+    }
+
+    private List<PointsCtrl> grilleBrute(String famille, String sousType) {
         Map<Integer, PointsCtrl> grille = new LinkedHashMap<>();
         if (!grillePropre(sousType)) {
             points.findByIdTypeDossierOrderByOrdrePointCtrlAsc(famille).stream().filter(p -> p.getIdSousType() == null)

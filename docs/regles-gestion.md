@@ -1467,6 +1467,22 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > - **Ses points de contrôle et ses motifs-types** sont ceux de `DAOO` (grille de base), y compris les points propres au
 >   contrat-cadre (p. 32-33 : critères d'élimination et d'attribution, cohérence avec les pièces de candidature). Ses délais
 >   sont les délais standards, comme ceux de `DAOO`. Sa référence porte `DAOO-CC`.
+>   ⚠️ **2026-10-18, la grille cite les informations du contrat-cadre (demande front « grille-contrat-cadre » ; V133).** Les
+>   points détaillés de `DAOO` (« Conformité au plan de passation » … « Cohérence des mentions du dossier ») citaient les codes
+>   des formes à quantités fixes et à commandes : 41 des 54 codes cités manquaient à la fiche d'un contrat-cadre. Chacun dont le
+>   texte change a désormais une **variante contrat-cadre** (forme `CONTRAT_CADRE`, mêmes libellé, ordre, portée et caractère
+>   obligatoire), qui cite les codes du contrat-cadre (`B02-OE-01`, `B05-MT-*`, `B04-CP-*`, `B07-PE-*`, `B09-GP-*`…, les codes des
+>   travaux entre parenthèses quand ils diffèrent) ; l'original passe en forme `AUTRE`. « Spécifications techniques » (`B12`) reste
+>   commun. La condition de forme choisit la variante selon la fiche du dossier ; **`DAOO-CC` impose la forme** : sa grille, même
+>   servie sans dossier (`?sousType=DAOO-CC`), ne contient pas les points `AUTRE`. `B01` n'est plus cité (Q1 : « la ligne du
+>   plan ») ; les cinq codes retirés du référentiel sont ôtés ou remplacés (`B08-AC-01` → `B08-PA-05`, `B09-DG-02` → `B09-DG-04`).
+>   **Règle des codes cités (B2)** : un code de la fiche cité par un point (champ `B05-GS-03`, rubrique `B08-AV`, bloc `B12`) doit
+>   exister, actif, au référentiel pour **chaque forme** du point (contrat-cadre, autres formes ; les deux sans forme) et dans
+>   **au moins une** de ses catégories (toutes sans catégorie). Sinon l'enregistrement par l'Administrateur est refusé (400
+>   `CODES_ABSENTS`, codes nommés) ; le bilan de l'existant se lit à `GET /api/points-ctrls/controle-codes` (vide en recette après
+>   V133). **Non traité (Q2)** : en travaux, la même grille cite surtout des codes du DAO de fournitures (42 sur 54 absents d'une
+>   fiche de travaux, toutes formes) ; la règle « au moins une catégorie » ne le relève pas — lot à venir, sur avis du pilote. Les
+>   prestations intellectuelles ne sont pas touchées : la grille `DC` ne cite aucun code et le contrat-cadre n'existe pas en PI.
 > - **Les dossiers existants (Q1)** : un dossier déjà soumis garde son sous-type. Le dossier 100380 reste en `DAOO`.
 >   ⚠️ **Revu le 2026-10-18 par le pilote (V132)** : la référence doit refléter le sous-type. Une **requalification
 >   ponctuelle** fait passer en `DAOO-CC` les dossiers de contrat-cadre déjà nés en `DAOO`, non clôturés et sans PV signé

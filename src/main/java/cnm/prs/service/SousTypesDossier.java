@@ -83,6 +83,14 @@ public final class SousTypesDossier {
         return contratCadre && DAOO.equals(s) ? DAOO_CC : s;
     }
 
+    /**
+     * ⚠️ 2026-10-18 (demande front « grille-contrat-cadre », §B1) — la forme qu'un sous-type impose à sa fiche : {@code CONTRAT_CADRE}
+     * pour {@code DAOO-CC}, nul pour les autres (la forme se lit alors sur la fiche du dossier).
+     */
+    public static String formeImposee(String sousType) {
+        return DAOO_CC.equals(sousType) ? cnm.prs.entity.PieceSousType.CONTRAT_CADRE : null;
+    }
+
     /** Le sous-type du dossier de marché, par la même règle : {@code MPI}, {@code MAORI}, {@code MAOOI}, {@code MAOOPREQUAL}, {@code MAOR}, {@code MAOO}. */
     public static String dossierMarche(String mode, boolean prestationsIntellectuelles) {
         return switch (dossierMiseEnConcurrence(mode, prestationsIntellectuelles)) {

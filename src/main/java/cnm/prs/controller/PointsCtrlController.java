@@ -43,6 +43,15 @@ public class PointsCtrlController {
         return service.findAll(typeDossier, sousType);
     }
 
+    /**
+     * ⚠️ 2026-10-18 (demande front « grille-contrat-cadre », §B2) — le bilan des codes de la fiche cités par les points : un code
+     * inconnu, retiré, hors des catégories du point ou absent pour l'une de ses formes est en écart.
+     */
+    @GetMapping("/controle-codes")
+    public cnm.prs.dto.CodesCitesPointsCtrlDto controleCodes() {
+        return service.controleCodes();
+    }
+
     @GetMapping("/{id}")
     public PointsCtrlDto findById(@PathVariable Integer id) {
         return service.findById(id);

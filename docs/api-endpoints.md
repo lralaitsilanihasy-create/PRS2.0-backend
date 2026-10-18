@@ -10743,11 +10743,25 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 |---|---|---|---|---|---|
 | GET | /api/points-ctrls | — | `PointsCtrlDto[]` | 200, 400 | Authentifié — filtres `?typeDossier=` `&sousType=` (grille effective) |
 | GET | /api/points-ctrls/{id} | — | `PointsCtrlDto` | 200, 404 | Authentifié |
+| GET | /api/points-ctrls/controle-codes | — | `CodesCitesPointsCtrlDto` | 200 | Authentifié — ⚠️ 2026-10-18 |
 | POST | /api/points-ctrls | `PointsCtrlDto` | `PointsCtrlDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/points-ctrls/{id} | `PointsCtrlDto` | `PointsCtrlDto` | 200, 400, 404 | ADMINISTRATEUR |
 | DELETE | /api/points-ctrls/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 
 `{id}` = idPointCtrl (number).
+
+> ⚠️ **2026-10-18 — la grille du contrat-cadre et les codes cités (demande front « grille-contrat-cadre » ; V133).**
+> - **`?sousType=DAOO-CC`** : le sous-type impose la forme contrat-cadre ; la grille ne contient plus les points de forme `AUTRE`
+>   hérités de `DAOO`, seulement leurs variantes `CONTRAT_CADRE` (même libellé, même ordre) et les points sans forme. Les autres
+>   sous-types servent toujours les conditions non résolues ; `GET /api/dossiers/{id}/grille` les résout sur la fiche.
+> - **`POST` / `PUT`** : un code de la fiche cité par le libellé ou la description (`B05-GS-03`, rubrique `B08-AV`, bloc `B12`)
+>   doit exister, actif, au référentiel pour chaque forme du point et dans au moins une de ses catégories ; sinon **400**
+>   `code = CODES_ABSENTS`, message nominatif (« B05-TP-02 retiré du référentiel », « B02-OB-03 absent pour le contrat-cadre »),
+>   `details.ecarts = [{ code, motif, forme }]`. Le `PUT` contrôle le texte proposé avec la forme et la catégorie du point.
+> - **`GET /api/points-ctrls/controle-codes`** — le bilan sur l'existant :
+>   `{ pointsCites, codesCites, points: [{ idPointCtrl, libelPointCtrl, idTypeDossier, idSousType, forme, categorie, ecarts: [{ code,
+>   motif, forme }] }] }`, les seuls points en écart. `motif` : `INCONNU`, `INACTIF`, `HORS_CATEGORIE`, `HORS_FORME` (`forme` :
+>   `CONTRAT_CADRE` ou `AUTRE`). En recette après V133 : 23 points citent des codes (les 12 de `DAOO` et 11 variantes), aucun en écart.
 
 **Exemple — requête** (point spécifique au sous-type PPM-AGPM)
 ```json
