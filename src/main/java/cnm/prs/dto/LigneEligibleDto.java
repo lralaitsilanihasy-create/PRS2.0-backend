@@ -36,5 +36,21 @@ public record LigneEligibleDto(Integer idDetail, Integer idDossier, String refeD
          * validation ({@link cnm.prs.service.SousTypesDossier#dossierMiseEnConcurrence}) sur le mode et la catégorie de la ligne
          * <strong>à la date de la lecture</strong> (H1) ; jamais {@code DAO} (H2).
          */
-        String sousType) {
+        String sousType,
+        /**
+         * ⚠️ 2026-10-19 (demande front « etat-fiche-liste », §B1) — la fiche de la ligne : statut et numéro de sa dernière version
+         * ({@code BROUILLON} v1 tant qu'aucune version n'est enregistrée, {@code BROUILLON} sur une révision ouverte) ;
+         * {@code null} sans fiche.
+         */
+        EtatFiche fiche,
+        /** ⚠️ §B1 — le dossier soumis né de la fiche, son statut courant ; {@code null} sans fiche ou tant qu'il n'est pas créé. */
+        EtatDossier dossier) {
+
+    /** L'état de la fiche d'une ligne : {@code BROUILLON} ou {@code VALIDEE}, et le numéro de la dernière version. */
+    public record EtatFiche(String statut, Integer version) {
+    }
+
+    /** Le dossier soumis d'une fiche : identifiant, référence, statut courant. */
+    public record EtatDossier(Integer idDossier, String refeDossier, String statut) {
+    }
 }

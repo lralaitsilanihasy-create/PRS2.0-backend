@@ -324,6 +324,13 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     List<Object[]> findDossiersNesDeFiche();
 
     /**
+     * ⚠️ 2026-10-19 (« etat-fiche-liste », §B1) — le dossier soumis de chaque fiche, pour toute la liste des éligibles en une
+     * requête : {@code [idDmc, idDossier, refeDossier, statut]}.
+     */
+    @Query("select d.idDmc, d.idDossier, d.refeDossier, d.statut from Dossier d where d.idDmc is not null")
+    List<Object[]> findEtatsDossiersNesDeFiche();
+
+    /**
      * ⚠️ LOT 3a (2026-08-26) — §1 : identifiants des dossiers visibles d'une localité, projection de
      * {@link #findVisiblesParLocalite} sur la seule PK. Sert à scoper les ressources
      * <strong>enfants</strong> d'un dossier (lots, prévisions, échéances…) dont la table ne porte pas

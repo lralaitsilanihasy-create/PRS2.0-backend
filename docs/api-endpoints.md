@@ -5008,6 +5008,18 @@ a déjà été produit, son sous-type est celui du dossier (`DossierDto.idTypeDo
 reçoit la règle du mode seul. Jamais `DAO` (ancien code, `DAOO` depuis V94). Filtre facultatif **`?sousType=`** (casse
 indifférente) : les seules lignes de ce sous-type ; hors des six codes → 400 `SOUS_TYPE_INCONNU`.
 
+⚠️ **2026-10-19** (demande front `demande-backend-2026-10-19-etat-fiche-liste.md`) — deux objets de plus sur une ligne qui a une
+fiche (`idDmc` non nul), tous deux `null` sinon :
+- **`fiche: { statut, version }`** : le statut (`BROUILLON` · `VALIDEE`) et le numéro de la **dernière** version de la fiche. Une
+  révision ouverte sur une version validée donne `BROUILLON` avec son numéro. Une fiche jamais enregistrée vaut `{ BROUILLON, 1 }`,
+  comme sur `GET /api/fiches-marche/{idDmc}`.
+- **`dossier: { idDossier, refeDossier, statut }`** : le dossier soumis né de la fiche (`t_dossier.ID_DMC`, le même que
+  `idDossierSoumis`) et son statut courant ; `null` tant qu'il n'est pas créé.
+
+Les deux viennent de deux requêtes pour toute la liste, jamais d'une requête par ligne. **Q1** : une ligne dont le dossier est
+clôturé reste listée, avec son état, comme toute ligne `dejaDao`. Elle y reste aussi après l'attribution ; une liste à part des
+appels d'offres lancés attend une demande du pilote.
+
 **Endpoints**
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |

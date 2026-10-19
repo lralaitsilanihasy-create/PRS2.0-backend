@@ -25,6 +25,7 @@ import com.jayway.jsonpath.JsonPath;
 import cnm.prs.entity.Capm;
 import cnm.prs.entity.ChampFicheMarche;
 import cnm.prs.entity.Dossier;
+import cnm.prs.entity.FicheMarche;
 import cnm.prs.entity.DossierMec;
 import cnm.prs.entity.Marche;
 import cnm.prs.entity.MarchePrevision;
@@ -53,6 +54,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
     private static final String JSON = MediaType.APPLICATION_JSON_VALUE;
 
     @Autowired private ChampFicheMarcheRepository champRepository;
+    @Autowired private cnm.prs.repository.FicheMarcheRepository ficheRepository;
 
     private String tokenUgpm;
     private String tokenPrmp2;
@@ -207,7 +209,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ 3. éligibles
 
     @Test
-    @DisplayName("3 — eligibles : seules les lignes H4 du périmètre, dejaDao juste ; un contrôleur n'en a aucune")
+    @DisplayName("3 — eligibles : seules les lignes H4 du périmètre, dejaDao juste, état de la fiche et de son dossier ; un contrôleur n'en a aucune")
     void eligibles() throws Exception {
         mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
@@ -222,7 +224,30 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].dejaDao").value(true))
-                .andExpect(jsonPath("$[0].idDmc").value(idDmc));
+                .andExpect(jsonPath("$[0].idDmc").value(idDmc))
+                // ⚠️ 2026-10-19 (« etat-fiche-liste », §B1) — fiche virtuelle : brouillon v1, pas de dossier.
+                .andExpect(jsonPath("$[0].fiche.statut").value("BROUILLON"))
+                .andExpect(jsonPath("$[0].fiche.version").value(1))
+                .andExpect(jsonPath("$[0].dossier").doesNotExist());
+        // v1 validée, v2 ouverte en révision : la dernière version fait foi ; puis le dossier soumis né de la fiche.
+        ficheRepository.save(fiche(idDmc, 1, "VALIDEE"));
+        ficheRepository.save(fiche(idDmc, 2, "BROUILLON"));
+        Dossier soumis = dossierLoc(9950, "EN_ATTENTE_DECISION_PRMP", "ANT", "PRMP001");
+        soumis.setIdSousType("DAOO");
+        soumis.setIdDmc(idDmc);
+        dossierRepository.save(soumis);
+        mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].fiche.statut").value("BROUILLON"))
+                .andExpect(jsonPath("$[0].fiche.version").value(2))
+                .andExpect(jsonPath("$[0].dossier.idDossier").value(9950))
+                .andExpect(jsonPath("$[0].dossier.refeDossier").value("DOS-9950"))
+                .andExpect(jsonPath("$[0].dossier.statut").value("EN_ATTENTE_DECISION_PRMP"));
+        ficheRepository.save(fiche(idDmc, 3, "VALIDEE"));
+        mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].fiche.statut").value("VALIDEE"))
+                .andExpect(jsonPath("$[0].fiche.version").value(3));
         mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp2))
                 .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));
         mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenCc))
@@ -588,6 +613,16 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
         c.setControle(controle);
         c.setActif(true);
         champRepository.save(c);
+    }
+
+    /** Une version de fiche enregistrée directement (statut et numéro seuls), pour l'état servi sur la liste des éligibles. */
+    private FicheMarche fiche(Long idDmc, int version, String statut) {
+        FicheMarche f = new FicheMarche();
+        f.setIdDmc(idDmc);
+        f.setNumeroVersion(version);
+        f.setStatut(statut);
+        f.setDateCreation(java.time.LocalDateTime.now());
+        return f;
     }
 
     private Long creerDmc(String token, int idDetail) throws Exception {

@@ -143,6 +143,9 @@ public class DmcService {
     private final cnm.prs.repository.RecuDaoRepository recuRepository;
     private final cnm.prs.repository.OffreRepository offreRepository;
 
+    /** ⚠️ 2026-10-19 (« etat-fiche-liste », §B1). */
+    private final cnm.prs.repository.FicheMarcheRepository ficheRepository;
+
     public DmcService(DossierMecRepository repository, MarcheRepository marcheRepository,
             ModePassationRepository modeRepository, TypeDmcRepository typeDmcRepository,
             PerimetreDossier perimetre, DossierRepository dossierRepository,
@@ -150,7 +153,8 @@ public class DmcService {
             ChampFicheMarcheRepository champRepository, cnm.prs.repository.NatureRepository natureRepository,
             JournalDossierService journal, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, cnm.prs.repository.RecuDaoRepository recuRepository,
-            cnm.prs.repository.OffreRepository offreRepository) {
+            cnm.prs.repository.OffreRepository offreRepository, cnm.prs.repository.FicheMarcheRepository ficheRepository) {
+        this.ficheRepository = ficheRepository;
         this.recuRepository = recuRepository;
         this.offreRepository = offreRepository;
         this.documentRepository = documentRepository;
@@ -267,6 +271,13 @@ public class DmcService {
         recuRepository.compterEnAttenteParDmc().forEach(r -> recusEnAttente.put((Long) r[0], (Long) r[1]));
         Map<Long, Long> nbOffres = new HashMap<>();
         offreRepository.compterDeposeesParDmc().forEach(r -> nbOffres.put((Long) r[0], (Long) r[1]));
+        // ⚠️ 2026-10-19 (« etat-fiche-liste », §B1) — état de la fiche et de son dossier : une requête chacun.
+        Map<Long, LigneEligibleDto.EtatFiche> etatsFiche = new HashMap<>();
+        ficheRepository.findEtatsDernieresVersions().forEach(
+                r -> etatsFiche.put((Long) r[0], new LigneEligibleDto.EtatFiche((String) r[2], (Integer) r[1])));
+        Map<Long, LigneEligibleDto.EtatDossier> etatsDossier = new HashMap<>();
+        dossierRepository.findEtatsDossiersNesDeFiche().forEach(r -> etatsDossier.put((Long) r[0],
+                new LigneEligibleDto.EtatDossier((Integer) r[1], (String) r[2], (String) r[3])));
         Map<Integer, Dossier> dossiers = new HashMap<>();
         List<LigneEligibleDto> out = new ArrayList<>();
         for (Marche m : lignes) {
@@ -295,7 +306,10 @@ public class DmcService {
                     m.formeMarcheSaisie() == null ? null : m.formeMarcheSaisie().name(),
                     motifForme(m.formeMarcheSaisie()).isEmpty(), cat.categorie() == null ? null : cat.categorie().name(),
                     cat.motif().isEmpty(), m.getIdNature(), nature == null ? null : nature.getLibelle(),
-                    dmc == null ? 0 : recusEnAttente.getOrDefault(dmc.getIdDmc(), 0L), dmc == null ? 0 : nbOffres.getOrDefault(dmc.getIdDmc(), 0L), sousTypeLigne));
+                    dmc == null ? 0 : recusEnAttente.getOrDefault(dmc.getIdDmc(), 0L), dmc == null ? 0 : nbOffres.getOrDefault(dmc.getIdDmc(), 0L), sousTypeLigne,
+                    // Une fiche sans version enregistrée est virtuelle : version 1, brouillon (comme GET /api/fiches-marche/{idDmc}).
+                    dmc == null ? null : etatsFiche.getOrDefault(dmc.getIdDmc(), new LigneEligibleDto.EtatFiche("BROUILLON", 1)),
+                    dmc == null ? null : etatsDossier.get(dmc.getIdDmc())));
         }
         return out;
     }
