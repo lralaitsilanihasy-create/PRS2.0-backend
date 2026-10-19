@@ -48,6 +48,10 @@ import cnm.prs.security.PerimetreDossier;
 @Transactional
 public class PieceJointeDossierService {
 
+    /** ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B3) — une pièce jointe d'office par l'application, retirée ou remplacée à la main. */
+    public static final String CODE_PRODUITE_PAR_APPLICATION = "PIECE_PRODUITE_PAR_APPLICATION";
+    static final String CODE_AUTRE_DOCUMENT = "AUTRE_DOCUMENT";
+
     private final PieceJointeDossierRepository repository;
     private final TypePieceJointeRepository typePieceRepository;
     private final DossierRepository dossierRepository;
@@ -213,7 +217,18 @@ public class PieceJointeDossierService {
      * @throws BusinessRuleException 409 {@code PIECE_PRODUITE_PAR_FICHE}
      */
     private void exigerPasDeSubstitution(Dossier dossier, Integer idTypePiece) {
-        if (dossier.getIdDmc() == null || idTypePiece == null) {
+        if (idTypePiece == null) {
+            return;
+        }
+        // ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B3) — les pièces jointes d'office par l'attribution ne se remplacent pas
+        // non plus ; « tout autre document » reste libre (plusieurs pièces de ce type coexistent).
+        boolean autreDocument = typePieceRepository.findById(idTypePiece).map(t -> CODE_AUTRE_DOCUMENT.equals(t.getCode())).orElse(false);
+        if (!autreDocument && repository.findByIdDossier(dossier.getIdDossier()).stream()
+                .anyMatch(p -> p.getProduitePar() != null && idTypePiece.equals(p.getIdTypePiece()))) {
+            throw new BusinessRuleException("Les pièces de ce type sont jointes d'office au dossier de marché par l'application : elles ne "
+                    + "se remplacent pas à la main.", CODE_PRODUITE_PAR_APPLICATION);
+        }
+        if (dossier.getIdDmc() == null) {
             return;
         }
         List<PieceJointeDossier> produites = repository.findByIdDossierAndIdDocumentFicheIsNotNull(dossier.getIdDossier());
@@ -261,6 +276,11 @@ public class PieceJointeDossierService {
             throw new BusinessRuleException("Cette pièce est produite par la fiche marché du dossier : elle ne se supprime "
                     + "pas à la main. Corrigez la fiche (révision puis validation) : ses documents remplaceront celui-ci.",
                     "PIECE_PRODUITE_PAR_FICHE");
+        }
+        // ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B3) — de même une pièce jointe d'office par l'attribution, Administrateur compris.
+        if (piece.getProduitePar() != null) {
+            throw new BusinessRuleException("Cette pièce est jointe d'office au dossier de marché par l'application (" + piece.getProduitePar()
+                    + ") : elle ne se supprime pas à la main.", CODE_PRODUITE_PAR_APPLICATION);
         }
         if (CurrentUser.profil().orElse(null) == ProfilUtilisateur.ADMINISTRATEUR) {
             repository.deleteById(id);

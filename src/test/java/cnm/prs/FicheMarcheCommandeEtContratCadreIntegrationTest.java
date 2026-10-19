@@ -266,6 +266,109 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
                 .isEqualTo("00008/DAOO/CNM/2026");
     }
 
+    @Autowired private cnm.prs.repository.AttributionRepository attributionRepository;
+    @Autowired private cnm.prs.repository.PieceJointeDossierRepository pieceJointeDossierRepository;
+    @Autowired private cnm.prs.repository.PieceSousTypeRepository pieceSousTypeRepository;
+    @Autowired private cnm.prs.repository.FicheMarcheRepository ficheMarcheRepository;
+    @Autowired private cnm.prs.repository.DocumentFicheMarcheRepository documentFicheMarcheRepository;
+
+    @Test
+    @DisplayName("⚠️ 19/10 (« dossier-marche-contrat-cadre », V137) — MAOO-CC créé avec la liste de MAOO ; le dossier de marché d'un "
+            + "contrat-cadre, sans référence, passe en MAOO-CC, ses pièces d'office marquées, le bordereau estimatif de la fiche en devis "
+            + "estimatif et celui de l'offre en autre document, trace au journal ; une pièce de la PRMP n'est pas marquée ; seconde passe sans effet")
+    void reprisesV137() throws Exception {
+        importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
+        Long idDmc = creerDmc(9903);
+        remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", null, Map.of("B05-MT-01", "250000000"));
+        int idMec = JsonPath.<Integer>read(mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.idSousType").value("DAOO-CC"))
+                .andReturn().getResponse().getContentAsString(), "$.idDossier");
+        // La famille DDM et MAOO avec une pièce de sa liste (la base de test ne les porte pas) ; les types de pièce du dossier de marché.
+        typeDossierRepository.save(new cnm.prs.entity.TypeDossier("DDM", "Dossier de Marché"));
+        sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier("MAOO", "Marché sur Appel d'Offres Ouvert", "DDM"));
+        Map<String, Integer> types = new LinkedHashMap<>();
+        for (String code : List.of("PROJET_MARCHE", "DEVIS_ESTIMATIF", "AUTRE_DOCUMENT")) {
+            cnm.prs.entity.TypePieceJointe t = typePieceJointeRepository.findFirstByCode(code).orElseGet(() -> {
+                cnm.prs.entity.TypePieceJointe n = typePieceJointeRepository.findById(seedTypePiece(code, false, null, 0)).orElseThrow();
+                n.setCode(code);
+                return typePieceJointeRepository.save(n);
+            });
+            types.put(code, t.getIdTypePiece());
+        }
+        pieceSousTypeRepository.save(new cnm.prs.entity.PieceSousType(types.get("PROJET_MARCHE"), "MAOO", true, 9, null, null));
+        // Le bordereau estimatif de la fiche (produit par la validation, sinon posé ici).
+        cnm.prs.entity.FicheMarche validee = ficheMarcheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElseThrow();
+        if (documentFicheMarcheRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
+                .noneMatch(x -> "BORDEREAU_ESTIMATIF".equals(x.getType()) && "pdf".equals(x.getExtension()))) {
+            cnm.prs.entity.DocumentFicheMarche e = new cnm.prs.entity.DocumentFicheMarche();
+            e.setIdFiche(validee.getIdFiche());
+            e.setType("BORDEREAU_ESTIMATIF");
+            e.setExtension("pdf");
+            e.setNomFichier("BORDEREAU_ESTIMATIF_v137.pdf");
+            e.setContenu("%PDF-estimatif".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+            e.setTailleOctets(14L);
+            e.setEmpreinte("0".repeat(64));
+            e.setDateGeneration(java.time.LocalDateTime.now());
+            documentFicheMarcheRepository.saveAndFlush(e);
+        }
+        // L'état d'avant V137 : le dossier de marché né en MAOO, soumis sans référence, ses pièces d'office non marquées.
+        java.time.LocalDateTime creeLe = java.time.LocalDateTime.now().minusMinutes(10);
+        Dossier marche = dossierLoc(9970, "SOUMIS", "ANT", "PRMP001");
+        marche.setIdTypeDossier("DDM");
+        marche.setIdSousType("MAOO");
+        marche.setRefeDossier(null);
+        marche.setIdEntiteContract(1);
+        dossierRepository.saveAndFlush(marche);
+        cnm.prs.entity.Attribution a = new cnm.prs.entity.Attribution();
+        a.setIdDmc(idDmc);
+        a.setLot(1);
+        a.setEtat("AU_CONTROLE");
+        a.setIdDossier(9970);
+        a.setDossierCreeLe(creeLe);
+        attributionRepository.saveAndFlush(a);
+        int projet = piece(9970, types.get("PROJET_MARCHE"), "projet-de-marche_" + idDmc + "_lot1.pdf", creeLe.plusSeconds(1));
+        int offre = piece(9970, types.get("DEVIS_ESTIMATIF"), "bordereau-offre-4_" + idDmc + "_lot1.pdf", creeLe.plusSeconds(1));
+        int prmp = piece(9970, types.get("AUTRE_DOCUMENT"), "note-de-la-prmp.pdf", creeLe.plusMinutes(8));
+
+        Runnable v137 = () -> org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(
+                org.springframework.jdbc.datasource.DataSourceUtils.getConnection(jdbcTemplate.getDataSource()),
+                new ClassPathResource("db/migration/V137__dossier_marche_contrat_cadre.sql"));
+        v137.run();
+        v137.run();
+        entityManager.clear();   // la reprise écrit en SQL : relire les pièces depuis la base
+        assertThat(jdbcTemplate.queryForMap("select \"GRILLE_BASE\" gb, \"ID_TYPE_DOSSIER\" f from tr_sous_type_dossier where \"ID_SOUS_TYPE\" = 'MAOO-CC'"))
+                .containsEntry("gb", "MAOO").containsEntry("f", "DDM");
+        assertThat(jdbcTemplate.queryForObject("select count(*) from t_piece_sous_type where \"ID_SOUS_TYPE\" = 'MAOO-CC'", Integer.class)).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("select \"ID_SOUS_TYPE\" from t_dossier where \"ID_DOSSIER\" = 9970", String.class)).isEqualTo("MAOO-CC");
+        assertThat(jdbcTemplate.queryForObject("select \"ID_SOUS_TYPE\" from t_dossier where \"ID_DOSSIER\" = ?", String.class, idMec))
+                .isEqualTo("DAOO-CC");
+        assertThat(pieceJointeDossierRepository.findById(projet).orElseThrow().getProduitePar()).isEqualTo("ATTRIBUTION");
+        assertThat(pieceJointeDossierRepository.findById(prmp).orElseThrow().getProduitePar()).isNull();
+        cnm.prs.entity.PieceJointeDossier bordereauOffre = pieceJointeDossierRepository.findById(offre).orElseThrow();
+        assertThat(bordereauOffre.getIdTypePiece()).isEqualTo(types.get("AUTRE_DOCUMENT"));
+        assertThat(bordereauOffre.getProduitePar()).isEqualTo("ATTRIBUTION");
+        assertThat(pieceJointeDossierRepository.findByIdDossier(9970)).filteredOn(p -> types.get("DEVIS_ESTIMATIF").equals(p.getIdTypePiece()))
+                .singleElement().satisfies(p -> {
+                    assertThat(p.getNomFichier()).startsWith("BORDEREAU_ESTIMATIF");
+                    assertThat(p.getProduitePar()).isEqualTo("ATTRIBUTION");
+                });
+        assertThat(jdbcTemplate.queryForList("select \"DETAIL\" from t_action_dossier where \"ID_DOSSIER\" = 9970 and \"TYPE_ACTION\" = "
+                + "'SOUS_TYPE_REQUALIFIE'", String.class)).singleElement().asString().contains("MAOO → MAOO-CC", "bordereau estimatif de la fiche");
+    }
+
+    private int piece(int idDossier, Integer idTypePiece, String nom, java.time.LocalDateTime le) {
+        cnm.prs.entity.PieceJointeDossier p = new cnm.prs.entity.PieceJointeDossier();
+        p.setIdDossier(idDossier);
+        p.setIdTypePiece(idTypePiece);
+        p.setNomFichier(nom);
+        p.setContenu("%PDF-1.4".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+        p.setFormat("PDF");
+        p.setTaille(8L);
+        p.setDateUpload(le);
+        p.setApresLettreRenvoi(false);
+        return pieceJointeDossierRepository.saveAndFlush(p).getIdPiece();
+    }
+
     // ------------------------------------------------------------------ 5. quantité fixe inchangée
 
     @Test

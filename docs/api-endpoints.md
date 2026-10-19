@@ -8693,6 +8693,41 @@ sous-type). Aucune dépendance ajoutée.
   | `COHERENCE` | `LANCEMENT_PREVU` (plan), `DAO_DISPONIBLE` (date de lancement `B04-CP-01`, à défaut validation de la fiche), `RETARD` (« n jour(s) » ou « aucun ») |
   | `VALIDATION` | `VERSION`, `DATE_VALIDATION`, `VALIDEE_PAR` (nom) |
 
+⚠️ **2026-10-19 (demande front « dossier-marche-contrat-cadre » ; V137)** — le dossier de marché aligné sur le dossier de mise en
+concurrence.
+- **B1, le sous-type `MAOO-CC`** (famille `DDM`, « Marché sur appel d'offres ouvert — contrat-cadre », grille de base `MAOO`, liste de
+  pièces copiée de `MAOO`). `POST …/attribution/lots/{lot}/dossier` le produit quand le dossier de mise en concurrence de la fiche est
+  en `DAOO-CC` (`AttributionDto.lots[].dossierMarche.sousType`) ; la référence porte `…/MAOO-CC/…`. Les autres sous-types de marché
+  ne changent pas (Q3). La saisie directe d'un `MAOO-CC` reste ouverte (Q2) : un contrat-cadre en remise papier n'a pas
+  d'attribution, son dossier de marché se crée à la main.
+- **B2, la procédure** : `GET /api/dossiers/{id}` (lecture unitaire) sert sur un dossier de marché né d'une attribution
+  **`procedure: { idDmc, lot, idDossierMiseEnConcurrence, refeDossierMiseEnConcurrence }`**, lu sur `t_attribution` ; absent
+  sinon. `idDmc` du dossier reste nul (la colonne est unique et désigne le dossier de mise en concurrence) et `idDossierParent`
+  aussi (il désigne une mise à jour).
+- **B3, les pièces jointes d'office** : `PieceJointeDossierDto` gagne **`produitePar`** (`"ATTRIBUTION"`, nul pour une pièce
+  téléversée). Ces pièces ne se suppriment pas (`DELETE /api/piece-jointe-dossiers/{id}`, Administrateur compris) ni ne se remplacent
+  (`POST /api/piece-jointe-dossiers` d'un même type) : 409 **`PIECE_PRODUITE_PAR_APPLICATION`**. « Tout autre document » reste libre.
+- **B4, les pièces** :
+  - **Le devis estimatif** est le bordereau (ou DQE) estimatif de la dernière version validée de la fiche ; le bordereau de l'offre
+    retenue est joint en `AUTRE_DOCUMENT`.
+  - **Sur `GET /api/dossiers/{id}/pieces-exigees`**, trois pièces internes sont fournies par l'application (`fourniePar`
+    `"APPLICATION"`), au lieu d'être masquées en remise électronique :
+
+    | Code | Fournie quand | `lien` |
+    |---|---|---|
+    | `FICHE_PRESENTATION` | la fiche de la procédure a une version validée | `/api/dossiers/{id}/fiche-presentation` |
+    | `PV_CNM_DMC` | le PV d'examen du dossier de mise en concurrence est **signé** | `/api/pv-examens/{idPv}/document` |
+    | `PV_VALIDATION_CAO` | le rapport d'évaluation signé est joint d'office (il vaut PV de validation) | `/api/piece-jointe-dossiers/{idPiece}/contenu` |
+
+  - **`GET /api/dossiers/{id}/fiche-presentation`** sert aussi le dossier de marché : `idDmc` est celui de la procédure, une section
+    **`ATTRIBUTION`** s'ajoute après `PROCEDURE` (`LOT`, `DOSSIER_MISE_EN_CONCURRENCE`, `ATTRIBUTAIRE`, ou `TITULAIRES` par rang
+    pour un contrat-cadre multi-attributaire, `MONTANT_HT`, `MONTANT_TTC`, `DELAI`, `RAPPORT_SIGNE`), et `VALIDATION` gagne
+    `DOSSIER_CREE_LE` et `DOSSIER_CREE_PAR`. Le PDF est titré « Dossier de marché » ; la création nominative du dossier de marché
+    vaut signature (hypothèse, à confirmer par le pilote).
+- **Q1, la reprise (V137)** : un dossier de marché né d'une attribution, sans référence ni réception, en `MAOO` alors que son dossier de
+  mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
+  estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
+
 ⚠️ **2026-10-17 (demande front « canevas-rapport-evaluation »)** — le canevas de rapport d'évaluation, et « tout autre document utile ».
 - **`GET /api/dossiers/{id}/canevas-rapport`** rend le canevas en données, et **`…/canevas-rapport/pdf`** en PDF.
   - **Garde** : celle de la lecture du dossier.

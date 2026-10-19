@@ -596,6 +596,8 @@ public class DossierService {
                 dto.setIdDossierPlan(plan.idDossierPlan());
                 dto.setIdPvPlan(plan.idPvPlan());
             }
+        } else if ("DDM".equals(entity.getIdTypeDossier())) {
+            dto.setProcedure(piecesFournies.getObject().procedureDe(entity));   // ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B2)
         }
         return enrichir(List.of(dto)).get(0);
     }

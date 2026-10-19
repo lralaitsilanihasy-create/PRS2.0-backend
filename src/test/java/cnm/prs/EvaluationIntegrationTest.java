@@ -1,6 +1,9 @@
 package cnm.prs;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -78,6 +81,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private cnm.prs.repository.PieceJointeDossierRepository pieceJointeDossierRepository;
     @Autowired private cnm.prs.seed.PointsCtrlDossierMarcheSeeder pointsCtrlSeeder;
     @Autowired private cnm.prs.repository.AttributionRepository attributionRepository;
+    @Autowired private cnm.prs.repository.PieceSousTypeRepository pieceSousTypeRepository;
+    @Autowired private cnm.prs.repository.DocumentFicheMarcheRepository documentFicheMarcheRepository;
     @Autowired private cnm.prs.service.AttributionService attributionService;
 
     private final LocalDate aujourdhui = LocalDate.now();
@@ -1773,9 +1778,42 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
             tp.setCode(t[1]);
             typePieceJointeRepository.save(tp);
         }
+        // ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre ») — le dossier de mise en concurrence en DAOO-CC, au PV signé ; MAOO-CC et sa
+        // liste (les trois pièces internes en PAPIER, comme V102) ; le bordereau estimatif que la fiche a produit.
+        cnm.prs.entity.SousTypeDossier maooCc = new cnm.prs.entity.SousTypeDossier("MAOO-CC", "Marché sur appel d'offres ouvert — contrat-cadre", "DDM");
+        maooCc.setGrilleBase("MAOO");
+        sousTypeDossierRepository.save(maooCc);
+        int ordre = 1;
+        for (String[] t : List.of(new String[] { "FICHE_PRESENTATION", "PAPIER" }, new String[] { "PV_CNM_DMC", "PAPIER" },
+                new String[] { "PV_OUVERTURE", null }, new String[] { "RAPPORT_ANALYSE", null }, new String[] { "PV_VALIDATION_CAO", "PAPIER" },
+                new String[] { "DEVIS_ESTIMATIF", null }, new String[] { "PROJET_MARCHE", null }, new String[] { "AUTRE_DOCUMENT", null })) {
+            cnm.prs.entity.TypePieceJointe tp = typePieceJointeRepository.findFirstByCode(t[0]).orElseGet(() -> {
+                cnm.prs.entity.TypePieceJointe n = typePieceJointeRepository.findById(seedTypePiece(t[0], false, null, 0)).orElseThrow();
+                n.setCode(t[0]);
+                return typePieceJointeRepository.save(n);
+            });
+            cnm.prs.entity.PieceSousType ps = new cnm.prs.entity.PieceSousType(tp.getIdTypePiece(), "MAOO-CC", !"AUTRE_DOCUMENT".equals(t[0]),
+                    ordre++, null, null);
+            ps.setCondition(t[1]);
+            pieceSousTypeRepository.save(ps);
+        }
+        Dossier mec = dossierLoc(9960, "CLOTURE", "ANT", "PRMP001");
+        mec.setIdTypeDossier("DMC");
+        mec.setIdSousType("DAOO-CC");
+        mec.setIdDmc(idDmc);
+        dossierRepository.save(mec);
+        receptionRepository.save(reception(9960, 9960, "CTRCC1", true));
+        dispatchRepository.save(dispatch(9960, 9960, "CTRCC1", "CTRMEM", "CTRPRE"));
+        examenRepository.save(examen(9960, 9960, "CTRMEM"));
+        seedPvSigne(9960, 9960);
+        String estimatif = documentFicheMarcheRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
+                .filter(x -> "BORDEREAU_ESTIMATIF".equals(x.getType()) && "pdf".equals(x.getExtension())).findFirst().orElseThrow().getNomFichier();
         String att = base.replace("/evaluation", "/attribution");
-        int idDossier = JsonPath.read(mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString(), "$.lots[0].dossierMarche.idDossier");
+        String creation = mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.lots[0].dossierMarche.sousType").value("MAOO-CC"))
+                .andReturn().getResponse().getContentAsString();
+        int idDossier = JsonPath.read(creation, "$.lots[0].dossierMarche.idDossier");
+        dossierMarcheContratCadre(idDossier, estimatif);
         String projet = texteDuPdf(mvc.perform(get(att + "/lots/1/projet").header("Authorization", tokenUgpm)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
         assertThat(projet).contains("PROJET DE CONTRAT-CADRE", "et les 2 titulaire(s) suivant(s)", "BTP Gamma, NIF 7777888999", "BTP Alpha, NIF 1111222333",
@@ -2005,6 +2043,62 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     /** Une fiche électronique validée (délai de réponse aux demandes : 5 jours), un responsable, une CAO de deux membres. */
+    /**
+     * ⚠️ 2026-10-19 (demande front « dossier-marche-contrat-cadre ») — le dossier de marché d'un contrat-cadre : la procédure servie
+     * (B2), les pièces jointes d'office marquées et gardées (B3), le devis estimatif de la fiche et les pièces internes fournies par
+     * l'application (B4), la fiche de présentation du marché.
+     */
+    private void dossierMarcheContratCadre(int idDossier, String estimatif) throws Exception {
+        mvc.perform(get("/api/dossiers/" + idDossier).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.idSousType").value("MAOO-CC")).andExpect(jsonPath("$.idDmc").doesNotExist())
+                .andExpect(jsonPath("$.idDossierParent").doesNotExist())
+                .andExpect(jsonPath("$.procedure.idDmc").value(idDmc)).andExpect(jsonPath("$.procedure.lot").value(1))
+                .andExpect(jsonPath("$.procedure.idDossierMiseEnConcurrence").value(9960))
+                .andExpect(jsonPath("$.procedure.refeDossierMiseEnConcurrence").value("DOS-9960"));
+        String pieces = mvc.perform(get("/api/piece-jointe-dossiers").param("dossier", String.valueOf(idDossier)).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(pieces, "$[*].produitePar")).isNotEmpty().containsOnly("ATTRIBUTION");
+        assertThat(JsonPath.<List<String>>read(pieces, "$[?(@.nomFichier=='" + estimatif + "')].nomFichier")).hasSize(1);
+        int idEstimatif = JsonPath.<List<Integer>>read(pieces, "$[?(@.nomFichier=='" + estimatif + "')].idPiece").get(0);
+        int idTypeDevis = JsonPath.<List<Integer>>read(pieces, "$[?(@.nomFichier=='" + estimatif + "')].idTypePiece").get(0);
+        int idTypeAutre = typePieceJointeRepository.findFirstByCode("AUTRE_DOCUMENT").orElseThrow().getIdTypePiece();
+        assertThat(JsonPath.<List<Integer>>read(pieces, "$[?(@.nomFichier =~ /bordereau-offre-.*/)].idTypePiece")).doesNotContain(idTypeDevis);
+        // Ni retrait ni remplacement à la main, Administrateur compris ; « tout autre document » reste libre.
+        mvc.perform(delete("/api/piece-jointe-dossiers/" + idEstimatif).header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PIECE_PRODUITE_PAR_APPLICATION"));
+        mvc.perform(delete("/api/piece-jointe-dossiers/" + idEstimatif).header("Authorization", tokenAdmin)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PIECE_PRODUITE_PAR_APPLICATION"));
+        org.springframework.mock.web.MockMultipartFile pdf = new org.springframework.mock.web.MockMultipartFile("fichier", "autre.pdf",
+                "application/pdf", "%PDF-1.4 autre".getBytes(StandardCharsets.ISO_8859_1));
+        mvc.perform(multipart("/api/piece-jointe-dossiers").file(pdf).file(data(idDossier, idTypeDevis)).header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PIECE_PRODUITE_PAR_APPLICATION"));
+        mvc.perform(multipart("/api/piece-jointe-dossiers").file(pdf).file(data(idDossier, idTypeAutre)).header("Authorization", tokenPrmp)).andExpect(status().isCreated());
+        // B4 — les pièces internes, fournies par l'application.
+        String exigees = mvc.perform(get("/api/dossiers/" + idDossier + "/pieces-exigees").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.fourniePar=='APPLICATION')].code"))
+                .containsExactlyInAnyOrder("FICHE_PRESENTATION", "PV_CNM_DMC", "PV_VALIDATION_CAO");
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='PV_CNM_DMC')].lien").get(0)).startsWith("/api/pv-examens/");
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='PV_VALIDATION_CAO')].lien").get(0)).startsWith("/api/piece-jointe-dossiers/");
+        // La fiche de présentation du marché : la section « Attribution ».
+        mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.idDmc").value(idDmc))
+                .andExpect(jsonPath("$.sections[?(@.code=='ATTRIBUTION')].lignes[?(@.code=='LOT')].valeur").value(hasItem("1")))
+                .andExpect(jsonPath("$.sections[?(@.code=='ATTRIBUTION')].lignes[?(@.code=='DOSSIER_MISE_EN_CONCURRENCE')].valeur")
+                        .value(hasItem("DOS-9960")))
+                .andExpect(jsonPath("$.sections[?(@.code=='ATTRIBUTION')].lignes[?(@.code=='TITULAIRES')].valeur")
+                        .value(hasItem(containsString("1. BTP Gamma (offre n° 3)"))))
+                .andExpect(jsonPath("$.sections[?(@.code=='VALIDATION')].lignes[?(@.code=='DOSSIER_CREE_LE')]").isNotEmpty());
+        assertThat(texteDuPdf(mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation/pdf").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray())).contains("Dossier de marché", "Attribution");
+    }
+
+    /** La partie {@code data} d'un dépôt de pièce. */
+    private static org.springframework.mock.web.MockMultipartFile data(int idDossier, int idTypePiece) {
+        return new org.springframework.mock.web.MockMultipartFile("data", "", "application/json",
+                ("{\"idDossier\":" + idDossier + ",\"idTypePiece\":" + idTypePiece + "}").getBytes(StandardCharsets.UTF_8));
+    }
+
     private void ficheEnLigne() throws Exception {
         String corps = mvc.perform(post("/api/dmcs/par-marche/9901").header("Authorization", tokenPrmp))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();

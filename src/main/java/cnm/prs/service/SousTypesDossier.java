@@ -27,6 +27,8 @@ public final class SousTypesDossier {
 
     // Famille DDM — les dossiers de marché produits par l'attribution.
     public static final String MAOO = "MAOO";
+    /** ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B1) — le marché d'un appel d'offres ouvert en contrat-cadre ; V137. */
+    public static final String MAOO_CC = "MAOO-CC";
     public static final String MAOR = "MAOR";
     public static final String MAOOI = "MAOOI";
     public static final String MAORI = "MAORI";
@@ -101,6 +103,16 @@ public final class SousTypesDossier {
             case DAOR -> MAOR;
             default -> MAOO;
         };
+    }
+
+    /**
+     * ⚠️ 2026-10-19 (demande front « dossier-marche-contrat-cadre », §B1) — le sous-type du dossier de marché né de l'attribution, lu
+     * sur le dossier de mise en concurrence de la procédure : {@code DAOO-CC} produit un {@code MAOO-CC}. Sans dossier de mise en
+     * concurrence, ou pour un autre sous-type, la règle du mode ({@link #dossierMarche(String, boolean)}) ; Q3 : pas de
+     * {@code MAOR-CC} ni de {@code MAOOI-CC}.
+     */
+    public static String dossierMarche(String mode, boolean prestationsIntellectuelles, String sousTypeMiseEnConcurrence) {
+        return DAOO_CC.equals(sousTypeMiseEnConcurrence) ? MAOO_CC : dossierMarche(mode, prestationsIntellectuelles);
     }
 
     /** Minuscules, sans accent. */

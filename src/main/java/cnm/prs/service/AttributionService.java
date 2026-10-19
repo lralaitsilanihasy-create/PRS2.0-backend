@@ -969,7 +969,8 @@ public class AttributionService {
 
     /**
      * Crée le dossier de marché d'un lot attribuable (PRMP ou son UGPM) et y joint d'office le projet de marché, le cahier des charges
-     * (DAO complet), le devis estimatif (bordereau de l'offre proposée), le PV d'ouverture et le rapport d'évaluation : 409
+     * (DAO complet), le devis estimatif (⚠️ 2026-10-19 : le bordereau estimatif de la fiche ; celui de l'offre proposée en « tout autre
+     * document »), le PV d'ouverture et le rapport d'évaluation, marqués {@code ATTRIBUTION} : 409
      * {@code EVALUATION_NON_CLOSE}, {@code LOT_INFRUCTUEUX}, {@code DOSSIER_EXISTANT} (avec {@code idDossier}) ; 404 lot inconnu.
      */
     public AttributionDto creerDossier(Long idDmc, Integer lot) {
@@ -994,7 +995,10 @@ public class AttributionService {
         DossierMec dmc = dmcRepository.findById(idDmc).orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
         Map<String, String> plan = valeursPpm.lire(dmc.getIdDetail()).valeurs();
         // ⚠️ PI-d2b (arbitrage du pilote, 08/10) — une consultation de prestations intellectuelles : le sous-type MPI (V90).
-        String sousType = SousTypesDossier.dossierMarche(plan.get("MODE"), evaluation.estPi(idDmc));   // ⚠️ M1 (manuel de contrôle, §B1)
+        // ⚠️ M1 (manuel de contrôle, §B1) ; ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B1) : DAOO-CC → MAOO-CC.
+        String sousTypeDmc = dossierRepository.findIdDossierByIdDmc(idDmc).flatMap(dossierRepository::findById).map(Dossier::getIdSousType)
+                .orElse(null);
+        String sousType = SousTypesDossier.dossierMarche(plan.get("MODE"), evaluation.estPi(idDmc), sousTypeDmc);
         ValeursPpmService.EnTete enTete = valeursPpm.enTete(dmc.getIdDetail());
         Dossier dossier = saisie.creerDossierMarche(sousType, enTete.idLocalite(), enTete.idEntiteContract());
         LocalDateTime maintenant = LocalDateTime.now();
@@ -1021,7 +1025,10 @@ public class AttributionService {
         int jointes = 0;
         jointes += joindre(dossier, "PROJET_MARCHE", "projet-de-marche" + suffixe, a.getProjetPdf());
         jointes += joindreCahierDesCharges(dossier, idDmc);
-        jointes += joindre(dossier, "DEVIS_ESTIMATIF", "bordereau-offre-" + offre.getNumero() + suffixe,
+        // ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B4) — le devis estimatif du manuel est l'estimation de la PRMP : le bordereau
+        // (ou DQE) estimatif de la fiche. Le bordereau de l'offre retenue suit le projet de marché, en « tout autre document ».
+        jointes += joindreEstimatif(dossier, idDmc);
+        jointes += joindre(dossier, PieceJointeDossierService.CODE_AUTRE_DOCUMENT, "bordereau-offre-" + offre.getNumero() + suffixe,
                 seance.bordereauPdf(p.idOffreFinanciere() != null ? p.idOffreFinanciere() : p.idOffre()).orElse(null));
         jointes += joindre(dossier, "PV_OUVERTURE", "pv-ouverture_" + idDmc + ".pdf", seance.pvSigne(idDmc));
         jointes += joindre(dossier, "RAPPORT_ANALYSE", "rapport-evaluation_" + idDmc + ".pdf", evaluation.rapportSigne(idDmc));
@@ -1074,8 +1081,24 @@ public class AttributionService {
         p.setTaille((long) contenu.length);
         p.setDateUpload(LocalDateTime.now());
         p.setApresLettreRenvoi(false);
+        p.setProduitePar(PieceJointeDossier.PAR_ATTRIBUTION);   // ⚠️ 2026-10-19 (§B3) : ni retrait ni remplacement à la main
         pieces.save(p);
         return 1;
+    }
+
+    /**
+     * ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B4) — le bordereau (ou DQE) estimatif de la dernière version validée de la fiche,
+     * en devis estimatif ; 0 si la fiche n'en a pas produit (la PRMP le joint).
+     */
+    private int joindreEstimatif(Dossier d, Long idDmc) {
+        FicheMarche validee = ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
+                .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((x, y) -> y).orElse(null);
+        if (validee == null) {
+            return 0;
+        }
+        return documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
+                .filter(x -> "pdf".equals(x.getExtension()) && DocumentsFicheMarcheService.TYPES_ESTIMATIF.contains(x.getType())).findFirst()
+                .map(x -> joindre(d, "DEVIS_ESTIMATIF", x.getNomFichier(), x.getContenu())).orElse(0);
     }
 
     /** Le cahier des charges : le DAO complet de la dernière version validée, à défaut ses documents séparés (PDF). */

@@ -220,6 +220,23 @@ public class DossierDto {
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     private Integer idPvPlan;
 
+    /**
+     * ⚠️ 2026-10-19 (demande front « dossier-marche-contrat-cadre », §B2) — pour un dossier de marché né d'une attribution, sur la
+     * lecture unitaire : la procédure qui l'a produit. Absent sinon. Il ne s'écrit nulle part : il se lit sur {@code t_attribution}
+     * ({@code idDmc} reste celui du seul dossier de mise en concurrence, et {@code idDossierParent} celui d'une mise à jour).
+     */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private Procedure procedure;
+
+    /**
+     * @param idDmc                        la fiche de la procédure
+     * @param lot                          le lot attribué
+     * @param idDossierMiseEnConcurrence   le dossier de mise en concurrence de la procédure, nul s'il n'existe pas
+     * @param refeDossierMiseEnConcurrence sa référence
+     */
+    public record Procedure(Long idDmc, Integer lot, Integer idDossierMiseEnConcurrence, String refeDossierMiseEnConcurrence) {
+    }
+
     /** ⚠️ Chronométrage (2026-09-01) — étape ouverte du circuit ; {@code null} si aucune tâche CNM ne court. */
     @Size(max = 30)
     private String etapeCourante;

@@ -12,13 +12,16 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.dto.EvaluationDto;
 import cnm.prs.dto.FichePresentationDto;
 import cnm.prs.dto.FichePresentationDto.Ligne;
 import cnm.prs.dto.FichePresentationDto.Section;
+import cnm.prs.entity.Attribution;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.DossierMec;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
+import cnm.prs.repository.AttributionRepository;
 import cnm.prs.repository.DossierMecRepository;
 import cnm.prs.repository.DossierRepository;
 
@@ -49,10 +52,16 @@ public class FichePresentationService {
     private final ActeurDirectory acteurs;
     private final GenerateurDocumentsFiche generateur;
     private final ObjectProvider<DossierService> dossierService;
+    /** ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B4) — le dossier de marché né d'une attribution. */
+    private final AttributionRepository attributions;
+    private final ObjectProvider<EvaluationService> evaluation;
 
     public FichePresentationService(DossierRepository dossiers, DossierMecRepository dmcs, FicheMarcheService fiches,
             ValeursPpmService valeursPpm, ActeurDirectory acteurs, GenerateurDocumentsFiche generateur,
-            ObjectProvider<DossierService> dossierService) {
+            ObjectProvider<DossierService> dossierService, AttributionRepository attributions,
+            ObjectProvider<EvaluationService> evaluation) {
+        this.attributions = attributions;
+        this.evaluation = evaluation;
         this.dossiers = dossiers;
         this.dmcs = dmcs;
         this.fiches = fiches;
@@ -85,12 +94,17 @@ public class FichePresentationService {
 
     FichePresentationDto contenu(Integer idDossier) {
         Dossier d = dossiers.findById(idDossier).orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
-        FicheMarcheService.EtatVersion ev = d.getIdDmc() == null ? null : fiches.etatValide(d.getIdDmc()).orElse(null);
+        // ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B4) — un dossier de marché né d'une attribution se présente par la fiche
+        // de sa procédure, avec la section « Attribution ».
+        Attribution attribution = d.getIdDmc() != null || !"DDM".equals(d.getIdTypeDossier()) ? null
+                : attributions.findFirstByIdDossier(idDossier).orElse(null);
+        Long idDmc = attribution != null ? attribution.getIdDmc() : d.getIdDmc();
+        FicheMarcheService.EtatVersion ev = idDmc == null ? null : fiches.etatValide(idDmc).orElse(null);
         if (ev == null) {
             throw new BusinessRuleException("Ce dossier n'est pas né d'une fiche validée : sa fiche de présentation n'est pas produite par "
                     + "l'application.", CODE_INDISPONIBLE, idDossier);
         }
-        Integer idDetail = dmcs.findById(d.getIdDmc()).map(DossierMec::getIdDetail).orElse(null);
+        Integer idDetail = dmcs.findById(idDmc).map(DossierMec::getIdDetail).orElse(null);
         ValeursPpmService.ValeursPpm ppm = idDetail == null ? new ValeursPpmService.ValeursPpm(null, 0, Map.of(), Map.of())
                 : valeursPpm.lire(idDetail);
         Map<String, String> p = ppm.valeurs();
@@ -140,6 +154,9 @@ public class FichePresentationService {
             }
         }
         sections.add(section("PROCEDURE", "Procédure", procedure));
+        if (attribution != null) {
+            sections.add(section("ATTRIBUTION", "Attribution", attribution(attribution)));
+        }
         // ⚠️ Recette du 17/10 (remarque 3) — du calendrier du plan (B01-AC-18, une trentaine d'étapes), les seules étapes du DAO, une
         // ligne chacune.
         sections.add(section("CALENDRIER_PLAN", "Calendrier prévisionnel du plan (étapes du DAO)",
@@ -163,14 +180,46 @@ public class FichePresentationService {
                 ligne("VERSION", "Version de la fiche", String.valueOf(ev.version())),
                 ligne("DATE_VALIDATION", "Validée le", ev.etat().getDateValidation() == null ? null
                         : ev.etat().getDateValidation().format(JOUR_HEURE)),
-                ligne("VALIDEE_PAR", "Validée par", validePar == null ? null : acteurs.nom(validePar)))));
-        return new FichePresentationDto(idDossier, d.getIdDmc(), ev.version(), sections.stream().filter(s -> !s.lignes().isEmpty()).toList());
+                ligne("VALIDEE_PAR", "Validée par", validePar == null ? null : acteurs.nom(validePar)),
+                // ⚠️ 2026-10-19 (§B4) — la création nominative du dossier de marché par la PRMP (ou son UGPM), datée et journalisée.
+                attribution == null || attribution.getDossierCreeLe() == null ? null
+                        : ligne("DOSSIER_CREE_LE", "Dossier de marché créé le", attribution.getDossierCreeLe().format(JOUR_HEURE)),
+                attribution == null || attribution.getDossierCreePar() == null ? null
+                        : ligne("DOSSIER_CREE_PAR", "Dossier de marché créé par", acteurs.nom(attribution.getDossierCreePar())))));
+        return new FichePresentationDto(idDossier, idDmc, ev.version(), sections.stream().filter(s -> !s.lignes().isEmpty()).toList());
+    }
+
+    /**
+     * ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B4) — la section « Attribution » : le lot, le dossier de mise en concurrence, la
+     * proposition de la commission au rapport signé (attributaire, ou titulaires classés d'un contrat-cadre, montants, délai).
+     */
+    private List<Ligne> attribution(Attribution a) {
+        Dossier mec = dossiers.findIdDossierByIdDmc(a.getIdDmc()).flatMap(dossiers::findById).orElse(null);
+        EvaluationDto ev = evaluation.getObject().vueSansGarde(a.getIdDmc()).orElse(null);
+        EvaluationDto.Proposition p = ev == null ? null : ev.lots().stream().filter(l -> a.getLot().equals(l.lot())).findFirst()
+                .map(EvaluationDto.Lot::proposition).orElse(null);
+        String titulaires = p == null || p.titulaires() == null || p.titulaires().isEmpty() ? null
+                : String.join("\n", p.titulaires().stream().map(t -> t.rang() + ". " + t.candidat() + " (offre n° " + t.numero() + ")"
+                        + (t.montant() == null ? "" : " — " + ValeursPpmService.montant(t.montant()) + " Ar HT")).toList());
+        return lignes(
+                ligne("LOT", "Lot", String.valueOf(a.getLot())),
+                ligne("DOSSIER_MISE_EN_CONCURRENCE", "Dossier de mise en concurrence", mec == null ? null : mec.getRefeDossier()),
+                ligne("ATTRIBUTAIRE", "Attributaire proposé par la commission",
+                        p == null || titulaires != null ? null : p.candidat() + (p.numero() == null ? "" : " (offre n° " + p.numero() + ")")),
+                ligne("TITULAIRES", "Titulaires proposés, par rang", titulaires),
+                ligne("MONTANT_HT", "Montant proposé hors taxes (Ariary)", p == null || titulaires != null ? null : ValeursPpmService.montant(p.montant())),
+                ligne("MONTANT_TTC", "Montant proposé toutes taxes (Ariary)", p == null || titulaires != null ? null
+                        : ValeursPpmService.montant(p.montantTtc())),
+                ligne("DELAI", "Délai d'exécution proposé", p == null ? null : p.delai()),
+                ligne("RAPPORT_SIGNE", "Rapport d'évaluation signé le", ev == null || ev.rapport() == null || ev.rapport().signeLe() == null ? null
+                        : ev.rapport().signeLe().format(JOUR_HEURE)));
     }
 
     DocumentLibre document(FichePresentationDto f, LocalDateTime le) {
         List<DocumentLibre.Element> els = new ArrayList<>();
         els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "FICHE DE PRÉSENTATION"));
-        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "Dossier d'appel à la concurrence"));
+        boolean marche = f.sections().stream().anyMatch(s -> "ATTRIBUTION".equals(s.code()));   // ⚠️ 2026-10-19 (§B4)
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, marche ? "Dossier de marché" : "Dossier d'appel à la concurrence"));
         els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
         for (Section s : f.sections()) {
             els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, s.titre(), true));
@@ -180,7 +229,8 @@ public class FichePresentationService {
             els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
         }
         String pied = "Fiche produite par l'application le " + le.format(JOUR_HEURE) + " à partir de la version " + f.versionFiche()
-                + " de la fiche ; la validation tracée de la fiche par la PRMP vaut signature.";
+                + " de la fiche ; la validation tracée de la fiche par la PRMP vaut signature"
+                + (marche ? ", comme la création nominative du dossier de marché." : ".");
         return new DocumentLibre("FICHE_PRESENTATION", null, els, pied);
     }
 

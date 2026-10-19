@@ -1546,6 +1546,25 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > - **Les autres modes (Q3)** : un contrat-cadre en appel d'offres restreint ou international garde `DAOR` ou `DAOOI` ; leurs
 >   listes filtrent déjà les pièces par forme.
 >
+> ⚠️ **2026-10-19 — le dossier de marché suit : `MAOO-CC` (demande du pilote ; V137).**
+> - **Le sous-type** : l'attribution d'un lot dont le dossier de mise en concurrence est en `DAOO-CC` produit un dossier de marché
+>   `MAOO-CC` (grille de base `MAOO`, mêmes points, motifs et délais ; liste de pièces du manuel, p. 50, celle de `MAOO`). Les
+>   autres modes gardent `MAOR`, `MAOOI`… La saisie directe d'un dossier de marché reste ouverte, `MAOO-CC` compris : une procédure
+>   en remise papier n'est pas évaluée dans l'application et n'a pas d'attribution.
+> - **La procédure** : le dossier de marché ne porte ni `ID_DMC` (unique : le dossier de mise en concurrence) ni de dossier parent
+>   (une mise à jour) ; sa procédure se lit sur l'attribution (fiche, lot, dossier de mise en concurrence).
+> - **Les pièces jointes d'office** par l'attribution (projet de marché, cahier des charges, devis estimatif, PV d'ouverture,
+>   rapport, questions et réponses, bordereau de l'offre) ne se retirent ni ne se remplacent à la main, Administrateur compris.
+> - **Le devis estimatif** du manuel est l'estimation de la PRMP : le bordereau (ou DQE) estimatif de la fiche. Le bordereau de
+>   l'offre retenue suit le projet de marché, en « tout autre document ».
+> - **Les pièces internes** que V102 masquait en ligne sont fournies par l'application : la fiche de présentation (celle de la
+>   procédure, avec une section « Attribution » ; la création nominative du dossier de marché vaut signature, hypothèse à confirmer
+>   par le pilote), le PV signé de la Commission sur le dossier de mise en concurrence, et le PV de validation de la CAO, dont le
+>   rapport d'évaluation signé tient lieu.
+> - **Reprise** : le dossier de marché d'un contrat-cadre déjà né en `MAOO`, encore sans référence (100383), passe en `MAOO-CC`.
+> - **Non fait** : des points de contrôle propres au contrat-cadre pour le marché (plusieurs titulaires classés, offre indicative,
+>   sélection par la PRMP, décret n° 2019-1064, art. 13) demandent des textes, du pilote ou de l'Administrateur.
+>
 > ⚠️ **2026-10-08 — les sous-types du Manuel de contrôle a priori (tranche M1, V94).** Le sous-type `DAO` s'appelle
 > désormais **`DAOO`** (dossier d'appel d'offres ouvert), références des dossiers existants comprises. La fiche produit le
 > dossier dans le sous-type que dit le **mode** de la ligne du plan : appel d'offres ouvert → `DAOO`, restreint → `DAOR`,

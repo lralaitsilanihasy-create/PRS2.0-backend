@@ -76,4 +76,14 @@ public class PieceJointeDossier {
      */
     @Column(name = "ID_DOCUMENT_FICHE")
     private Integer idDocumentFiche;
+
+    /**
+     * ⚠️ 2026-10-19 (demande front « dossier-marche-contrat-cadre », §B3 ; V137) — la pièce jointe d'office par l'application
+     * ({@link #PAR_ATTRIBUTION} : la création du dossier de marché à l'attribution) ; {@code null} pour une pièce téléversée. Comme une
+     * pièce produite par la fiche, elle ne se retire ni ne se remplace à la main (409 {@code PIECE_PRODUITE_PAR_APPLICATION}).
+     */
+    @Column(name = "PRODUITE_PAR", length = 20)
+    private String produitePar;
+
+    public static final String PAR_ATTRIBUTION = "ATTRIBUTION";
 }

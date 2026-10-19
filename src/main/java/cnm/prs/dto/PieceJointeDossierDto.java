@@ -48,4 +48,11 @@ public class PieceJointeDossierDto {
      * {@code PIECE_PRODUITE_PAR_FICHE}).
      */
     private Integer idDocumentFiche;
+
+    /**
+     * ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B3) — {@code ATTRIBUTION} pour une pièce jointe d'office au dossier de marché
+     * par l'attribution, {@code null} sinon. Lecture seule : elle ne se retire ni ne se remplace à la main (409
+     * {@code PIECE_PRODUITE_PAR_APPLICATION}).
+     */
+    private String produitePar;
 }
