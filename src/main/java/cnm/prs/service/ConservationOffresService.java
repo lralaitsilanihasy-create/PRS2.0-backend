@@ -51,10 +51,14 @@ public class ConservationOffresService {
     /** ⚠️ 2026-10-06 (retrait après paiement, H4) — les fichiers des reçus de frais de dossier suivent la même conservation. */
     private final cnm.prs.repository.RecuDaoRepository recus;
     private final Clock horloge;
+    /** ⚠️ V136 (2026-10-19, « copie-offre-candidat ») — les copies chiffrées par les candidats partent avec les contenus. */
+    private final CopieOffreService copies;
 
     public ConservationOffresService(ParametreService parametres, SeanceRepository seances, OffreRepository offres,
             OffreMorceauRepository morceaux, OffreJournalRepository journalOffres, SeanceJournalRepository journalSeance,
-            StockageOffres stockage, ProceduresEnLigneService procedures, Clock horloge, cnm.prs.repository.RecuDaoRepository recus) {
+            StockageOffres stockage, ProceduresEnLigneService procedures, Clock horloge, cnm.prs.repository.RecuDaoRepository recus,
+            CopieOffreService copies) {
+        this.copies = copies;
         this.recus = recus;
         this.parametres = parametres;
         this.seances = seances;
@@ -112,6 +116,7 @@ public class ConservationOffresService {
         }
         String acteur = CurrentUser.ref().or(CurrentUser::login).orElse(null);
         List<Offre> cibles = aPurger(idDmc);
+        copies.purger(cibles.stream().map(Offre::getIdOffre).toList());
         for (Offre o : cibles) {
             stockage.purgerTout(o.getIdOffre());
             morceaux.deleteAll(morceaux.findByIdOffreOrderByRangAsc(o.getIdOffre()));

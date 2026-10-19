@@ -69,10 +69,10 @@ public class CeremonieService {
     static final String CEREMONIE_ROUVERTE = "ceremonieRouverte";
 
     static final String ABSENTE = "ABSENTE";
-    static final int ITERATIONS_MIN = 600_000;
+    static final int ITERATIONS_MIN = EnveloppeChiffree.ITERATIONS_MIN;
     static final int DEFI_MINUTES = 5;
-    static final String KDF = "PBKDF2-SHA-256";
-    static final String ALGORITHME_ENVELOPPE = "AES-256-GCM";
+    static final String KDF = EnveloppeChiffree.KDF;
+    static final String ALGORITHME_ENVELOPPE = EnveloppeChiffree.ALGORITHME;
     public static final List<String> ALGORITHMES = List.of(ALGORITHME_ENVELOPPE, ClesRsa.ALGORITHME_RSA, "SHAMIR-GF256");
 
     private final CeremonieClesRepository ceremonieRepository;
@@ -508,17 +508,7 @@ public class CeremonieService {
                     + empreinte + ").", "EMPREINTE_INVALIDE");
         }
         CeremonieDto.Enveloppe e = corps.enveloppe();
-        if (ClesRsa.decoder(e.chiffre()) == null || ClesRsa.decoder(e.iv()) == null || ClesRsa.decoder(e.sel()) == null) {
-            throw new BadRequestException("L'enveloppe attend chiffre, iv et sel en base64.", "ENVELOPPE_INVALIDE");
-        }
-        if (e.iterations() == null || e.iterations() < ITERATIONS_MIN) {
-            throw new BadRequestException("La dérivation de la clé d'enveloppe attend au moins " + ITERATIONS_MIN + " itérations.",
-                    "ENVELOPPE_INVALIDE");
-        }
-        if (!KDF.equalsIgnoreCase(e.kdf()) || !ALGORITHME_ENVELOPPE.equalsIgnoreCase(e.algorithme())) {
-            throw new BadRequestException("L'enveloppe attend kdf = " + KDF + " et algorithme = " + ALGORITHME_ENVELOPPE + ".",
-                    "ENVELOPPE_INVALIDE");
-        }
+        EnveloppeChiffree.controler(e);   // ⚠️ 2026-10-19 : contrôle partagé avec la copie de l'offre du candidat (V136)
         CleDetenteur c = new CleDetenteur();
         c.setIdDmc(idDmc);
         c.setRole(cible.role());

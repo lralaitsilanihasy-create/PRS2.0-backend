@@ -45,6 +45,7 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
     private static final String JSON = MediaType.APPLICATION_JSON_VALUE;
     private static final String METHODE = "Qualité technique, expérience et proposition financière";
 
+    @Autowired private cnm.prs.repository.CopieOffreRepository copieOffreRepository;
     @Autowired private cnm.prs.service.ChampFicheMarcheService champService;
     @Autowired private cnm.prs.repository.CompteCandidatRepository candidats;
     @Autowired private cnm.prs.repository.NotificationRepository notificationRepository;
@@ -332,6 +333,19 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         // reste scellée et nommée ; la qualifiée est invitée ; l'évaluation technique ne se rouvre plus.
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         String fa = propositionFinanciere(a);
+        // ⚠️ V136 (« copie-offre-candidat ») — la copie de l'enveloppe financière survit à la séance d'ouverture (close) : elle
+        // n'est effacée qu'à la clôture de la séance financière.
+        cnm.prs.entity.CopieOffre copieF = new cnm.prs.entity.CopieOffre();
+        copieF.setIdOffre(fa);
+        copieF.setEnvChiffre("AAAA");
+        copieF.setEnvIv("AAAA");
+        copieF.setEnvSel("AAAA");
+        copieF.setEnvIterations(600_000);
+        copieF.setEnvKdf("PBKDF2-SHA-256");
+        copieF.setEnvAlgorithme("AES-256-GCM");
+        copieF.setVersion(1);
+        copieF.setEnregistreeLe(LocalDateTime.now());
+        copieOffreRepository.save(copieF);
         propositionFinanciere(b);
         String sf = "/api/fiches-marche/" + idDmc + "/seance/financiere";
         mvc.perform(post(sf + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isConflict())
@@ -372,6 +386,7 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.pv.signaturesAttendues.length()").value(2)).andExpect(jsonPath("$.pv.quorum.requis").value(2))
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(close, "$.pv.signaturesAttendues[*].qualite")).containsExactly("PRESIDENT", "MEMBRE");
+        assertThat(copieOffreRepository.findById(fa).orElseThrow().getEffaceeLe()).isNotNull();   // ⚠️ V136
         mvc.perform(post(sf + "/pv/signer").header("Authorization", tokenPrmp)).andExpect(status().isForbidden());
         mvc.perform(post(sf + "/pv/empechement").header("Authorization", m1).contentType(JSON)
                 .content("{\"im\":\"" + ims.get(1) + "\",\"motif\":\"Parti\"}")).andExpect(status().isConflict())

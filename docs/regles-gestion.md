@@ -1107,6 +1107,17 @@ Contrat : `docs/api-endpoints.md`, § *L'ouverture des plis en séance — V69*.
   depuis la clôture de la séance. Au terme, **l'Administrateur purge** les procédures échues, une à une (aucune suppression
   automatique) : les offres chiffrées et leur contenu déchiffré disparaissent, remplacées et retirées comprises ; le journal, les
   empreintes, la lecture et le PV restent, et la purge est journalisée.
+- ⚠️ **2026-10-19 — le candidat relit son offre** (demande front « copie-offre-candidat », arbitrage du pilote du 19/10) :
+  - **avant la séance**, par une **copie qu'il chiffre lui-même** avec une phrase de relecture et que le serveur garde sans pouvoir la
+    lire. Elle est facultative et se dépose après le scellement. Une phrase perdue rend la copie irrécupérable : il n'existe aucune
+    voie de secours, ni par l'administration ni par le serveur ;
+  - la copie est **la saisie du candidat, pas l'original scellé** : seule l'empreinte de l'accusé fait foi ;
+  - **la copie ne vit que tant que le secret compte** : elle est effacée à la clôture de la séance qui ouvre l'offre (séance
+    d'ouverture ; séance financière pour l'enveloppe financière des prestations intellectuelles). Un constat d'illisibilité ne
+    l'efface pas, puisque la commission n'a rien lu ;
+  - **après le déchiffrement**, le candidat relit son offre **telle que lue par la commission**, sans phrase, sans les alertes de la
+    commission ;
+  - les fichiers joints ne sont pas copiés : le candidat les garde, la copie n'en porte que le nom, la taille et l'empreinte.
 - **Confirmé sans changement** : le dépositaire de la part de secours est choisi librement, procédure par procédure ; le reçu des
   frais de dossier reste une pièce de l'offre, vérifiée par la CAO ; la signature électronique exigée reste **Simple** tant que la
   liste officielle des prestataires de certification n'existe pas.

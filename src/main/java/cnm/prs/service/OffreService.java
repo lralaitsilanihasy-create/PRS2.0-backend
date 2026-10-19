@@ -91,12 +91,16 @@ public class OffreService {
     private final Clock horloge;
     /** ⚠️ R9b (manuel révisé, lot 2, §B4 n° 4 ; V112) — chaque refus hors délai est horodaté et tracé. */
     private final TentativesRefusees tentatives;
+    /** ⚠️ V136 (2026-10-19, « copie-offre-candidat », §B2) — la copie chiffrée du candidat, dite sur la liste. */
+    private final cnm.prs.repository.CopieOffreRepository copies;
 
     public OffreService(OffreRepository offres, OffreMorceauRepository morceaux, OffreJournalRepository journal, StockageOffres stockage,
             ProceduresEnLigneService procedures, CeremonieService ceremonies, CeremonieClesRepository ceremonieRepository,
             ParametresInternesService internes, FicheMarcheService fiches, EntrepriseRepository entreprises,
             CompteCandidatRepository candidats, ExclusionArmpService exclusions, NotificationService notifications,
-            GenerateurDocumentsFiche generateur, ObjectMapper mapper, Clock horloge, TentativesRefusees tentatives) {
+            GenerateurDocumentsFiche generateur, ObjectMapper mapper, Clock horloge, TentativesRefusees tentatives,
+            cnm.prs.repository.CopieOffreRepository copies) {
+        this.copies = copies;
         this.tentatives = tentatives;
         this.offres = offres;
         this.morceaux = morceaux;
@@ -748,6 +752,7 @@ public class OffreService {
     }
 
     private OffreDto dto(Offre o, int recus) {
+        Optional<cnm.prs.entity.CopieOffre> copie = copies.findById(o.getIdOffre());
         ProcedureEnLigneDto p;
         try {
             p = procedureLue(o.getIdDmc());
@@ -756,7 +761,8 @@ public class OffreService {
         }
         return new OffreDto(o.getIdOffre(), o.getIdDmc(), p == null ? null : p.reference(), p == null ? null : p.objet(), o.getLot(),
                 o.getEtat(), o.getDateCreation(), o.getDateDepot(), o.getDateRetrait(), o.getNumero(), o.getTaille(), o.getNombreMorceaux(),
-                recus, o.getEmpreinte(), o.getRemplace(), o.getRemplaceePar(), o.getEnveloppe());
+                recus, o.getEmpreinte(), o.getRemplace(), o.getRemplaceePar(), o.getEnveloppe(),
+                copie.map(c -> c.getEffaceeLe() == null).orElse(false), copie.map(cnm.prs.entity.CopieOffre::getEffaceeLe).orElse(null));
     }
 
     private OffreDto.Accuse accuse(Offre o) {

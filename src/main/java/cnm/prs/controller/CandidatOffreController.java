@@ -33,9 +33,39 @@ import cnm.prs.service.OffreService;
 public class CandidatOffreController {
 
     private final OffreService service;
+    /** ⚠️ V136 (2026-10-19, « copie-offre-candidat ») — la copie chiffrée par le candidat, et sa lecture après la séance. */
+    private final cnm.prs.service.CopieOffreService copies;
+    private final cnm.prs.service.SeanceService seance;
 
-    public CandidatOffreController(OffreService service) {
+    public CandidatOffreController(OffreService service, cnm.prs.service.CopieOffreService copies, cnm.prs.service.SeanceService seance) {
         this.service = service;
+        this.copies = copies;
+        this.seance = seance;
+    }
+
+    /**
+     * ⚠️ V136 (§B1) — dépose (ou remplace) la copie chiffrée de son offre : 204 ; 400 {@code ENVELOPPE_INVALIDE} ; 413 au-delà de 1 Mo ;
+     * 409 {@code OFFRE_NON_SCELLEE}, {@code OFFRE_RETIREE}, {@code SEANCE_CLOSE}.
+     */
+    @PutMapping("/{idOffre}/copie")
+    public ResponseEntity<Void> deposerCopie(@PathVariable String idOffre, @RequestBody(required = false) cnm.prs.dto.CopieOffreDto.Corps corps) {
+        copies.deposer(moi(), idOffre, corps);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** ⚠️ V136 (§B1) — la copie chiffrée ; 404 {@code COPIE_ABSENTE}, {@code COPIE_EFFACEE} (après la clôture de la séance). */
+    @GetMapping("/{idOffre}/copie")
+    public cnm.prs.dto.CopieOffreDto lireCopie(@PathVariable String idOffre) {
+        return copies.lire(moi(), idOffre);
+    }
+
+    /**
+     * ⚠️ 2026-10-19 (Q2) — son offre telle que lue en séance ; 409 {@code SEANCE_NON_DECHIFFREE}, {@code OFFRE_NON_OUVERTE},
+     * {@code ENVELOPPE_FINANCIERE}.
+     */
+    @GetMapping("/{idOffre}/lecture")
+    public cnm.prs.dto.SeanceDto.OffreLue lecture(@PathVariable String idOffre) {
+        return seance.lectureCandidat(moi(), idOffre);
     }
 
     /** 201 {@code EN_COURS} ; 400 ; 409 {@code PROCEDURE_FERMEE} … {@code OFFRE_EXISTANTE}. */

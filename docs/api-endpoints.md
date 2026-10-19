@@ -7184,8 +7184,34 @@ le serveur ne déchiffre rien.
 | GET | /api/candidat/offres/{idOffre} | — | `OffreDto` | 200, 403, 404 | CANDIDAT (le sien) |
 | GET | /api/candidat/offres/{idOffre}/accuse | — | le PDF de l'accusé | 200, 403, 404, 409 `OFFRE_NON_DEPOSEE` | CANDIDAT (le sien) |
 | DELETE | /api/candidat/offres/{idOffre} | — | `OffreDto` (`RETIREE`) | 200, 403, 404, 409 | CANDIDAT (le sien) |
+| PUT | /api/candidat/offres/{idOffre}/copie (⚠️ V136) | `{ chiffre, iv, sel, iterations, kdf, algorithme, version }` | — | 204, 400 `ENVELOPPE_INVALIDE`, 403, 404, 409 `OFFRE_NON_SCELLEE` / `OFFRE_RETIREE` / `SEANCE_CLOSE`, 413 | CANDIDAT (le sien) |
+| GET | /api/candidat/offres/{idOffre}/copie (⚠️ V136) | — | `{ chiffre, iv, sel, iterations, kdf, algorithme, version, enregistreeLe }` | 200, 403, 404 `COPIE_ABSENTE` / `COPIE_EFFACEE` | CANDIDAT (le sien) |
+| GET | /api/candidat/offres/{idOffre}/lecture (⚠️ 19/10) | — | `OffreLue` (sa seule offre) | 200, 403, 404, 409 `SEANCE_NON_DECHIFFREE` / `OFFRE_NON_OUVERTE` / `ENVELOPPE_FINANCIERE` | CANDIDAT (le sien) |
 | GET | /api/fiches-marche/{idDmc}/depots | — | `DepotsDto` | 200, 403, 404 | PRMP et UGPM de la fiche, responsable de la procédure |
 
+- ⚠️ **2026-10-19 — la copie de son offre** (demande front `demande-backend-2026-10-19-copie-offre-candidat.md` ; arbitrage du
+  pilote du 19/10 ; V136 `t_copie_offre`). Le candidat chiffre sur son poste le récapitulatif de sa saisie avec sa **phrase de
+  relecture** et le confie au serveur, qui **ne le lit jamais**, comme l'enveloppe d'une clé de détenteur (V66) :
+  - **`PUT …/copie`**, après le scellement. Le contrôle de l'enveloppe est celui de `…/ceremonie/cles` (`EnveloppeChiffree` :
+    base64, PBKDF2-SHA-256 ≥ 600 000 itérations, AES-256-GCM) et `version` est un entier ≥ 1, sinon 400 `ENVELOPPE_INVALIDE`. Au-delà
+    de 1 Mo de chiffré : 413. Le `PUT` répond 409 `OFFRE_NON_SCELLEE` sur une offre `EN_COURS`, 409 `OFFRE_RETIREE` sur une offre
+    retirée, et 409 `SEANCE_CLOSE` une fois close la séance qui ouvre l'offre. Un nouveau `PUT` remplace la copie.
+  - **`GET …/copie`** : l'enveloppe, `version` et `enregistreeLe` ; 404 `COPIE_ABSENTE` sans copie.
+  - **Effacement** à la clôture de la séance qui ouvre l'offre (PV d'ouverture entièrement signé ; pour l'enveloppe financière d'une
+    proposition de prestations intellectuelles, clôture de la séance financière). L'enveloppe est vidée et la ligne garde
+    `EFFACEE_LE` ; `GET` répond alors 404 `COPIE_EFFACEE`, avec la date dans le message. **Un constat d'illisibilité n'efface rien** :
+    la commission n'a rien lu. Une offre remplacée ou retirée garde sa copie jusqu'à la clôture. La purge de conservation supprime la
+    ligne.
+  - **Journal** (`t_offre_journal`) : `COPIE_DEPOSEE`, `COPIE_LUE`, `COPIE_EFFACEE`, avec la taille et le motif, jamais le contenu
+    ni la phrase. Il n'y a **aucune voie de secours** pour une phrase perdue (Q3).
+  - **`OffreDto`** gagne **`copie`** (une copie lisible existe) et **`copieEffaceeLe`** (date d'effacement, nulle sinon), sur
+    `GET /api/candidat/offres` et `/{idOffre}` (§B2).
+  - **`GET …/lecture`** (Q2) : le candidat relit **sa** offre telle que lue en séance, sans phrase, dès que la séance est déchiffrée.
+    C'est le `OffreLue` de `…/seance/lecture`, restreint à son offre, sans les alertes de la commission (`alertes` vide) et sans
+    `entreprise` ni `fraisDossier`. La route répond 409 `SEANCE_NON_DECHIFFREE` avant le déchiffrement (et sur un constat
+    d'illisibilité), 409 `OFFRE_NON_OUVERTE` pour une offre remplacée, retirée ou écartée, et 409 `ENVELOPPE_FINANCIERE` pour
+    l'enveloppe financière d'une proposition PI, dont la lecture n'est pas servie ici.
+  - **Les fichiers ne sont pas copiés (Q1)** : le récapitulatif n'en porte que le nom, la taille et l'empreinte.
 - **Les conditions du dépôt** (§B1), vérifiées dans cet ordre à `POST …/offres` (409 à code) :
   1. la procédure figure dans la liste publique — sinon `PROCEDURE_FERMEE` ;
   2. `etat = OUVERTE` à l'horloge du serveur — `PROCEDURE_FERMEE` avant l'ouverture des dépôts, `DELAI_DEPASSE` après la date limite ;

@@ -12,7 +12,11 @@ public record OffreDto(String idOffre, Long idDmc, String reference, String obje
         LocalDateTime dateDepot, LocalDateTime dateRetrait, Integer numero, long taille, int nombreMorceaux, int recus, String empreinte,
         String remplace, String remplaceePar,
         /** ⚠️ V86 (PI-b) — {@code TECHNIQUE} · {@code FINANCIERE} ; nul pour une offre ordinaire. */
-        String enveloppe) {
+        String enveloppe,
+        /** ⚠️ V136 (2026-10-19, « copie-offre-candidat », §B2) — une copie chiffrée lisible existe. */
+        boolean copie,
+        /** ⚠️ V136 (§B2) — la copie a été effacée à la clôture de la séance (date), nul sinon. */
+        LocalDateTime copieEffaceeLe) {
 
     /**
      * Le corps de {@code POST /api/candidat/offres}. {@code enTete} est une <strong>chaîne</strong> : le JSON de l'en-tête tel que le

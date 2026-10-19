@@ -80,12 +80,15 @@ public class SeanceFinanciereService {
     private final NegociationService negociation;
     /** ⚠️ 2026-10-15 (« modeles-guide-cao », §B2.1) — la référence, l'objet et la liste restreinte, à l'en-tête du PV. */
     private final ReferencesCommission references;
+    /** ⚠️ V136 (2026-10-19) — les copies des enveloppes financières, effacées à la clôture de la séance financière. */
+    private final CopieOffreService copies;
 
     public SeanceFinanciereService(SeanceService seance, PartsEnSeance memoire, SeanceRepository seances, SeanceFinanciereRepository financieres,
             OffreRepository offres, EvaluationTechniqueService technique, FicheMarcheService fiches, ParametresInternesService internes,
             NotificationService notifications, CompteCandidatRepository candidats, GenerateurDocumentsFiche generateur,
             EvaluationJournalRepository journal, ObjectMapper mapper, Clock horloge, NegociationService negociation, QuorumCao quorumCao,
-            cnm.prs.repository.SeanceFinanciereSignatureRepository signatures, ReferencesCommission references) {
+            cnm.prs.repository.SeanceFinanciereSignatureRepository signatures, ReferencesCommission references, CopieOffreService copies) {
+        this.copies = copies;
         this.references = references;
         this.quorumCao = quorumCao;
         this.signatures = signatures;
@@ -387,6 +390,7 @@ public class SeanceFinanciereService {
         s.setObservations(c == null || c.observations() == null || c.observations().isBlank() ? null : c.observations().trim());
         s.setCloseLe(maintenant());
         s.setEtat(SeanceFinanciere.CLOSE);
+        copies.effacerALaCloture(idDmc, true);   // ⚠️ V136 (« copie-offre-candidat ») : les enveloppes financières sont lues
         SeanceFinanciereDto d = dto(s);
         for (GenerateurDocumentsFiche.Fichier f : generateur.generer(document(s, d))) {
             if ("pdf".equals(f.extension())) {

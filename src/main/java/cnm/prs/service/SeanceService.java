@@ -97,6 +97,8 @@ public class SeanceService {
     private final TentativesRefusees tentatives;
     /** ⚠️ 2026-10-15 (« modeles-guide-cao », §B1.1) — l'avis de la Commission sur le DAO et la publication de l'avis, à l'en-tête du PV. */
     private final ReferencesCommission references;
+    /** ⚠️ V136 (2026-10-19, « copie-offre-candidat ») — les copies des candidats, effacées à la clôture de la séance. */
+    private final CopieOffreService copies;
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final SeanceRepository seances;
@@ -132,7 +134,8 @@ public class SeanceService {
             RapprochementCandidatService rapprochements, CompteCandidatRepository candidats, NotificationService notifications,
             GenerateurDocumentsFiche generateur, DossierMecRepository dmcRepository, ObjectMapper mapper, Clock horloge,
             SeanceSignatureRepository signatures, FormulairesEnLigne formulaires, QuorumCao quorumCao,
-            TentativesRefusees tentatives, ReferencesCommission references) {
+            TentativesRefusees tentatives, ReferencesCommission references, CopieOffreService copies) {
+        this.copies = copies;
         this.tentatives = tentatives;
         this.references = references;
         this.quorumCao = quorumCao;
@@ -538,6 +541,32 @@ public class SeanceService {
         exigerLecteur(idDmc, true);
         exigerDechiffree(idDmc);
         return construireLecture(idDmc, true);
+    }
+
+    /**
+     * ⚠️ 2026-10-19 (« copie-offre-candidat », Q2) — le candidat relit <strong>sa</strong> offre telle que lue en séance, sans phrase :
+     * la lecture de son offre seule, sans les alertes de la commission (rapprochements, exclusion, garantie, formulaires, frais) ni
+     * l'identité vérifiée de l'entreprise. Dès la séance déchiffrée (la copie chiffrée est effacée à sa clôture : pas de trou).
+     * 404 ; 403 (pas la sienne) ; 409 {@code SEANCE_NON_DECHIFFREE}, {@code OFFRE_NON_OUVERTE} (remplacée, retirée, écartée),
+     * {@code ENVELOPPE_FINANCIERE} (proposition PI : la lecture financière n'est pas servie ici).
+     */
+    @Transactional(readOnly = true)
+    public SeanceDto.OffreLue lectureCandidat(String idCandidat, String idOffre) {
+        Offre o = offres.findById(idOffre).orElseThrow(() -> new ResourceNotFoundException("Offre introuvable : " + idOffre + "."));
+        if (!o.getIdCandidat().equals(idCandidat)) {
+            throw new AccessDeniedException("Cette offre n'est pas la vôtre.");
+        }
+        if (Offre.FINANCIERE.equals(o.getEnveloppe())) {
+            throw new BusinessRuleException("L'enveloppe financière ne se relit pas ici : sa lecture est celle de la séance financière.",
+                    "ENVELOPPE_FINANCIERE");
+        }
+        exigerDechiffree(o.getIdDmc());
+        SeanceDto.OffreLue l = construireLecture(o.getIdDmc(), false).offres().stream().filter(x -> idOffre.equals(x.idOffre())).findFirst()
+                .orElseThrow(() -> new BusinessRuleException("Cette offre n'a pas été ouverte en séance (" + o.getEtat().toLowerCase(java.util.Locale.ROOT)
+                        + ").", "OFFRE_NON_OUVERTE"));
+        return new SeanceDto.OffreLue(l.numero(), l.idOffre(), l.lot(), l.etat(), l.integrite(), l.motif(), null, l.groupement(),
+                l.acteEngagement(), l.garantie(), l.pieces(), l.piecesManquantes(), List.of(), l.formulaires(), l.totaux(),
+                l.partiesFormulaires(), null, l.rabais());
     }
 
     /**
@@ -998,6 +1027,9 @@ public class SeanceService {
         if (Seance.PV_A_SIGNER.equals(s.getEtat())) {
             s.setEtat(Seance.CLOSE);
             s.setCloseLe(maintenant);
+            // ⚠️ V136 (2026-10-19, « copie-offre-candidat ») — les offres sont connues de la CAO : les copies des candidats sont
+            // effacées (pas sur un constat d'illisibilité, qui reste ILLISIBLE ; enveloppes financières PI : à la séance financière).
+            copies.effacerALaCloture(idDmc, false);
         }
         boolean publie = publication(idDmc);
         s.setPv(pdf(idDmc, s, true));

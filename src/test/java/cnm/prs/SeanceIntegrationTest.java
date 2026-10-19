@@ -93,6 +93,7 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
     /** Les paires des trois détenteurs (deux membres, la part de secours), tirées une fois pour la classe. */
     private static final List<KeyPair> PAIRES = new ArrayList<>();
 
+    @Autowired private cnm.prs.repository.CopieOffreRepository copieOffreRepository;
     @Autowired private ChampFicheMarcheService champService;
     @Autowired private ParametreService parametres;
     @Autowired private CeremonieClesRepository ceremonieRepository;
@@ -194,6 +195,26 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         String jetonC = bearer("c@seance.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000043", null);
         declarer(jetonC, "7777888999", "BTP Gamma");
         String offreC = deposer(jetonC, "7777888999", "BTP Gamma", "13100000");   // manifeste v1 : garantie sans montant
+        // ⚠️ V136 (2026-10-19, « copie-offre-candidat ») — la copie chiffrée par le candidat, avant la séance.
+        String chiffreA = Base64.getEncoder().encodeToString("récapitulatif chiffré de BTP Alpha".getBytes(StandardCharsets.UTF_8));
+        copie(jetonA, offreA, enveloppe(chiffreA, 600_000)).andExpect(status().isNoContent());
+        copie(jetonA, offreA, enveloppe(chiffreA, 1000)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ENVELOPPE_INVALIDE"));
+        copie(jetonA, offreA, enveloppe(Base64.getEncoder().encodeToString(new byte[1024 * 1024 + 1]), 600_000))
+                .andExpect(status().isPayloadTooLarge());
+        copie(jetonB, offreA, enveloppe(chiffreA, 600_000)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/candidat/offres/" + offreA + "/copie").header("Authorization", jetonB)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/candidat/offres/" + offreB + "/copie").header("Authorization", jetonB)).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COPIE_ABSENTE"));
+        mvc.perform(get("/api/candidat/offres/" + offreA + "/copie").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.chiffre").value(chiffreA)).andExpect(jsonPath("$.iterations").value(600_000))
+                .andExpect(jsonPath("$.kdf").value("PBKDF2-SHA-256")).andExpect(jsonPath("$.version").value(1))
+                .andExpect(jsonPath("$.enregistreeLe").isNotEmpty());
+        String mesOffresA = mvc.perform(get("/api/candidat/offres").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(mesOffresA, "$[?(@.idOffre=='" + offreA + "')].copie")).containsExactly(true);
+        mvc.perform(get("/api/candidat/offres/" + offreA + "/lecture").header("Authorization", jetonA)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SEANCE_NON_DECHIFFREE"));
         mvc.perform(get(base).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("A_VENIR"))
                 .andExpect(jsonPath("$.quorum").value(2)).andExpect(jsonPath("$.offres.length()").value(3));
         mvc.perform(get(base).header("Authorization", tokenAdmin)).andExpect(status().isForbidden());
@@ -285,6 +306,14 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(lecture, "$.offres[0].piecesManquantes")).contains("Reçu du paiement des frais de dossier");
         assertThat(JsonPath.<String>read(lecture, "$.nonOuvertes[0].etat")).isEqualTo("ECARTEE");
         assertThat(JsonPath.<String>read(lecture, "$.nonOuvertes[0].motif")).contains("exclue par l'ARMP", "ARMP-2026-77");
+        // ⚠️ 2026-10-19 (« copie-offre-candidat », Q2) — le candidat relit son offre telle que lue, sans les alertes de la commission.
+        mvc.perform(get("/api/candidat/offres/" + offreA + "/lecture").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.idOffre").value(offreA)).andExpect(jsonPath("$.acteEngagement.montantHt").value("12500000"))
+                .andExpect(jsonPath("$.garantie.montant").value(1_500_000)).andExpect(jsonPath("$.alertes.length()").value(0))
+                .andExpect(jsonPath("$.entreprise").isEmpty());
+        mvc.perform(get("/api/candidat/offres/" + offreA + "/lecture").header("Authorization", jetonB)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/candidat/offres/" + offreB + "/lecture").header("Authorization", jetonB)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("OFFRE_NON_OUVERTE"));
         // ⚠️ §B1 : les pièces, aux membres de la CAO seulement — la PRMP, l'UGPM et le responsable reçoivent un 403 nommé.
         byte[] ae = mvc.perform(get(base + "/offres/" + offreA + "/pieces/acte-engagement.pdf").header("Authorization", jetonM1))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
@@ -369,7 +398,20 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.pv.signaturesAttendues.length()").value(0));
         mvc.perform(post(base + "/pv/signer").header("Authorization", jetonM2)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DEJA_SIGNE"));
-        byte[] pv = mvc.perform(get(base + "/pv").header("Authorization", jetonM1)).andExpect(status().isOk())
+        // ⚠️ V136 — la séance close, la copie est effacée : 404 nommé, la liste le date, plus de dépôt ; la lecture reste.
+        mvc.perform(get("/api/candidat/offres/" + offreA + "/copie").header("Authorization", jetonA)).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("COPIE_EFFACEE"));
+        mesOffresA = mvc.perform(get("/api/candidat/offres").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(mesOffresA, "$[?(@.idOffre=='" + offreA + "')].copie")).containsExactly(false);
+        assertThat(JsonPath.<List<String>>read(mesOffresA, "$[?(@.idOffre=='" + offreA + "')].copieEffaceeLe")).singleElement().isNotNull();
+        copie(jetonA, offreA, enveloppe(chiffreA, 600_000)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SEANCE_CLOSE"));
+        assertThat(copieOffreRepository.findById(offreA).orElseThrow().getEnvChiffre()).isNull();
+        mvc.perform(get("/api/candidat/offres/" + offreA + "/lecture").header("Authorization", jetonA)).andExpect(status().isOk());
+        assertThat(offreJournal.findAll()).filteredOn(j -> offreA.equals(j.getIdOffre())).extracting(j -> j.getAction())
+                .contains("COPIE_DEPOSEE", "COPIE_LUE", "COPIE_EFFACEE");
+        assertThat(offreJournal.findAll()).noneMatch(j -> j.getDetail() != null && j.getDetail().contains(chiffreA));
+        byte[] pv =mvc.perform(get(base + "/pv").header("Authorization", jetonM1)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(texteDuPdf(pv)).contains("Président de la commission) — signé électroniquement sur la plateforme le",
                 "empêché de signer : Appelé en urgence avant la fin de la séance (constaté par", "montant : 1 500 000 MGA",
@@ -520,7 +562,9 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
     @Test
     @DisplayName("S5 : le constat est refusé tant que le quorum reste possible, puis accepté quand les parts sont perdues")
     void illisible() throws Exception {
-        deposer(jetonA, "1111222333", "BTP Alpha", "12500000");
+        String offreA = deposer(jetonA, "1111222333", "BTP Alpha", "12500000");
+        String chiffreA = Base64.getEncoder().encodeToString(new byte[64]);
+        copie(jetonA, offreA, enveloppe(chiffreA, 600_000)).andExpect(status().isNoContent());   // ⚠️ V136
         changer("B04-LR-03", aujourdhui.minusDays(1).toString());
         changer("B04-OP-02", aujourdhui.minusDays(1).toString());
         changer("B04-OP-03", "09:00");
@@ -566,6 +610,11 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("CONSERVATION_EN_COURS"));
         mvc.perform(post(base + "/pv/signer").header("Authorization", jetonM1)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.etat").value("ILLISIBLE")).andExpect(jsonPath("$.pv.signe").value(true));
+        // ⚠️ V136 — la commission n'a rien lu : la copie du candidat reste, seule trace lisible de sa saisie ; pas de lecture.
+        mvc.perform(get("/api/candidat/offres/" + offreA + "/copie").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.chiffre").value(chiffreA));
+        mvc.perform(get("/api/candidat/offres/" + offreA + "/lecture").header("Authorization", jetonA)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SEANCE_NON_DECHIFFREE"));
         mvc.perform(post(conservation + "/" + idDmc + "/purger").header("Authorization", tokenAdmin)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CONSERVATION_EN_COURS")).andExpect(jsonPath("$.details.echeance").isNotEmpty());
         Seance s = seanceRepository.findById(idDmc).orElseThrow();
@@ -582,6 +631,7 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(purgee.getPurgeeLe()).isNotNull();
         assertThat(purgee.getChemin()).isNull();
         assertThat(purgee.getEmpreinte()).isNotBlank();
+        assertThat(copieOffreRepository.findById(offreA)).isEmpty();   // ⚠️ V136 : la copie part avec la purge
         assertThat(offreJournal.findAll()).anyMatch(j -> idOffre.equals(j.getIdOffre()) && "PURGE_CONSERVATION".equals(j.getAction()));
         assertThat(seanceJournal.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction()).contains("PURGE_CONSERVATION");
         mvc.perform(get(base + "/pv").header("Authorization", tokenPrmp)).andExpect(status().isOk());   // le PV reste
@@ -784,6 +834,18 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ le navigateur, simulé
 
     /** Scelle et dépose une offre comme le navigateur : ZIP + manifeste, K, morceau AES-GCM, parts Shamir chiffrées RSA-OAEP. */
+    /** ⚠️ V136 — {@code PUT …/copie} du candidat. */
+    private org.springframework.test.web.servlet.ResultActions copie(String jeton, String idOffre, String corps) throws Exception {
+        return mvc.perform(put("/api/candidat/offres/" + idOffre + "/copie").header("Authorization", jeton).contentType(JSON).content(corps));
+    }
+
+    /** Une enveloppe de copie : le chiffré donné, IV et sel quelconques, PBKDF2 / AES-GCM. */
+    private static String enveloppe(String chiffre, int iterations) {
+        String b64 = Base64.getEncoder().encodeToString(new byte[12]);
+        return "{\"chiffre\":\"" + chiffre + "\",\"iv\":\"" + b64 + "\",\"sel\":\"" + b64 + "\",\"iterations\":" + iterations
+                + ",\"kdf\":\"PBKDF2-SHA-256\",\"algorithme\":\"AES-256-GCM\",\"version\":1}";
+    }
+
     private String deposer(String jeton, String nif, String raison, String montantHt) throws Exception {
         return deposer(jeton, nif, raison, montantHt, null);
     }
