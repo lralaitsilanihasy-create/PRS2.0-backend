@@ -21,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import cnm.prs.dto.ModelePvDto;
 import cnm.prs.entity.VersionModelePv;
 import cnm.prs.service.ModelePvService;
+import cnm.prs.service.ModelesIntegresService;
 import jakarta.validation.Valid;
 
 /**
@@ -39,9 +40,11 @@ public class ModelePvController {
             .parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
 
     private final ModelePvService service;
+    private final ModelesIntegresService integres;
 
-    public ModelePvController(ModelePvService service) {
+    public ModelePvController(ModelePvService service, ModelesIntegresService integres) {
         this.service = service;
+        this.integres = integres;
     }
 
     @GetMapping
@@ -59,6 +62,32 @@ public class ModelePvController {
     @GetMapping("/integres")
     public List<ModelePvDto.Integre> integres() {
         return service.integres();
+    }
+
+    /** Le {@code .docx} d'un modèle intégré, tel que livré ; 404 hors de la liste servie (« modeles-pv-integres-consultation », §B1). */
+    @GetMapping("/integres/{code}/fichiers/{nom:.+}")
+    public ResponseEntity<byte[]> fichierIntegre(@PathVariable String code, @PathVariable String nom) {
+        return ResponseEntity.ok().contentType(DOCX)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(nom, StandardCharsets.UTF_8).build().toString())
+                .body(integres.fichier(code, nom));
+    }
+
+    /**
+     * L'aperçu d'un modèle intégré sur un dossier réel, sans rien enregistrer (« modeles-pv-integres-consultation », §B2) : le fichier
+     * choisi par la règle de production est nommé dans {@code X-Fichier-Modele}. {@code pv=} / {@code lettre=} visent un PV ou une
+     * lettre du dossier (défaut : le plus récent).
+     */
+    @PostMapping("/integres/{code}/apercu")
+    public ResponseEntity<byte[]> apercuIntegre(@PathVariable String code, @RequestParam Integer dossier,
+            @RequestParam(required = false) String avis, @RequestParam(required = false) Integer pv,
+            @RequestParam(required = false) Integer lettre, @RequestParam(defaultValue = "pdf") String format) {
+        boolean pdf = !"docx".equalsIgnoreCase(format);
+        ModelesIntegresService.Apercu a = integres.apercu(code, dossier, avis, pv, lettre, pdf);
+        return ResponseEntity.ok().contentType(pdf ? MediaType.APPLICATION_PDF : DOCX)
+                .header("X-Fichier-Modele", a.fichier())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename("apercu-" + code + "-dossier-" + dossier + (pdf ? ".pdf" : ".docx"), StandardCharsets.UTF_8).build().toString())
+                .body(a.contenu());
     }
 
     /** Par sous-type et par nature, ce qui produit le document : INTEGRE, GERE ou AUCUN (« modeles-pv-integres », §B2). */

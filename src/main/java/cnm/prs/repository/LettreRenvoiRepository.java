@@ -79,6 +79,9 @@ public interface LettreRenvoiRepository extends JpaRepository<LettreRenvoi, Inte
      */
     java.util.Optional<LettreRenvoi> findFirstByIdDossierAndStatutOrderByIdLettreDesc(Integer idDossier, String statut);
 
+    /** ⚠️ 2026-10-20 (« modeles-pv-integres-consultation », Q2) — la dernière lettre d'un dossier, quel que soit son statut. */
+    java.util.Optional<LettreRenvoi> findFirstByIdDossierOrderByIdLettreDesc(Integer idDossier);
+
     /**
      * ⚠️ 2026-09-15 — lettres <strong>à traiter</strong> d'une liste de dossiers, en une requête (accueil
      * « À faire ») : à signer ({@code SOUMIS}) ou à archiver ({@code SIGNE} non archivée). Colonnes : (0) idDossier,

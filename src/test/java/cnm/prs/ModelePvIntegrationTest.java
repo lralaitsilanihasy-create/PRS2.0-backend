@@ -218,6 +218,67 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * ⚠️ 2026-10-20 (« modeles-pv-integres-consultation », §B1-B2) — télécharger un fichier intégré (jamais un chemin libre) et l'essayer
+     * sur un dossier réel par la règle de la production, le fichier choisi nommé dans {@code X-Fichier-Modele}.
+     */
+    @Test
+    void consultationDesIntegres() throws Exception {
+        String integres = BASE + "/integres/";
+        mvc.perform(get(integres + "PV-PLAN-INTEGRE/fichiers/PV_AF_PPM_CENTRALE.docx").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        byte[] fichier = mvc.perform(get(integres + "PV-PLAN-INTEGRE/fichiers/PV_AF_PPM_CENTRALE.docx").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(fichier, 0, 2, java.nio.charset.StandardCharsets.ISO_8859_1)).isEqualTo("PK");
+        mvc.perform(get(integres + "PV-PLAN-INTEGRE/fichiers/LR_CENTRALE.docx").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        mvc.perform(get(integres + "PV-PLAN-INTEGRE/fichiers/application.properties").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        mvc.perform(get(integres + "INCONNU/fichiers/LR_CENTRALE.docx").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        mvc.perform(get(integres + "LETTRE-RENVOI-INTEGREE/fichiers/LR_REGIONALE.docx").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk());
+
+        // Dossier 1 (plan sans ligne, examen 1 réceptionné en centrale) : sans PV, puis sans ligne, la règle refuse en clair.
+        mvc.perform(post(integres + "PV-PLAN-INTEGRE/apercu").param("dossier", "1").param("format", "docx").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PV_ABSENT"));
+        seedPvSigne(9702, 1);
+        mvc.perform(post(integres + "PV-PLAN-INTEGRE/apercu").param("dossier", "1").param("format", "docx").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AUCUN_DOCUMENT"))
+                .andExpect(jsonPath("$.message").value(containsString("plus aucune ligne")));
+        marcheRepository.save(marche(9801, 1, 1));
+        byte[] af = mvc.perform(post(integres + "PV-PLAN-INTEGRE/apercu").param("dossier", "1").param("format", "docx")
+                .header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("X-Fichier-Modele", "PV_AF_PPM_CENTRALE.docx"))
+                .andReturn().getResponse().getContentAsByteArray();
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(af))) {
+            String texte = doc.getParagraphs().stream().map(p -> p.getText()).reduce("", (a, b) -> a + "\n" + b);
+            assertThat(texte).doesNotContain("<REFERENCE PV", "<ENTITE CONTRACTANTE>");
+        }
+        // L'avis forcé choisit son fichier, sur une copie : le PV en base garde son avis.
+        mvc.perform(post(integres + "PV-PLAN-INTEGRE/apercu").param("dossier", "1").param("avis", "FAVR").param("pv", "9702")
+                .param("format", "docx").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("X-Fichier-Modele", "PV_AFSR_PPM_CENTRALE.docx"));
+        assertThat(pvExamenRepository.findById(9702).orElseThrow().getIdAvis()).isEqualTo("FAV");
+        mvc.perform(post(integres + "PV-PLAN-INTEGRE/apercu").param("dossier", "1").param("avis", "NSP").param("format", "docx")
+                .header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AUCUN_DOCUMENT"))
+                .andExpect(jsonPath("$.message").value(containsString("ne se prononce pas")));
+        mvc.perform(post(integres + "PV-PLAN-INTEGRE/apercu").param("dossier", "2").param("pv", "9702").param("format", "docx")
+                .header("Authorization", tokenAdmin)).andExpect(status().isNotFound());
+
+        // Lettre de renvoi : la dernière du dossier, même non signée.
+        mvc.perform(post(integres + "LETTRE-RENVOI-INTEGREE/apercu").param("dossier", "1").param("format", "docx")
+                .header("Authorization", tokenAdmin)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LETTRE_ABSENTE"));
+        seedLettreSoumise();
+        mvc.perform(post(integres + "LETTRE-RENVOI-INTEGREE/apercu").param("dossier", "1").param("format", "docx")
+                .header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("X-Fichier-Modele", org.hamcrest.Matchers.startsWith("LR_")));
+    }
+
     /** ⚠️ 2026-10-20 (« modeles-pv-integres », §B1-B2) — les modèles intégrés au JAR et la couverture par sous-type. */
     @Test
     void integresEtCouverture() throws Exception {

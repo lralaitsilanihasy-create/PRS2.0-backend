@@ -53,7 +53,27 @@ public class LettreRenvoiDocumentGenerator {
      * @return le PDF de la lettre (copie du modèle, placeholders remplis)
      */
     public byte[] genererPdf(boolean centrale, Map<String, String> remplacements) {
-        String modele = centrale ? MODELE_CENTRALE : MODELE_REGIONALE;
+        byte[] docx = genererDocx(centrale, remplacements);
+        try {
+            return convertirEnPdf(docx);
+        } catch (BusinessRuleException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessRuleException("Génération du document de la lettre impossible : " + e.getMessage());
+        }
+    }
+
+    /** ⚠️ 2026-10-20 (« modeles-pv-integres-consultation », §B2) — le fichier choisi : central (ANT) ou régional. */
+    public static String modele(boolean centrale) {
+        return centrale ? MODELE_CENTRALE : MODELE_REGIONALE;
+    }
+
+    /**
+     * La lettre remplie, avant conversion. ⚠️ 2026-10-20 (« modeles-pv-integres-consultation », §B2) — séparée de {@link #genererPdf}
+     * pour que l'aperçu passe par le même remplissage que la production.
+     */
+    public byte[] genererDocx(boolean centrale, Map<String, String> remplacements) {
+        String modele = modele(centrale);
         try (InputStream in = getClass().getResourceAsStream(modele)) {
             if (in == null) {
                 throw new BusinessRuleException("Modèle de lettre introuvable : " + modele);
@@ -63,8 +83,7 @@ public class LettreRenvoiDocumentGenerator {
             ByteArrayOutputStream docxOut = new ByteArrayOutputStream();
             doc.write(docxOut);
             doc.close();
-
-            return convertirEnPdf(docxOut.toByteArray());
+            return docxOut.toByteArray();
         } catch (BusinessRuleException e) {
             throw e;
         } catch (Exception e) {

@@ -178,9 +178,27 @@ public class PvDocumentService {
      */
     @Transactional(readOnly = true)
     public Optional<String> modelePour(PvExamen pv) {
-        PvDocumentGenerator.SensAvis sens = sensDuModele(pv == null ? null : pv.getIdAvis()).orElse(null);
+        return Optional.ofNullable(choisirModele(pv).modele());
+    }
+
+    /** ⚠️ 2026-10-20 (« modeles-pv-integres-consultation », §B2) — le modèle choisi, ou la raison pour laquelle il n'y en a pas. */
+    public record ChoixModele(String modele, String raison) {
+    }
+
+    /**
+     * ⚠️ 2026-10-20 (demande front « modeles-pv-integres-consultation », §B2) — la règle de {@link #modelePour}, qui dit aussi
+     * <strong>pourquoi</strong> un PV n'a pas de document : la production et l'aperçu d'un modèle intégré la partagent.
+     */
+    @Transactional(readOnly = true)
+    public ChoixModele choisirModele(PvExamen pv) {
+        if (pv == null) {
+            return new ChoixModele(null, "Aucun PV.");
+        }
+        PvDocumentGenerator.SensAvis sens = sensDuModele(pv.getIdAvis()).orElse(null);
         if (sens == null) {
-            return Optional.empty();
+            return new ChoixModele(null, "NSP".equals(pv.getIdAvis())
+                    ? "L'avis « ne se prononce pas » n'a pas de modèle : le PV n'a pas de document."
+                    : "L'avis « " + pv.getIdAvis() + " » n'a pas de modèle : le PV n'a pas de document.");
         }
         Integer idExamen = pv.getIdExamen();
         Integer idDossier = examenRepository.findIdDossierByExamen(idExamen).orElse(null);
@@ -188,21 +206,42 @@ public class PvDocumentService {
         // Localité du circuit (réception), comme les lettres de renvoi : commande la variante
         // centrale / régionale (⚠️ 2026-08-04 — les 4 modèles régionaux sont désormais fournis).
         String localite = examenRepository.findLocaliteByExamen(idExamen).orElse(null);
-        if (dossier == null || localite == null) {
-            return Optional.empty();
+        if (dossier == null) {
+            return new ChoixModele(null, "Le dossier du PV est introuvable.");
+        }
+        if (localite == null) {
+            return new ChoixModele(null, "La localité du circuit est inconnue (pas de réception) : le modèle central ou régional ne se "
+                    + "choisit pas.");
         }
         Ppm ppm = ppmRepository.findByIdDossier(idDossier).stream().findFirst().orElse(null);
         // L'éligibilité ne dépend PAS du mode de passation : on exige seulement que le PPM comporte au
         // moins une ligne de marché (PPM réel), quel que soit le mode (AOO, cotation, etc.).
         // ⚠️ 2026-08-05 — les lignes SUPPRIMÉES d'une version ne comptent pas : un plan dont toutes les
         // lignes ont été retirées n'est pas un PPM.
-        if (ppm == null || marcheRepository.findByIdPpm(ppm.getIdPpm()).stream().allMatch(Marche::getSupprimee)) {
-            return Optional.empty();
+        if (ppm == null) {
+            return new ChoixModele(null, "Le dossier ne porte pas de plan de passation (PPM) : les modèles intégrés ne couvrent que les "
+                    + "PV du plan.");
+        }
+        if (marcheRepository.findByIdPpm(ppm.getIdPpm()).stream().allMatch(Marche::getSupprimee)) {
+            return new ChoixModele(null, "Le plan de passation n'a plus aucune ligne de marché : le PV n'a pas de document.");
         }
         // Le sous-type (dérivé serveur des marchés déclencheurs) commande la mention AGPM du modèle.
-        return Optional.of(PvDocumentGenerator.modele(sens,
+        return new ChoixModele(PvDocumentGenerator.modele(sens,
                 DossierIntegriteService.SOUS_TYPE_PPM_AGPM.equals(dossier.getIdSousType()),
-                LOCALITE_CENTRALE.equals(localite)));
+                LOCALITE_CENTRALE.equals(localite)), null);
+    }
+
+    /**
+     * ⚠️ 2026-10-20 (demande front « modeles-pv-integres-consultation », §B2) — le Word du PV rempli par le même contexte et le même
+     * générateur que la production, <strong>sans rien enregistrer</strong>.
+     */
+    @Transactional(readOnly = true)
+    public byte[] apercuDocx(PvExamen pv, String modele) {
+        PvDocumentContexte ctx = contexte(pv);
+        if (ctx == null) {
+            throw new BusinessRuleException("Le contexte du PV n'a pas pu être lu (dossier ou plan introuvable).", "AUCUN_DOCUMENT");
+        }
+        return generator.genererDocx(ctx, modele);
     }
 
     /**

@@ -179,6 +179,21 @@ public class PvDocumentGenerator {
      * @return le PDF du Projet de PV (copie du modèle, placeholders remplis).
      */
     public byte[] genererPdf(PvDocumentContexte ctx, String modele) {
+        byte[] docx = genererDocx(ctx, modele);
+        try {
+            return convertirEnPdf(docx);
+        } catch (BusinessRuleException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessRuleException("Génération du document du PV impossible : " + e.getMessage());
+        }
+    }
+
+    /**
+     * Le Word du PV rempli, avant conversion. ⚠️ 2026-10-20 (demande front « modeles-pv-integres-consultation », §B2) — séparé de
+     * {@link #genererPdf} pour que l'aperçu d'un modèle intégré passe par le même remplissage que la production.
+     */
+    public byte[] genererDocx(PvDocumentContexte ctx, String modele) {
         try (InputStream in = getClass().getResourceAsStream(modele)) {
             if (in == null) {
                 throw new BusinessRuleException("Modèle de PV introuvable : " + modele);
@@ -190,8 +205,7 @@ public class PvDocumentGenerator {
             ByteArrayOutputStream docxOut = new ByteArrayOutputStream();
             doc.write(docxOut);
             doc.close();
-
-            return convertirEnPdf(docxOut.toByteArray());
+            return docxOut.toByteArray();
         } catch (BusinessRuleException e) {
             throw e;
         } catch (Exception e) {

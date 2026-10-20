@@ -8728,6 +8728,24 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-20 (demande front « modeles-pv-integres-consultation »)** — consulter les modèles intégrés depuis l'écran,
+réservé à l'Administrateur.
+- **`GET /api/modeles-pv/integres/{code}/fichiers/{nom}`** : le `.docx` tel que livré dans le JAR. Un code inconnu, ou un nom
+  absent des `fichiers` servis pour ce code, répond 404 : la route ne lit jamais un chemin libre.
+- **`POST /api/modeles-pv/integres/{code}/apercu?dossier=&avis=&pv=&lettre=&format=pdf|docx`** : le document rempli sur un dossier
+  réel, **sans rien enregistrer**. L'en-tête **`X-Fichier-Modele`** nomme le fichier qui a servi.
+  - **Même code que la production** : le choix du fichier passe par `PvDocumentService.choisirModele`, et le remplissage par
+    `PvDocumentGenerator.genererDocx` ou par `LettreRenvoiService.apercu` (`LettreRenvoiDocumentGenerator.genererDocx`).
+  - **`PV-PLAN-INTEGRE`** : le PV `pv=` (404 s'il n'est pas du dossier), à défaut le plus récent du dossier. `avis` force
+    `FAV`, `FAVR`, `DEF` ou `NSP` sur une copie du PV : le PV en base n'est jamais touché.
+    - 409 `PV_ABSENT` si le dossier n'a pas de PV.
+    - 409 `AUCUN_DOCUMENT` avec la raison en clair : avis « ne se prononce pas », dossier sans plan, plan sans ligne, localité du
+      circuit inconnue.
+  - **`LETTRE-RENVOI-INTEGREE`** : la lettre `lettre=` (404 si elle n'est pas du dossier), à défaut la dernière du dossier, même
+    non signée. 409 `LETTRE_ABSENTE` si le dossier n'en a pas.
+  - **PDF** : 409 `CONVERSION_INDISPONIBLE` sans Word sur le serveur ; le format `docx` reste possible.
+  - **Écart possible avec le document archivé** : un PV signé régénéré prend la date du jour et les règles en vigueur.
+
 ⚠️ **2026-10-20 (demande front « modeles-pv-integres »)** — ce qui produit les documents aujourd'hui, réservé à l'Administrateur
 comme les autres routes de `/api/modeles-pv`.
 - **`GET /api/modeles-pv/integres`** : `[{ code, libelle, nature, sousTypes, fichiers, regle, enService }]`. Ce sont les modèles

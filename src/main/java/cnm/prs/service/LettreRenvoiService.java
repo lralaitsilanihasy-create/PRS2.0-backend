@@ -437,22 +437,46 @@ public class LettreRenvoiService {
         if (lettre.getCheminDocument() != null && !lettre.getCheminDocument().isBlank()) {
             return false;   // déjà produit
         }
+        Rendu rendu = rendu(lettre);
+        byte[] pdf = documentGenerator.genererPdf(rendu.centrale(), rendu.remplacements());
+        lettre.setCheminDocument(stockerSurFsx(lettre, pdf));   // PDF écrit sur le FSX (répertoire LR/)
+        repository.save(lettre);
+        log.info("Document de la lettre de renvoi {} produit : {}", idLettre, lettre.getCheminDocument());
+        return true;
+    }
+
+    /** Le choix du fichier (central ou régional) et les remplacements d'une lettre : un seul calcul, production et aperçu. */
+    private record Rendu(boolean centrale, java.util.Map<String, String> remplacements) {
+    }
+
+    private Rendu rendu(LettreRenvoi lettre) {
         Dossier dossier = lettre.getIdDossier() == null ? null
                 : dossierRepository.findById(lettre.getIdDossier()).orElse(null);
         String localite = dossier == null ? null : dossier.getIdLocalite();
         if (localite == null || localite.isBlank()) {
-            localite = repository.findLocaliteByLettre(idLettre).orElse(null);
+            localite = repository.findLocaliteByLettre(lettre.getIdLettre()).orElse(null);
         }
         boolean centrale = Localite.estCentrale(localite);   // source unique (cf. références « CNM »)
         String localiteLibelle = localite == null ? "" : localiteRepository.findById(localite)
                 .map(l -> l.getLibelleLocalite() == null ? "" : l.getLibelleLocalite()).orElse("");
         String signataire = nomComplet(lettre.getImSignataire());
-        byte[] pdf = documentGenerator.genererPdf(centrale,
-                construireRemplacements(lettre, dossier, signataire, centrale, localiteLibelle));
-        lettre.setCheminDocument(stockerSurFsx(lettre, pdf));   // PDF écrit sur le FSX (répertoire LR/)
-        repository.save(lettre);
-        log.info("Document de la lettre de renvoi {} produit : {}", idLettre, lettre.getCheminDocument());
-        return true;
+        return new Rendu(centrale, construireRemplacements(lettre, dossier, signataire, centrale, localiteLibelle));
+    }
+
+    /** ⚠️ 2026-10-20 (« modeles-pv-integres-consultation », §B2) — le fichier qui a servi et le Word rempli. */
+    public record ApercuLettre(String modele, byte[] docx) {
+    }
+
+    /**
+     * ⚠️ 2026-10-20 (demande front « modeles-pv-integres-consultation », §B2) — la lettre remplie par le même calcul que la production,
+     * <strong>sans rien enregistrer</strong> ; une lettre non signée s'aperçoit aussi.
+     */
+    @Transactional(readOnly = true)
+    public ApercuLettre apercu(Integer idLettre) {
+        LettreRenvoi lettre = exigerExistante(idLettre);
+        Rendu rendu = rendu(lettre);
+        return new ApercuLettre(LettreRenvoiDocumentGenerator.modele(rendu.centrale()),
+                documentGenerator.genererDocx(rendu.centrale(), rendu.remplacements()));
     }
 
     /**
