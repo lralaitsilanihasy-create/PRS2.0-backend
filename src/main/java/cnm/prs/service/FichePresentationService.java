@@ -190,7 +190,8 @@ public class FichePresentationService {
                 ligne("VERSION", "Version de la fiche", String.valueOf(ev.version())),
                 ligne("DATE_VALIDATION", "Validée le", ev.etat().getDateValidation() == null ? null
                         : ev.etat().getDateValidation().format(JOUR_HEURE)),
-                ligne("VALIDEE_PAR", "Validée par", validePar == null ? null : acteurs.nom(validePar)))));
+                // ⚠️ 2026-10-20 (« fiche-presentation-marche-ecarts », §B1) — une référence d'acteur, pas un login.
+                ligne("VALIDEE_PAR", "Validée par", acteurs.nomDeRef(validePar)))));
         return new FichePresentationDto(idDossier, idDmc, ev.version(), sections.stream().filter(s -> !s.lignes().isEmpty()).toList());
     }
 
@@ -228,7 +229,7 @@ public class FichePresentationService {
                 // ⚠️ 2026-10-19 (§B4) — la création nominative du dossier de marché par la PRMP (ou son UGPM), datée et journalisée (Q2 :
                 // vaut signature, hypothèse à confirmer par le pilote).
                 a.getDossierCreeLe() == null ? null : ligne("DOSSIER_CREE_LE", "Dossier de marché créé le", a.getDossierCreeLe().format(JOUR_HEURE)),
-                a.getDossierCreePar() == null ? null : ligne("DOSSIER_CREE_PAR", "Dossier de marché créé par", acteurs.nom(a.getDossierCreePar())))));
+                a.getDossierCreePar() == null ? null : ligne("DOSSIER_CREE_PAR", "Dossier de marché créé par", acteurs.nomDeRef(a.getDossierCreePar())))));
         return out;
     }
 
@@ -367,7 +368,11 @@ public class FichePresentationService {
                 continue;
             }
             LocalDate fait = realise.get(i);
-            out.add(ligne(code, ev.libelle(code), "prévu le " + prevu.format(JOUR) + " ; " + (fait == null ? "non réalisé" : "réalisé le " + fait.format(JOUR))));
+            // ⚠️ 2026-10-20 (« fiche-presentation-marche-ecarts », §B2) — les offres optimisées (06, 07) relèvent des marchés subséquents :
+            // « prévu » seul, jamais « non réalisé », qui laisserait croire à un retard de la procédure.
+            boolean subsequent = i == 6 || i == 7;
+            out.add(ligne(code, ev.libelle(code), "prévu le " + prevu.format(JOUR) + (subsequent ? ""
+                    : " ; " + (fait == null ? "non réalisé" : "réalisé le " + fait.format(JOUR)))));
         }
         return out;
     }

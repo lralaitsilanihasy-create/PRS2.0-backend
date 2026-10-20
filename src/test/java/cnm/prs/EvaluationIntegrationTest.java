@@ -2141,6 +2141,14 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp)).andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].attributions[0].propose.candidat").value(hasItem("BTP Gamma")))
                 .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].attributions[0].propose.nbTitulaires").value(hasItem(2)));
+        // ⚠️ 2026-10-20 (« fiche-presentation-marche-ecarts », §B1) — le créateur est tracé par sa référence d'acteur (en recette, IMP001
+        // pour le login PRMP001) : son nom se lit par la référence, pas comme un login.
+        cnm.prs.entity.Prmp autre = prmp("IMPX01", "ANT");
+        autre.setNomPrmp("RAKOTO");
+        prmpRepository.save(autre);
+        cnm.prs.entity.Attribution creee = attributionRepository.findById(new cnm.prs.entity.Attribution.Cle(idDmc, 1)).orElseThrow();
+        creee.setDossierCreePar("IMPX01");
+        attributionRepository.saveAndFlush(creee);
         String fiche = mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.idDmc").value(idDmc))
                 .andExpect(jsonPath("$.sections[?(@.code=='ATTRIBUTION')].lignes[?(@.code=='LOT')].valeur").value(hasItem("1")))
@@ -2153,6 +2161,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.sections[?(@.code=='SEANCE')].lignes[?(@.code=='OUVERTE_LE')]").isNotEmpty())
                 .andExpect(jsonPath("$.sections[?(@.code=='VALIDATION')].lignes[?(@.code=='DOSSIER_CREE_LE')]").isNotEmpty())
                 .andExpect(jsonPath("$.sections[?(@.code=='VALIDATION')].lignes[?(@.code=='VERSION')]").isEmpty())
+                .andExpect(jsonPath("$.sections[?(@.code=='VALIDATION')].lignes[?(@.code=='DOSSIER_CREE_PAR')].valeur")
+                        .value(hasItem(containsString("RAKOTO"))))
                 .andReturn().getResponse().getContentAsString();
         List<String> codesSections = JsonPath.read(fiche, "$.sections[*].code");
         assertThat(codesSections).startsWith("IDENTIFICATION", "MARCHE", "ATTRIBUTION", "MISE_EN_CONCURRENCE")

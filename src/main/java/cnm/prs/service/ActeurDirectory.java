@@ -96,6 +96,24 @@ public class ActeurDirectory {
         return resultat;
     }
 
+    /**
+     * ⚠️ 2026-10-20 (demande front « fiche-presentation-marche-ecarts », §B1) — le nom lisible d'une <strong>référence</strong>
+     * d'acteur (ce que {@code CurrentUser.ref()} trace : {@code VALIDE_PAR} d'une fiche, {@code DOSSIER_CREE_PAR} d'une attribution),
+     * et non d'un login : la PRMP ({@code t_prmp}), à défaut le contrôleur, puis l'UGPM ; à défaut le login de même valeur ; {@code null}
+     * sinon. Une UGPM trace la référence de sa PRMP de tutelle : c'est alors le nom de la PRMP.
+     */
+    @Transactional(readOnly = true)
+    public String nomDeRef(String ref) {
+        if (ref == null || ref.isBlank()) {
+            return null;
+        }
+        return prmpRepository.findById(ref).map(p -> assembler(p.getPrenomsPrmp(), p.getNomPrmp()))
+                .or(() -> controleurRepository.findById(ref).map(c -> assembler(c.getPrenomsCont(), c.getNomCont())))
+                .or(() -> ugpmRepository.findById(ref).map(u -> assembler(u.getPrenomsUgpm(), u.getNomUgpm())))
+                .filter(n -> !n.isBlank())
+                .orElseGet(() -> nom(ref));
+    }
+
     /** Nom lisible d'un seul login, ou {@code null} s'il n'est pas résolvable. */
     @Transactional(readOnly = true)
     public String nom(String login) {

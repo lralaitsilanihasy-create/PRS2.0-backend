@@ -8728,6 +8728,14 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-20 (demande front « fiche-presentation-marche-ecarts »)** — deux écarts corrigés sur la fiche de présentation.
+- **B1** : `DOSSIER_CREE_PAR` (dossier de marché) et `VALIDEE_PAR` (fiche du dossier de mise en concurrence) sont servis. Ces champs
+  tracent une **référence d'acteur** (`CurrentUser.ref()`), que la fiche lisait comme un login : la ligne disparaissait dès que
+  login et référence diffèrent (PRMP001 / IMP001 en recette). Le nom se lit désormais par la référence
+  (`ActeurDirectory.nomDeRef` : PRMP, puis contrôleur, puis UGPM, à défaut un login de même valeur). Une UGPM trace la référence
+  de sa PRMP de tutelle : c'est alors le nom de la PRMP.
+- **B2** : dans `PREVU_REALISE`, les offres optimisées (`B04-CP-06`, `B04-CP-07`) sont servies « prévu le … » seul.
+
 ⚠️ **2026-10-20 (demande front « fiche-presentation-marche »)** — la fiche de présentation propre au dossier de marché.
 - **`GET /api/dossiers/{id}/fiche-presentation`** (et `…/pdf`), pour un dossier de marché né d'une attribution, sert dans l'ordre :
   - `IDENTIFICATION`, `MARCHE` : inchangées ;

@@ -62,14 +62,15 @@ class FichePresentationEtapesTest {
             champs.put(c[0], champ);
         }
         cnm.prs.dto.FicheMarcheDto fiche = new cnm.prs.dto.FicheMarcheDto();
-        fiche.setValeurs(java.util.Map.of("B04-CP-01", "2026-10-19", "B04-CP-04", "2026-12-04", "B04-CP-05", "2099-12-21"));
+        fiche.setValeurs(java.util.Map.of("B04-CP-01", "2026-10-19", "B04-CP-04", "2026-12-04", "B04-CP-05", "2099-12-21", "B04-CP-06", "2026-11-24"));
         FicheMarcheService.EtatVersion ev = new FicheMarcheService.EtatVersion(1, fiche, champs, null, null);   // champs sans filtre de type ni de catégorie
         cnm.prs.entity.Attribution a = new cnm.prs.entity.Attribution();
         a.setAttribueLe(java.time.LocalDateTime.of(2026, 12, 2, 10, 0));
         List<Ligne> l = FichePresentationService.prevuRealise(ev, a, null, java.time.LocalDate.of(2026, 10, 20), null);
-        assertThat(l).extracting(Ligne::code).containsExactly("B04-CP-01", "B04-CP-04", "B04-CP-05");
+        assertThat(l).extracting(Ligne::code).containsExactly("B04-CP-01", "B04-CP-04", "B04-CP-05", "B04-CP-06");
         assertThat(l).extracting(Ligne::valeur).containsExactly("prévu le 19/10/2026 ; réalisé le 20/10/2026",
-                "prévu le 04/12/2026 ; réalisé le 02/12/2026", "prévu le 21/12/2099 ; non réalisé");
+                "prévu le 04/12/2026 ; réalisé le 02/12/2026", "prévu le 21/12/2099 ; non réalisé",
+                "prévu le 24/11/2026");   // ⚠️ « …-ecarts », §B2 : les offres optimisées, « prévu » seul
         assertThat(l.get(0).libelle()).isEqualTo("Date de lancement de la mise en concurrence");
     }
 }
