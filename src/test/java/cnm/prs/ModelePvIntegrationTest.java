@@ -217,4 +217,43 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get(BASE + "/variables").param("sousType", "XX").header("Authorization", tokenAdmin))
                 .andExpect(status().isBadRequest());
     }
+
+    /** ⚠️ 2026-10-20 (« modeles-pv-integres », §B1-B2) — les modèles intégrés au JAR et la couverture par sous-type. */
+    @Test
+    void integresEtCouverture() throws Exception {
+        mvc.perform(get(BASE + "/integres").header("Authorization", tokenMembre)).andExpect(status().isForbidden());
+        mvc.perform(get(BASE + "/couverture").header("Authorization", tokenMembre)).andExpect(status().isForbidden());
+        String integres = mvc.perform(get(BASE + "/integres").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].code").value("PV-PLAN-INTEGRE"))
+                .andExpect(jsonPath("$[0].sousTypes").value(org.hamcrest.Matchers.contains("PPM", "PPM-AGPM")))
+                .andExpect(jsonPath("$[0].enService").value(true))
+                .andExpect(jsonPath("$[1].code").value("LETTRE-RENVOI-INTEGREE"))
+                .andExpect(jsonPath("$[1].nature").value("LETTRE_RENVOI"))
+                .andExpect(jsonPath("$[1].sousTypes").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$[1].fichiers").value(org.hamcrest.Matchers.contains("LR_CENTRALE.docx", "LR_REGIONALE.docx")))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<java.util.List<String>>read(integres, "$[0].fichiers")).hasSize(12)
+                .contains("PV_AFSR_PPMAGPM_CENTRALE.docx", "PV_ANF_PPM_REGIONALE.docx");
+
+        // Un modèle géré rattaché à DAOO-CC ne produit encore rien : la couverture le montre à part.
+        long id = creer("PV-DMC");
+        mvc.perform(put(BASE + "/" + id + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sousTypes\":[\"DAOO-CC\"]}")).andExpect(status().isOk());
+        String couverture = mvc.perform(get(BASE + "/couverture").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<java.util.List<String>>read(couverture, "$[?(@.sousType=='PPM' && @.nature=='PV')].produitPar"))
+                .containsExactly("INTEGRE");
+        assertThat(JsonPath.<java.util.List<String>>read(couverture, "$[?(@.sousType=='PPM-AGPM' && @.nature=='PV')].integre"))
+                .containsExactly("PV-PLAN-INTEGRE");
+        assertThat(JsonPath.<java.util.List<String>>read(couverture, "$[?(@.sousType=='DAOO-CC' && @.nature=='PV')].produitPar"))
+                .containsExactly("AUCUN");
+        assertThat(JsonPath.<java.util.List<String>>read(couverture, "$[?(@.sousType=='DAOO-CC' && @.nature=='PV')].modeleRattache.code"))
+                .containsExactly("PV-DMC");
+        assertThat(JsonPath.<java.util.List<Object>>read(couverture,
+                "$[?(@.sousType=='DAOO-CC' && @.nature=='PV')].modeleRattache.numeroEnVigueur")).containsExactly((Object) null);
+        assertThat(JsonPath.<java.util.List<String>>read(couverture, "$[?(@.sousType=='DAOO' && @.nature=='LETTRE_RENVOI')].produitPar"))
+                .containsExactly("INTEGRE");
+        assertThat(JsonPath.<java.util.List<String>>read(couverture, "$[?(@.sousType=='DAOO' && @.nature=='PV')].famille"))
+                .containsExactly("DMC");
+    }
 }

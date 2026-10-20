@@ -39,6 +39,11 @@ public class LettreRenvoiDocumentGenerator {
     private static final String MODELE_CENTRALE = "/templates/LR_CENTRALE.docx";
     private static final String MODELE_REGIONALE = "/templates/LR_REGIONALE.docx";
 
+    /** ⚠️ 2026-10-20 (demande front « modeles-pv-integres », §B1) — les deux fichiers que {@link #genererPdf} peut choisir. */
+    public static List<String> modeles() {
+        return List.of(MODELE_CENTRALE, MODELE_REGIONALE);
+    }
+
     /** Convertisseur Word, initialisé paresseusement (démarre MS Word) et réutilisé. */
     private volatile IConverter convertisseur;
 

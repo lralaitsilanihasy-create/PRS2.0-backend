@@ -146,6 +146,56 @@ public class ModelePvService {
                 CatalogueModelesPv.FORMATS, CatalogueModelesPv.ALIAS);
     }
 
+    /**
+     * ⚠️ 2026-10-20 (demande front « modeles-pv-integres », §B1) — les modèles intégrés au JAR, lus là où le choix se fait
+     * ({@link PvDocumentGenerator#modeles}, {@link LettreRenvoiDocumentGenerator#modeles},
+     * {@link PvDocumentService#SOUS_TYPES_MODELES_INTEGRES}) ; seuls les fichiers présents sont servis. {@code enService} est vrai tant
+     * que la production ne passe pas par le générateur (lot G2).
+     */
+    @Transactional(readOnly = true)
+    public List<ModelePvDto.Integre> integres() {
+        return List.of(
+                new ModelePvDto.Integre("PV-PLAN-INTEGRE", "PV d'examen du plan de passation", "PV",
+                        PvDocumentService.SOUS_TYPES_MODELES_INTEGRES, presents(PvDocumentGenerator.modeles()),
+                        "Un fichier par avis (FAV ; FAVR avec l'annexe des observations ; DEF), avec ou sans AGPM (sous-type PPM-AGPM), "
+                                + "commission centrale ou régionale. Seul un dossier dont le PPM garde au moins une ligne reçoit un "
+                                + "document ; l'avis NSP n'en a pas.",
+                        true),
+                new ModelePvDto.Integre("LETTRE-RENVOI-INTEGREE", "Lettre de renvoi", "LETTRE_RENVOI", null,
+                        presents(LettreRenvoiDocumentGenerator.modeles()),
+                        "Un fichier par commission, centrale ou régionale, pour toute lettre signée, quel que soit le sous-type.", true));
+    }
+
+    /**
+     * ⚠️ 2026-10-20 (demande front « modeles-pv-integres », §B2) — pour chaque sous-type du référentiel et chaque nature, ce qui
+     * produit son document. Un modèle géré rattaché ne produit encore rien (lot G2) : il est servi à part, {@code produitPar} ne vaut
+     * pas {@code GERE} avant.
+     */
+    @Transactional(readOnly = true)
+    public List<ModelePvDto.Couverture> couverture() {
+        List<ModelePvDto.Integre> integres = integres();
+        List<ModelePvDto.Couverture> out = new ArrayList<>();
+        for (SousTypeDossier s : sousTypes.findAll(org.springframework.data.domain.Sort.by("idSousType"))) {
+            for (String nature : List.of("PV", "LETTRE_RENVOI")) {
+                ModelePvDto.Integre integre = integres.stream().filter(i -> i.nature().equals(nature)
+                        && (i.sousTypes() == null || i.sousTypes().contains(s.getIdSousType()))).findFirst().orElse(null);
+                ModelePvDto.ModeleRattache rattache = rattachements.findByIdSousTypeAndNature(s.getIdSousType(), nature)
+                        .flatMap(r -> modeles.findById(r.getIdModele()))
+                        .map(m -> new ModelePvDto.ModeleRattache(m.getIdModele(), m.getCode(),
+                                versions.findByIdModeleAndEtat(m.getIdModele(), VersionModelePv.EN_VIGUEUR).map(VersionModelePv::getNumero)
+                                        .orElse(null)))
+                        .orElse(null);
+                out.add(new ModelePvDto.Couverture(s.getIdSousType(), s.getLibelleSousType(), s.getIdTypeDossier(), nature,
+                        integre != null && integre.enService() ? "INTEGRE" : "AUCUN", integre == null ? null : integre.code(), rattache));
+            }
+        }
+        return out;
+    }
+
+    private List<String> presents(List<String> chemins) {
+        return chemins.stream().filter(c -> getClass().getResource(c) != null).map(c -> c.substring(c.lastIndexOf('/') + 1)).toList();
+    }
+
     // ───────────────────────────────────────────── gestes ─────────────────────────────────────────────
 
     public ModelePvDto.Fiche creer(ModelePvDto.CreationRequest r) {

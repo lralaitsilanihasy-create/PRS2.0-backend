@@ -55,6 +55,18 @@ public class ModelePvController {
         return service.catalogue(sousType);
     }
 
+    /** Les modèles intégrés au JAR, choisis par le code (« modeles-pv-integres », §B1). */
+    @GetMapping("/integres")
+    public List<ModelePvDto.Integre> integres() {
+        return service.integres();
+    }
+
+    /** Par sous-type et par nature, ce qui produit le document : INTEGRE, GERE ou AUCUN (« modeles-pv-integres », §B2). */
+    @GetMapping("/couverture")
+    public List<ModelePvDto.Couverture> couverture() {
+        return service.couverture();
+    }
+
     @PostMapping
     public ModelePvDto.Fiche creer(@Valid @RequestBody ModelePvDto.CreationRequest corps) {
         return service.creer(corps);

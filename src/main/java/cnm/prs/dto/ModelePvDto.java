@@ -91,4 +91,23 @@ public final class ModelePvDto {
 
     public record Cle(String cle, String libelle, List<String> valeurs) {
     }
+
+    /**
+     * ⚠️ 2026-10-20 (« modeles-pv-integres », §B1) — un modèle intégré au JAR, choisi par le code : {@code sousTypes} nul = tous ;
+     * {@code enService} vrai tant que la production passe par lui.
+     */
+    public record Integre(String code, String libelle, String nature, List<String> sousTypes, List<String> fichiers, String regle,
+            boolean enService) {
+    }
+
+    /**
+     * ⚠️ 2026-10-20 (« modeles-pv-integres », §B2) — ce qui produit le document d'un sous-type pour une nature : {@code produitPar}
+     * {@code INTEGRE}, {@code GERE} ou {@code AUCUN} ; {@code modeleRattache} est le modèle géré rattaché, qu'il produise ou non.
+     */
+    public record Couverture(String sousType, String libelle, String famille, String nature, String produitPar, String integre,
+            ModeleRattache modeleRattache) {
+    }
+
+    public record ModeleRattache(Long id, String code, Integer numeroEnVigueur) {
+    }
 }

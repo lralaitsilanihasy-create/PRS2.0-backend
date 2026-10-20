@@ -8728,6 +8728,21 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-20 (demande front « modeles-pv-integres »)** — ce qui produit les documents aujourd'hui, réservé à l'Administrateur
+comme les autres routes de `/api/modeles-pv`.
+- **`GET /api/modeles-pv/integres`** : `[{ code, libelle, nature, sousTypes, fichiers, regle, enService }]`. Ce sont les modèles
+  intégrés au JAR, lus là où le choix se fait (`PvDocumentGenerator.modeles()`, `LettreRenvoiDocumentGenerator.modeles()`,
+  `PvDocumentService.SOUS_TYPES_MODELES_INTEGRES`) ; seuls les fichiers présents sont servis.
+  - `PV-PLAN-INTEGRE` : sous-types `PPM` et `PPM-AGPM`, 12 fichiers.
+  - `LETTRE-RENVOI-INTEGREE` : `sousTypes: null` (tous), 2 fichiers.
+  - `enService` reste `true` tant que la production ne passe pas par le générateur (lot G2).
+- **`GET /api/modeles-pv/couverture`** : une ligne par sous-type du référentiel et par nature (`PV`, `LETTRE_RENVOI`) :
+  `{ sousType, libelle, famille, nature, produitPar, integre, modeleRattache }`.
+  - `produitPar` vaut `INTEGRE`, `GERE` ou `AUCUN`. Avant G2, il ne vaut jamais `GERE`.
+  - `integre` est le code du modèle intégré, ou `null`.
+  - `modeleRattache` vaut `{ id, code, numeroEnVigueur }` ou `null` : c'est le modèle géré rattaché, servi même s'il ne produit
+    rien encore.
+
 ⚠️ **2026-10-20 (demande front « generateur-modeles-pv », lot G1 ; V138)** — les modèles de PV, rédigés dans Word par
 l'Administrateur. Toutes les routes sont réservées à l'Administrateur (403 sinon) et journalisées (`historique` de la fiche).
 Ce lot ne produit encore aucun PV : la production par la version en vigueur est le lot G2 ; les 14 modèles du plan restent servis

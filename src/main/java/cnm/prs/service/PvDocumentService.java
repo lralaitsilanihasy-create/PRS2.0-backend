@@ -64,6 +64,14 @@ public class PvDocumentService {
     /** Localité centrale : source unique {@link Localite#ID_CENTRALE} (partagée avec les références). */
     private static final String LOCALITE_CENTRALE = Localite.ID_CENTRALE;
 
+    /**
+     * ⚠️ 2026-10-20 (demande front « modeles-pv-integres », §B1) — les sous-types dont le PV reçoit un des 12 modèles intégrés. La
+     * règle réelle de {@link #modelePour} est « un PPM qui garde au moins une ligne », ce que seuls ces sous-types portent ; l'AGPM se
+     * lit sur {@code PPM-AGPM}.
+     */
+    public static final List<String> SOUS_TYPES_MODELES_INTEGRES = List.of(DossierIntegriteService.SOUS_TYPE_PPM,
+            DossierIntegriteService.SOUS_TYPE_PPM_AGPM);
+
     private final PvDocumentGenerator generator;
     private final ExamenRepository examenRepository;
     /** ⚠️ 2026-09-10 — le PV ne rapporte que ce qui relève du périmètre d'examen. */

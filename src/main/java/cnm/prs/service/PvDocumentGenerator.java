@@ -83,6 +83,22 @@ public class PvDocumentGenerator {
                 + (centrale ? "CENTRALE" : "REGIONALE") + ".docx";
     }
 
+    /**
+     * ⚠️ 2026-10-20 (demande front « modeles-pv-integres », §B1) — tous les fichiers que {@link #modele} peut choisir, sur ses trois
+     * axes : l'écran « Modèles de PV » de l'Administrateur les lit ici, là où le choix se fait.
+     */
+    public static List<String> modeles() {
+        List<String> out = new ArrayList<>();
+        for (SensAvis sens : SensAvis.values()) {
+            for (boolean avecAgpm : new boolean[] { false, true }) {
+                for (boolean centrale : new boolean[] { true, false }) {
+                    out.add(modele(sens, avecAgpm, centrale));
+                }
+            }
+        }
+        return out;
+    }
+
     private static final String DATE_EXAMEN = "<DATE EXAMEN>";
     private static final String REFERENCE_PV = "<REFERENCE PV >";
     private static final String DATE_RECEPTION = "<DATE RECEPTION DU DOSSIER>";
