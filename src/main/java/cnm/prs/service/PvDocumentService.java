@@ -264,6 +264,24 @@ public class PvDocumentService {
                 examenRepository.findLocaliteByExamen(idExamen).orElse(dossier.getIdLocalite()));
     }
 
+    /**
+     * ⚠️ 2026-10-20 (« generateur-modeles-pv », lot G1) — le même contexte pour un dossier <strong>sans plan</strong> (mise en
+     * concurrence, marché, acte de gestion) : l'exercice et la nature du plan restent nuls. Sert l'aperçu d'un modèle de PV sur un
+     * dossier réel ; {@link #contexte(PvExamen)} garde son contrat (nul sans plan).
+     */
+    @Transactional(readOnly = true)
+    public PvDocumentContexte contexteDuDossier(PvExamen pv) {
+        Integer idExamen = pv.getIdExamen();
+        Integer idDossier = examenRepository.findIdDossierByExamen(idExamen).orElse(null);
+        Dossier dossier = idDossier == null ? null : dossierRepository.findById(idDossier).orElse(null);
+        if (dossier == null) {
+            return null;
+        }
+        Ppm ppm = ppmRepository.findByIdDossier(idDossier).stream().findFirst().orElse(null);
+        return construireContexte(pv, dossier, ppm, idExamen,
+                examenRepository.findLocaliteByExamen(idExamen).orElse(dossier.getIdLocalite()));
+    }
+
     private PvDocumentContexte construireContexte(PvExamen pv, Dossier dossier, Ppm ppm, Integer idExamen,
             String idLocalite) {
         LocalDate dateExamen = examenRepository.findById(idExamen).map(Examen::getDateExamen).orElse(null);
@@ -278,7 +296,7 @@ public class PvDocumentService {
         // ⚠️ 2026-08-04 — lieu d'établissement = chef-lieu (ville de siège) ; repli sur le libellé.
         String chefLieu = loc == null || loc.getChefLieu() == null || loc.getChefLieu().isBlank()
                 ? localite : loc.getChefLieu();
-        return new PvDocumentContexte(dateExamen, refPv, dateReception, entite, ppm.getExercice(), localite, chefLieu,
+        return new PvDocumentContexte(dateExamen, refPv, dateReception, entite, ppm == null ? null : ppm.getExercice(), localite, chefLieu,
                 // ⚠️ R3 (2026-09-01) — la mention « (par intérim) » est RETIRÉE d'ici : « Étaient
                 // présents » redevient une simple liste de présence. Elle a déménagé au bloc VISA,
                 // seul endroit qui fasse foi sur l'acte.
@@ -291,7 +309,7 @@ public class PvDocumentService {
                 ligneViseur(pv, idLocalite),
                 // ⚠️ 2026-08-05 — nature du plan : INITIAL (null/0) ou MODIFICATIF N°n si le dossier est
                 // une version. L'information est portée par le PPM lui-même (t_ppm.NUM_MAJ).
-                ppm.getNumMaj(),
+                ppm == null ? null : ppm.getNumMaj(),
                 construireObservations(idExamen));
     }
 

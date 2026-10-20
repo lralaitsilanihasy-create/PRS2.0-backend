@@ -2171,6 +2171,32 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(fiche, "$.sections[?(@.code=='PROCEDURE')].lignes[*].code"))
                 .noneMatch(c -> c.startsWith("B04-CP-")).doesNotContain("DATE_LIMITE");
         assertThat(JsonPath.<List<String>>read(fiche, "$.sections[*].lignes[*].code")).doesNotContain("TITULAIRES");
+        // ⚠️ 2026-10-20 (« generateur-modeles-pv », lot G1) — l'aperçu d'un modèle sur ce dossier de marché : procédure, marché et une
+        // ligne de tableau par titulaire proposé, lus par les règles de la fiche de présentation ; rien n'est enregistré au dossier.
+        String modele = mvc.perform(post("/api/modeles-pv").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"PV-DDM\",\"libelle\":\"PV du marché\",\"nature\":\"PV\"}")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        long idModele = ((Number) JsonPath.read(modele, "$.id")).longValue();
+        byte[] word = cnm.prs.service.ModelePvWordTest.docx(doc -> {
+            cnm.prs.service.ModelePvWordTest.paragraphe(doc, "Lot {{PROCEDURE.LOT}} — {{MARCHE.DOSSIER_MEC}} — {{MARCHE.ESTIMATION}}");
+            org.apache.poi.xwpf.usermodel.XWPFTable tit = doc.createTable(2, 2);
+            tit.getRow(0).getCell(0).setText("Rang");
+            tit.getRow(1).getCell(0).setText("{{POUR:TITULAIRES}}{{TIT.RANG}}");
+            tit.getRow(1).getCell(1).setText("{{TIT.CANDIDAT}} — {{TIT.MONTANT_HT}}");
+        });
+        mvc.perform(multipart("/api/modeles-pv/" + idModele + "/versions").file(new org.springframework.mock.web.MockMultipartFile("fichier",
+                "PV_DDM.docx", "application/octet-stream", word)).header("Authorization", tokenAdmin)).andExpect(status().isOk());
+        byte[] apercu = mvc.perform(post("/api/modeles-pv/" + idModele + "/versions/1/apercu").param("dossier", String.valueOf(idDossier))
+                .param("format", "docx").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        try (org.apache.poi.xwpf.usermodel.XWPFDocument doc = new org.apache.poi.xwpf.usermodel.XWPFDocument(
+                new java.io.ByteArrayInputStream(apercu))) {
+            assertThat(doc.getParagraphs().get(0).getText()).startsWith("Lot 1 — DOS-9960");
+            org.apache.poi.xwpf.usermodel.XWPFTable tit = doc.getTables().get(0);
+            assertThat(tit.getRows()).hasSize(3);
+            assertThat(tit.getRow(1).getCell(0).getText()).isEqualTo("1");
+            assertThat(tit.getRow(1).getCell(1).getText()).startsWith("BTP Gamma — ");
+        }
         assertThat(texteDuPdf(mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation/pdf").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray())).contains("Dossier de marché", "Attribution",
                         "Mise en concurrence", "Évaluation des offres");

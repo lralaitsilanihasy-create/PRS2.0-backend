@@ -1577,6 +1577,13 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   concurrence (avis de la Commission, première publication, délai de remise effectif), la séance d'ouverture, l'évaluation (le
 >   rapport signé vaut PV de validation) et, pour un contrat-cadre, le calendrier prévu face au réalisé. Le calendrier du plan et la
 >   cohérence avec l'AGPM restent sur la fiche du dossier de mise en concurrence.
+> - ⚠️ **2026-10-20 (« generateur-modeles-pv », lot G1)** — **les modèles de PV se rédigent dans Word** par l'Administrateur, qui
+>   seul les crée, dépose, déclare, met en vigueur, rattache et archive (journalisé). Un fichier déposé est **contrôlé** ; une
+>   version au rapport bloquant ne se met pas en vigueur. **Une version en vigueur ne se modifie plus** : on en dépose une nouvelle,
+>   qui la remplace, avec un motif. **Un sous-type a au plus un modèle** par nature (PV, lettre de renvoi). Les conditions et les
+>   champs saisis se déclarent dans l'écran de la version, pas dans le Word. Les fichiers sont en base. L'aperçu sur un dossier réel
+>   n'enregistre rien. La production des PV par ces modèles (un PV signé garde son document, un projet suit la version en vigueur)
+>   viendra au lot G2 ; jusque-là, les PV de mise en concurrence et de marché restent sans document.
 > - **Non fait** : des points de contrôle propres au contrat-cadre pour le marché (plusieurs titulaires classés, offre indicative,
 >   sélection par la PRMP, décret n° 2019-1064, art. 13) demandent des textes, du pilote ou de l'Administrateur.
 >

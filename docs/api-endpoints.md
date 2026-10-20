@@ -8728,6 +8728,46 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-20 (demande front « generateur-modeles-pv », lot G1 ; V138)** — les modèles de PV, rédigés dans Word par
+l'Administrateur. Toutes les routes sont réservées à l'Administrateur (403 sinon) et journalisées (`historique` de la fiche).
+Ce lot ne produit encore aucun PV : la production par la version en vigueur est le lot G2 ; les 14 modèles du plan restent servis
+comme avant.
+
+| Route | Effet |
+|---|---|
+| `GET /api/modeles-pv` | `[{ id, code, libelle, nature, etat, sousTypes[], enVigueur{numero, etat, bloquant, deposeeLe, enVigueurLe}, derniere{…} }]` |
+| `POST /api/modeles-pv` | `{ code, libelle, nature: PV \| LETTRE_RENVOI }` → la fiche ; 409 `CODE_DEJA_PRIS`, 400 `NATURE_INCONNUE`, `CODE_INVALIDE` |
+| `GET /api/modeles-pv/{id}` | la fiche : `sousTypes[{id, libelle, famille}]`, `versions[]` (de la plus récente), `historique[{le, action, numeroVersion, detail, par}]` |
+| `POST /api/modeles-pv/{id}/dupliquer` | corps facultatif `{ code, libelle }` (défaut `<code>-COPIE`) : copie la version en vigueur (à défaut la dernière), conditions et champs compris, en brouillon v1 ; sans rattachement |
+| `POST /api/modeles-pv/{id}/versions` | multipart, partie `fichier` (`.docx`, 10 Mo) → la version en `BROUILLON` et son `rapport` ; 400 `FICHIER_INVALIDE` ; 409 `MODELE_ARCHIVE` |
+| `GET /api/modeles-pv/{id}/versions/{n}` | la version : `nomFichier, taille, empreinte (SHA-256), etat, bloquant, rapport, motif, deposeeLe/Par, enVigueurLe/Par, remplaceeLe, conditions[], champs[]` |
+| `PUT /api/modeles-pv/{id}/versions/{n}/conditions` | `[{ nom, expression, libelle }]`, remplace l'ensemble ; rapport recalculé ; 400 `CONDITION_INVALIDE` (`details` par nom : nom invalide, doublon, expression illisible, clé inconnue) ; 409 `VERSION_FIGEE` hors brouillon |
+| `PUT /api/modeles-pv/{id}/versions/{n}/champs` | `[{ code, libelle, type, options[], obligatoire, aide, visibleSi }]`, types `TEXTE, TEXTE_LONG, LISTE, CASE, DATE, NOMBRE, PIECE` ; `visibleSi` = une condition déclarée ; rapport recalculé ; 400 `CHAMP_INVALIDE` ; 409 `VERSION_FIGEE` |
+| `POST /api/modeles-pv/{id}/versions/{n}/apercu?dossier=&avis=&format=` | le document rempli sur un dossier réel, **rien n'est enregistré** ; `format=pdf` (défaut) ou `docx` ; `avis` force `FAV, FAVR, DEF, NSP` (défaut : l'avis du dernier PV) ; corps facultatif `{ saisis: { code: valeur } }` ; toute version s'essaie ; 409 `CONVERSION_INDISPONIBLE` (PDF sans Word sur le serveur), 404 dossier |
+| `POST /api/modeles-pv/{id}/versions/{n}/mettre-en-vigueur` | `{ motif }` obligatoire (400 `MOTIF_REQUIS`) ; 409 `RAPPORT_BLOQUANT` ; la version en vigueur précédente passe `REMPLACEE` |
+| `PUT /api/modeles-pv/{id}/rattachements` | `{ sousTypes: [...] }`, remplace l'ensemble ; 400 `SOUS_TYPE_INCONNU` ; 409 `SOUS_TYPE_DEJA_SERVI` (`details` : sous-type → code du modèle qui le sert) |
+| `POST /api/modeles-pv/{id}/archiver` | corps facultatif `{ motif }` ; 409 `MODELE_EN_SERVICE` sans motif quand le modèle a une version en vigueur et des sous-types ; archivé, il est détaché |
+| `GET /api/modeles-pv/{id}/versions/{n}/fichier` | le `.docx` tel que déposé |
+| `GET /api/modeles-pv/variables?sousType=` | le catalogue : `groupes[{nom, variables[{code, libelle, exemple, liste}]}]` filtrés par la famille du sous-type, `listes[{nom, prefixe, libelle}]`, `cles[{cle, libelle, valeurs}]`, `formats`, `alias` (chevron → variable) ; 400 sous-type inconnu |
+
+- **Syntaxe du Word** : `{{CODE}}`, `{{CODE|format}}` (`long`, `court`, `lettres`, `majuscules`, `minuscules`), `{{SAISI:code}}`,
+  `{{SI:NOM}} … {{FINSI:NOM}}` (dans un paragraphe, ou sur plusieurs paragraphes et tableaux d'une même zone : corps, une cellule,
+  un en-tête), `{{POUR:LISTE}}` dans la première cellule de la ligne de tableau à répéter (`OBSERVATIONS` → `OBS.*`,
+  `TITULAIRES` → `TIT.*`), et les chevrons des modèles du plan (`<REFERENCE PV >`, `<CHEF LIEU>` et ses graphies…). Un marqueur
+  que Word a réparti sur plusieurs morceaux est recollé ; un marqueur coupé par une tabulation, un saut ou une image ne l'est pas
+  (bloquant). `{{IMAGE:…}}` n'est pas pris en charge : l'image s'insère dans le Word.
+- **Clés de condition** : `avis` (`FAV, FAVR, DEF, NSP`), `agpm` (`oui/non`), `portee` (`centrale/regionale`), `sousType`, `forme`
+  (forme du marché de la fiche), `titulaires` (nombre), `saisi.<code>` ; grammaire de `ConditionsModele` (`=`, `!=`, `contient`,
+  `renseigne`, `vide`, `et`, `ou`).
+- **Rapport** : `{ bloquant, nbBloquants, nbAvertissements, points[{niveau OK|AVERTISSEMENT|BLOQUANT, code, message, ou, suggestion}],
+  variables, conditionsUtilisees, champsUtilises, controleLe }`. Codes bloquants : `FICHIER_ILLISIBLE`, `MARQUEUR_COUPE`,
+  `BLOC_MAL_FERME`, `BLOC_NON_FERME`, `VARIABLE_INCONNUE` (avec la suggestion la plus proche), `FORMAT_INCONNU`,
+  `VARIABLE_HORS_LISTE`, `CHAMP_NON_DECLARE`, `CONDITION_NON_DECLAREE`, `LISTE_INCONNUE`, `POUR_MAL_PLACE`,
+  `IMAGE_NON_PRISE_EN_CHARGE`, `SECTION_ABSENTE` (PV : `PV.REFERENCE`, `PV.MEMBRE`, et `PV.AVIS` ou un bloc dont la condition lit
+  l'avis ; lettre : `DOSSIER.REFERENCE`), `ESSAI_ECHEC`. Avertissements : `ANCIEN_MARQUEUR`, `CONDITION_INUTILISEE`,
+  `CHAMP_INUTILISE`, `ESSAI_PDF_NON_VERIFIE` (Word absent ou conversion désactivée, `app.modeles-pv.essai-pdf`). `ou` :
+  « paragraphe n », « tableau t, ligne l, cellule c, paragraphe n », « en-tête n » (Word ne pagine pas hors de lui : pas de page).
+
 ⚠️ **2026-10-20 (demande front « fiche-presentation-marche-ecarts »)** — deux écarts corrigés sur la fiche de présentation.
 - **B1** : `DOSSIER_CREE_PAR` (dossier de marché) et `VALIDEE_PAR` (fiche du dossier de mise en concurrence) sont servis. Ces champs
   tracent une **référence d'acteur** (`CurrentUser.ref()`), que la fiche lisait comme un login : la ligne disparaissait dès que

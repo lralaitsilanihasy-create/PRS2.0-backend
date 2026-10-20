@@ -403,7 +403,7 @@ public class PvDocumentGenerator {
      * shut down ») et TOUTES les générations suivantes échouaient jusqu'au redémarrage du serveur.
      * On retente donc UNE fois avec un convertisseur neuf.
      */
-    private byte[] convertirEnPdf(byte[] docx) {
+    byte[] convertirEnPdf(byte[] docx) {
         try {
             return convertir(docx);
         } catch (RuntimeException premiereTentative) {
