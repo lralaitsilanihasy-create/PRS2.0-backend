@@ -1427,7 +1427,8 @@ public class SeanceService {
 
     // ------------------------------------------------------------------ outils
 
-    private SeanceDto dto(Long idDmc) {
+    /** L'état de la séance, sans garde ; ⚠️ 2026-10-20 (« fiche-presentation-marche ») lu aussi par la fiche de présentation. */
+    SeanceDto dto(Long idDmc) {
         Seance s = seances.findById(idDmc).orElse(null);
         LocalDateTime heure = heureOuverture(idDmc);
         LocalDateTime maintenant = maintenant();

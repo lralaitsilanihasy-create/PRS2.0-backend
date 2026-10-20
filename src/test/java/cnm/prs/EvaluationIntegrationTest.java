@@ -3,6 +3,7 @@ package cnm.prs;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -766,7 +767,14 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp)).andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].dossiersMarche[0].lot").value(hasItem(1)))
                 .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].dossiersMarche[0].idDossier").value(hasItem(idDossier)))
-                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].dossiersMarche[0].statut").value(hasItem("BROUILLON")));
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].dossiersMarche[0].statut").value(hasItem("BROUILLON")))
+                // ⚠️ 2026-10-20 (« liste-dossier-marche ») — §B1 le numéro de la procédure ; §B2 l'attribution par lot, règle de l'écran.
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].numeroProcedure").value(hasItem(notNullValue())))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].attributions[0].etat").value(hasItem("AU_CONTROLE")))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].attributions[0].rapportSigneLe").value(hasItem(notNullValue())))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].attributions[0].propose.candidat").value(hasItem("BTP Alpha")))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].attributions[0].propose.montant").value(hasItem(12500000)))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].attributions[0].propose.nbTitulaires").value(hasItem(1)));
         List<String> codesPieces = pieceJointeDossierRepository.findAll().stream().filter(x -> x.getIdDossier() == idDossier)
                 .map(x -> typePieceJointeRepository.findById(x.getIdTypePiece()).orElseThrow().getCode()).toList();
         assertThat(codesPieces).contains("PROJET_MARCHE", "CAHIER_CHARGES", "RAPPORT_ANALYSE", "QUESTIONS_REPONSES");
@@ -2127,17 +2135,35 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/pv-examens/" + idPvMec).header("Authorization", bearer("PRMP002", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP002", "ANT")))
                 .andExpect(status().isForbidden());
         assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='PV_VALIDATION_CAO')].lien").get(0)).startsWith("/api/piece-jointe-dossiers/");
-        // La fiche de présentation du marché : la section « Attribution ».
-        mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation").header("Authorization", tokenPrmp)).andExpect(status().isOk())
-                .andExpect(jsonPath("$.idDmc").value(idDmc))
+        // La fiche de présentation du marché : ⚠️ 2026-10-20 (« fiche-presentation-marche », §B1) la sienne — l'attribution (un titulaire
+        // par ligne, l'écart à l'estimation), la mise en concurrence, la séance, l'évaluation ; plus le calendrier du plan ni la cohérence.
+        // ⚠️ 2026-10-20 (« liste-dossier-marche », §B2) — plusieurs titulaires proposés : le rang 1 et leur nombre.
+        mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].attributions[0].propose.candidat").value(hasItem("BTP Gamma")))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].attributions[0].propose.nbTitulaires").value(hasItem(2)));
+        String fiche = mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.idDmc").value(idDmc))
                 .andExpect(jsonPath("$.sections[?(@.code=='ATTRIBUTION')].lignes[?(@.code=='LOT')].valeur").value(hasItem("1")))
-                .andExpect(jsonPath("$.sections[?(@.code=='ATTRIBUTION')].lignes[?(@.code=='DOSSIER_MISE_EN_CONCURRENCE')].valeur")
+                .andExpect(jsonPath("$.sections[?(@.code=='MISE_EN_CONCURRENCE')].lignes[?(@.code=='DOSSIER_MISE_EN_CONCURRENCE')].valeur")
                         .value(hasItem("DOS-9960")))
-                .andExpect(jsonPath("$.sections[?(@.code=='ATTRIBUTION')].lignes[?(@.code=='TITULAIRES')].valeur")
-                        .value(hasItem(containsString("1. BTP Gamma (offre n° 3)"))))
-                .andExpect(jsonPath("$.sections[?(@.code=='VALIDATION')].lignes[?(@.code=='DOSSIER_CREE_LE')]").isNotEmpty());
+                .andExpect(jsonPath("$.sections[?(@.code=='ATTRIBUTION')].lignes[?(@.code=='TITULAIRE_1')].valeur")
+                        .value(hasItem(containsString("BTP Gamma (offre n° 3)"))))
+                .andExpect(jsonPath("$.sections[?(@.code=='EVALUATION')].lignes[?(@.code=='OFFRES_EVALUEES')]").isNotEmpty())
+                .andExpect(jsonPath("$.sections[?(@.code=='EVALUATION')].lignes[?(@.code=='RAPPORT_SIGNE')]").isNotEmpty())
+                .andExpect(jsonPath("$.sections[?(@.code=='SEANCE')].lignes[?(@.code=='OUVERTE_LE')]").isNotEmpty())
+                .andExpect(jsonPath("$.sections[?(@.code=='VALIDATION')].lignes[?(@.code=='DOSSIER_CREE_LE')]").isNotEmpty())
+                .andExpect(jsonPath("$.sections[?(@.code=='VALIDATION')].lignes[?(@.code=='VERSION')]").isEmpty())
+                .andReturn().getResponse().getContentAsString();
+        List<String> codesSections = JsonPath.read(fiche, "$.sections[*].code");
+        assertThat(codesSections).startsWith("IDENTIFICATION", "MARCHE", "ATTRIBUTION", "MISE_EN_CONCURRENCE")
+                .containsSubsequence("ATTRIBUTION", "MISE_EN_CONCURRENCE", "SEANCE", "EVALUATION", "VALIDATION")
+                .doesNotContain("CALENDRIER_PLAN", "COHERENCE");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.sections[?(@.code=='PROCEDURE')].lignes[*].code"))
+                .noneMatch(c -> c.startsWith("B04-CP-")).doesNotContain("DATE_LIMITE");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.sections[*].lignes[*].code")).doesNotContain("TITULAIRES");
         assertThat(texteDuPdf(mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation/pdf").header("Authorization", tokenPrmp))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray())).contains("Dossier de marché", "Attribution");
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray())).contains("Dossier de marché", "Attribution",
+                        "Mise en concurrence", "Évaluation des offres");
     }
 
     /** La partie {@code data} d'un dépôt de pièce. */

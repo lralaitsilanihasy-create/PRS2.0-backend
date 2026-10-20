@@ -146,6 +146,10 @@ public class DmcService {
     /** ⚠️ 2026-10-19 (« etat-fiche-liste », §B1 ; « dossier-marche-lecture », §B2). */
     private final cnm.prs.repository.FicheMarcheRepository ficheRepository;
     private final cnm.prs.repository.AttributionRepository attributionRepository;
+    /** ⚠️ 2026-10-20 (« liste-dossier-marche ») — le numéro de la procédure (§B1), l'attribution par lot (§B2). */
+    private final cnm.prs.repository.FicheMarcheValeurRepository valeurRepository;
+    private final cnm.prs.repository.EvaluationRepository evaluationRepository;
+    private final org.springframework.beans.factory.ObjectProvider<AttributionService> attributionService;
 
     public DmcService(DossierMecRepository repository, MarcheRepository marcheRepository,
             ModePassationRepository modeRepository, TypeDmcRepository typeDmcRepository,
@@ -155,7 +159,12 @@ public class DmcService {
             JournalDossierService journal, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, cnm.prs.repository.RecuDaoRepository recuRepository,
             cnm.prs.repository.OffreRepository offreRepository, cnm.prs.repository.FicheMarcheRepository ficheRepository,
-            cnm.prs.repository.AttributionRepository attributionRepository) {
+            cnm.prs.repository.AttributionRepository attributionRepository,
+            cnm.prs.repository.FicheMarcheValeurRepository valeurRepository, cnm.prs.repository.EvaluationRepository evaluationRepository,
+            org.springframework.beans.factory.ObjectProvider<AttributionService> attributionService) {
+        this.valeurRepository = valeurRepository;
+        this.evaluationRepository = evaluationRepository;
+        this.attributionService = attributionService;
         this.ficheRepository = ficheRepository;
         this.attributionRepository = attributionRepository;
         this.recuRepository = recuRepository;
@@ -285,6 +294,23 @@ public class DmcService {
         Map<Long, List<LigneEligibleDto.DossierMarche>> dossiersMarche = new HashMap<>();
         attributionRepository.findDossiersMarche().forEach(r -> dossiersMarche.computeIfAbsent((Long) r[0], k -> new ArrayList<>())
                 .add(new LigneEligibleDto.DossierMarche((Integer) r[1], (Integer) r[2], (String) r[3], (String) r[4])));
+        // ⚠️ 2026-10-20 (« liste-dossier-marche », §B1) — les numéros de procédure : une requête ; §B2 : l'attribution, pour les seules
+        // procédures dont l'évaluation est ouverte (une requête pour les repérer), par la règle de l'écran d'attribution.
+        Map<Long, String> numeros = new HashMap<>();
+        Map<Long, String> numerosDao = new HashMap<>();
+        for (Object[] r : valeurRepository.findNumerosProcedure()) {
+            String v = r[3] == null ? null : ((String) r[3]).trim();
+            if (v == null || v.isEmpty()) {
+                continue;
+            }
+            if ("B02-OE-01".equals(r[2]) && cnm.prs.enums.TypeMarcheDao.CONTRAT_CADRE.name().equals(r[1])) {
+                numeros.put((Long) r[0], v);
+            } else if ("B02-OB-03".equals(r[2])) {
+                numerosDao.put((Long) r[0], v);
+            }
+        }
+        numerosDao.forEach(numeros::putIfAbsent);
+        java.util.Set<Long> evaluees = new java.util.HashSet<>(evaluationRepository.findIdsDmc());
         Map<Integer, Dossier> dossiers = new HashMap<>();
         List<LigneEligibleDto> out = new ArrayList<>();
         for (Marche m : lignes) {
@@ -317,7 +343,9 @@ public class DmcService {
                     // Une fiche sans version enregistrée est virtuelle : version 1, brouillon (comme GET /api/fiches-marche/{idDmc}).
                     dmc == null ? null : etatsFiche.getOrDefault(dmc.getIdDmc(), new LigneEligibleDto.EtatFiche("BROUILLON", 1)),
                     dmc == null ? null : etatsDossier.get(dmc.getIdDmc()),
-                    dmc == null ? null : dossiersMarche.getOrDefault(dmc.getIdDmc(), List.of())));
+                    dmc == null ? null : dossiersMarche.getOrDefault(dmc.getIdDmc(), List.of()),
+                    dmc == null ? null : numeros.getOrDefault(dmc.getIdDmc(), d == null ? null : d.getRefeDossier()),
+                    dmc == null ? null : evaluees.contains(dmc.getIdDmc()) ? attributionService.getObject().resume(dmc.getIdDmc()) : List.of()));
         }
         return out;
     }

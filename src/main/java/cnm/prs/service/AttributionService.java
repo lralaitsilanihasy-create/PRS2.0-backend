@@ -176,6 +176,34 @@ public class AttributionService {
         evaluation.controlerLecture(idDmc);
         EvaluationDto ev = evaluation.vueSansGarde(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
+        return vue(idDmc, ev);
+    }
+
+    /**
+     * ⚠️ 2026-10-20 (demande front « liste-dossier-marche », §B2) — l'attribution résumée par lot, pour la liste des procédures, par la
+     * règle de {@link #lire} (sans garde : l'appelant filtre ses lignes) ; vide tant que l'évaluation n'est pas ouverte. La proposition
+     * est celle du rang 1 ; ses titulaires comptés pour un contrat-cadre à plusieurs titulaires.
+     */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.LigneEligibleDto.AttributionLot> resume(Long idDmc) {
+        EvaluationDto ev = evaluation.vueSansGarde(idDmc).orElse(null);
+        if (ev == null) {
+            return List.of();
+        }
+        LocalDateTime signe = ev.rapport() == null ? null : ev.rapport().signeLe();
+        return vue(idDmc, ev).lots().stream().map(l -> {
+            EvaluationDto.Proposition p = l.proposition();
+            cnm.prs.dto.LigneEligibleDto.Propose propose = null;
+            if (p != null && !p.infructueux()) {
+                List<EvaluationDto.Titulaire> t = p.titulaires() == null ? List.of() : p.titulaires();
+                propose = t.isEmpty() ? new cnm.prs.dto.LigneEligibleDto.Propose(p.candidat(), p.montant(), 1)
+                        : new cnm.prs.dto.LigneEligibleDto.Propose(t.get(0).candidat(), t.get(0).montant(), t.size());
+            }
+            return new cnm.prs.dto.LigneEligibleDto.AttributionLot(l.lot(), l.etat(), signe, propose);
+        }).toList();
+    }
+
+    private AttributionDto vue(Long idDmc, EvaluationDto ev) {
         List<AttributionDto.LotAttribution> lots = new ArrayList<>();
         for (EvaluationDto.Lot l : ev.lots()) {
             // ⚠️ 2d-2 — l'évaluation rouverte (reprise, réattribution) n'efface pas l'état d'un autre lot déjà attribué.

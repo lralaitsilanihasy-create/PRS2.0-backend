@@ -1,5 +1,6 @@
 package cnm.prs.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -16,6 +17,7 @@ import cnm.prs.dto.EvaluationDto;
 import cnm.prs.dto.FichePresentationDto;
 import cnm.prs.dto.FichePresentationDto.Ligne;
 import cnm.prs.dto.FichePresentationDto.Section;
+import cnm.prs.dto.SeanceDto;
 import cnm.prs.entity.Attribution;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.DossierMec;
@@ -55,11 +57,16 @@ public class FichePresentationService {
     /** ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B4) — le dossier de marché né d'une attribution. */
     private final AttributionRepository attributions;
     private final ObjectProvider<EvaluationService> evaluation;
+    /** ⚠️ 2026-10-20 (« fiche-presentation-marche », §B1) — la séance d'ouverture, l'avis de la Commission et la publication. */
+    private final ObjectProvider<SeanceService> seance;
+    private final ReferencesCommission references;
 
     public FichePresentationService(DossierRepository dossiers, DossierMecRepository dmcs, FicheMarcheService fiches,
             ValeursPpmService valeursPpm, ActeurDirectory acteurs, GenerateurDocumentsFiche generateur,
             ObjectProvider<DossierService> dossierService, AttributionRepository attributions,
-            ObjectProvider<EvaluationService> evaluation) {
+            ObjectProvider<EvaluationService> evaluation, ObjectProvider<SeanceService> seance, ReferencesCommission references) {
+        this.seance = seance;
+        this.references = references;
         this.attributions = attributions;
         this.evaluation = evaluation;
         this.dossiers = dossiers;
@@ -145,6 +152,12 @@ public class FichePresentationService {
                 ligne("GARANTIE_FORME", "Forme de la garantie de soumission", premier(ev, "B05-GS-02", "B05-GQ-02")),
                 ligne("GARANTIE_MONTANT", "Montant de la garantie de soumission (Ariary)", premier(ev, "B05-GS-03", "B05-GQ-03")),
                 ligne("GARANTIE_VALIDITE", "Validité de la garantie de soumission (jours)", premier(ev, "B05-GS-04"))));
+        if (attribution != null) {
+            // ⚠️ 2026-10-20 (« fiche-presentation-marche », §B1) — la fiche propre au dossier de marché : ce qui s'est passé (attribution,
+            // mise en concurrence, séance, évaluation), plus le calendrier prévu du DAO ni la cohérence avec l'AGPM (contrôle du DAO).
+            sections.addAll(duMarche(d, attribution, ev, ppm, procedure));
+            return new FichePresentationDto(idDossier, idDmc, ev.version(), sections.stream().filter(s -> !s.lignes().isEmpty()).toList());
+        }
         // Le calendrier de la procédure du contrat-cadre (B04-CP, huit étapes), sous les libellés du référentiel ; ⚠️ recette du 17/10
         // (remarque 2) : sans B04-CP-02, déjà servie comme date limite de remise.
         for (int i = 1; i <= 8; i++) {
@@ -154,9 +167,6 @@ public class FichePresentationService {
             }
         }
         sections.add(section("PROCEDURE", "Procédure", procedure));
-        if (attribution != null) {
-            sections.add(section("ATTRIBUTION", "Attribution", attribution(attribution)));
-        }
         // ⚠️ Recette du 17/10 (remarque 3) — du calendrier du plan (B01-AC-18, une trentaine d'étapes), les seules étapes du DAO, une
         // ligne chacune.
         sections.add(section("CALENDRIER_PLAN", "Calendrier prévisionnel du plan (étapes du DAO)",
@@ -180,39 +190,186 @@ public class FichePresentationService {
                 ligne("VERSION", "Version de la fiche", String.valueOf(ev.version())),
                 ligne("DATE_VALIDATION", "Validée le", ev.etat().getDateValidation() == null ? null
                         : ev.etat().getDateValidation().format(JOUR_HEURE)),
-                ligne("VALIDEE_PAR", "Validée par", validePar == null ? null : acteurs.nom(validePar)),
-                // ⚠️ 2026-10-19 (§B4) — la création nominative du dossier de marché par la PRMP (ou son UGPM), datée et journalisée.
-                attribution == null || attribution.getDossierCreeLe() == null ? null
-                        : ligne("DOSSIER_CREE_LE", "Dossier de marché créé le", attribution.getDossierCreeLe().format(JOUR_HEURE)),
-                attribution == null || attribution.getDossierCreePar() == null ? null
-                        : ligne("DOSSIER_CREE_PAR", "Dossier de marché créé par", acteurs.nom(attribution.getDossierCreePar())))));
+                ligne("VALIDEE_PAR", "Validée par", validePar == null ? null : acteurs.nom(validePar)))));
         return new FichePresentationDto(idDossier, idDmc, ev.version(), sections.stream().filter(s -> !s.lignes().isEmpty()).toList());
     }
 
     /**
-     * ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B4) — la section « Attribution » : le lot, le dossier de mise en concurrence, la
-     * proposition de la commission au rapport signé (attributaire, ou titulaires classés d'un contrat-cadre, montants, délai).
+     * ⚠️ 2026-10-20 (demande front « fiche-presentation-marche », §B1 ; manuel de contrôle, p. 50-52) — les sections d'un dossier de
+     * marché né d'une attribution, après l'identification et le marché : {@code ATTRIBUTION}, {@code MISE_EN_CONCURRENCE},
+     * {@code PROCEDURE} (conditions de la mise en concurrence, sans les dates prévues), {@code SEANCE}, {@code EVALUATION},
+     * {@code PREVU_REALISE} (Q1 : le calendrier prévu du contrat-cadre face aux faits), {@code VALIDATION} (la création nominative).
      */
-    private List<Ligne> attribution(Attribution a) {
+    private List<Section> duMarche(Dossier d, Attribution a, FicheMarcheService.EtatVersion ev, ValeursPpmService.ValeursPpm ppm,
+            List<Ligne> procedure) {
+        EvaluationDto evd = evaluation.getObject().vueSansGarde(a.getIdDmc()).orElse(null);
+        EvaluationDto.Lot lot = evd == null ? null : evd.lots().stream().filter(l -> a.getLot().equals(l.lot())).findFirst().orElse(null);
+        SeanceDto s = seance.getObject().dto(a.getIdDmc());
+        LocalDate publication = references.publication(a.getIdDmc()).map(p -> date(p.datePublication())).orElse(null);
+        String limite = premier(ev, "B04-LR-03", "B04-OV-02", "B04-LH-02", "B04-CP-02");
+        LocalDate dateLimite = date(limite);
         Dossier mec = dossiers.findIdDossierByIdDmc(a.getIdDmc()).flatMap(dossiers::findById).orElse(null);
-        EvaluationDto ev = evaluation.getObject().vueSansGarde(a.getIdDmc()).orElse(null);
-        EvaluationDto.Proposition p = ev == null ? null : ev.lots().stream().filter(l -> a.getLot().equals(l.lot())).findFirst()
-                .map(EvaluationDto.Lot::proposition).orElse(null);
-        String titulaires = p == null || p.titulaires() == null || p.titulaires().isEmpty() ? null
-                : String.join("\n", p.titulaires().stream().map(t -> t.rang() + ". " + t.candidat() + " (offre n° " + t.numero() + ")"
-                        + (t.montant() == null ? "" : " — " + ValeursPpmService.montant(t.montant()) + " Ar HT")).toList());
-        return lignes(
-                ligne("LOT", "Lot", String.valueOf(a.getLot())),
+
+        List<Section> out = new ArrayList<>();
+        out.add(section("ATTRIBUTION", "Attribution", attribution(a, lot, ppm.ligne() == null ? null : ppm.ligne().getMontEstim())));
+        out.add(section("MISE_EN_CONCURRENCE", "Mise en concurrence", lignes(
                 ligne("DOSSIER_MISE_EN_CONCURRENCE", "Dossier de mise en concurrence", mec == null ? null : mec.getRefeDossier()),
-                ligne("ATTRIBUTAIRE", "Attributaire proposé par la commission",
-                        p == null || titulaires != null ? null : p.candidat() + (p.numero() == null ? "" : " (offre n° " + p.numero() + ")")),
-                ligne("TITULAIRES", "Titulaires proposés, par rang", titulaires),
-                ligne("MONTANT_HT", "Montant proposé hors taxes (Ariary)", p == null || titulaires != null ? null : ValeursPpmService.montant(p.montant())),
-                ligne("MONTANT_TTC", "Montant proposé toutes taxes (Ariary)", p == null || titulaires != null ? null
-                        : ValeursPpmService.montant(p.montantTtc())),
-                ligne("DELAI", "Délai d'exécution proposé", p == null ? null : p.delai()),
-                ligne("RAPPORT_SIGNE", "Rapport d'évaluation signé le", ev == null || ev.rapport() == null || ev.rapport().signeLe() == null ? null
-                        : ev.rapport().signeLe().format(JOUR_HEURE)));
+                ligne("AVIS_COMMISSION", "Avis de la Commission sur le dossier", references.pvCommission(a.getIdDmc())
+                        .map(ReferencesCommission::lignePv).orElse(null)),
+                ligne("PREMIERE_PUBLICATION", "Première publication de l'avis", publication == null ? null : publication.format(JOUR)),
+                ligne("DATE_LIMITE", "Date et heure limites de remise", avecHeure(limite, premier(ev, "B04-LR-04"))),
+                ligne("DELAI_REMISE", "Délai de remise effectif", publication == null || dateLimite == null ? null
+                        : ChronoUnit.DAYS.between(publication, dateLimite) + " jour(s), de la première publication à la date limite"))));
+        out.add(section("PROCEDURE", "Procédure", procedure.stream().filter(l -> l == null || !"DATE_LIMITE".equals(l.code())).toList()));
+        out.add(section("SEANCE", "Séance d'ouverture des offres", seance(s, a.getLot())));
+        out.add(section("EVALUATION", "Évaluation des offres", evaluation(evd, lot)));
+        out.add(section("PREVU_REALISE", "Calendrier : prévu et réalisé", prevuRealise(ev, a, evd, publication, dateLimite)));
+        out.add(section("VALIDATION", "Validation", lignes(
+                // ⚠️ 2026-10-19 (§B4) — la création nominative du dossier de marché par la PRMP (ou son UGPM), datée et journalisée (Q2 :
+                // vaut signature, hypothèse à confirmer par le pilote).
+                a.getDossierCreeLe() == null ? null : ligne("DOSSIER_CREE_LE", "Dossier de marché créé le", a.getDossierCreeLe().format(JOUR_HEURE)),
+                a.getDossierCreePar() == null ? null : ligne("DOSSIER_CREE_PAR", "Dossier de marché créé par", acteurs.nom(a.getDossierCreePar())))));
+        return out;
+    }
+
+    /**
+     * ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B4) — la section « Attribution » : le lot, la proposition de la commission au
+     * rapport signé ; ⚠️ 2026-10-20 (§B1) une ligne par titulaire d'un contrat-cadre (rang, candidat, montants, délai) et l'écart à
+     * l'estimation du plan (Q3 : sur l'offre classée 1re quand il y a plusieurs titulaires).
+     */
+    private List<Ligne> attribution(Attribution a, EvaluationDto.Lot lot, BigDecimal estimation) {
+        EvaluationDto.Proposition p = lot == null ? null : lot.proposition();
+        List<EvaluationDto.Titulaire> titulaires = p == null || p.titulaires() == null ? List.of() : p.titulaires();
+        List<Ligne> out = new ArrayList<>();
+        out.add(ligne("LOT", "Lot", String.valueOf(a.getLot())));
+        BigDecimal retenu;
+        if (titulaires.isEmpty()) {
+            out.add(ligne("ATTRIBUTAIRE", "Attributaire proposé par la commission",
+                    p == null ? null : p.candidat() + (p.numero() == null ? "" : " (offre n° " + p.numero() + ")")));
+            out.add(ligne("MONTANT_HT", "Montant proposé hors taxes (Ariary)", p == null ? null : ValeursPpmService.montant(p.montant())));
+            out.add(ligne("MONTANT_TTC", "Montant proposé toutes taxes (Ariary)", p == null ? null : ValeursPpmService.montant(p.montantTtc())));
+            out.add(ligne("DELAI", "Délai d'exécution proposé", p == null ? null : p.delai()));
+            retenu = p == null ? null : p.montant();
+        } else {
+            for (EvaluationDto.Titulaire t : titulaires) {
+                out.add(ligne("TITULAIRE_" + t.rang(), "Titulaire proposé, rang " + t.rang(), t.candidat() + " (offre n° " + t.numero() + ")"
+                        + (t.montant() == null ? "" : "\nHors taxes : " + ValeursPpmService.montant(t.montant()) + " Ar")
+                        + (t.montantTtc() == null ? "" : "\nToutes taxes : " + ValeursPpmService.montant(t.montantTtc()) + " Ar")
+                        + (t.delai() == null || t.delai().isBlank() ? "" : "\nDélai : " + t.delai())));
+            }
+            retenu = titulaires.get(0).montant();
+        }
+        out.add(ligne("ECART_ESTIMATION", titulaires.isEmpty() ? "Écart à l'estimation du plan" : "Écart à l'estimation du plan (offre classée 1re)",
+                ecart(retenu, estimation)));
+        return out;
+    }
+
+    /** « −22,5 % (179 570 562 Ar HT contre 231 563 789 Ar estimés) » ; nul sans l'un des deux montants. */
+    static String ecart(BigDecimal montant, BigDecimal estimation) {
+        if (montant == null || estimation == null || estimation.signum() == 0) {
+            return null;
+        }
+        double pct = montant.subtract(estimation).doubleValue() * 100 / estimation.doubleValue();
+        return String.format(java.util.Locale.FRANCE, "%+.1f %%", pct).replace('-', '−') + " (" + ValeursPpmService.montant(montant)
+                + " Ar HT contre " + ValeursPpmService.montant(estimation) + " Ar estimés)";
+    }
+
+    /** La séance du lot : ouverture, offres reçues, ouvertes et non ouvertes (par état), PV d'ouverture signé, quorum. */
+    private static List<Ligne> seance(SeanceDto s, Integer lot) {
+        List<SeanceDto.OffreSeance> offres = s.offres().stream().filter(o -> o.lot() == null || o.lot().equals(lot)).toList();
+        long ouvertes = offres.stream().filter(o -> SeanceService.INTACTE.equals(o.etat())).count();
+        Map<String, Long> autres = new java.util.TreeMap<>();
+        offres.stream().filter(o -> !SeanceService.INTACTE.equals(o.etat())).forEach(o -> autres.merge(etatOffre(o.etat()), 1L, Long::sum));
+        LocalDateTime pvSigne = s.pv() == null || !s.pv().signe() ? null : s.pv().signatures().stream().map(SeanceDto.Signature::date)
+                .filter(java.util.Objects::nonNull).max(LocalDateTime::compareTo).orElse(null);
+        return lignes(
+                ligne("OUVERTE_LE", "Séance ouverte le", s.ouverteLe() == null ? null : s.ouverteLe().format(JOUR_HEURE)),
+                s.ouverteLe() == null ? null : ligne("OFFRES_RECUES", "Offres reçues", String.valueOf(offres.size())),
+                s.ouverteLe() == null ? null : ligne("OFFRES_OUVERTES", "Offres ouvertes", String.valueOf(ouvertes)),
+                s.ouverteLe() == null ? null : ligne("OFFRES_NON_OUVERTES", "Offres non ouvertes", autres.isEmpty() ? "0"
+                        : (offres.size() - ouvertes) + " (" + String.join(", ", autres.entrySet().stream().map(e -> e.getValue() + " " + e.getKey()).toList()) + ")"),
+                ligne("PV_SIGNE", "Procès-verbal d'ouverture signé le", pvSigne == null ? null : pvSigne.format(JOUR_HEURE)),
+                ligne("QUORUM", "Quorum au procès-verbal", s.pv() == null ? null : quorum(s.pv().quorum())));
+    }
+
+    private static String etatOffre(String etat) {
+        return switch (etat == null ? "" : etat) {
+            case "ALTEREE" -> "altérée";
+            case "LECTURE_IMPOSSIBLE" -> "illisible";
+            case "RETIREE" -> "retirée";
+            case "REMPLACEE" -> "remplacée";
+            case "ECARTEE" -> "écartée";
+            default -> etat == null ? "inconnue" : etat.toLowerCase(java.util.Locale.FRENCH).replace('_', ' ');
+        };
+    }
+
+    /** L'évaluation du lot : offres évaluées, conformes, écartées, corrigées, anormales, qualifiées ; le rapport signé et son quorum. */
+    private static List<Ligne> evaluation(EvaluationDto evd, EvaluationDto.Lot lot) {
+        if (evd == null || lot == null) {
+            return List.of();
+        }
+        List<EvaluationDto.OffreEvaluee> o = lot.offres() == null ? List.of() : lot.offres();
+        long conformes = o.stream().filter(x -> x.conformite() != null && cnm.prs.entity.EvaluationDecision.CONFORME.equals(x.conformite().decision())).count();
+        long ecartees = o.stream().filter(x -> x.ecartee() != null).count();
+        long corrigees = o.stream().filter(x -> x.evaluation() != null && x.evaluation().corrections() != null && !x.evaluation().corrections().isEmpty()).count();
+        long suspectees = o.stream().filter(x -> x.anormale() != null && Boolean.TRUE.equals(x.anormale().suspectee())).count();
+        long rejetees = o.stream().filter(x -> x.anormale() != null && EvaluationService.REJETEE.equals(x.anormale().decision())).count();
+        long qualifiees = o.stream().filter(x -> x.qualification() != null && EvaluationService.QUALIFIE.equals(x.qualification().decision())).count();
+        EvaluationDto.Rapport r = evd.rapport();
+        return lignes(
+                ligne("OUVERTE_LE", "Évaluation ouverte le", evd.ouverteLe() == null ? null : evd.ouverteLe().format(JOUR_HEURE)),
+                ligne("OFFRES_EVALUEES", "Offres évaluées", String.valueOf(o.size())),
+                ligne("OFFRES_CONFORMES", "Offres conformes", String.valueOf(conformes)),
+                ligne("OFFRES_ECARTEES", "Offres écartées", String.valueOf(ecartees)),
+                ligne("CORRECTIONS", "Offres aux prix corrigés", String.valueOf(corrigees)),
+                ligne("OFFRES_ANORMALES", "Offres anormalement basses", suspectees == 0 ? "aucune" : suspectees + " suspectée(s), " + rejetees + " rejetée(s)"),
+                ligne("OFFRES_QUALIFIEES", "Offres qualifiées", String.valueOf(qualifiees)),
+                ligne("RAPPORT_SIGNE", "Rapport d'évaluation signé le (vaut PV de validation)", r == null || r.signeLe() == null ? null
+                        : r.signeLe().format(JOUR_HEURE)),
+                ligne("QUORUM", "Quorum au rapport", r == null ? null : quorum(r.quorum())));
+    }
+
+    private static String quorum(cnm.prs.dto.QuorumDto q) {
+        return q == null ? null : q.obtenus() + " signataire(s) sur " + q.requis() + " requis — " + (q.atteint() ? "atteint" : "non atteint");
+    }
+
+    /**
+     * Q1 — le calendrier prévu de la procédure du contrat-cadre ({@code B04-CP-01} à {@code 08}) face aux faits connus de l'application :
+     * lancement / première publication, remise / date limite échue, évaluation / ouverture, attribution, notification, rejets /
+     * information des candidats ; les offres optimisées (marchés subséquents) restent « prévu ». Vide hors contrat-cadre.
+     */
+    static List<Ligne> prevuRealise(FicheMarcheService.EtatVersion ev, Attribution a, EvaluationDto evd, LocalDate publication,
+            LocalDate dateLimite) {
+        Map<Integer, LocalDate> realise = new java.util.HashMap<>();
+        if (publication != null) {
+            realise.put(1, publication);
+        }
+        if (dateLimite != null && !dateLimite.isAfter(LocalDate.now())) {
+            realise.put(2, dateLimite);
+        }
+        if (evd != null && evd.ouverteLe() != null) {
+            realise.put(3, evd.ouverteLe().toLocalDate());
+        }
+        if (a.getAttribueLe() != null) {
+            realise.put(4, a.getAttribueLe().toLocalDate());
+        }
+        if (a.getNotifieLe() != null) {
+            realise.put(5, a.getNotifieLe().toLocalDate());
+        }
+        if (a.getInformeLe() != null) {
+            realise.put(8, a.getInformeLe().toLocalDate());
+        }
+        List<Ligne> out = new ArrayList<>();
+        for (int i = 1; i <= 8; i++) {
+            String code = "B04-CP-0" + i;
+            LocalDate prevu = date(ev.valeur(code));
+            if (prevu == null) {
+                continue;
+            }
+            LocalDate fait = realise.get(i);
+            out.add(ligne(code, ev.libelle(code), "prévu le " + prevu.format(JOUR) + " ; " + (fait == null ? "non réalisé" : "réalisé le " + fait.format(JOUR))));
+        }
+        return out;
     }
 
     DocumentLibre document(FichePresentationDto f, LocalDateTime le) {

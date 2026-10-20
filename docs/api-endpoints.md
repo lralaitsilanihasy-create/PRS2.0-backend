@@ -8728,6 +8728,39 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-20 (demande front « fiche-presentation-marche »)** — la fiche de présentation propre au dossier de marché.
+- **`GET /api/dossiers/{id}/fiche-presentation`** (et `…/pdf`), pour un dossier de marché né d'une attribution, sert dans l'ordre :
+  - `IDENTIFICATION`, `MARCHE` : inchangées ;
+  - `ATTRIBUTION` : `LOT` ; un attributaire (`ATTRIBUTAIRE`, `MONTANT_HT`, `MONTANT_TTC`, `DELAI`) ou une ligne par titulaire
+    d'un contrat-cadre (`TITULAIRE_<rang>` : candidat et offre, puis montants HT et TTC et délai, une information par ligne de la
+    valeur) ; `ECART_ESTIMATION` (« −22,5 % (… Ar HT contre … Ar estimés) », sur le montant estimatif de la ligne du plan ; Q3 :
+    sur l'offre classée 1re quand il y a plusieurs titulaires). `TITULAIRES` (une seule chaîne) n'est plus servie ;
+  - `MISE_EN_CONCURRENCE` (nouvelle) : `DOSSIER_MISE_EN_CONCURRENCE` (déplacée d'`ATTRIBUTION`), `AVIS_COMMISSION` (« procès-verbal
+    n° …, du …, avis … », le PV signé du dossier), `PREMIERE_PUBLICATION` (saisie à l'impression de l'avis), `DATE_LIMITE`,
+    `DELAI_REMISE` (jours de la première publication à la date limite) ;
+  - `PROCEDURE` : les conditions de la mise en concurrence, sans `DATE_LIMITE` ni les dates prévues `B04-CP-*` ;
+  - `SEANCE` (nouvelle) : `OUVERTE_LE`, `OFFRES_RECUES`, `OFFRES_OUVERTES`, `OFFRES_NON_OUVERTES` (avec leurs états), `PV_SIGNE`
+    (la dernière signature du PV d'ouverture), `QUORUM` ;
+  - `EVALUATION` (nouvelle) : `OUVERTE_LE`, `OFFRES_EVALUEES`, `OFFRES_CONFORMES`, `OFFRES_ECARTEES`, `CORRECTIONS` (offres aux prix
+    corrigés), `OFFRES_ANORMALES`, `OFFRES_QUALIFIEES`, `RAPPORT_SIGNE` (vaut PV de validation), `QUORUM` — pour le lot du dossier ;
+  - `PREVU_REALISE` (nouvelle, Q1 ; contrat-cadre seulement) : une ligne par étape `B04-CP-0n` prévue, « prévu le … ; réalisé le … »
+    ou « non réalisé ». Réalisé : 01 la première publication, 02 la date limite échue, 03 l'ouverture de l'évaluation, 04
+    l'attribution, 05 la notification, 08 l'information des candidats ; 06 et 07 (offres optimisées) restent « prévu » ;
+  - `VALIDATION` : `DOSSIER_CREE_LE`, `DOSSIER_CREE_PAR` seulement.
+- **Plus servies pour un dossier de marché** : `CALENDRIER_PLAN`, `COHERENCE`, et la version de la fiche dans `VALIDATION`. Une section
+  sans ligne n'est pas servie. La fiche du dossier de mise en concurrence est inchangée.
+- **Q2** : la création nominative du dossier de marché vaut signature — hypothèse, toujours au pilote.
+
+⚠️ **2026-10-20 (demande front « liste-dossier-marche »)** — `GET /api/dmcs/eligibles`, deux champs de plus par ligne qui a une fiche.
+- **B1, `numeroProcedure`** : la règle de l'en-tête de la procédure (`DaoCompletService.numero`) sur la dernière version de la fiche :
+  `B02-OE-01` pour un contrat-cadre, puis `B02-OB-03`, à défaut la référence du plan. Une requête pour toute la liste.
+- **B2, `attributions: [{ lot, etat, rapportSigneLe, propose: { candidat, montant, nbTitulaires } }]`** : l'état de chaque lot calculé
+  par la règle de `GET /api/fiches-marche/{idDmc}/attribution` (`AttributionService.resume`), vide tant que l'évaluation n'est pas
+  ouverte. `propose` : l'offre du rang 1, nulle avant la clôture ou pour un lot proposé infructueux ; `nbTitulaires` > 1 pour un
+  contrat-cadre à plusieurs titulaires. **Coût** : une requête repère les procédures évaluées ; chacune paie ensuite la lecture de
+  son attribution. L'écran fait un seul appel.
+- `null` pour les deux sur une ligne sans fiche.
+
 ⚠️ **2026-10-20 (demande front « dossier-marche-donnees »)** — la Commission lit la procédure du dossier de marché qu'elle contrôle.
 - **B1, en lecture seule** : les GET de la procédure d'une fiche admettent, en plus du responsable, de la CAO, de la PRMP et de l'UGPM,
   **un compte de la Commission** (Président, chef de commission, secrétaire, membre, vérificateur, assistant, chargé de publication,

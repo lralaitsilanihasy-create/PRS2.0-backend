@@ -47,21 +47,27 @@ public class ReferencesCommission {
      * (« … PV n° …, du …, avis favorable ») ; vide sans dossier ou sans PV signé.
      */
     public Optional<String> avisCommission(Long idDmc) {
+        return pvCommission(idDmc).map(pv -> "Avis de la Commission nationale des marchés sur le dossier d'appel d'offres : "
+                + lignePv(pv) + ".");
+    }
+
+    /** ⚠️ 2026-10-20 (« fiche-presentation-marche », §B1) — le plus récent PV signé du dossier que porte la procédure ; vide sinon. */
+    public Optional<PvExamen> pvCommission(Long idDmc) {
         Integer idDossier = idDmc == null ? null : dossiers.findIdDossierByIdDmc(idDmc).orElse(null);
         if (idDossier == null) {
             return Optional.empty();
         }
         List<PvExamen> signes = pvs.findSignesParDossierRows(idDossier);
-        if (signes.isEmpty()) {
-            return Optional.empty();
-        }
-        PvExamen pv = signes.get(0);
+        return signes.isEmpty() ? Optional.empty() : Optional.of(signes.get(0));
+    }
+
+    /** « procès-verbal n° …, du …, avis favorable » (les éléments connus seulement). */
+    public static String lignePv(PvExamen pv) {
         java.time.LocalDate date = pv.getDatePv() != null ? pv.getDatePv() : pv.getDateSignaturePresident();
         String avis = "FAV".equals(pv.getIdAvis()) ? "favorable" : "FAVR".equals(pv.getIdAvis()) ? "favorable avec réserves"
                 : pv.getIdAvis() == null ? null : pv.getIdAvis().toLowerCase(java.util.Locale.FRENCH);
-        return Optional.of("Avis de la Commission nationale des marchés sur le dossier d'appel d'offres : procès-verbal"
-                + (pv.getReferencePv() == null ? "" : " n° " + pv.getReferencePv()) + (date == null ? "" : " du " + date.format(DATE))
-                + (avis == null ? "" : ", avis " + avis) + ".");
+        return "procès-verbal" + (pv.getReferencePv() == null ? "" : " n° " + pv.getReferencePv()) + (date == null ? "" : " du " + date.format(DATE))
+                + (avis == null ? "" : ", avis " + avis);
     }
 
     /** La première publication de l'avis spécifique : {@code datePublication} (aaaa-mm-jj) et {@code supports}, tels que saisis à l'impression ; vide sans avis. */

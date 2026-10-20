@@ -49,7 +49,29 @@ public record LigneEligibleDto(Integer idDetail, Integer idDossier, String refeD
          * ⚠️ 2026-10-19 (demande front « dossier-marche-lecture », §B2) — les dossiers de marché nés de l'attribution de la fiche, un
          * par lot qui a le sien, lus sur {@code t_attribution} ; vide tant qu'aucun lot n'a son dossier, {@code null} sans fiche.
          */
-        java.util.List<DossierMarche> dossiersMarche) {
+        java.util.List<DossierMarche> dossiersMarche,
+        /**
+         * ⚠️ 2026-10-20 (demande front « liste-dossier-marche », §B1) — le numéro de la procédure, règle de l'en-tête
+         * ({@code DaoCompletService.numero}) sur la dernière version de la fiche : {@code B02-OE-01} pour un contrat-cadre, puis
+         * {@code B02-OB-03}, à défaut la référence du plan ; {@code null} sans fiche.
+         */
+        String numeroProcedure,
+        /**
+         * ⚠️ §B2 — l'état de l'attribution, par lot, calculé par la règle de {@code GET /api/fiches-marche/{idDmc}/attribution} ; vide
+         * tant que l'évaluation n'est pas ouverte, {@code null} sans fiche.
+         */
+        java.util.List<AttributionLot> attributions) {
+
+    /**
+     * L'attribution d'un lot : son état ({@code EN_EVALUATION}, {@code PROPOSE}, {@code AU_CONTROLE}…), la signature du rapport
+     * d'évaluation (nulle avant), la proposition du rapport (nulle avant la clôture, ou pour un lot proposé infructueux).
+     */
+    public record AttributionLot(Integer lot, String etat, java.time.LocalDateTime rapportSigneLe, Propose propose) {
+    }
+
+    /** L'offre proposée au rang 1 ; {@code nbTitulaires} > 1 pour un contrat-cadre à plusieurs titulaires. */
+    public record Propose(String candidat, BigDecimal montant, int nbTitulaires) {
+    }
 
     /** Le dossier de marché d'un lot : identifiant, référence (nulle avant la réception), statut courant. */
     public record DossierMarche(Integer lot, Integer idDossier, String refeDossier, String statut) {

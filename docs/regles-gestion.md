@@ -1572,6 +1572,11 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   périmètre (tous les contrôleurs de la localité, pas seulement ceux du circuit). Les pièces des offres restent réservées aux
 >   membres de la CAO (arbitrage du 04/10). Sans dossier de marché, la procédure reste à la CAO, au responsable, à la PRMP et à
 >   l'UGPM.
+> - ⚠️ **2026-10-20 (« fiche-presentation-marche »)** — **la fiche de présentation du dossier de marché** présente ce qui s'est
+>   passé, selon les points du manuel de contrôle (p. 50-52) : l'attribution (titulaires par rang, écart à l'estimation), la mise en
+>   concurrence (avis de la Commission, première publication, délai de remise effectif), la séance d'ouverture, l'évaluation (le
+>   rapport signé vaut PV de validation) et, pour un contrat-cadre, le calendrier prévu face au réalisé. Le calendrier du plan et la
+>   cohérence avec l'AGPM restent sur la fiche du dossier de mise en concurrence.
 > - **Non fait** : des points de contrôle propres au contrat-cadre pour le marché (plusieurs titulaires classés, offre indicative,
 >   sélection par la PRMP, décret n° 2019-1064, art. 13) demandent des textes, du pilote ou de l'Administrateur.
 >
