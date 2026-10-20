@@ -8728,6 +8728,26 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-19 (demande front « dossier-marche-lecture »)** — ce que la page et la liste du dossier de marché lisent encore.
+- **B1, le montant initial** (`GET /api/dossiers/{id}/actes-gestion`) : `sourceMontantInitial` vaut `ATTRIBUTION` (le montant attribué),
+  à défaut **`PROPOSITION`** (nouvelle valeur : le montant de l'offre proposée par le rapport, avant l'attribution), à défaut `DECLARE`.
+  **Q1** : un contrat-cadre à **plusieurs titulaires** (titulaires retenus ou proposés) n'a pas de montant connu : nul, ou déclaré
+  par la PRMP comme pour un marché hors application.
+- **B2, `GET /api/dmcs/eligibles`** : chaque ligne qui a une fiche porte **`dossiersMarche: [{ lot, idDossier, refeDossier, statut }]`**,
+  un par lot qui a son dossier de marché (`t_attribution`), dans l'ordre des lots ; vide sinon, nul sans fiche. Une requête pour toute
+  la liste.
+- **B3, `procedure`** (lecture unitaire d'un dossier de marché) gagne **`designationMarche`** (la désignation de la fiche validée, à
+  défaut celle de la ligne du plan) et **`intituleLot`** (« Lot n°01 : … » d'après les lots du plan, la règle du projet de marché ;
+  nul si la ligne n'a pas plusieurs lots).
+- **B4, le PV de la Commission sur le dossier de mise en concurrence** :
+  - **Q2** : un PV d'examen n'a de document (PDF) que pour un **plan de passation**, seul cas couvert par les modèles officiels
+    (`PvDocumentService.modelePour`). Le PV d'un dossier de mise en concurrence ou de marché n'en a pas, quel que soit le chemin suivi.
+  - **Q3** : `GET /api/pv-examens/{id}` et `…/document` admettent désormais la PRMP **propriétaire du dossier** (`t_dossier.ID_PRMP`)
+    pour un PV signé, et non plus seulement celle du PPM : un dossier de mise en concurrence ou de marché n'a pas de PPM. Sans
+    document, `…/document` répond 404 (et non plus 403).
+  - **Q4** : sur `GET /api/dossiers/{id}/pieces-exigees`, `PV_CNM_DMC` n'a de `lien` que si le PV a son PDF (ou un modèle pour le
+    produire) ; `TypePieceJointeDto` gagne **`idPv`**, le PV à ouvrir par ses données.
+
 ⚠️ **2026-10-17 (demande front « canevas-rapport-evaluation »)** — le canevas de rapport d'évaluation, et « tout autre document utile ».
 - **`GET /api/dossiers/{id}/canevas-rapport`** rend le canevas en données, et **`…/canevas-rapport/pdf`** en PDF.
   - **Garde** : celle de la lecture du dossier.

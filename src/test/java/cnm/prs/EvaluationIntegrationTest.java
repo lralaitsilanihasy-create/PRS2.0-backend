@@ -735,6 +735,14 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("DOSSIER_EXISTANT")).andExpect(jsonPath("$.idDossier").value(idDossier));
         assertThat(dossierRepository.findById(idDossier).orElseThrow().getIdTypeDossier()).isEqualTo("DDM");
         assertThat(dossierRepository.findById(idDossier).orElseThrow().getIdDmc()).isNull();   // le lien du DAO reste au dossier DAO
+        // ⚠️ 2026-10-19 (« dossier-marche-lecture », §B1) — avant l'attribution, le montant de l'offre proposée par le rapport ;
+        // §B2 : le dossier de marché sur la ligne des éligibles.
+        mvc.perform(get("/api/dossiers/" + idDossier + "/actes-gestion").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.montantInitialHt").value(12500000)).andExpect(jsonPath("$.sourceMontantInitial").value("PROPOSITION"));
+        mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].dossiersMarche[0].lot").value(hasItem(1)))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].dossiersMarche[0].idDossier").value(hasItem(idDossier)))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].dossiersMarche[0].statut").value(hasItem("BROUILLON")));
         List<String> codesPieces = pieceJointeDossierRepository.findAll().stream().filter(x -> x.getIdDossier() == idDossier)
                 .map(x -> typePieceJointeRepository.findById(x.getIdTypePiece()).orElseThrow().getCode()).toList();
         assertThat(codesPieces).contains("PROJET_MARCHE", "CAHIER_CHARGES", "RAPPORT_ANALYSE", "QUESTIONS_REPONSES");
@@ -782,6 +790,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.lots[0].attributaire.montant").value(12500000));
         mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_ATTRIBUE"));
+        mvc.perform(get("/api/dossiers/" + idDossier + "/actes-gestion").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.montantInitialHt").value(12500000)).andExpect(jsonPath("$.sourceMontantInitial").value("ATTRIBUTION"));
         mvc.perform(get("/api/candidat/offres/" + b + "/resultat").header("Authorization", jetonB)).andExpect(status().isNotFound());
 
         // §B4.1 — l'information : une lettre par candidat, signée de la PRMP ; le délai court de la plus tardive des deux dates (art. 78).
@@ -2054,7 +2064,13 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.idDossierParent").doesNotExist())
                 .andExpect(jsonPath("$.procedure.idDmc").value(idDmc)).andExpect(jsonPath("$.procedure.lot").value(1))
                 .andExpect(jsonPath("$.procedure.idDossierMiseEnConcurrence").value(9960))
-                .andExpect(jsonPath("$.procedure.refeDossierMiseEnConcurrence").value("DOS-9960"));
+                .andExpect(jsonPath("$.procedure.refeDossierMiseEnConcurrence").value("DOS-9960"))
+                // ⚠️ 2026-10-19 (« dossier-marche-lecture », §B3) — l'objet ; la ligne n'a pas plusieurs lots : pas d'intitulé.
+                .andExpect(jsonPath("$.procedure.designationMarche").isNotEmpty())
+                .andExpect(jsonPath("$.procedure.intituleLot").doesNotExist());
+        // §B1, Q1 — contrat-cadre à plusieurs titulaires : aucun montant initial.
+        mvc.perform(get("/api/dossiers/" + idDossier + "/actes-gestion").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.montantInitialHt").doesNotExist()).andExpect(jsonPath("$.sourceMontantInitial").doesNotExist());
         String pieces = mvc.perform(get("/api/piece-jointe-dossiers").param("dossier", String.valueOf(idDossier)).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Object>>read(pieces, "$[*].produitePar")).isNotEmpty().containsOnly("ATTRIBUTION");
@@ -2078,7 +2094,14 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.fourniePar=='APPLICATION')].code"))
                 .containsExactlyInAnyOrder("FICHE_PRESENTATION", "PV_CNM_DMC", "PV_VALIDATION_CAO");
-        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='PV_CNM_DMC')].lien").get(0)).startsWith("/api/pv-examens/");
+        // ⚠️ 2026-10-19 (« dossier-marche-lecture », Q4) — le PV d'un dossier de mise en concurrence n'a pas de modèle : pas de lien, idPv.
+        assertThat(JsonPath.<List<Object>>read(exigees, "$[?(@.code=='PV_CNM_DMC')].lien")).containsOnlyNulls();
+        int idPvMec = JsonPath.<List<Integer>>read(exigees, "$[?(@.code=='PV_CNM_DMC')].idPv").get(0);
+        // Q3 — la PRMP du dossier de mise en concurrence (sans PPM) lit son PV signé ; le document reste absent (404, pas 403).
+        mvc.perform(get("/api/pv-examens/" + idPvMec).header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(get("/api/pv-examens/" + idPvMec + "/document").header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/pv-examens/" + idPvMec).header("Authorization", bearer("PRMP002", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP002", "ANT")))
+                .andExpect(status().isForbidden());
         assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='PV_VALIDATION_CAO')].lien").get(0)).startsWith("/api/piece-jointe-dossiers/");
         // La fiche de présentation du marché : la section « Attribution ».
         mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation").header("Authorization", tokenPrmp)).andExpect(status().isOk())

@@ -158,6 +158,7 @@ public class PiecesExigees {
                 x.setLien(e.fourniture().lien());
                 x.setIdDossierPlan(e.fourniture().idDossierPlan());
                 x.setIdPvPlan(e.fourniture().idPvPlan());
+                x.setIdPv(e.fourniture().idPv());
             }
             return x;
         }).toList();

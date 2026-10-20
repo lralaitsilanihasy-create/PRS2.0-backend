@@ -44,7 +44,16 @@ public record LigneEligibleDto(Integer idDetail, Integer idDossier, String refeD
          */
         EtatFiche fiche,
         /** ⚠️ §B1 — le dossier soumis né de la fiche, son statut courant ; {@code null} sans fiche ou tant qu'il n'est pas créé. */
-        EtatDossier dossier) {
+        EtatDossier dossier,
+        /**
+         * ⚠️ 2026-10-19 (demande front « dossier-marche-lecture », §B2) — les dossiers de marché nés de l'attribution de la fiche, un
+         * par lot qui a le sien, lus sur {@code t_attribution} ; vide tant qu'aucun lot n'a son dossier, {@code null} sans fiche.
+         */
+        java.util.List<DossierMarche> dossiersMarche) {
+
+    /** Le dossier de marché d'un lot : identifiant, référence (nulle avant la réception), statut courant. */
+    public record DossierMarche(Integer lot, Integer idDossier, String refeDossier, String statut) {
+    }
 
     /** L'état de la fiche d'une ligne : {@code BROUILLON} ou {@code VALIDEE}, et le numéro de la dernière version. */
     public record EtatFiche(String statut, Integer version) {

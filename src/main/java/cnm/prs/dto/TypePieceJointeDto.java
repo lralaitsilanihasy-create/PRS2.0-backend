@@ -50,4 +50,9 @@ public class TypePieceJointeDto {
     private Integer idDossierPlan;
     /** Le PV signé de l'examen du plan (contrôle du plan). */
     private Integer idPvPlan;
+    /**
+     * ⚠️ 2026-10-19 (« dossier-marche-lecture », Q4) — {@code PV_CNM_DMC} : le PV signé de la Commission sur le dossier de mise en
+     * concurrence, ouvrable même sans document ({@code lien} nul tant que le PV n'a pas de PDF).
+     */
+    private Integer idPv;
 }

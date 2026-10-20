@@ -53,12 +53,18 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
             """)
     List<PvExamen> findDefinitifsPourPrmp(@Param("idPrmp") String idPrmp);
 
-    /** Vrai si le PV est SIGNÉ et relève d'un dossier de la PRMP (accès détail / document PRMP). */
+    /**
+     * Vrai si le PV est SIGNÉ et relève d'un dossier de la PRMP (accès détail / document PRMP). ⚠️ 2026-10-19 (demande front
+     * « dossier-marche-lecture », Q3) — un dossier de mise en concurrence ou de marché n'a pas de PPM : sa PRMP se lit aussi sur
+     * {@code t_dossier.ID_PRMP}.
+     */
     @Query("""
             select (count(pv) > 0) from PvExamen pv
             where pv.idPv = :idPv and pv.statutPv = 'SIGNE'
-              and exists (select 1 from Ppm p
-                          where p.idDossier = pv.examen.dispatch.reception.idDossier and p.idPrmp = :idPrmp)
+              and (exists (select 1 from Ppm p
+                           where p.idDossier = pv.examen.dispatch.reception.idDossier and p.idPrmp = :idPrmp)
+                   or exists (select 1 from Dossier d
+                              where d.idDossier = pv.examen.dispatch.reception.idDossier and d.idPrmp = :idPrmp))
             """)
     boolean estSignePourPrmp(@Param("idPv") Integer idPv, @Param("idPrmp") String idPrmp);
 

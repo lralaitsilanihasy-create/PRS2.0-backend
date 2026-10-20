@@ -1562,6 +1562,11 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   par le pilote), le PV signé de la Commission sur le dossier de mise en concurrence, et le PV de validation de la CAO, dont le
 >   rapport d'évaluation signé tient lieu.
 > - **Reprise** : le dossier de marché d'un contrat-cadre déjà né en `MAOO`, encore sans référence (100383), passe en `MAOO-CC`.
+> - ⚠️ **2026-10-19 (« dossier-marche-lecture »)** — **le montant initial** d'un marché né d'une attribution est le montant attribué,
+>   à défaut celui de l'offre proposée par le rapport (`PROPOSITION`). Un contrat-cadre à plusieurs titulaires n'en a pas : la PRMP
+>   le déclare si besoin (plafond des avenants à trancher avec le juriste). **La PRMP lit le PV signé** de ses dossiers de mise en
+>   concurrence et de marché (propriétaire du dossier, sans PPM). **Le PV d'un tel dossier n'a pas de document** : aucun modèle
+>   officiel ne le couvre (seuls les PV de plan en ont) ; il se lit par ses données.
 > - **Non fait** : des points de contrôle propres au contrat-cadre pour le marché (plusieurs titulaires classés, offre indicative,
 >   sélection par la PRMP, décret n° 2019-1064, art. 13) demandent des textes, du pilote ou de l'Administrateur.
 >

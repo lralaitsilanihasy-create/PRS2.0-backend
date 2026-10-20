@@ -38,8 +38,15 @@ public class PiecesFournies {
     public static final String CANEVAS_RAPPORT = "CANEVAS_RAPPORT";
     public static final Set<String> CONTROLE_DU_PLAN = Set.of("AGPM_CONTROLE", "PPM_CONTROLE");
 
-    /** Ce qui fournit une pièce : la route qui la rend, et pour le contrôle du plan, le plan et son PV signé. */
-    public record Fourniture(String lien, Integer idDossierPlan, Integer idPvPlan) {
+    /**
+     * Ce qui fournit une pièce : la route qui la rend, et pour le contrôle du plan, le plan et son PV signé ; ⚠️ 2026-10-19 (Q4) pour
+     * le PV de la Commission sur le DAO, ce PV ({@code idPv}).
+     */
+    public record Fourniture(String lien, Integer idDossierPlan, Integer idPvPlan, Integer idPv) {
+
+        public Fourniture(String lien, Integer idDossierPlan, Integer idPvPlan) {
+            this(lien, idDossierPlan, idPvPlan, null);
+        }
     }
 
     /** ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B4) — les pièces du dossier de marché né d'une attribution. */
@@ -54,10 +61,21 @@ public class PiecesFournies {
     private final cnm.prs.repository.DossierRepository dossiers;
     private final cnm.prs.repository.PieceJointeDossierRepository pieces;
     private final cnm.prs.repository.TypePieceJointeRepository types;
+    /** ⚠️ 2026-10-19 (« dossier-marche-lecture », §B3, Q4) — l'objet et le lot de la procédure ; le document du PV. */
+    private final cnm.prs.repository.DossierMecRepository dmcs;
+    private final cnm.prs.repository.MarcheRepository marches;
+    private final cnm.prs.repository.LotRepository lots;
+    private final org.springframework.beans.factory.ObjectProvider<PvDocumentService> pvDocuments;
 
     public PiecesFournies(FicheMarcheService fiches, CalendrierAnnuelService calendrier, PvExamenRepository pvs,
             cnm.prs.repository.AttributionRepository attributions, cnm.prs.repository.DossierRepository dossiers,
-            cnm.prs.repository.PieceJointeDossierRepository pieces, cnm.prs.repository.TypePieceJointeRepository types) {
+            cnm.prs.repository.PieceJointeDossierRepository pieces, cnm.prs.repository.TypePieceJointeRepository types,
+            cnm.prs.repository.DossierMecRepository dmcs, cnm.prs.repository.MarcheRepository marches,
+            cnm.prs.repository.LotRepository lots, org.springframework.beans.factory.ObjectProvider<PvDocumentService> pvDocuments) {
+        this.dmcs = dmcs;
+        this.marches = marches;
+        this.lots = lots;
+        this.pvDocuments = pvDocuments;
         this.fiches = fiches;
         this.calendrier = calendrier;
         this.pvs = pvs;
@@ -77,8 +95,15 @@ public class PiecesFournies {
         }
         return attributions.findFirstByIdDossier(d.getIdDossier()).map(a -> {
             Dossier mec = dossiers.findIdDossierByIdDmc(a.getIdDmc()).flatMap(dossiers::findById).orElse(null);
+            // ⚠️ 2026-10-19 (§B3) — l'objet : la fiche validée, à défaut la ligne du plan ; le lot, si la ligne en a plusieurs.
+            Integer idDetail = dmcs.findById(a.getIdDmc()).map(cnm.prs.entity.DossierMec::getIdDetail).orElse(null);
+            String designation = fiches.etatValide(a.getIdDmc()).map(v -> v.etat().getDesignationMarche()).filter(s -> !s.isBlank())
+                    .orElseGet(() -> idDetail == null ? null : marches.findById(idDetail).map(cnm.prs.entity.Marche::getDesignationMarche)
+                            .orElse(null));
+            java.util.List<cnm.prs.entity.Lot> duPlan = idDetail == null ? java.util.List.of() : lots.findByIdDetail(idDetail);
             return new cnm.prs.dto.DossierDto.Procedure(a.getIdDmc(), a.getLot(), mec == null ? null : mec.getIdDossier(),
-                    mec == null ? null : mec.getRefeDossier());
+                    mec == null ? null : mec.getRefeDossier(), designation,
+                    duPlan.size() > 1 ? ProjetMarcheService.intituleLot(duPlan, a.getLot()) : null);
         }).orElse(null);
     }
 
@@ -123,13 +148,25 @@ public class PiecesFournies {
             out.put(FICHE_PRESENTATION, new Fourniture(racine + "/fiche-presentation", null, null));
         }
         if (procedure.idDossierMiseEnConcurrence() != null) {
+            // ⚠️ 2026-10-19 (« dossier-marche-lecture », Q4) — un lien seulement si le PV a (ou peut produire) son PDF : aucun modèle
+            // officiel n'existe pour le PV d'un dossier de mise en concurrence. Le PV s'ouvre toujours par idPv.
             pvs.findSignesParDossierRows(procedure.idDossierMiseEnConcurrence()).stream().findFirst()
-                    .ifPresent(pv -> out.put(PV_CNM_DMC, new Fourniture("/api/pv-examens/" + pv.getIdPv() + "/document", null, null)));
+                    .ifPresent(pv -> out.put(PV_CNM_DMC, new Fourniture(aUnDocument(pv) ? "/api/pv-examens/" + pv.getIdPv() + "/document" : null,
+                            null, null, pv.getIdPv())));
         }
         types.findFirstByCode(RAPPORT_ANALYSE).flatMap(t -> pieces.findByIdDossier(d.getIdDossier()).stream()
                 .filter(p -> t.getIdTypePiece().equals(p.getIdTypePiece()) && p.getProduitePar() != null).findFirst())
                 .ifPresent(p -> out.put(PV_VALIDATION_CAO, new Fourniture("/api/piece-jointe-dossiers/" + p.getIdPiece() + "/contenu", null, null)));
         return out;
+    }
+
+    /** Le PV a son PDF, ou peut le produire à la lecture (modèle officiel pour son cas). */
+    private boolean aUnDocument(PvExamen pv) {
+        if (pv.getCheminDocument() != null && !pv.getCheminDocument().isBlank()) {
+            return true;
+        }
+        PvDocumentService d = pvDocuments.getIfAvailable();
+        return d != null && d.estEligible(pv);
     }
 
     /**

@@ -233,8 +233,12 @@ public class DossierDto {
      * @param lot                          le lot attribué
      * @param idDossierMiseEnConcurrence   le dossier de mise en concurrence de la procédure, nul s'il n'existe pas
      * @param refeDossierMiseEnConcurrence sa référence
+     * @param designationMarche            ⚠️ 2026-10-19 (« dossier-marche-lecture », §B3) — l'objet : la désignation de la fiche
+     *                                     validée, à défaut celle de la ligne du plan
+     * @param intituleLot                  « Lot n°01 : … » d'après les lots du plan, pour une ligne qui en a plusieurs ; nul sinon
      */
-    public record Procedure(Long idDmc, Integer lot, Integer idDossierMiseEnConcurrence, String refeDossierMiseEnConcurrence) {
+    public record Procedure(Long idDmc, Integer lot, Integer idDossierMiseEnConcurrence, String refeDossierMiseEnConcurrence,
+            String designationMarche, String intituleLot) {
     }
 
     /** ⚠️ Chronométrage (2026-09-01) — étape ouverte du circuit ; {@code null} si aucune tâche CNM ne court. */

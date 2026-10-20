@@ -263,17 +263,24 @@ public class ProjetMarcheService {
 
     /** « Lot n°01 : désignation » depuis les lots du plan (dans leur ordre), sinon « Lot n°01 ». */
     private String lotLibelle(Entree in) {
-        String numero = String.format(Locale.ROOT, "Lot n°%02d", in.lot());
         Integer idDetail = dmcs.findById(in.idDmc()).map(d -> d.getIdDetail()).orElse(null);
-        if (idDetail == null || in.lot() == null || in.lot() < 1) {
+        return intituleLot(idDetail == null ? List.of() : lots.findByIdDetail(idDetail), in.lot());
+    }
+
+    /**
+     * « Lot n°01 : désignation » — le lot de ce rang parmi les lots de la ligne du plan (ordre de leur identifiant), « Lot n°01 » seul
+     * sans désignation. ⚠️ 2026-10-19 (« dossier-marche-lecture », §B3) : partagé avec {@code DossierDto.procedure.intituleLot}.
+     */
+    public static String intituleLot(List<Lot> lotsDuPlan, Integer lot) {
+        String numero = String.format(Locale.ROOT, "Lot n°%02d", lot);
+        if (lot == null || lot < 1) {
             return numero;
         }
-        List<Lot> duPlan = lots.findByIdDetail(idDetail).stream().sorted(Comparator.comparing(Lot::getIdLot)).toList();
-        if (in.lot() > duPlan.size() || duPlan.get(in.lot() - 1).getDesignationLot() == null
-                || duPlan.get(in.lot() - 1).getDesignationLot().isBlank()) {
+        List<Lot> duPlan = lotsDuPlan.stream().sorted(Comparator.comparing(Lot::getIdLot)).toList();
+        if (lot > duPlan.size() || duPlan.get(lot - 1).getDesignationLot() == null || duPlan.get(lot - 1).getDesignationLot().isBlank()) {
             return numero;
         }
-        return numero + " : " + duPlan.get(in.lot() - 1).getDesignationLot().trim();
+        return numero + " : " + duPlan.get(lot - 1).getDesignationLot().trim();
     }
 
     // ------------------------------------------------------------------ art. 60 : les mentions

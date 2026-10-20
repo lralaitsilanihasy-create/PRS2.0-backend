@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.ActeGestionDto;
+import cnm.prs.dto.EvaluationDto;
 import cnm.prs.entity.ActeGestion;
 import cnm.prs.entity.Attribution;
 import cnm.prs.entity.Dossier;
@@ -73,13 +74,19 @@ public class ActesGestionService {
     private final cnm.prs.repository.AttributionPieceRepository piecesAttribution;
     private final cnm.prs.repository.PieceJointeDossierRepository piecesDossier;
     private final cnm.prs.repository.TypePieceJointeRepository typesPiece;
+    /** ⚠️ 2026-10-19 (« dossier-marche-lecture », §B1) — la proposition du rapport et les titulaires d'un contrat-cadre. */
+    private final ObjectProvider<EvaluationService> evaluation;
+    private final cnm.prs.repository.AttributionTitulaireRepository titulaires;
     static final String MARCHE_INITIAL = "MARCHE_INITIAL";
 
     public ActesGestionService(ActeGestionRepository actes, DossierRepository dossiers, SousTypeDossierRepository sousTypes,
             PvExamenRepository pvs, AttributionRepository attributions, PiecesExigees pieces, DossierIntegriteService integrite,
             ObjectProvider<SaisieService> saisie, ObjectProvider<DossierService> dossierService,
             Clock clock, cnm.prs.repository.AttributionPieceRepository piecesAttribution,
-            cnm.prs.repository.PieceJointeDossierRepository piecesDossier, cnm.prs.repository.TypePieceJointeRepository typesPiece) {
+            cnm.prs.repository.PieceJointeDossierRepository piecesDossier, cnm.prs.repository.TypePieceJointeRepository typesPiece,
+            ObjectProvider<EvaluationService> evaluation, cnm.prs.repository.AttributionTitulaireRepository titulaires) {
+        this.evaluation = evaluation;
+        this.titulaires = titulaires;
         this.piecesAttribution = piecesAttribution;
         this.piecesDossier = piecesDossier;
         this.typesPiece = typesPiece;
@@ -282,12 +289,23 @@ public class ActesGestionService {
         for (int i = autres.size() - 1; i >= 0; i--) {
             ordre.add(autres.get(i));
         }
-        BigDecimal montantConnu = attributions.findFirstByIdDossier(marche.getIdDossier()).map(Attribution::getMontant).orElse(null);
+        // ⚠️ 2026-10-19 (demande front « dossier-marche-lecture », §B1) — le montant attribué ; avant l'attribution, celui de l'offre
+        // proposée par le rapport (PROPOSITION) ; Q1 : aucun pour un contrat-cadre à plusieurs titulaires (déclaré au besoin).
+        Attribution attribution = attributions.findFirstByIdDossier(marche.getIdDossier()).orElse(null);
+        EvaluationDto.Proposition proposition = attribution == null ? null : evaluation.getObject().vueSansGarde(attribution.getIdDmc())
+                .flatMap(ev -> ev.lots().stream().filter(l -> attribution.getLot().equals(l.lot())).findFirst())
+                .map(EvaluationDto.Lot::proposition).orElse(null);
+        boolean plusieursTitulaires = attribution != null
+                && (titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(attribution.getIdDmc(), attribution.getLot()).size() > 1
+                        || proposition != null && proposition.titulaires() != null && proposition.titulaires().size() > 1);
+        BigDecimal montantConnu = attribution == null || plusieursTitulaires ? null : attribution.getMontant();
+        BigDecimal montantPropose = montantConnu != null || plusieursTitulaires || proposition == null || proposition.infructueux() ? null
+                : proposition.montant();
         BigDecimal montantDeclare = premier(ordre, ActeGestion::getMontantInitialHt);
         String categorieConnue = pieces.contexte(marche).categorie();
         String categorieDeclaree = premier(ordre, ActeGestion::getCategorie);
-        return new Faits(montantConnu != null ? montantConnu : montantDeclare,
-                montantConnu != null ? "ATTRIBUTION" : montantDeclare != null ? "DECLARE" : null,
+        return new Faits(montantConnu != null ? montantConnu : montantPropose != null ? montantPropose : montantDeclare,
+                montantConnu != null ? "ATTRIBUTION" : montantPropose != null ? "PROPOSITION" : montantDeclare != null ? "DECLARE" : null,
                 categorieConnue != null ? categorieConnue : categorieDeclaree,
                 categorieConnue != null ? "FICHE" : categorieDeclaree != null ? "DECLARE" : null,
                 premier(ordre, ActeGestion::getDateReceptionProvisoire), premier(ordre, ActeGestion::getDateReceptionDefinitive),

@@ -30,7 +30,8 @@ public final class ActeGestionDto {
     }
 
     /**
-     * Le marché et ses actes : faits retenus (montant initial HT et sa source {@code ATTRIBUTION} | {@code DECLARE}, catégorie et sa
+     * Le marché et ses actes : faits retenus (montant initial HT et sa source {@code ATTRIBUTION} | {@code PROPOSITION} — ⚠️ 2026-10-19 :
+     * l'offre proposée par le rapport, avant l'attribution ; aucun pour un contrat-cadre à plusieurs titulaires — | {@code DECLARE}, catégorie et sa
      * source {@code FICHE} | {@code DECLARE}, réceptions et solde déclarés), cumul des avenants comptés et plafond (tiers du montant
      * initial), avenant suivant.
      */
