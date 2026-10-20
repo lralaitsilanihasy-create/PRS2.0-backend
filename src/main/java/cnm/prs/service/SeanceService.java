@@ -99,6 +99,8 @@ public class SeanceService {
     private final ReferencesCommission references;
     /** ⚠️ V136 (2026-10-19, « copie-offre-candidat ») — les copies des candidats, effacées à la clôture de la séance. */
     private final CopieOffreService copies;
+    /** ⚠️ 2026-10-20 (« dossier-marche-donnees », §B1) — la Commission lit la procédure du dossier de marché qu'elle contrôle. */
+    private final ControleDuMarche controleDuMarche;
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final SeanceRepository seances;
@@ -134,7 +136,9 @@ public class SeanceService {
             RapprochementCandidatService rapprochements, CompteCandidatRepository candidats, NotificationService notifications,
             GenerateurDocumentsFiche generateur, DossierMecRepository dmcRepository, ObjectMapper mapper, Clock horloge,
             SeanceSignatureRepository signatures, FormulairesEnLigne formulaires, QuorumCao quorumCao,
-            TentativesRefusees tentatives, ReferencesCommission references, CopieOffreService copies) {
+            TentativesRefusees tentatives, ReferencesCommission references, CopieOffreService copies,
+            ControleDuMarche controleDuMarche) {
+        this.controleDuMarche = controleDuMarche;
         this.copies = copies;
         this.tentatives = tentatives;
         this.references = references;
@@ -1664,7 +1668,10 @@ public class SeanceService {
         }
     }
 
-    /** Responsable, membres de la CAO, PRMP de la fiche, et l'UGPM si {@code ugpm}. */
+    /**
+     * Responsable, membres de la CAO, PRMP de la fiche, et l'UGPM si {@code ugpm} ; ⚠️ 2026-10-20 (§B1) la Commission qui contrôle un
+     * dossier de marché né de la procédure ({@link ControleDuMarche}).
+     */
     void exigerLecteur(Long idDmc, boolean ugpm) {
         exigerDmc(idDmc);
         if (internes.estTitulaire(idDmc)) {
@@ -1677,6 +1684,9 @@ public class SeanceService {
         ProfilUtilisateur p = CurrentUser.profil().orElse(null);
         if (p == ProfilUtilisateur.PRMP || ugpm && p == ProfilUtilisateur.UGPM) {
             fiches.controlerLecture(idDmc);
+            return;
+        }
+        if (controleDuMarche.litLaProcedure(idDmc)) {
             return;
         }
         throw new AccessDeniedException("La séance se lit par le responsable de la procédure, les membres de la commission et la PRMP de la fiche.");

@@ -735,6 +735,30 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("DOSSIER_EXISTANT")).andExpect(jsonPath("$.idDossier").value(idDossier));
         assertThat(dossierRepository.findById(idDossier).orElseThrow().getIdTypeDossier()).isEqualTo("DDM");
         assertThat(dossierRepository.findById(idDossier).orElseThrow().getIdDmc()).isNull();   // le lien du DAO reste au dossier DAO
+        // ⚠️ 2026-10-20 (« dossier-marche-donnees », §B1) — la Commission lit la procédure du dossier de marché qu'elle contrôle, dès
+        // la soumission (Q1 : le brouillon est hors de son périmètre), journal compris (Q3), en lecture seule.
+        cnm.prs.entity.Dossier ddm = dossierRepository.findById(idDossier).orElseThrow();
+        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", ddm.getIdLocalite());
+        String sea = base.replace("/evaluation", "/seance");
+        List<String> lectures = List.of(sea, base, base + "/lots/1/tableau", base + "/journal", att);
+        for (String route : lectures) {
+            mvc.perform(get(route).header("Authorization", tokenSec)).andExpect(status().isForbidden());
+        }
+        ddm.setStatut("SOUMIS");
+        dossierRepository.save(ddm);
+        for (String route : lectures) {
+            mvc.perform(get(route).header("Authorization", tokenSec)).andExpect(status().isOk());
+        }
+        mvc.perform(get(sea + "/lecture").header("Authorization", tokenSec))
+                .andExpect(res -> assertThat(res.getResponse().getStatus()).isNotEqualTo(403));
+        mvc.perform(get(sea + "/offres/" + a + "/pieces/offre.pdf").header("Authorization", tokenSec)).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("PIECE_RESERVEE_CAO"));
+        mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenSec).contentType(JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get(base).header("Authorization", bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "XXX")))
+                .andExpect(status().isForbidden());
+        ddm.setStatut("BROUILLON");
+        dossierRepository.save(ddm);
         // ⚠️ 2026-10-19 (« dossier-marche-lecture », §B1) — avant l'attribution, le montant de l'offre proposée par le rapport ;
         // §B2 : le dossier de marché sur la ligne des éligibles.
         mvc.perform(get("/api/dossiers/" + idDossier + "/actes-gestion").header("Authorization", tokenPrmp)).andExpect(status().isOk())

@@ -150,7 +150,8 @@ public class EvaluationService {
             cnm.prs.repository.LotRepository lotRepository, ValeursPpmService valeursPpm, cnm.prs.repository.EvaluationRapportRepository rapports,
             cnm.prs.repository.EvaluationSignatureRepository signatures, GenerateurDocumentsFiche generateur, cnm.prs.repository.CaoRepository caoRepository,
             org.springframework.beans.factory.ObjectProvider<ResultatsPi> resultatsPi, QuorumCao quorumCao,
-            cnm.prs.repository.EvaluationRapportRetireRepository retraits) {
+            cnm.prs.repository.EvaluationRapportRetireRepository retraits, ControleDuMarche controleDuMarche) {
+        this.controleDuMarche = controleDuMarche;
         this.quorumCao = quorumCao;
         this.retraits = retraits;
         this.evaluations = evaluations;
@@ -334,7 +335,9 @@ public class EvaluationService {
     @Transactional(readOnly = true)
     public List<EvaluationDto.Journal> journal(Long idDmc) {
         exigerEvaluation(idDmc);
-        if (membreAppelant(idDmc) == null && !internes.estTitulaire(idDmc) && CurrentUser.profil().orElse(null) != ProfilUtilisateur.PRMP) {
+        // ⚠️ 2026-10-20 (« dossier-marche-donnees », Q3) — la Commission qui contrôle le dossier de marché le lit aussi.
+        if (membreAppelant(idDmc) == null && !internes.estTitulaire(idDmc) && CurrentUser.profil().orElse(null) != ProfilUtilisateur.PRMP
+                && !controleDuMarche.litLaProcedure(idDmc)) {
             throw new AccessDeniedException("Le journal de l'évaluation se lit par la commission, le responsable et la PRMP.");
         }
         if (CurrentUser.profil().orElse(null) == ProfilUtilisateur.PRMP) {
@@ -2700,7 +2703,10 @@ public class EvaluationService {
                 && internes.membresCao(idDmc).contains(ref) ? ref : null;
     }
 
-    /** CAO, responsable, PRMP et UGPM de la fiche (P5). */
+    /** ⚠️ 2026-10-20 (« dossier-marche-donnees », §B1) — la Commission lit la procédure du dossier de marché qu'elle contrôle. */
+    private final ControleDuMarche controleDuMarche;
+
+    /** CAO, responsable, PRMP et UGPM de la fiche (P5) ; ⚠️ 2026-10-20 (§B1) la Commission ({@link ControleDuMarche}). */
     private void exigerLecteur(Long idDmc) {
         exigerDmc(idDmc);
         if (membreAppelant(idDmc) != null || CurrentUser.profil().isPresent() && internes.estTitulaire(idDmc)) {
@@ -2709,6 +2715,9 @@ public class EvaluationService {
         ProfilUtilisateur p = CurrentUser.profil().orElse(null);
         if (p == ProfilUtilisateur.PRMP || p == ProfilUtilisateur.UGPM) {
             fiches.controlerLecture(idDmc);
+            return;
+        }
+        if (controleDuMarche.litLaProcedure(idDmc)) {
             return;
         }
         throw new AccessDeniedException("L'évaluation se lit par la commission, le responsable de la procédure, la PRMP et l'UGPM.");

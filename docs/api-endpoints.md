@@ -8728,6 +8728,22 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-20 (demande front « dossier-marche-donnees »)** — la Commission lit la procédure du dossier de marché qu'elle contrôle.
+- **B1, en lecture seule** : les GET de la procédure d'une fiche admettent, en plus du responsable, de la CAO, de la PRMP et de l'UGPM,
+  **un compte de la Commission** (Président, chef de commission, secrétaire, membre, vérificateur, assistant, chargé de publication,
+  Administrateur) **dès qu'un dossier de marché né de la procédure** (`t_attribution.ID_DOSSIER`) **est dans son périmètre de
+  lecture** (`ControleDuMarche`). Routes : `/api/fiches-marche/{idDmc}/seance`, `…/seance/lecture`, `…/seance/pv` ;
+  `…/evaluation` et ses lectures (dont `…/lots/{lot}/tableau`, le rapport, les évaluations technique et financière, la
+  négociation) ; `…/attribution` et ses lectures (projet, lettres, avis, fichiers).
+  - **Q1** : dès la soumission (le périmètre d'un contrôleur exclut les brouillons de sa localité).
+  - **Q2** : tous les contrôleurs du périmètre du dossier, pas seulement ceux de son circuit (même règle que la fiche et la fiche de
+    présentation).
+  - **Q3** : `…/evaluation/journal` aussi.
+  - **Inchangé** : sans dossier de marché, 403 comme avant ; les gestes gardent leurs gardes (403) ; les pièces des offres restent
+    aux membres de la CAO (`…/seance/offres/{idOffre}/pieces/…` : 403 `PIECE_RESERVEE_CAO`).
+- **B2** : le 403 de la PRMP sur le PV 64 venait du JAR de recette d'avant la livraison « dossier-marche-lecture » (redémarré le
+  20/10 à 08:09) ; aucun changement.
+
 ⚠️ **2026-10-19 (demande front « dossier-marche-lecture »)** — ce que la page et la liste du dossier de marché lisent encore.
 - **B1, le montant initial** (`GET /api/dossiers/{id}/actes-gestion`) : `sourceMontantInitial` vaut `ATTRIBUTION` (le montant attribué),
   à défaut **`PROPOSITION`** (nouvelle valeur : le montant de l'offre proposée par le rapport, avant l'attribution), à défaut `DECLARE`.

@@ -1567,6 +1567,11 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   le déclare si besoin (plafond des avenants à trancher avec le juriste). **La PRMP lit le PV signé** de ses dossiers de mise en
 >   concurrence et de marché (propriétaire du dossier, sans PPM). **Le PV d'un tel dossier n'a pas de document** : aucun modèle
 >   officiel ne le couvre (seuls les PV de plan en ont) ; il se lit par ses données.
+> - ⚠️ **2026-10-20 (« dossier-marche-donnees »)** — **la Commission lit la procédure** (séance d'ouverture, évaluation et son
+>   journal, attribution) d'un dossier de marché qu'elle contrôle, **en lecture seule**, dès que ce dossier est soumis et dans son
+>   périmètre (tous les contrôleurs de la localité, pas seulement ceux du circuit). Les pièces des offres restent réservées aux
+>   membres de la CAO (arbitrage du 04/10). Sans dossier de marché, la procédure reste à la CAO, au responsable, à la PRMP et à
+>   l'UGPM.
 > - **Non fait** : des points de contrôle propres au contrat-cadre pour le marché (plusieurs titulaires classés, offre indicative,
 >   sélection par la PRMP, décret n° 2019-1064, art. 13) demandent des textes, du pilote ou de l'Administrateur.
 >
