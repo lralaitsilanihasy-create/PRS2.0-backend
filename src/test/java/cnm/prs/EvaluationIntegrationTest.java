@@ -2177,26 +2177,21 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"code\":\"PV-DDM\",\"libelle\":\"PV du marché\",\"nature\":\"PV\"}")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         long idModele = ((Number) JsonPath.read(modele, "$.id")).longValue();
-        byte[] word = cnm.prs.service.ModelePvWordTest.docx(doc -> {
-            cnm.prs.service.ModelePvWordTest.paragraphe(doc, "Lot {{PROCEDURE.LOT}} — {{MARCHE.DOSSIER_MEC}} — {{MARCHE.ESTIMATION}}");
-            org.apache.poi.xwpf.usermodel.XWPFTable tit = doc.createTable(2, 2);
-            tit.getRow(0).getCell(0).setText("Rang");
-            tit.getRow(1).getCell(0).setText("{{POUR:TITULAIRES}}{{TIT.RANG}}");
-            tit.getRow(1).getCell(1).setText("{{TIT.CANDIDAT}} — {{TIT.MONTANT_HT}}");
-        });
-        mvc.perform(multipart("/api/modeles-pv/" + idModele + "/versions").file(new org.springframework.mock.web.MockMultipartFile("fichier",
-                "PV_DDM.docx", "application/octet-stream", word)).header("Authorization", tokenAdmin)).andExpect(status().isOk());
+        // ⚠️ 2026-10-21 (« modele-pv-page ») — le modèle est une page, l'aperçu un PDF.
+        String page = cnm.prs.service.ModelePvPageTest.document(
+                cnm.prs.service.ModelePvPageTest.paragraphe("Lot {{PROCEDURE.LOT}} — {{MARCHE.DOSSIER_MEC}} — {{MARCHE.ESTIMATION}}"),
+                cnm.prs.service.ModelePvPageTest.tableau(List.of("Rang", "Titulaire"), "TITULAIRES",
+                        List.of("{{TIT.RANG}}", "{{TIT.CANDIDAT}} — {{TIT.MONTANT_HT}}"))).toString();
+        mvc.perform(post("/api/modeles-pv/" + idModele + "/versions").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"document\":" + page + "}")).andExpect(status().isOk());
         byte[] apercu = mvc.perform(post("/api/modeles-pv/" + idModele + "/versions/1/apercu").param("dossier", String.valueOf(idDossier))
-                .param("format", "docx").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .header("Authorization", tokenAdmin)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
-        try (org.apache.poi.xwpf.usermodel.XWPFDocument doc = new org.apache.poi.xwpf.usermodel.XWPFDocument(
-                new java.io.ByteArrayInputStream(apercu))) {
-            assertThat(doc.getParagraphs().get(0).getText()).startsWith("Lot 1 — DOS-9960");
-            org.apache.poi.xwpf.usermodel.XWPFTable tit = doc.getTables().get(0);
-            assertThat(tit.getRows()).hasSize(3);
-            assertThat(tit.getRow(1).getCell(0).getText()).isEqualTo("1");
-            assertThat(tit.getRow(1).getCell(1).getText()).startsWith("BTP Gamma — ");
+        String texteApercu;
+        try (org.apache.pdfbox.pdmodel.PDDocument doc = org.apache.pdfbox.Loader.loadPDF(apercu)) {
+            texteApercu = cnm.prs.service.ModelePvPageTest.trie().getText(doc);
         }
+        assertThat(texteApercu).contains("Lot 1 — DOS-9960", "Rang Titulaire").containsPattern("\\n1 BTP Gamma — ");
         assertThat(texteDuPdf(mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation/pdf").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray())).contains("Dossier de marché", "Attribution",
                         "Mise en concurrence", "Évaluation des offres");

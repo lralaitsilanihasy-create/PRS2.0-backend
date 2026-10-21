@@ -94,7 +94,16 @@
 		<dependency>
 			<groupId>org.apache.pdfbox</groupId>
 			<artifactId>pdfbox</artifactId>
-			<version>3.0.3</version>
+			<version>3.0.7</version>
+		</dependency>
+		<!-- ⚠️ 2026-10-21 (demande front « modele-pv-page », lots P1-P2) : le rendu PDF des modeles de PV construits dans
+		     l'application (document -> XHTML et CSS de page -> PDF ; @page, en-tetes courants, numeros de page). LGPL 2.1 ou
+		     ulterieure ; il demande PDFBox 3.0.7, d'ou la montee de 3.0.3 a 3.0.7 ci-dessus (meme branche 3.0). Polices
+		     embarquees : Liberation Serif / Sans (SIL OFL 1.1), src/main/resources/fonts/liberation. -->
+		<dependency>
+			<groupId>io.github.openhtmltopdf</groupId>
+			<artifactId>openhtmltopdf-pdfbox</artifactId>
+			<version>1.1.97</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

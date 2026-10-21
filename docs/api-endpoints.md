@@ -8728,6 +8728,55 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-21 (demande front « modele-pv-page », lots P1-P2 ; V139)** — **une version de modèle de PV est une page** construite dans
+l'application, plus un Word déposé (option C' du pilote). Réservé à l'Administrateur, comme le reste de `/api/modeles-pv`.
+- **Le document** (Q1 : JSON de l'éditeur, jamais de HTML) : `{ page?, entete?, enteteSurPremiereSeulement?, corps, piedDePage? }`.
+  - `entete`, `corps` et `piedDePage` sont chacun un `doc` Tiptap : `{ type: "doc", content: [...] }`.
+  - `page` : `format` (`A4`), `orientation` (`portrait`, `paysage`), `marges` en mm (`haut`, `bas`, `gauche`, `droite`,
+    0 à 60), `police` et `taille` par défaut.
+  - Les nœuds sont fermés : `paragraph`, `heading`, `bulletList`, `orderedList`, `listItem`, `table`, `tableRow`
+    (`liste` : ligne répétée), `tableCell` / `tableHeader`, `image` (`idImage`), `pageBreak`, `bloc` (`condition` ; en ligne
+    dans un paragraphe, ou autour de blocs), `text` et ses marques (`bold`, `italic`, `underline`, `textStyle` : `fontFamily`,
+    `fontSize`, `color`), `hardBreak`, `variable` (`code`, `format`), `champ` (`code`), `numeroPage`, `nombrePages`.
+  - Une `variable` et un `champ` portent des marques comme un texte. Un attribut inconnu de valeur nulle est toléré (Tiptap écrit
+    les valeurs par défaut) ; valué, il est refusé.
+  - Limites : 2 Mo, 40 niveaux, 50 000 nœuds. Listes fermées (polices, couleurs, fonds, alignements, formats) :
+    **`GET /api/modeles-pv/schema`**.
+- **`POST /api/modeles-pv/{id}/versions`** : corps JSON `{ document, motif? }`. Rend la version en `BROUILLON`, `support: "PAGE"`,
+  son `document` et son `rapport`.
+  - 400 **`DOCUMENT_INVALIDE`** : `details`, chemin du nœud → « lieu : raison » (`"corps/2/0"` →
+    `"corps › tableau 1 › ligne 1 : …"`) ; 409 `MODELE_ARCHIVE`.
+  - Le même chemin en **multipart** (dépôt d'un `.docx`) : 409 **`SUPPORT_ABANDONNE`**.
+- **`PUT /api/modeles-pv/{id}/versions/{n}/document`** (Q4) : remplace le document d'un brouillon et recalcule le rapport. 409
+  `VERSION_FIGEE` hors brouillon, `SUPPORT_ABANDONNE` sur une version Word. Journal `DOCUMENT_MODIFIE` (`ENREGISTREE` pour le POST).
+- **`GET …/versions/{n}`** sert aussi `support` et `document` ; la fiche du modèle (`GET /{id}`) ne sert pas les documents.
+- **Le rapport** : les mêmes points qu'en G1, appliqués aux nœuds.
+  - `ou` est le lieu lisible (« corps › paragraphe 2 › variable 1 ») ; **`chemin`** (nouveau) donne les rangs dans les `content`
+    depuis la zone (`corps/1/1`), pour placer le curseur.
+  - La `suggestion` d'une variable inconnue est le code seul (`PV.REFERENCE`).
+  - `POUR_MAL_PLACE` : une ligne répétée dans une autre. `DOCUMENT_VALIDE` (OK) remplace `FICHIER_LISIBLE`. `ESSAI` est le
+    rendu PDF d'essai sur le dossier fictif, toujours fait (pur Java, sans Word) ; son échec est `ESSAI_ECHEC`, bloquant.
+- **`POST …/versions/{n}/apercu`** : une page rend un **PDF** seul (`format=docx` : 400 `FORMAT_INDISPONIBLE`). Une version Word
+  garde son aperçu en Word ou en PDF.
+- **Le rendu** : document → XHTML écrit par le serveur → PDF (OpenHTMLtoPDF).
+  - `@page` aux marges données ; en-tête courant, ou sur la première page seulement ; pied de page ; numéros de page.
+  - « Times New Roman » et « Arial » sont rendus par Liberation Serif et Liberation Sans, embarquées (Q2).
+  - Un paragraphe qui ne porte que des blocs, tous faux, disparaît.
+  - L'aperçu, l'essai du contrôle et la production à venir (G2) passent par ce même code.
+- **Images** (§B3) :
+  - **`POST /api/modeles-pv/images`** : multipart `fichier`, PNG ou JPEG de 2 Mo au plus, reconnu par son contenu (signature,
+    puis lecture de l'image) ; 400 `IMAGE_INVALIDE`. Rend `{ idImage, largeur, hauteur, type, code }`, dimensions en pixels.
+  - **`GET /api/modeles-pv/images/{idImage}`** : l'image, avec son type contrôlé (`nosniff`).
+  - **`GET /api/modeles-pv/images/embleme`** : l'emblème des PV officiels, créé au premier appel (code `EMBLEME`).
+  - Une `image` dont l'`idImage` n'existe pas rend le document invalide.
+- **Versions Word** (§B6, Q5) : gardées en consultation (`GET …/fichier`, aperçu).
+  - `mettre-en-vigueur` : 409 `SUPPORT_ABANDONNE`.
+  - `dupliquer` ne copie pas une version Word : la copie part sans version, le journal le dit.
+  - `GET …/fichier` sur une page : 409 **`VERSION_SANS_FICHIER`**.
+- **`POST …/versions/depart`** produit une page : l'en-tête officiel reconstruit avec l'emblème, puis le contenu du 21/10. Journal
+  « page reconstruite d'après PV_AFSR_PPM_… ». Il ne reste aucun avertissement au rapport.
+- **Dépendance** : `io.github.openhtmltopdf:openhtmltopdf-pdfbox:1.1.97` (LGPL 2.1), avec PDFBox monté de 3.0.3 à 3.0.7.
+
 ⚠️ **2026-10-21 (demande front « modele-pv-depart »)** — **`POST /api/modeles-pv/{id}/versions/depart`** : l'application assemble
 le modèle de départ d'un PV, réservé à l'Administrateur. Corps facultatif `{ portee?: "centrale" | "regionale" | "les-deux" }`,
 `les-deux` par défaut.

@@ -1,29 +1,14 @@
 package cnm.prs.service;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.poi.xwpf.usermodel.IBodyElement;
-import org.apache.poi.xwpf.usermodel.XWPFTable.XWPFBorderType;
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import org.apache.poi.xwpf.usermodel.XWPFParagraph;
-import org.apache.poi.xwpf.usermodel.XWPFRun;
-import org.apache.poi.xwpf.usermodel.XWPFTable;
-import org.apache.poi.xwpf.usermodel.XWPFTableCell;
-import org.apache.xmlbeans.XmlCursor;
-import org.apache.xmlbeans.XmlObject;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTPPr;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTRPr;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTSectPr;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblPr;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTTblWidth;
-import org.openxmlformats.schemas.wordprocessingml.x2006.main.STTblWidth;
-
 import cnm.prs.dto.ModelePvDto;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.JsonNodeFactory;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * ⚠️ 2026-10-21 (demande front « modele-pv-depart ») — le <strong>modèle de départ</strong> d'un PV, assemblé par l'application à
@@ -31,10 +16,16 @@ import cnm.prs.dto.ModelePvDto;
  * Les phrases de chaque famille sont écrites ici une fois (Q1), à faire valider par la CNM ; le texte juridique de la base (formule
  * « L'an … », signatures, annexe) est repris tel quel.
  *
- * <p>Ce que fait l'assemblage (§B2) : titre et intitulé de la famille, « L'an » en lettres, avis en trois blocs (gras gardé),
- * observation générale saisie, annexe sous {@code AVEC_RESERVES} avec sa ligne {@code {{POUR:OBSERVATIONS}}}, anciens chevrons
- * remplacés par leurs variables ; pour {@code les-deux}, les écarts entre les PV centrale et régionale en blocs {@code CENTRALE} /
- * {@code REGIONALE} ; pour le dossier de marché, le tableau des titulaires proposés et l'écart à l'estimation. Pur : aucune base.</p>
+ * <p>⚠️ 2026-10-21 (demande front « modele-pv-page », §B5) — le départ est désormais une <strong>page</strong> ({@link ModelePvPage}),
+ * plus un Word : la page officielle est reconstruite ici (en-tête et emblème, identification, « L'an … », présents, avis, signatures,
+ * annexe), avec le même contenu que le Word du matin. Les marges de la base (7,5 mm à gauche, aucune à droite) et ses retraits de
+ * paragraphe (17,5 mm, 25 mm) se résument à des marges de page de 25 mm.</p>
+ *
+ * <p>Ce que fait l'assemblage : titre et intitulé de la famille, « L'an » en lettres, avis en trois blocs (« AVIS FAVORABLE » en
+ * gras), observation générale saisie, annexe sous {@code AVEC_RESERVES} (saut de page compris) avec sa ligne répétée
+ * {@code OBSERVATIONS} ; pour {@code les-deux}, les écarts entre les PV centrale et régionale en blocs {@code CENTRALE} /
+ * {@code REGIONALE} (en ligne quand l'écart est un mot) ; pour le dossier de marché, le tableau des titulaires proposés et l'écart à
+ * l'estimation. Pur : aucune base.</p>
  */
 public final class ModelePvDepart {
 
@@ -44,16 +35,16 @@ public final class ModelePvDepart {
     public static final List<String> PORTEES = List.of(CENTRALE, REGIONALE, LES_DEUX);
 
     static final String MOTIF = "Modèle de départ généré par l'application — texte à faire valider par la CNM";
-    private static final String GABARITS = "/templates/";
     private static final String BASE_CENTRALE = "PV_AFSR_PPM_CENTRALE.docx";
     private static final String BASE_REGIONALE = "PV_AFSR_PPM_REGIONALE.docx";
+    private static final String POINTILLES = "………………………………..";
 
     /** Les phrases d'une famille : complément du titre, intitulé du dossier, ce sur quoi porte l'avis, titulaires proposés. */
     public record Famille(String code, String titre, String intitule, String cible, boolean titulaires) {
     }
 
-    /** Le Word assemblé, les fichiers officiels qui ont servi, et ce qui se déclare d'office avec lui (§B4). */
-    public record Depart(byte[] docx, List<String> bases, List<ModelePvDto.Condition> conditions, List<ModelePvDto.Champ> champs) {
+    /** La page assemblée, les fichiers officiels qu'elle reconstruit, et ce qui se déclare d'office avec elle (§B4). */
+    public record Depart(JsonNode document, List<String> bases, List<ModelePvDto.Condition> conditions, List<ModelePvDto.Champ> champs) {
     }
 
     /** §B3 — propositions du front, articles ajoutés au titre (« DE L'ACTE », « DE LA DÉCLARATION »). Le plan (DDP) n'en a pas. */
@@ -71,83 +62,125 @@ public final class ModelePvDepart {
             "DSS", new Famille("DSS", "DE LA DÉCLARATION SANS SUITE", "{{DOSSIER.SOUS_TYPE}} n° {{DOSSIER.REFERENCE}}",
                     "à la déclaration sans suite", false));
 
+    private static final JsonNodeFactory F = JsonNodeFactory.instance;
+
     private ModelePvDepart() {
     }
 
-    /** Assemble le modèle de départ d'une famille ({@link #FAMILLES}) pour une portée ({@link #PORTEES}). */
-    public static Depart assembler(Famille f, String portee) throws IOException {
+    /**
+     * Assemble la page de départ d'une famille ({@link #FAMILLES}) pour une portée ({@link #PORTEES}) ; {@code idEmbleme} est
+     * l'image de l'emblème (fournie par l'application).
+     */
+    public static Depart assembler(Famille f, String portee, long idEmbleme) {
         boolean deux = LES_DEUX.equals(portee);
-        String base = REGIONALE.equals(portee) ? BASE_REGIONALE : BASE_CENTRALE;
-        List<String> bases = deux ? List.of(BASE_CENTRALE, BASE_REGIONALE) : List.of(base);
+        boolean regionale = REGIONALE.equals(portee);
         String commission = deux ? "{{SI:CENTRALE}}Centrale{{FINSI:CENTRALE}}{{SI:REGIONALE}}Régionale{{FINSI:REGIONALE}}"
-                : REGIONALE.equals(portee) ? "Régionale" : "Centrale";
-        byte[] docx;
-        try (InputStream in = ModelePvDepart.class.getResourceAsStream(GABARITS + base);
-                XWPFDocument doc = new XWPFDocument(in); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            List<XWPFParagraph> corps = new ArrayList<>(doc.getParagraphs());
-            for (XWPFParagraph p : tous(doc)) {
-                ModelePvWord.recoller(p);
+                : regionale ? "Régionale" : "Centrale";
+        ArrayNode c = F.arrayNode();
+
+        // En-tête officiel : l'emblème, le ministère, la commission (centrale ou régionale, avec sa localité).
+        ObjectNode emb = ModelePvPage.noeud("image");
+        emb.putObject("attrs").put("idImage", idEmbleme).put("largeur", 51.6).put("alignement", "center");
+        c.add(emb);
+        c.add(p("MINISTERE DE L’ECONOMIE ET DES FINANCES", attrs("center", null, 60.0), null));
+        c.add(p(POINTILLES, attrs(null, 12.0, null), null));
+        c.add(p("COMMISSION NATIONALE DES MARCHES", attrs("center", null, 60.0), null));
+        c.add(p(POINTILLES, attrs(null, 12.0, null), null));
+        c.add(p(deux ? "COMMISSION {{SI:CENTRALE}}CENTRALE DES MARCHES….{{FINSI:CENTRALE}}{{SI:REGIONALE}}REGIONALE DES MARCHES"
+                + "{{FINSI:REGIONALE}}" : regionale ? "COMMISSION REGIONALE DES MARCHES" : "COMMISSION CENTRALE DES MARCHES….", null, null));
+        c.add(p(POINTILLES, attrs(null, 12.0, null), null));
+        if (deux || regionale) {
+            List<ObjectNode> localite = List.of(p("{{COMMISSION.LOCALITE}}", attrs(null, 12.0, null), null),
+                    p(POINTILLES, attrs(null, 12.0, null), null));
+            if (deux) {
+                c.add(bloc("REGIONALE", localite));
+            } else {
+                localite.forEach(c::add);
             }
-            // Avant toute insertion : les paragraphes neufs se créent en fin de corps avant d'être déplacés.
-            finAnnexe(doc);
-            List<Runnable> deplacements = new ArrayList<>();
-            XWPFParagraph titre = null;
-            for (int i = 0; i < corps.size(); i++) {
-                XWPFParagraph p = corps.get(i);
-                String t = p.getText().trim();
-                if (deux && t.startsWith("COMMISSION CENTRALE")) {
-                    // Les deux premières lignes de l'en-tête : la commission, puis la localité (régionale seule).
-                    ecrire(p, List.of(new Morceau("COMMISSION {{SI:CENTRALE}}CENTRALE DES MARCHES….{{FINSI:CENTRALE}}"
-                            + "{{SI:REGIONALE}}REGIONALE DES MARCHES{{FINSI:REGIONALE}}", rpr(p, 0))));
-                } else if (t.startsWith("PROCES-VERBAL")) {
-                    titre = p;
-                    ecrire(p, List.of(new Morceau("PROCÈS-VERBAL D’EXAMEN " + f.titre(), rpr(p, 0))));
-                } else if (t.startsWith("NATURE ET INTITULE")) {
-                    ecrire(p, List.of(new Morceau("NATURE ET INTITULE DU DOSSIER : ", rpr(p, 0)),
-                            new Morceau(f.intitule(), rpr(p, p.getRuns().size() - 1))));
-                } else if (t.contains("instituée")) {
-                    for (XWPFRun r : p.getRuns()) {
-                        String x = r.getText(0);
-                        if (x != null) {
-                            r.setText(x.replace("<DATE EXAMEN>", "{{PV.DATE_EXAMEN|lettres}}")
-                                    .replaceAll("Commission (Centrale|Régionale) des Marchés", "Commission " + commission + " des Marchés"), 0);
-                        }
-                    }
-                } else if (t.startsWith("La Commission") && t.contains("émet un")) {
-                    avis(doc, p, f, commission, corps.get(i + 1), deplacements);
-                } else if ("ANNEXE".equals(t)) {
-                    XWPFRun r = p.getRuns().get(0);
-                    r.setText("{{SI:AVEC_RESERVES}}" + r.getText(0), 0);
-                    // Le saut de page part avec l'annexe : la base la séparait par un saut de section, qui reste en place
-                    // quand l'annexe disparaît et laissait une page blanche (les deux sections ne diffèrent que par un pied de
-                    // page équivalent, le numéro de page).
-                    p.setPageBreak(true);
-                }
-                if (p.getCTP().getPPr() != null && p.getCTP().getPPr().isSetSectPr()) {
-                    p.getCTP().getPPr().unsetSectPr();
-                }
-            }
-            if (deux && titre != null) {
-                // Sous la ligne de la commission régionale : sa localité, puis les pointillés (comme le PV régional).
-                XWPFParagraph pointilles = corps.get(corps.indexOf(titre) - 1);
-                for (String texte : List.of("{{SI:REGIONALE}}{{COMMISSION.LOCALITE}}", pointilles.getText() + "{{FINSI:REGIONALE}}")) {
-                    XWPFParagraph n = copie(doc, pointilles, texte, rpr(pointilles, 0));
-                    XWPFParagraph avant = titre;
-                    deplacements.add(() -> deplacer(n.getCTP(), avant.getCTP()));
-                }
-            }
-            // Les anciens chevrons restants deviennent la variable de leur alias (§B2.8) ; le point de contrôle ouvre la ligne
-            // répétée de l'annexe (§B2.6).
-            for (XWPFParagraph p : tous(doc)) {
-                ModelePvWord.remplacer(p, brut -> {
-                    String code = CatalogueModelesPv.ALIAS.get(brut);
-                    return code == null ? null : ("OBS.POINT".equals(code) ? "{{POUR:OBSERVATIONS}}" : "") + "{{" + code + "}}";
-                });
-            }
-            deplacements.forEach(Runnable::run);
-            doc.write(out);
-            docx = out.toByteArray();
         }
+        c.add(vide());
+
+        // Titre et identification.
+        c.add(p("PROCÈS-VERBAL D’EXAMEN " + f.titre(), attrs("center", null, null), marques(true, 12)));
+        c.add(p("Séance du {{PV.DATE_EXAMEN}}", attrs("center", null, null), marques(false, 12)));
+        c.add(vide());
+        c.add(p("PV N° : {{PV.REFERENCE}}", null, gras()));
+        c.add(p("DOSSIER DEPOSE LE : {{DOSSIER.DATE_RECEPTION}}", null, gras()));
+        c.add(p("ORGANISME CONCERNE : {{DOSSIER.ENTITE}}", null, gras()));
+        c.add(p("NATURE ET INTITULE DU DOSSIER : " + f.intitule(), null, gras()));
+        c.add(vide());
+        c.add(p("L’an {{PV.DATE_EXAMEN|lettres}}, la Commission " + commission + " des Marchés, instituée par la loi N°2016-055 du "
+                + "25 janvier 2017 portant Code des Marchés Publics et le décret N°219-093 du 13 février 2019, fixant les attributions "
+                + "du Ministre de l’Economie et des Finances ainsi que l’organisation générale de son ministère, a statué sur le dossier "
+                + "soumis à son contrôle a priori.", attrs("justify", null, null), null));
+        c.add(vide());
+
+        // Présents.
+        c.add(p("Etaient présents :", null, gras()));
+        c.add(p("Président de la Commission Nationale des Marchés : {{PV.PRESIDENT}}", null, null));
+        c.add(p("Chef de la Commission : {{PV.CHEF_COMMISSION}}", null, null));
+        c.add(p("Membre de la Commission : {{PV.MEMBRE}}", null, null));
+        c.add(vide());
+
+        // L'avis, en trois blocs ; l'observation générale ; les titulaires du marché.
+        c.add(p("AVIS DE LA COMMISSION :", null, gras()));
+        c.add(vide());
+        String emet = "La Commission " + commission + " des Marchés émet un ";
+        c.add(bloc("FAVORABLE", List.of(avis(emet, "AVIS FAVORABLE", " " + f.cible() + "."))));
+        c.add(bloc("AVEC_RESERVES", List.of(avis(emet, "AVIS FAVORABLE", " " + f.cible()
+                + ", sous réserve qu’il soit tenu compte des observations portées en annexe."))));
+        c.add(bloc("DEFAVORABLE", List.of(avis(emet, "AVIS NON FAVORABLE", " " + f.cible()
+                + ", pour le motif suivant : {{SAISI:motif_defavorable}}."))));
+        c.add(bloc("OBS_GENERALE", List.of(p("Observations générales de la Commission : {{SAISI:observation_generale}}",
+                attrs("justify", null, null), null))));
+        if (f.titulaires()) {
+            c.add(vide());
+            c.add(p("Titulaire(s) proposé(s) :", null, null));
+            c.add(table(List.of("RANG", "CANDIDAT PROPOSÉ", "MONTANT HT (Ar)", "DÉLAI D’EXÉCUTION"), "TITULAIRES",
+                    List.of("{{TIT.RANG}}", "{{TIT.CANDIDAT}}", "{{TIT.MONTANT_HT}}", "{{TIT.DELAI}}"), List.of(55, 215, 125, 125), null));
+            c.add(p("Écart à l’estimation : {{MARCHE.ECART}}", null, null));
+        }
+        c.add(vide());
+        c.add(vide());
+
+        // Signatures, sans bordures.
+        ObjectNode sign = ModelePvPage.noeud("table");
+        sign.putObject("attrs").put("bordures", false);
+        ArrayNode lignes = sign.putArray("content");
+        lignes.add(ligne(null, cellule(270, p("VISA DU SUPERIEUR HIERARCHIQUE", null, gras()),
+                p("(Nom, prénoms, cachet et signature du supérieur hiérarchique)", null, null)),
+                cellule(270, p("A {{COMMISSION.CHEF_LIEU}}, le {{PV.DATE_DU_JOUR}}", null, gras()),
+                        p("(Nom, prénoms, cachet et signature du membre en charge du dossier)", null, null))));
+        lignes.add(ligne(null, cellule(270, vide(), vide(), vide(), p("{{PV.VISEUR}}", null, marques(false, 11))),
+                cellule(270, vide(), vide(), vide(), p("{{PV.MEMBRE}}", null, marques(false, 11)))));
+        c.add(sign);
+
+        // L'annexe : sa propre page, sous les réserves seulement.
+        List<ObjectNode> annexe = new ArrayList<>();
+        annexe.add(ModelePvPage.noeud("pageBreak"));
+        annexe.add(p("ANNEXE", attrs("center", null, null), gras()));
+        annexe.add(vide());
+        ObjectNode obs = table(List.of("REFERENCES", "OBSERVATIONS", "CORRECTIONS"), "OBSERVATIONS", List.of(), List.of(150, 185, 185),
+                marques(false, 12));
+        ArrayNode ligneObs = (ArrayNode) obs.path("content").path(1).path("content");
+        ligneObs.removeAll();
+        ligneObs.add(cellule(150, p("{{OBS.POINT}}", null, marques(false, 12))));
+        ligneObs.add(cellule(185, p("Au lieu de :", null, marques(true, 12)), p("{{OBS.AU_LIEU_DE}}", null, marques(false, 12))));
+        ligneObs.add(cellule(185, p("Lire :", null, marques(true, 12)), p("{{OBS.LIRE}}", null, marques(true, 12))));
+        annexe.add(obs);
+        c.add(bloc("AVEC_RESERVES", annexe));
+
+        ObjectNode doc = F.objectNode();
+        ObjectNode page = doc.putObject("page").put("format", "A4").put("orientation", "portrait").put("police", "Arial").put("taille", 10);
+        page.putObject("marges").put("haut", 25).put("bas", 17).put("gauche", 25).put("droite", 25);
+        doc.putObject("corps").put("type", "doc").set("content", c);
+        ArrayNode pied = F.arrayNode();
+        ObjectNode numero = ModelePvPage.noeud("paragraph");
+        numero.putObject("attrs").put("textAlign", "center");
+        numero.putArray("content").add(ModelePvPage.noeud("numeroPage"));
+        pied.add(numero);
+        doc.putObject("piedDePage").put("type", "doc").set("content", pied);
+
         List<ModelePvDto.Condition> conditions = new ArrayList<>(List.of(
                 new ModelePvDto.Condition("FAVORABLE", "avis = FAV", "Avis favorable"),
                 new ModelePvDto.Condition("AVEC_RESERVES", "avis = FAVR", "Avis favorable avec réserves"),
@@ -162,148 +195,114 @@ public final class ModelePvDepart {
                         "Obligatoire quand l'avis est défavorable.", "DEFAVORABLE"),
                 new ModelePvDto.Champ("observation_generale", "Observation générale de la Commission", "TEXTE_LONG", List.of(), false,
                         "Facultative : un constat d'ensemble sur le dossier.", null));
-        return new Depart(docx, bases, conditions, champs);
-    }
-
-    /**
-     * L'avis en trois blocs, « AVIS FAVORABLE » gardant le gras de la base ; puis l'observation générale et, pour le dossier de
-     * marché, les titulaires proposés et l'écart à l'estimation, insérés avant {@code suivant}.
-     */
-    private static void avis(XWPFDocument doc, XWPFParagraph p, Famille f, String commission, XWPFParagraph suivant,
-            List<Runnable> deplacements) {
-        int iGras = 0;
-        while (iGras < p.getRuns().size() && !String.valueOf(p.getRuns().get(iGras).getText(0)).contains("AVIS")) {
-            iGras++;
-        }
-        CTRPr simple = rpr(p, 0);
-        CTRPr gras = rpr(p, Math.min(iGras, p.getRuns().size() - 1));
-        CTRPr suite = rpr(p, Math.min(iGras + 1, p.getRuns().size() - 1));
-        String cible = f.cible();
-        ecrire(p, List.of(new Morceau("La Commission " + commission + " des Marchés émet un ", simple),
-                new Morceau("{{SI:FAVORABLE}}AVIS FAVORABLE", gras), new Morceau(" " + cible + ".{{FINSI:FAVORABLE}}", suite),
-                new Morceau("{{SI:AVEC_RESERVES}}AVIS FAVORABLE", gras),
-                new Morceau(" " + cible + ", sous réserve qu’il soit tenu compte des observations portées en annexe.{{FINSI:AVEC_RESERVES}}",
-                        suite),
-                new Morceau("{{SI:DEFAVORABLE}}AVIS NON FAVORABLE", gras),
-                new Morceau(" " + cible + ", pour le motif suivant : {{SAISI:motif_defavorable}}.{{FINSI:DEFAVORABLE}}", suite)));
-        List<XmlObject> inseres = new ArrayList<>();
-        inseres.add(copie(doc, p, "{{SI:OBS_GENERALE}}Observations générales de la Commission : {{SAISI:observation_generale}}"
-                + "{{FINSI:OBS_GENERALE}}", simple).getCTP());
-        if (f.titulaires()) {
-            inseres.add(copie(doc, p, "Titulaire(s) proposé(s) :", simple).getCTP());
-            inseres.add(titulaires(doc, p, simple, gras).getCTTbl());
-            inseres.add(copie(doc, p, "Écart à l’estimation : {{MARCHE.ECART}}", simple).getCTP());
-        }
-        for (XmlObject o : inseres) {
-            deplacements.add(() -> deplacer(o, suivant.getCTP()));
-        }
-    }
-
-    /**
-     * Le tableau des titulaires proposés : un en-tête (en gras), une ligne répétée ; aligné sur le paragraphe d'avis (même retrait,
-     * même largeur, même police).
-     */
-    private static XWPFTable titulaires(XWPFDocument doc, XWPFParagraph avis, CTRPr ligne, CTRPr entete) {
-        XWPFTable t = doc.createTable(2, 4);
-        int gauche = Math.max(0, avis.getIndentationLeft());
-        int droite = Math.max(0, avis.getIndentationRight());
-        CTSectPr sect = doc.getDocument().getBody().getSectPr();
-        int page = 11910;
-        int marges = 425;
-        if (sect != null && sect.getPgSz() != null && sect.getPgSz().getW() != null && sect.getPgMar() != null) {
-            page = ((java.math.BigInteger) sect.getPgSz().getW()).intValue();
-            marges = ((java.math.BigInteger) sect.getPgMar().getLeft()).intValue() + ((java.math.BigInteger) sect.getPgMar().getRight()).intValue();
-        }
-        t.setWidth(String.valueOf(Math.max(4000, page - marges - gauche - droite)));
-        CTTblPr tblPr = t.getCTTbl().getTblPr() == null ? t.getCTTbl().addNewTblPr() : t.getCTTbl().getTblPr();
-        CTTblWidth ind = tblPr.isSetTblInd() ? tblPr.getTblInd() : tblPr.addNewTblInd();
-        ind.setW(java.math.BigInteger.valueOf(gauche));
-        ind.setType(STTblWidth.DXA);
-        XWPFBorderType b = XWPFBorderType.SINGLE;
-        t.setTopBorder(b, 4, 0, "000000");
-        t.setBottomBorder(b, 4, 0, "000000");
-        t.setLeftBorder(b, 4, 0, "000000");
-        t.setRightBorder(b, 4, 0, "000000");
-        t.setInsideHBorder(b, 4, 0, "000000");
-        t.setInsideVBorder(b, 4, 0, "000000");
-        String[] titres = { "RANG", "CANDIDAT PROPOSÉ", "MONTANT HT (Ar)", "DÉLAI D’EXÉCUTION" };
-        String[] valeurs = { "{{POUR:TITULAIRES}}{{TIT.RANG}}", "{{TIT.CANDIDAT}}", "{{TIT.MONTANT_HT}}", "{{TIT.DELAI}}" };
-        for (int c = 0; c < 4; c++) {
-            cellule(t.getRow(0).getCell(c), titres[c], entete);
-            cellule(t.getRow(1).getCell(c), valeurs[c], ligne);
-        }
-        return t;
-    }
-
-    private static void cellule(XWPFTableCell c, String texte, CTRPr rpr) {
-        XWPFParagraph p = c.getParagraphs().get(0);
-        ecrire(p, List.of(new Morceau(texte, rpr)));
-    }
-
-    /**
-     * {@code {{FINSI:AVEC_RESERVES}}} dans le dernier paragraphe du corps : l'annexe et les paragraphes vides qui la suivent
-     * disparaissent ensemble quand l'avis n'est pas « avec réserves » (pas de page blanche à leur place).
-     */
-    private static void finAnnexe(XWPFDocument doc) {
-        List<IBodyElement> elements = doc.getBodyElements();
-        XWPFParagraph dernier = elements.get(elements.size() - 1) instanceof XWPFParagraph p ? p : doc.createParagraph();
-        dernier.insertNewRun(0).setText("{{FINSI:AVEC_RESERVES}}");
+        List<String> bases = deux ? List.of(BASE_CENTRALE, BASE_REGIONALE) : List.of(regionale ? BASE_REGIONALE : BASE_CENTRALE);
+        return new Depart(doc, bases, conditions, champs);
     }
 
     // ───────────────────────────────────────────── outils ─────────────────────────────────────────────
 
-    private record Morceau(String texte, CTRPr rpr) {
-    }
-
-    /** Réécrit un paragraphe : ses morceaux retirés, puis un morceau par texte, chacun avec la mise en forme donnée. */
-    private static void ecrire(XWPFParagraph p, List<Morceau> morceaux) {
-        for (int i = p.getRuns().size() - 1; i >= 0; i--) {
-            p.removeRun(i);
+    /** Un paragraphe écrit avec les marqueurs du Word ({@link ModelePvPage#enLigne}). */
+    private static ObjectNode p(String texte, ObjectNode attrs, ArrayNode marques) {
+        ObjectNode n = ModelePvPage.noeud("paragraph");
+        if (attrs != null) {
+            n.set("attrs", attrs);
         }
-        for (Morceau m : morceaux) {
-            XWPFRun r = p.createRun();
-            if (m.rpr() != null) {
-                r.getCTR().setRPr(m.rpr());
-            }
-            r.setText(m.texte());
-        }
-    }
-
-    /** Une copie détachée de la mise en forme du morceau {@code i} (nulle s'il n'en a pas). */
-    private static CTRPr rpr(XWPFParagraph p, int i) {
-        if (i < 0 || i >= p.getRuns().size() || p.getRuns().get(i).getCTR().getRPr() == null) {
-            return null;
-        }
-        return (CTRPr) p.getRuns().get(i).getCTR().getRPr().copy();
-    }
-
-    /** Un paragraphe neuf, en fin de corps, avec la mise en forme de {@code modele} ; {@link #deplacer} le met en place. */
-    private static XWPFParagraph copie(XWPFDocument doc, XWPFParagraph modele, String texte, CTRPr rpr) {
-        XWPFParagraph n = doc.createParagraph();
-        if (modele.getCTP().getPPr() != null) {
-            CTPPr ppr = (CTPPr) modele.getCTP().getPPr().copy();
-            if (ppr.isSetSectPr()) {
-                ppr.unsetSectPr();
-            }
-            n.getCTP().setPPr(ppr);
-        }
-        ecrire(n, List.of(new Morceau(texte, rpr)));
+        n.set("content", ModelePvPage.enLigne(texte, marques));
         return n;
     }
 
-    /** Déplace un élément du corps juste avant {@code avant} (en dernier : les objets POI ne suivent pas le déplacement). */
-    private static void deplacer(XmlObject element, XmlObject avant) {
-        try (XmlCursor source = element.newCursor(); XmlCursor cible = avant.newCursor()) {
-            source.moveXml(cible);
-        }
+    private static ObjectNode vide() {
+        return ModelePvPage.noeud("paragraph");
     }
 
-    /** Les paragraphes du corps et des cellules (un niveau de tableau suffit aux bases). */
-    private static List<XWPFParagraph> tous(XWPFDocument doc) {
-        List<XWPFParagraph> out = new ArrayList<>(doc.getParagraphs());
-        for (XWPFTable t : doc.getTables()) {
-            t.getRows().forEach(l -> l.getTableCells().forEach(c -> out.addAll(c.getParagraphs())));
+    /** « La Commission … émet un <b>AVIS …</b> cible. », justifié. */
+    private static ObjectNode avis(String debut, String avis, String fin) {
+        ObjectNode n = ModelePvPage.noeud("paragraph");
+        n.set("attrs", attrs("justify", null, null));
+        ArrayNode content = n.putArray("content");
+        content.addAll(ModelePvPage.enLigne(debut, null));
+        content.addAll(ModelePvPage.enLigne(avis, gras()));
+        content.addAll(ModelePvPage.enLigne(fin, null));
+        return n;
+    }
+
+    private static ObjectNode bloc(String condition, List<ObjectNode> contenu) {
+        ObjectNode b = ModelePvPage.noeud("bloc");
+        b.putObject("attrs").put("condition", condition);
+        ArrayNode a = b.putArray("content");
+        contenu.forEach(a::add);
+        return b;
+    }
+
+    /** Un tableau à bordures : un en-tête en gras, puis une ligne répétée par {@code liste} portant {@code valeurs}. */
+    private static ObjectNode table(List<String> titres, String liste, List<String> valeurs, List<Integer> largeurs, ArrayNode marques) {
+        ObjectNode t = ModelePvPage.noeud("table");
+        t.putObject("attrs").put("bordures", true);
+        ArrayNode lignes = t.putArray("content");
+        List<ObjectNode> entete = new ArrayList<>();
+        List<ObjectNode> repetee = new ArrayList<>();
+        ArrayNode grasTitre = marques == null ? gras() : marques(true, 12);
+        for (int i = 0; i < titres.size(); i++) {
+            entete.add(cellule(largeurs.get(i), p(titres.get(i), "REFERENCES".equals(titres.get(i)) ? attrs("center", null, null) : null,
+                    grasTitre)));
+            repetee.add(cellule(largeurs.get(i), p(i < valeurs.size() ? valeurs.get(i) : "", null, marques)));
         }
-        return out;
+        lignes.add(ligne(null, entete.toArray(ObjectNode[]::new)));
+        lignes.add(ligne(liste, repetee.toArray(ObjectNode[]::new)));
+        return t;
+    }
+
+    private static ObjectNode ligne(String liste, ObjectNode... cellules) {
+        ObjectNode l = ModelePvPage.noeud("tableRow");
+        if (liste != null) {
+            l.putObject("attrs").put("liste", liste);
+        }
+        ArrayNode a = l.putArray("content");
+        for (ObjectNode c : cellules) {
+            a.add(c);
+        }
+        return l;
+    }
+
+    private static ObjectNode cellule(int largeur, ObjectNode... paragraphes) {
+        ObjectNode c = ModelePvPage.noeud("tableCell");
+        c.putObject("attrs").putArray("colwidth").add(largeur);
+        ArrayNode a = c.putArray("content");
+        for (ObjectNode p : paragraphes) {
+            a.add(p);
+        }
+        return c;
+    }
+
+    private static ObjectNode attrs(String alignement, Double retrait, Double retraitDroite) {
+        ObjectNode a = F.objectNode();
+        if (alignement != null) {
+            a.put("textAlign", alignement);
+        }
+        if (retrait != null) {
+            a.put("retrait", retrait);
+        }
+        if (retraitDroite != null) {
+            a.put("retraitDroite", retraitDroite);
+        }
+        return a;
+    }
+
+    private static ArrayNode gras() {
+        ArrayNode m = F.arrayNode();
+        m.add(ModelePvPage.noeud("bold"));
+        return m;
+    }
+
+    /** Gras ou non, en Times New Roman à la taille donnée (le titre, l'annexe et les noms de la base). */
+    private static ArrayNode marques(boolean gras, int taille) {
+        ArrayNode m = F.arrayNode();
+        if (gras) {
+            m.add(ModelePvPage.noeud("bold"));
+        }
+        ObjectNode style = ModelePvPage.noeud("textStyle");
+        style.putObject("attrs").put("fontFamily", "Times New Roman").put("fontSize", taille + "pt");
+        m.add(style);
+        return m;
     }
 }

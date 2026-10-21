@@ -20,6 +20,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import cnm.prs.dto.ModelePvDto;
 import cnm.prs.entity.VersionModelePv;
+import cnm.prs.entity.ImageModelePv;
+import cnm.prs.service.ImagesModelePvService;
 import cnm.prs.service.ModelePvService;
 import cnm.prs.service.ModelesIntegresService;
 import jakarta.validation.Valid;
@@ -31,6 +33,12 @@ import jakarta.validation.Valid;
  * {@code NATURE_SANS_DEPART}, {@code PORTEE_INCONNUE} ; 409 {@code FAMILLES_MULTIPLES}, {@code FAMILLE_SANS_DEPART}, {@code CODE_DEJA_PRIS},
  * {@code MODELE_ARCHIVE}, {@code VERSION_FIGEE}, {@code RAPPORT_BLOQUANT}, {@code SOUS_TYPE_DEJA_SERVI}, {@code MODELE_EN_SERVICE},
  * {@code CONVERSION_INDISPONIBLE}, {@code APERCU_IMPOSSIBLE} ; 404.
+ *
+ * <p>⚠️ 2026-10-21 (demande front « modele-pv-page », lots P1-P2) — une version est une page : {@code POST /{id}/versions} reçoit
+ * {@code { document, motif? }} en JSON, {@code PUT /{id}/versions/{n}/document} modifie un brouillon, l'aperçu d'une page est un PDF.
+ * Codes ajoutés : 400 {@code DOCUMENT_INVALIDE} ({@code details} chemin → raison), {@code FORMAT_INDISPONIBLE}, {@code IMAGE_INVALIDE} ;
+ * 409 {@code SUPPORT_ABANDONNE} (dépôt d'un Word, mise en vigueur ou modification d'une version Word), {@code VERSION_SANS_FICHIER}.
+ * Images : {@code POST /images}, {@code GET /images/{idImage}}, {@code GET /images/embleme}. Schéma : {@code GET /schema}.</p>
  */
 @RestController
 @RequestMapping("/api/modeles-pv")
@@ -42,10 +50,38 @@ public class ModelePvController {
 
     private final ModelePvService service;
     private final ModelesIntegresService integres;
+    private final ImagesModelePvService images;
 
-    public ModelePvController(ModelePvService service, ModelesIntegresService integres) {
+    public ModelePvController(ModelePvService service, ModelesIntegresService integres, ImagesModelePvService images) {
         this.service = service;
         this.integres = integres;
+        this.images = images;
+    }
+
+    /** ⚠️ 2026-10-21 (« modele-pv-page », §B1) — le schéma du document : nœuds, attributs, listes fermées, limites. */
+    @GetMapping("/schema")
+    public java.util.Map<String, Object> schema() {
+        return service.schema();
+    }
+
+    /** ⚠️ 2026-10-21 (« modele-pv-page », §B3) — multipart, partie {@code fichier} : PNG ou JPEG, 2 Mo au plus. */
+    @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ModelePvDto.ImageDeposee deposerImage(@RequestParam("fichier") MultipartFile fichier) {
+        return images.deposer(fichier);
+    }
+
+    /** L'emblème des PV officiels, fourni par l'application (créé au premier appel). */
+    @GetMapping("/images/embleme")
+    public ModelePvDto.ImageDeposee embleme() {
+        return images.embleme();
+    }
+
+    /** L'image, servie avec son type contrôlé, jamais celui déclaré au dépôt. */
+    @GetMapping("/images/{idImage:\\d+}")
+    public ResponseEntity<byte[]> image(@PathVariable Long idImage) {
+        ImageModelePv i = images.lire(idImage);
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(i.getType()))
+                .header("X-Content-Type-Options", "nosniff").body(i.getContenu());
     }
 
     @GetMapping
@@ -112,10 +148,26 @@ public class ModelePvController {
         return service.dupliquer(id, corps);
     }
 
-    /** Multipart, partie {@code fichier} : le {@code .docx}. Rend la version en brouillon et son rapport de contrôle. */
-    @PostMapping("/{id}/versions")
-    public ModelePvDto.Version deposer(@PathVariable Long id, @RequestParam("fichier") MultipartFile fichier) {
+    /** ⚠️ 2026-10-21 (« modele-pv-page », §B2) — le dépôt d'un {@code .docx} est retiré : 409 {@code SUPPORT_ABANDONNE}. */
+    @PostMapping(value = "/{id}/versions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ModelePvDto.Version deposer(@PathVariable Long id, @RequestParam(value = "fichier", required = false) MultipartFile fichier) {
         return service.deposer(id, fichier);
+    }
+
+    /**
+     * ⚠️ 2026-10-21 (« modele-pv-page », §B2) — une nouvelle version page : {@code { document, motif? }}. Rend la version en brouillon,
+     * son document et son rapport de contrôle.
+     */
+    @PostMapping(value = "/{id}/versions", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ModelePvDto.Version enregistrer(@PathVariable Long id, @Valid @RequestBody ModelePvDto.DocumentRequest corps) {
+        return service.enregistrerVersion(id, corps);
+    }
+
+    /** ⚠️ 2026-10-21 (« modele-pv-page », §B2, Q4) — remplace le document d'un brouillon ; le rapport est recalculé. */
+    @PutMapping("/{id}/versions/{numero}/document")
+    public ModelePvDto.Version document(@PathVariable Long id, @PathVariable Integer numero,
+            @Valid @RequestBody ModelePvDto.DocumentRequest corps) {
+        return service.modifierDocument(id, numero, corps);
     }
 
     /**
@@ -146,7 +198,8 @@ public class ModelePvController {
     }
 
     /**
-     * L'aperçu sur un dossier réel, sans rien enregistrer : {@code format=pdf} (défaut) ou {@code docx} ; {@code avis} force l'avis
+     * L'aperçu sur un dossier réel, sans rien enregistrer : {@code format=pdf} (défaut) ou {@code docx} (une version Word seulement,
+     * ⚠️ 2026-10-21 : une page s'aperçoit en PDF, 400 {@code FORMAT_INDISPONIBLE}) ; {@code avis} force l'avis
      * (FAV, FAVR, DEF, NSP) ; le corps facultatif porte les champs saisis.
      */
     @PostMapping("/{id}/versions/{numero}/apercu")

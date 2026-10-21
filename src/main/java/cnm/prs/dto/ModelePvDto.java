@@ -6,6 +6,7 @@ import java.util.Map;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import tools.jackson.databind.JsonNode;
 
 /**
  * ⚠️ 2026-10-20 (demande front « generateur-modeles-pv », §B4, lot G1) — les échanges de l'écran « Modèles de PV » de
@@ -32,10 +33,14 @@ public final class ModelePvDto {
     public record SousType(String id, String libelle, String famille) {
     }
 
-    /** Une version : son fichier, son état, son rapport de contrôle, ses conditions et ses champs saisis. */
+    /**
+     * Une version : son fichier, son état, son rapport de contrôle, ses conditions et ses champs saisis. ⚠️ 2026-10-21
+     * (« modele-pv-page ») — {@code support} {@code WORD} ou {@code PAGE} ; {@code document} : le document de la page, servi par la
+     * lecture d'une version et par les gestes qui la produisent ou la modifient (nul dans la fiche du modèle et pour un Word).
+     */
     public record Version(Integer numero, String nomFichier, Long taille, String empreinte, String etat, boolean bloquant,
             Rapport rapport, String motif, LocalDateTime deposeeLe, String deposeePar, LocalDateTime enVigueurLe, String enVigueurPar,
-            LocalDateTime remplaceeLe, List<Condition> conditions, List<Champ> champs) {
+            LocalDateTime remplaceeLe, List<Condition> conditions, List<Champ> champs, String support, JsonNode document) {
     }
 
     /** Le rapport de contrôle (§B5) : des points {@code OK}, {@code AVERTISSEMENT} ou {@code BLOQUANT}. */
@@ -43,8 +48,12 @@ public final class ModelePvDto {
             List<String> conditionsUtilisees, List<String> champsUtilises, LocalDateTime controleLe) {
     }
 
-    /** Un point du rapport ; {@code ou} situe le marqueur (paragraphe, cellule, en-tête), {@code suggestion} propose un code connu. */
-    public record Point(String niveau, String code, String message, String ou, String suggestion) {
+    /**
+     * Un point du rapport ; {@code ou} situe le marqueur (paragraphe, cellule, en-tête), {@code suggestion} propose un code connu.
+     * ⚠️ 2026-10-21 (« modele-pv-page », §B4) — {@code chemin} : pour une page, les rangs du nœud dans les {@code content} depuis sa
+     * zone ({@code corps/12/0/1}), pour y amener le curseur ; nul pour un Word.
+     */
+    public record Point(String niveau, String code, String message, String ou, String suggestion, String chemin) {
     }
 
     public record Condition(@NotBlank @Size(max = 60) String nom, @NotBlank @Size(max = 1000) String expression,
@@ -73,6 +82,14 @@ public final class ModelePvDto {
     }
 
     public record ApercuRequest(Map<String, String> saisis) {
+    }
+
+    /** ⚠️ 2026-10-21 (« modele-pv-page », §B2) — une version page : le document de l'éditeur, un motif facultatif. */
+    public record DocumentRequest(JsonNode document, @Size(max = 1000) String motif) {
+    }
+
+    /** ⚠️ 2026-10-21 (« modele-pv-page », §B3) — une image déposée : dimensions en pixels, type contrôlé, code d'une image fournie. */
+    public record ImageDeposee(Long idImage, int largeur, int hauteur, String type, String code) {
     }
 
     /** Le modèle de départ (« modele-pv-depart ») : {@code centrale}, {@code regionale} ou {@code les-deux} (défaut). */

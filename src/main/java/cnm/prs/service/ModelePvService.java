@@ -40,6 +40,7 @@ import cnm.prs.repository.SousTypeDossierRepository;
 import cnm.prs.repository.VersionModelePvRepository;
 import cnm.prs.security.CurrentUser;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -50,6 +51,11 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>Ce lot ne produit encore aucun PV : la production par la version en vigueur (B6) est le lot G2. Les 14 modèles du plan restent
  * servis par {@link PvDocumentGenerator}.</p>
+ *
+ * <p>⚠️ 2026-10-21 (demande front « modele-pv-page », lots P1-P2 ; V139) — le support change : une version est une
+ * <strong>page</strong> construite dans l'application ({@link ModelePvPage}), enregistrée en document JSON, contrôlée sur ses nœuds
+ * et rendue en PDF. Le dépôt d'un Word est retiré ; les versions Word déjà déposées restent en consultation (fichier, aperçu) et ne
+ * se mettent plus en vigueur ({@code SUPPORT_ABANDONNE}).</p>
  */
 @Service
 @Transactional
@@ -57,7 +63,6 @@ public class ModelePvService {
 
     static final Set<String> NATURES = Set.of("PV", "LETTRE_RENVOI");
     static final Set<String> TYPES_CHAMP = Set.of("TEXTE", "TEXTE_LONG", "LISTE", "CASE", "DATE", "NOMBRE", "PIECE");
-    private static final long TAILLE_MAX = 10L * 1024 * 1024;
     private static final Pattern NOM_CONDITION = Pattern.compile("[A-Za-z0-9_-]{1,60}");
     private static final Pattern CODE_CHAMP = Pattern.compile("[A-Za-z0-9_]{1,60}");
     private static final Pattern CODE_MODELE = Pattern.compile("[A-Za-z0-9_.-]{1,50}");
@@ -74,13 +79,14 @@ public class ModelePvService {
     private final SousTypeDossierRepository sousTypes;
     private final ContexteModelePvService contextes;
     private final PvDocumentGenerator convertisseur;
+    private final ImagesModelePvService images;
     private final ObjectMapper json;
     private final boolean essaiPdf;
 
     public ModelePvService(ModelePvRepository modeles, VersionModelePvRepository versions, ConditionModelePvRepository conditions,
             ChampSaisiModelePvRepository champs, RattachementModelePvRepository rattachements, JournalModelePvRepository journal,
             SousTypeDossierRepository sousTypes, ContexteModelePvService contextes, PvDocumentGenerator convertisseur,
-            ObjectMapper json, @Value("${app.modeles-pv.essai-pdf:true}") boolean essaiPdf) {
+            ImagesModelePvService images, ObjectMapper json, @Value("${app.modeles-pv.essai-pdf:true}") boolean essaiPdf) {
         this.modeles = modeles;
         this.versions = versions;
         this.conditions = conditions;
@@ -90,6 +96,7 @@ public class ModelePvService {
         this.sousTypes = sousTypes;
         this.contextes = contextes;
         this.convertisseur = convertisseur;
+        this.images = images;
         this.json = json;
         this.essaiPdf = essaiPdf;
     }
@@ -116,12 +123,24 @@ public class ModelePvService {
 
     @Transactional(readOnly = true)
     public ModelePvDto.Version version(Long id, Integer numero) {
-        return dto(version(modele(id), numero));
+        return dto(version(modele(id), numero), true);
     }
 
+    /** Le fichier d'une version Word ; une page n'en a pas (409 {@code VERSION_SANS_FICHIER}). */
     @Transactional(readOnly = true)
     public VersionModelePv fichier(Long id, Integer numero) {
-        return version(modele(id), numero);
+        VersionModelePv v = version(modele(id), numero);
+        if (VersionModelePv.PAGE.equals(v.getSupport())) {
+            throw new BusinessRuleException("La version " + numero + " est une page : elle n'a pas de fichier. Son rendu se voit par "
+                    + "l'aperçu PDF.", "VERSION_SANS_FICHIER");
+        }
+        return v;
+    }
+
+    /** ⚠️ 2026-10-21 (« modele-pv-page », §B1) — le schéma du document : nœuds, attributs, listes fermées, limites. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> schema() {
+        return ModelePvPage.schema();
     }
 
     /** Le catalogue des variables (§B3), filtré par la famille du sous-type ({@code null} : tout). */
@@ -208,7 +227,11 @@ public class ModelePvService {
         return fiche(m);
     }
 
-    /** Copie le modèle et sa version en vigueur (à défaut sa dernière version), conditions et champs compris, en brouillon. */
+    /**
+     * Copie le modèle et sa version en vigueur (à défaut sa dernière version), conditions et champs compris, en brouillon.
+     * ⚠️ 2026-10-21 (« modele-pv-page », §B6) — une version Word ne se copie plus (elle ne pourrait pas être mise en vigueur) : la
+     * copie part alors sans version, le journal le dit.
+     */
     public ModelePvDto.Fiche dupliquer(Long id, ModelePvDto.DuplicationRequest r) {
         ModelePv source = modele(id);
         String code = r == null || r.code() == null || r.code().isBlank() ? codeLibre(source.getCode() + "-COPIE") : r.code();
@@ -217,8 +240,12 @@ public class ModelePvService {
         List<VersionModelePv> vs = versions.findByIdModeleOrderByNumeroDesc(id);
         VersionModelePv base = vs.stream().filter(v -> VersionModelePv.EN_VIGUEUR.equals(v.getEtat())).findFirst()
                 .orElse(vs.isEmpty() ? null : vs.get(0));
+        boolean word = base != null && !VersionModelePv.PAGE.equals(base.getSupport());
+        if (word) {
+            base = null;
+        }
         if (base != null) {
-            VersionModelePv v = enregistrer(copie, base.getNomFichier(), base.getContenu());
+            VersionModelePv v = enregistrerPage(copie, base.getDocument());
             int ordre = 0;
             for (ConditionModelePv c : conditions.findByIdVersionOrderByOrdreAsc(base.getIdVersion())) {
                 conditions.save(condition(v, c.getNom(), c.getExpression(), c.getLibelle(), ordre++));
@@ -239,34 +266,80 @@ public class ModelePvService {
             }
             controlerEtEnregistrer(copie, v);
         }
-        tracer(copie, null, "DUPLIQUE", "copie de " + source.getCode() + (base == null ? "" : ", version " + base.getNumero()));
+        tracer(copie, null, "DUPLIQUE", "copie de " + source.getCode() + (base != null ? ", version " + base.getNumero()
+                : word ? ", sans version (la version Word n'est pas copiée : support abandonné)" : ""));
         tracer(source, null, "DUPLIQUE", "copié en " + copie.getCode());
         return fiche(copie);
     }
 
-    /** Dépose une version : contrôlée tout de suite, en brouillon avec son rapport (§B5). */
+    /**
+     * ⚠️ 2026-10-21 (« modele-pv-page », §B2) — le dépôt d'un Word est retiré : l'Administrateur ne dépose plus de fichier, tout
+     * modèle géré est une page (409 {@code SUPPORT_ABANDONNE}).
+     */
     public ModelePvDto.Version deposer(Long id, MultipartFile fichier) {
+        actif(id);
+        throw new BusinessRuleException("Le dépôt d'un Word est retiré : un modèle de PV se construit désormais dans l'application "
+                + "(POST …/versions avec le document de la page, ou POST …/versions/depart).", "SUPPORT_ABANDONNE");
+    }
+
+    /**
+     * ⚠️ 2026-10-21 (« modele-pv-page », §B2) — enregistre une nouvelle version <strong>page</strong> : le document est validé (400
+     * {@code DOCUMENT_INVALIDE}, {@code details} chemin → raison), puis contrôlé ; la version est un brouillon avec son rapport.
+     */
+    public ModelePvDto.Version enregistrerVersion(Long id, ModelePvDto.DocumentRequest r) {
         ModelePv m = actif(id);
-        if (fichier == null || fichier.isEmpty()) {
-            throw new BadRequestException("Aucun fichier déposé.", "FICHIER_INVALIDE");
+        String document = documentValide(r);
+        VersionModelePv v = enregistrerPage(m, document);
+        if (r.motif() != null && !r.motif().isBlank()) {
+            v.setMotif(r.motif().trim());
         }
-        String nom = fichier.getOriginalFilename() == null ? "modele.docx" : fichier.getOriginalFilename();
-        if (!nom.toLowerCase(Locale.ROOT).endsWith(".docx")) {
-            throw new BadRequestException("Le modèle se dépose en Word (.docx) : « " + nom + " ».", "FICHIER_INVALIDE");
+        ModelePvDto.Rapport rapport = controlerEtEnregistrer(m, v);
+        tracer(m, v.getNumero(), "ENREGISTREE", "page de " + v.getTaille() + " octets"
+                + (rapport.bloquant() ? ", contrôle bloquant (" + rapport.nbBloquants() + ")" : ", contrôle sans blocage"));
+        return dto(v, true);
+    }
+
+    /**
+     * ⚠️ 2026-10-21 (« modele-pv-page », §B2, Q4) — remplace le document d'un <strong>brouillon</strong> (409 {@code VERSION_FIGEE}
+     * sinon ; 409 {@code SUPPORT_ABANDONNE} sur une version Word) ; le rapport est recalculé. L'éditeur enregistre ainsi sans
+     * multiplier les versions.
+     */
+    public ModelePvDto.Version modifierDocument(Long id, Integer numero, ModelePvDto.DocumentRequest r) {
+        ModelePv m = actif(id);
+        VersionModelePv v = brouillon(m, numero);
+        if (!VersionModelePv.PAGE.equals(v.getSupport())) {
+            throw new BusinessRuleException("La version " + numero + " est un Word, gardé en consultation : enregistrez une nouvelle "
+                    + "version page.", "SUPPORT_ABANDONNE");
         }
-        if (fichier.getSize() > TAILLE_MAX) {
-            throw new BadRequestException("Le fichier dépasse 10 Mo.", "FICHIER_INVALIDE");
+        String document = documentValide(r);
+        poserDocument(v, document);
+        if (r.motif() != null && !r.motif().isBlank()) {
+            v.setMotif(r.motif().trim());
         }
-        byte[] contenu;
+        ModelePvDto.Rapport rapport = controlerEtEnregistrer(m, v);
+        tracer(m, numero, "DOCUMENT_MODIFIE", "page de " + v.getTaille() + " octets"
+                + (rapport.bloquant() ? ", contrôle bloquant (" + rapport.nbBloquants() + ")" : ", contrôle sans blocage"));
+        return dto(v, true);
+    }
+
+    /** Le document validé, sérialisé : 400 {@code DOCUMENT_INVALIDE} s'il manque, dépasse 2 Mo ou sort du schéma. */
+    private String documentValide(ModelePvDto.DocumentRequest r) {
+        if (r == null || r.document() == null || r.document().isNull() || r.document().isMissingNode()) {
+            throw new BadRequestException("Le document de la page est obligatoire.", "DOCUMENT_INVALIDE",
+                    Map.<String, Object>of("document", "document : obligatoire"));
+        }
+        String texte = json.writeValueAsString(r.document());
+        if (texte.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > ModelePvPage.TAILLE_MAX) {
+            throw new BadRequestException("Le document dépasse 2 Mo (les images sont à part).", "DOCUMENT_INVALIDE",
+                    Map.<String, Object>of("document", "document : plus de 2 Mo"));
+        }
         try {
-            contenu = fichier.getBytes();
-        } catch (IOException e) {
-            throw new BadRequestException("Fichier illisible : " + e.getMessage(), "FICHIER_INVALIDE");
+            ModelePvPage.valider(r.document(), images::existe);
+        } catch (ModelePvPage.Invalide e) {
+            throw new BadRequestException("Document invalide : " + e.details().values().iterator().next()
+                    + (e.details().size() > 1 ? " (et " + (e.details().size() - 1) + " autre(s))" : ""), "DOCUMENT_INVALIDE", e.details());
         }
-        VersionModelePv v = enregistrer(m, nom, contenu);
-        ModelePvDto.Rapport r = controlerEtEnregistrer(m, v);
-        tracer(m, v.getNumero(), "DEPOSEE", nom + (r.bloquant() ? ", contrôle bloquant (" + r.nbBloquants() + ")" : ", contrôle sans blocage"));
-        return dto(v);
+        return texte;
     }
 
     public ModelePvDto.Version declarerConditions(Long id, Integer numero, List<ModelePvDto.Condition> liste) {
@@ -367,20 +440,16 @@ public class ModelePvService {
             throw new BusinessRuleException("Pas de modèle de départ pour la famille " + famille + " : le plan a ses modèles intégrés, "
                     + "leur reprise relève du lot G4.", "FAMILLE_SANS_DEPART");
         }
-        ModelePvDepart.Depart d;
-        try {
-            d = ModelePvDepart.assembler(f, p);
-        } catch (IOException e) {
-            throw new IllegalStateException("Assemblage du modèle de départ impossible : " + e.getMessage(), e);
-        }
-        VersionModelePv v = enregistrer(m, "depart-" + m.getCode() + ".docx", d.docx());
+        // ⚠️ 2026-10-21 (« modele-pv-page », §B5) — le départ est une page, reconstruite d'après la base et son emblème.
+        ModelePvDepart.Depart d = ModelePvDepart.assembler(f, p, images.embleme().idImage());
+        VersionModelePv v = enregistrerPage(m, json.writeValueAsString(d.document()));
         v.setMotif(ModelePvDepart.MOTIF);
         enregistrerConditions(v, d.conditions());
         enregistrerChamps(v, d.champs());
         ModelePvDto.Rapport r = controlerEtEnregistrer(m, v);
-        tracer(m, v.getNumero(), "DEPART_GENERE", "famille " + famille + ", base " + String.join(" + ", d.bases()) + ", portée " + p
-                + (r.bloquant() ? ", contrôle bloquant (" + r.nbBloquants() + ")" : ", contrôle sans blocage"));
-        return dto(v);
+        tracer(m, v.getNumero(), "DEPART_GENERE", "famille " + famille + ", page reconstruite d'après " + String.join(" + ", d.bases())
+                + ", portée " + p + (r.bloquant() ? ", contrôle bloquant (" + r.nbBloquants() + ")" : ", contrôle sans blocage"));
+        return dto(v, true);
     }
 
     private void enregistrerConditions(VersionModelePv v, List<ModelePvDto.Condition> liste) {
@@ -422,7 +491,19 @@ public class ModelePvService {
         if (avis != null && !avis.isBlank() && !List.of("FAV", "FAVR", "DEF", "NSP").contains(avis)) {
             throw new BadRequestException("Avis inconnu : « " + avis + " » (FAV, FAVR, DEF, NSP).", "AVIS_INCONNU");
         }
+        boolean page = VersionModelePv.PAGE.equals(v.getSupport());
+        if (page && !pdf) {
+            throw new BadRequestException("Une page s'aperçoit en PDF seulement : il n'y a plus d'export Word.", "FORMAT_INDISPONIBLE");
+        }
         ModelePvWord.Contexte ctx = contextes.pour(idDossier, avis == null || avis.isBlank() ? null : avis, saisis);
+        if (page) {
+            // ⚠️ 2026-10-21 (« modele-pv-page », §B5) — le même rendu que l'essai du contrôle et que la production à venir (G2).
+            try {
+                return rendre(v.getDocument(), ctx, declarees(v));
+            } catch (RuntimeException e) {
+                throw new BusinessRuleException("La page n'a pas pu être rendue : " + e.getMessage(), "APERCU_IMPOSSIBLE");
+            }
+        }
         byte[] docx;
         try {
             docx = ModelePvWord.remplir(v.getContenu(), ctx, declarees(v));
@@ -444,13 +525,18 @@ public class ModelePvService {
     public ModelePvDto.Fiche mettreEnVigueur(Long id, Integer numero, String motif) {
         ModelePv m = actif(id);
         VersionModelePv v = brouillon(m, numero);
+        if (!VersionModelePv.PAGE.equals(v.getSupport())) {
+            // ⚠️ 2026-10-21 (« modele-pv-page », §B6, Q5) — les versions Word restent en consultation seulement.
+            throw new BusinessRuleException("La version " + numero + " est un Word : ce support est abandonné, elle reste en consultation. "
+                    + "Générez un modèle de départ en page ou enregistrez une page.", "SUPPORT_ABANDONNE");
+        }
         if (motif == null || motif.isBlank()) {
             throw new BadRequestException("La mise en vigueur demande un motif.", "MOTIF_REQUIS");
         }
         ModelePvDto.Rapport r = controlerEtEnregistrer(m, v);
         if (r.bloquant()) {
             throw new BusinessRuleException("Le rapport de contrôle de la version " + numero + " est bloquant (" + r.nbBloquants()
-                    + ") : corrigez le Word et déposez-le de nouveau.", "RAPPORT_BLOQUANT", null, Map.of("nbBloquants", r.nbBloquants()));
+                    + ") : corrigez la page et enregistrez-la de nouveau.", "RAPPORT_BLOQUANT", null, Map.of("nbBloquants", r.nbBloquants()));
         }
         LocalDateTime maintenant = LocalDateTime.now();
         versions.findByIdModeleAndEtat(m.getIdModele(), VersionModelePv.EN_VIGUEUR).ifPresent(p -> {
@@ -545,13 +631,16 @@ public class ModelePvService {
     private ModelePvDto.Rapport controlerEtEnregistrer(ModelePv m, VersionModelePv v) {
         Set<String> codesChamps = new LinkedHashSet<>();
         champs.findByIdVersionOrderByOrdreAsc(v.getIdVersion()).forEach(c -> codesChamps.add(c.getCode()));
-        ModelePvDto.Rapport r = controler(v.getContenu(), m.getNature(), declarees(v), codesChamps);
+        ModelePvDto.Rapport r = VersionModelePv.PAGE.equals(v.getSupport())
+                ? controlerPage(v.getDocument(), m.getNature(), declarees(v), codesChamps)
+                : controler(v.getContenu(), m.getNature(), declarees(v), codesChamps);
         v.setRapport(json.writeValueAsString(r));
         v.setBloquant(r.bloquant());
         versions.save(v);
         return r;
     }
 
+    /** Le contrôle d'une version Word (gardée en consultation) : relevé du fichier, puis les points communs. */
     ModelePvDto.Rapport controler(byte[] contenu, String nature, Map<String, String> declarees, Set<String> codesChamps) {
         List<ModelePvDto.Point> pts = new ArrayList<>();
         ModelePvWord.Releve rel;
@@ -563,33 +652,58 @@ public class ModelePvService {
         }
         pts.add(point("OK", "FICHIER_LISIBLE", "Fichier Word lisible", null, null));
         rel.defauts().forEach(d -> pts.add(point("BLOQUANT", d.code(), d.message(), d.ou(), null)));
+        boolean blocsSains = rel.defauts().stream().noneMatch(d -> d.code().startsWith("BLOC_"));
+        return points(pts, rel.marqueurs(), Map.of(), false, blocsSains, nature, declarees, codesChamps,
+                () -> essai(contenu, declarees, pts));
+    }
+
+    /**
+     * ⚠️ 2026-10-21 (« modele-pv-page », §B4) — le contrôle d'une page : les mêmes points, appliqués aux nœuds ; {@code ou} est le
+     * lieu lisible du nœud, {@code chemin} ses rangs. Les défauts propres au Word (fichier illisible, marqueur coupé, bloc mal fermé,
+     * ancien marqueur, image) n'ont plus lieu d'être : un nœud ne se coupe pas.
+     */
+    ModelePvDto.Rapport controlerPage(String document, String nature, Map<String, String> declarees, Set<String> codesChamps) {
+        List<ModelePvDto.Point> pts = new ArrayList<>();
+        JsonNode doc = json.readTree(document);
+        ModelePvPage.Releve rel = ModelePvPage.relever(doc);
+        pts.add(point("OK", "DOCUMENT_VALIDE", "Document de la page conforme au schéma", null, null));
+        return points(pts, rel.marqueurs(), rel.chemins(), true, true, nature, declarees, codesChamps,
+                () -> essaiPage(document, declarees, pts));
+    }
+
+    /** Les points communs aux deux supports, sur les marqueurs relevés ; {@code page} adapte les messages et les suggestions. */
+    private ModelePvDto.Rapport points(List<ModelePvDto.Point> pts, List<ModelePvWord.Marqueur> marqueurs,
+            Map<ModelePvWord.Marqueur, String> chemins, boolean page, boolean blocsSains, String nature, Map<String, String> declarees,
+            Set<String> codesChamps, Runnable essai) {
         Set<String> variables = new LinkedHashSet<>();
         Set<String> listes = new LinkedHashSet<>();
         Set<String> conditionsUtilisees = new LinkedHashSet<>();
         Set<String> champsUtilises = new LinkedHashSet<>();
         int repetees = 0;
-        boolean blocsSains = rel.defauts().stream().noneMatch(d -> d.code().startsWith("BLOC_"));
-        for (ModelePvWord.Marqueur mk : rel.marqueurs()) {
+        for (ModelePvWord.Marqueur mk : marqueurs) {
+            String ch = chemins.get(mk);
             switch (mk.type()) {
                 case "VARIABLE", "ALIAS" -> {
                     CatalogueModelesPv.Variable var = CatalogueModelesPv.variable(mk.code()).orElse(null);
                     if (var == null) {
                         String s = CatalogueModelesPv.suggestion(mk.code()).orElse(null);
                         pts.add(point("BLOQUANT", "VARIABLE_INCONNUE", "Variable inconnue " + mk.brut()
-                                + (s == null ? "" : " — vouliez-vous {{" + s + "}} ?"), mk.ou(), s == null ? null : "{{" + s + "}}"));
+                                + (s == null ? "" : " — vouliez-vous {{" + s + "}} ?"), mk.ou(),
+                                s == null ? null : page ? s : "{{" + s + "}}", ch));
                         continue;
                     }
                     if (mk.format() != null && !CatalogueModelesPv.FORMATS.contains(mk.format())) {
                         pts.add(point("BLOQUANT", "FORMAT_INCONNU", "Format inconnu « " + mk.format() + " » dans " + mk.brut() + " "
-                                + CatalogueModelesPv.FORMATS, mk.ou(), null));
+                                + CatalogueModelesPv.FORMATS, mk.ou(), null, ch));
                     }
                     if (var.liste() != null && !var.liste().equals(mk.liste())) {
                         pts.add(point("BLOQUANT", "VARIABLE_HORS_LISTE", mk.brut() + " ne vaut que sur une ligne de tableau répétée : "
-                                + "écrivez {{POUR:" + var.liste() + "}} dans la première cellule de la ligne.", mk.ou(), null));
+                                + (page ? "placez-la dans une ligne répétée de la liste " + var.liste() + "."
+                                        : "écrivez {{POUR:" + var.liste() + "}} dans la première cellule de la ligne."), mk.ou(), null, ch));
                     }
                     if ("ALIAS".equals(mk.type())) {
                         pts.add(point("AVERTISSEMENT", "ANCIEN_MARQUEUR", "Ancien marqueur " + mk.brut() + " lu comme {{" + var.code() + "}}",
-                                mk.ou(), "{{" + var.code() + "}}"));
+                                mk.ou(), "{{" + var.code() + "}}", ch));
                     }
                     if (variables.add(var.code()) && var.liste() != null) {
                         repetees++;
@@ -600,24 +714,25 @@ public class ModelePvService {
                     champsUtilises.add(mk.code());
                     if (!codesChamps.contains(mk.code())) {
                         pts.add(point("BLOQUANT", "CHAMP_NON_DECLARE", mk.brut() + " : le champ « " + mk.code()
-                                + " » n'est pas déclaré dans les champs saisis de la version.", mk.ou(), null));
+                                + " » n'est pas déclaré dans les champs saisis de la version.", mk.ou(), null, ch));
                     }
                 }
                 case "SI" -> {
                     conditionsUtilisees.add(mk.code());
                     if (!declarees.containsKey(mk.code())) {
                         blocsSains = false;
-                        pts.add(point("BLOQUANT", "CONDITION_NON_DECLAREE", mk.brut() + " : la condition « " + mk.code()
-                                + " » n'est pas déclarée pour cette version.", mk.ou(), null));
+                        pts.add(point("BLOQUANT", "CONDITION_NON_DECLAREE", (page ? "Bloc « " + mk.code() + " »" : mk.brut())
+                                + " : la condition « " + mk.code() + " » n'est pas déclarée pour cette version.", mk.ou(), null, ch));
                     }
                 }
                 case "POUR" -> {
                     if (CatalogueModelesPv.liste(mk.code()).isEmpty()) {
-                        pts.add(point("BLOQUANT", "LISTE_INCONNUE", "Liste inconnue " + mk.brut() + " "
-                                + CatalogueModelesPv.LISTES.stream().map(CatalogueModelesPv.Liste::nom).toList(), mk.ou(), null));
+                        pts.add(point("BLOQUANT", "LISTE_INCONNUE", "Liste inconnue " + (page ? "« " + mk.code() + " »" : mk.brut()) + " "
+                                + CatalogueModelesPv.LISTES.stream().map(CatalogueModelesPv.Liste::nom).toList(), mk.ou(), null, ch));
                     } else if (!mk.premiereCellule() || !mk.code().equals(mk.liste())) {
-                        pts.add(point("BLOQUANT", "POUR_MAL_PLACE", mk.brut() + " s'écrit dans la première cellule de la ligne de tableau "
-                                + "à répéter.", mk.ou(), null));
+                        pts.add(point("BLOQUANT", "POUR_MAL_PLACE", page
+                                ? "La ligne répétée « " + mk.code() + " » est dans une autre ligne répétée : deux listes ne s'imbriquent pas."
+                                : mk.brut() + " s'écrit dans la première cellule de la ligne de tableau à répéter.", mk.ou(), null, ch));
                     }
                 }
                 case "IMAGE" -> pts.add(point("BLOQUANT", "IMAGE_NON_PRISE_EN_CHARGE", mk.brut() + " : insérez l'image directement "
@@ -630,13 +745,13 @@ public class ModelePvService {
         for (String nom : declarees.keySet()) {
             if (!conditionsUtilisees.contains(nom)) {
                 pts.add(point("AVERTISSEMENT", "CONDITION_INUTILISEE", "La condition « " + nom + " » est déclarée mais aucun "
-                        + "{{SI:" + nom + "}} ne l'emploie.", null, null));
+                        + (page ? "bloc" : "{{SI:" + nom + "}}") + " ne l'emploie.", null, null));
             }
         }
         for (String code : codesChamps) {
             if (!champsUtilises.contains(code)) {
-                pts.add(point("AVERTISSEMENT", "CHAMP_INUTILISE", "Le champ « " + code + " » est déclaré mais {{SAISI:" + code
-                        + "}} n'apparaît pas dans le Word.", null, null));
+                pts.add(point("AVERTISSEMENT", "CHAMP_INUTILISE", "Le champ « " + code + " » est déclaré mais " + (page
+                        ? "la page ne l'emploie pas." : "{{SAISI:" + code + "}} n'apparaît pas dans le Word."), null, null));
             }
         }
         List<String> manquantes = new ArrayList<>();
@@ -653,7 +768,7 @@ public class ModelePvService {
         for (String code : manquantes) {
             pts.add(point("BLOQUANT", "SECTION_ABSENTE", "Section attendue absente (" + SECTIONS.getOrDefault(code, code) + ") : {{" + code
                     + "}}" + ("PV.AVIS".equals(code) ? " ou un bloc dont la condition lit l'avis" : "") + " n'apparaît pas.", null,
-                    "{{" + code + "}}"));
+                    page ? code : "{{" + code + "}}"));
         }
         if (manquantes.isEmpty()) {
             pts.add(point("OK", "SECTIONS", "PV".equals(nature) ? "Sections attendues : en-tête, identification, avis, signatures"
@@ -662,10 +777,27 @@ public class ModelePvService {
         pts.add(point("OK", "VARIABLES", variables.size() + " variable(s) reconnue(s)" + (repetees == 0 ? ""
                 : ", dont " + repetees + " répétée(s) (" + String.join(", ", listes) + ")"), null, null));
         if (blocsSains) {
-            pts.add(point("OK", "BLOCS", conditionsUtilisees.size() + " bloc(s) conditionnel(s), chacun fermé et déclaré", null, null));
+            pts.add(point("OK", "BLOCS", conditionsUtilisees.size() + " bloc(s) conditionnel(s), chacun " + (page ? "" : "fermé et ")
+                    + "déclaré", null, null));
         }
-        essai(contenu, declarees, pts);
+        essai.run();
         return rapport(pts, new ArrayList<>(variables), new ArrayList<>(conditionsUtilisees), new ArrayList<>(champsUtilises));
+    }
+
+    /** ⚠️ 2026-10-21 (« modele-pv-page », §B5) — l'essai d'une page : son rendu PDF sur le dossier fictif du catalogue. */
+    private void essaiPage(String document, Map<String, String> declarees, List<ModelePvDto.Point> pts) {
+        try {
+            rendre(document, CatalogueModelesPv.exemple(), declarees);
+            pts.add(point("OK", "ESSAI", "Production d'essai sur un dossier fictif jusqu'au PDF", null, null));
+        } catch (RuntimeException e) {
+            pts.add(point("BLOQUANT", "ESSAI_ECHEC", "Le rendu PDF d'essai sur un dossier fictif a échoué : " + e.getMessage(), null, null));
+        }
+    }
+
+    /** Le PDF d'une page remplie : le seul rendu, pour l'aperçu, l'essai et la production à venir (G2). */
+    private byte[] rendre(String document, ModelePvWord.Contexte ctx, Map<String, String> declarees) {
+        JsonNode doc = json.readTree(document);
+        return ModelePvPage.pdf(ModelePvPage.xhtml(doc, ctx, declarees, images::pourRendu));
     }
 
     /** La production d'essai sur le dossier fictif du catalogue, jusqu'au PDF quand Word est là. */
@@ -711,7 +843,11 @@ public class ModelePvService {
     }
 
     private static ModelePvDto.Point point(String niveau, String code, String message, String ou, String suggestion) {
-        return new ModelePvDto.Point(niveau, code, message, ou, suggestion);
+        return point(niveau, code, message, ou, suggestion, null);
+    }
+
+    private static ModelePvDto.Point point(String niveau, String code, String message, String ou, String suggestion, String chemin) {
+        return new ModelePvDto.Point(niveau, code, message, ou, suggestion, chemin);
     }
 
     // ───────────────────────────────────────────── outils ─────────────────────────────────────────────
@@ -743,20 +879,27 @@ public class ModelePvService {
         return code;
     }
 
-    private VersionModelePv enregistrer(ModelePv m, String nom, byte[] contenu) {
+    /** ⚠️ 2026-10-21 (« modele-pv-page ») — une nouvelle version page, en brouillon, au numéro suivant. */
+    private VersionModelePv enregistrerPage(ModelePv m, String document) {
         List<VersionModelePv> vs = versions.findByIdModeleOrderByNumeroDesc(m.getIdModele());
         VersionModelePv v = new VersionModelePv();
         v.setIdModele(m.getIdModele());
         v.setNumero(vs.isEmpty() ? 1 : vs.get(0).getNumero() + 1);
-        v.setNomFichier(nom);
-        v.setContenu(contenu);
-        v.setEmpreinte(sha256(contenu));
-        v.setTaille((long) contenu.length);
+        v.setSupport(VersionModelePv.PAGE);
+        poserDocument(v, document);
         v.setEtat(VersionModelePv.BROUILLON);
         v.setBloquant(true);
         v.setDeposeeLe(LocalDateTime.now());
         v.setDeposeePar(CurrentUser.login().orElse(null));
         return versions.saveAndFlush(v);
+    }
+
+    /** Le document d'une page, son empreinte et sa taille (sur le JSON enregistré). */
+    private static void poserDocument(VersionModelePv v, String document) {
+        byte[] octets = document.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        v.setDocument(document);
+        v.setEmpreinte(sha256(octets));
+        v.setTaille((long) octets.length);
     }
 
     private static ConditionModelePv condition(VersionModelePv v, String nom, String expression, String libelle, int ordre) {
@@ -827,6 +970,11 @@ public class ModelePvService {
     }
 
     private ModelePvDto.Version dto(VersionModelePv v) {
+        return dto(v, false);
+    }
+
+    /** {@code avecDocument} : le document de la page est servi (lecture d'une version, gestes qui la produisent). */
+    private ModelePvDto.Version dto(VersionModelePv v, boolean avecDocument) {
         ModelePvDto.Rapport r = null;
         if (v.getRapport() != null) {
             try {
@@ -844,7 +992,8 @@ public class ModelePvService {
                         .map(c -> new ModelePvDto.Champ(c.getCode(), c.getLibelle(), c.getType(),
                                 c.getOptions() == null || c.getOptions().isBlank() ? List.of() : List.of(c.getOptions().split("\n")),
                                 Boolean.TRUE.equals(c.getObligatoire()), c.getAide(), c.getVisibleSi()))
-                        .toList());
+                        .toList(),
+                v.getSupport(), avecDocument && v.getDocument() != null ? json.readTree(v.getDocument()) : null);
     }
 
     private static ModelePvDto.VersionCourte courte(VersionModelePv v) {

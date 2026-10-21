@@ -18,6 +18,10 @@ import lombok.Setter;
  * ⚠️ 2026-10-20 (demande front « generateur-modeles-pv », lot G1 ; V138) — une version d'un modèle de PV : le fichier Word déposé
  * (en base, Q2), son empreinte, son état ({@code BROUILLON}, {@code EN_VIGUEUR}, {@code REMPLACEE}) et son rapport de contrôle
  * (JSON). Une version en vigueur ne se modifie plus : on en dépose une nouvelle.
+ *
+ * <p>⚠️ 2026-10-21 (demande front « modele-pv-page », lots P1-P2 ; V139) — {@code SUPPORT} : {@code WORD} (le fichier, en
+ * consultation seulement) ou {@code PAGE} (le document JSON de l'éditeur, {@link cnm.prs.service.ModelePvPage}) ; l'empreinte et
+ * la taille d'une page portent sur son JSON.</p>
  */
 @Entity
 @Table(name = "t_version_modele_pv")
@@ -29,6 +33,8 @@ public class VersionModelePv {
     public static final String BROUILLON = "BROUILLON";
     public static final String EN_VIGUEUR = "EN_VIGUEUR";
     public static final String REMPLACEE = "REMPLACEE";
+    public static final String WORD = "WORD";
+    public static final String PAGE = "PAGE";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -41,11 +47,11 @@ public class VersionModelePv {
     @Column(name = "NUMERO", nullable = false)
     private Integer numero;
 
-    @Column(name = "NOM_FICHIER", nullable = false)
+    @Column(name = "NOM_FICHIER")
     private String nomFichier;
 
     @Basic(fetch = FetchType.LAZY)
-    @Column(name = "CONTENU", nullable = false, columnDefinition = "bytea")
+    @Column(name = "CONTENU", columnDefinition = "bytea")
     private byte[] contenu;
 
     @Column(name = "EMPREINTE", nullable = false, length = 64)
@@ -80,4 +86,11 @@ public class VersionModelePv {
 
     @Column(name = "REMPLACEE_LE")
     private LocalDateTime remplaceeLe;
+
+    @Column(name = "SUPPORT", nullable = false, length = 10)
+    private String support = WORD;
+
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "DOCUMENT", columnDefinition = "text")
+    private String document;
 }

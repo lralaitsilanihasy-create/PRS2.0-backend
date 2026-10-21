@@ -1591,6 +1591,19 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   n'est mis en vigueur sans lui. Deux écarts avec le PV intégré : une ligne de présence s'imprime même sans nom (pas de clé de
 >   condition sur la présence) et le viseur n'a ni qualité ni mention d'intérim. Les actes de gestion et la déclaration sans suite ne
 >   nomment que la référence du dossier : le catalogue n'a pas encore leurs variables propres.
+> - ⚠️ **2026-10-21 (« modele-pv-page », V139)** — **un modèle de PV est une page construite dans l'application**, plus un Word
+>   (décision du pilote du 21/10, option C') :
+>   - un PV produit depuis cette page reconstruite est acceptable ;
+>   - le PDF suffit, il n'y a plus d'export Word ;
+>   - l'Administrateur ne dépose plus de Word.
+>
+>   Les versions Word déjà déposées (que des brouillons) restent consultables et ne se mettent plus en vigueur. Les fichiers
+>   intégrés du plan et de la lettre de renvoi produisent toujours, jusqu'à ce que leur page de remplacement soit en vigueur et
+>   comparée sur des dossiers réels (G4).
+>
+>   Le document n'admet que des nœuds connus : le serveur écrit lui-même le rendu, il n'interprète jamais de HTML venu du navigateur.
+>   « Times New Roman » et « Arial » sont rendus par des polices libres métriquement compatibles (Liberation), embarquées dans le
+>   PDF.
 > - **Non fait** : des points de contrôle propres au contrat-cadre pour le marché (plusieurs titulaires classés, offre indicative,
 >   sélection par la PRMP, décret n° 2019-1064, art. 13) demandent des textes, du pilote ou de l'Administrateur.
 >
