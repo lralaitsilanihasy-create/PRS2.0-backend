@@ -75,6 +75,10 @@ public final class ModelePvDto {
     public record ApercuRequest(Map<String, String> saisis) {
     }
 
+    /** Le modèle de départ (« modele-pv-depart ») : {@code centrale}, {@code regionale} ou {@code les-deux} (défaut). */
+    public record DepartRequest(String portee) {
+    }
+
     /** Le catalogue des variables (§B3), par groupe, filtré par la famille du sous-type demandé. */
     public record Catalogue(String sousType, String famille, List<Groupe> groupes, List<Liste> listes, List<Cle> cles,
             List<String> formats, Map<String, String> alias) {

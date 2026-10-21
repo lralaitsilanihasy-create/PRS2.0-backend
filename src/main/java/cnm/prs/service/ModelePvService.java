@@ -292,12 +292,7 @@ public class ModelePvService {
         if (!erreurs.isEmpty()) {
             throw new BadRequestException("Conditions refusées : " + erreurs, "CONDITION_INVALIDE", erreurs);
         }
-        conditions.deleteByIdVersion(v.getIdVersion());
-        conditions.flush();
-        int ordre = 0;
-        for (ModelePvDto.Condition c : liste == null ? List.<ModelePvDto.Condition>of() : liste) {
-            conditions.save(condition(v, c.nom().trim(), c.expression().trim(), c.libelle(), ordre++));
-        }
+        enregistrerConditions(v, liste);
         controlerEtEnregistrer(m, v);
         tracer(m, numero, "CONDITIONS", noms.isEmpty() ? "aucune" : String.join(", ", noms));
         return dto(v);
@@ -328,6 +323,76 @@ public class ModelePvService {
         if (!erreurs.isEmpty()) {
             throw new BadRequestException("Champs refusés : " + erreurs, "CHAMP_INVALIDE", erreurs);
         }
+        enregistrerChamps(v, liste);
+        controlerEtEnregistrer(m, v);
+        tracer(m, numero, "CHAMPS", codes.isEmpty() ? "aucun" : String.join(", ", codes));
+        return dto(v);
+    }
+
+    /**
+     * ⚠️ 2026-10-21 (demande front « modele-pv-depart ») — le <strong>modèle de départ</strong> : l'application assemble une version
+     * en brouillon depuis le PV officiel du plan ({@link ModelePvDepart}), ses conditions et ses champs déclarés d'office ; rien
+     * n'est mis en vigueur. La famille se lit sur les sous-types rattachés : 400 {@code SANS_SOUS_TYPE}, 409
+     * {@code FAMILLES_MULTIPLES} (détail famille → sous-types), 409 {@code FAMILLE_SANS_DEPART} (le plan, lot G4) ; 400
+     * {@code NATURE_SANS_DEPART} (lettre de renvoi), {@code PORTEE_INCONNUE} ; 409 {@code MODELE_ARCHIVE}. Permise même si le
+     * modèle a déjà des versions : elle en ajoute une.
+     */
+    public ModelePvDto.Version depart(Long id, String portee) {
+        ModelePv m = actif(id);
+        if (!"PV".equals(m.getNature())) {
+            throw new BadRequestException("Le modèle de départ s'assemble pour un PV, pas pour une lettre de renvoi.", "NATURE_SANS_DEPART");
+        }
+        String p = portee == null || portee.isBlank() ? ModelePvDepart.LES_DEUX : portee.trim().toLowerCase(Locale.ROOT);
+        if (!ModelePvDepart.PORTEES.contains(p)) {
+            throw new BadRequestException("Portée inconnue : « " + portee + " » " + ModelePvDepart.PORTEES + ".", "PORTEE_INCONNUE");
+        }
+        Map<String, Object> parFamille = new java.util.TreeMap<>();
+        rattachements.findByIdModele(m.getIdModele()).stream().map(RattachementModelePv::getIdSousType).sorted().forEach(st -> {
+            String famille = sousTypes.findById(st).map(SousTypeDossier::getIdTypeDossier).orElse("?");
+            @SuppressWarnings("unchecked")
+            List<String> liste = (List<String>) parFamille.computeIfAbsent(famille, k -> new ArrayList<String>());
+            liste.add(st);
+        });
+        if (parFamille.isEmpty()) {
+            throw new BadRequestException("Le modèle « " + m.getCode() + " » ne sert aucun sous-type : rattachez-le d'abord, la famille "
+                    + "à assembler s'en déduit.", "SANS_SOUS_TYPE");
+        }
+        if (parFamille.size() > 1) {
+            throw new BusinessRuleException("Les sous-types du modèle relèvent de plusieurs familles (" + String.join(", ", parFamille.keySet())
+                    + ") : un modèle de départ s'assemble pour une seule.", "FAMILLES_MULTIPLES", null, parFamille);
+        }
+        String famille = parFamille.keySet().iterator().next();
+        ModelePvDepart.Famille f = ModelePvDepart.FAMILLES.get(famille);
+        if (f == null) {
+            throw new BusinessRuleException("Pas de modèle de départ pour la famille " + famille + " : le plan a ses modèles intégrés, "
+                    + "leur reprise relève du lot G4.", "FAMILLE_SANS_DEPART");
+        }
+        ModelePvDepart.Depart d;
+        try {
+            d = ModelePvDepart.assembler(f, p);
+        } catch (IOException e) {
+            throw new IllegalStateException("Assemblage du modèle de départ impossible : " + e.getMessage(), e);
+        }
+        VersionModelePv v = enregistrer(m, "depart-" + m.getCode() + ".docx", d.docx());
+        v.setMotif(ModelePvDepart.MOTIF);
+        enregistrerConditions(v, d.conditions());
+        enregistrerChamps(v, d.champs());
+        ModelePvDto.Rapport r = controlerEtEnregistrer(m, v);
+        tracer(m, v.getNumero(), "DEPART_GENERE", "famille " + famille + ", base " + String.join(" + ", d.bases()) + ", portée " + p
+                + (r.bloquant() ? ", contrôle bloquant (" + r.nbBloquants() + ")" : ", contrôle sans blocage"));
+        return dto(v);
+    }
+
+    private void enregistrerConditions(VersionModelePv v, List<ModelePvDto.Condition> liste) {
+        conditions.deleteByIdVersion(v.getIdVersion());
+        conditions.flush();
+        int ordre = 0;
+        for (ModelePvDto.Condition c : liste == null ? List.<ModelePvDto.Condition>of() : liste) {
+            conditions.save(condition(v, c.nom().trim(), c.expression().trim(), c.libelle(), ordre++));
+        }
+    }
+
+    private void enregistrerChamps(VersionModelePv v, List<ModelePvDto.Champ> liste) {
         champs.deleteByIdVersion(v.getIdVersion());
         champs.flush();
         int ordre = 0;
@@ -345,9 +410,6 @@ public class ModelePvService {
             n.setOrdre(ordre++);
             champs.save(n);
         }
-        controlerEtEnregistrer(m, v);
-        tracer(m, numero, "CHAMPS", codes.isEmpty() ? "aucun" : String.join(", ", codes));
-        return dto(v);
     }
 
     /**

@@ -8728,6 +8728,33 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-21 (demande front « modele-pv-depart »)** — **`POST /api/modeles-pv/{id}/versions/depart`** : l'application assemble
+le modèle de départ d'un PV, réservé à l'Administrateur. Corps facultatif `{ portee?: "centrale" | "regionale" | "les-deux" }`,
+`les-deux` par défaut.
+- **Réponse** : la version créée, comme `POST /{id}/versions` : `BROUILLON` au numéro suivant, `nomFichier` `depart-<code>.docx`,
+  `motif` « Modèle de départ généré par l'application — texte à faire valider par la CNM ». Elle porte ses conditions
+  (`FAVORABLE`, `AVEC_RESERVES`, `DEFAVORABLE`, `OBS_GENERALE`, et `CENTRALE` / `REGIONALE` avec `les-deux`) et ses champs
+  (`motif_defavorable`, obligatoire, visible si `DEFAVORABLE` ; `observation_generale`, facultatif), et son `rapport`, sans
+  blocage. Rien n'est mis en vigueur.
+- **Famille** : lue sur les sous-types rattachés au modèle.
+  - 400 `SANS_SOUS_TYPE` si le modèle n'en sert aucun.
+  - 409 `FAMILLES_MULTIPLES` si ses sous-types relèvent de plusieurs familles ; `details` : famille → sous-types.
+  - 409 `FAMILLE_SANS_DEPART` pour le plan (DDP) : ses modèles intégrés restent, leur reprise est le lot G4.
+- **Autres refus** : 400 `NATURE_SANS_DEPART` (modèle de lettre de renvoi), 400 `PORTEE_INCONNUE`, 409 `MODELE_ARCHIVE`.
+- **Déjà une version** : permis, une version de plus.
+- **Journal** : `DEPART_GENERE`, avec la famille, le ou les fichiers de base et la portée.
+- **Assemblage** (`ModelePvDepart`) : base `PV_AFSR_PPM_CENTRALE.docx` (ou `_REGIONALE` avec `regionale`), dont l'en-tête,
+  l'emblème, les styles, la formule « L'an … », les signatures et l'annexe sont gardés.
+  - Titre « PROCÈS-VERBAL D'EXAMEN » suivi de l'objet de la famille, intitulé de la famille, « L'an » en lettres.
+  - Avis en trois blocs, « AVIS FAVORABLE » en gras comme la base ; observation générale juste après.
+  - Annexe sous `AVEC_RESERVES`, ligne `{{POUR:OBSERVATIONS}}`. Elle commence sur une nouvelle page portée par son titre :
+    le saut de section de la base, qui laissait une page blanche sans annexe, est retiré.
+  - `les-deux` : les écarts entre les PV centrale et régionale (ligne de la commission, localité, « Commission Centrale /
+    Régionale ») en blocs `CENTRALE` / `REGIONALE`.
+  - Dossier de marché : après l'avis, « Titulaire(s) proposé(s) », un tableau `{{POUR:TITULAIRES}}` (rang, candidat, montant HT,
+    délai) et « Écart à l'estimation : `{{MARCHE.ECART}}` », quel que soit l'avis.
+  - Aucun ancien chevron ne reste.
+
 ⚠️ **2026-10-20 (demande front « modeles-pv-integres-consultation »)** — consulter les modèles intégrés depuis l'écran,
 réservé à l'Administrateur.
 - **`GET /api/modeles-pv/integres/{code}/fichiers/{nom}`** : le `.docx` tel que livré dans le JAR. Un code inconnu, ou un nom

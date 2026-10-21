@@ -279,6 +279,86 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
                         .string("X-Fichier-Modele", org.hamcrest.Matchers.startsWith("LR_")));
     }
 
+    /**
+     * ⚠️ 2026-10-21 (« modele-pv-depart ») — le modèle de départ : la famille lue sur les sous-types, une version en brouillon déjà
+     * déclarée et sans blocage, essayée sur un dossier réel ; les refus.
+     */
+    @Test
+    void modeleDeDepart() throws Exception {
+        long id = creer("PV-DEPART");
+        String depart = BASE + "/" + id + "/versions/depart";
+        mvc.perform(post(depart).header("Authorization", tokenMembre)).andExpect(status().isForbidden());
+        mvc.perform(post(depart).header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("SANS_SOUS_TYPE"));
+        mvc.perform(put(BASE + "/" + id + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sousTypes\":[\"DP\",\"DSS\",\"DC\"]}")).andExpect(status().isOk());
+        mvc.perform(post(depart).header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FAMILLES_MULTIPLES"))
+                .andExpect(jsonPath("$.details.DMC").value(org.hamcrest.Matchers.contains("DC", "DP")))
+                .andExpect(jsonPath("$.details.DSS").value(org.hamcrest.Matchers.contains("DSS")));
+        mvc.perform(put(BASE + "/" + id + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sousTypes\":[\"DP\",\"DC\"]}")).andExpect(status().isOk());
+        mvc.perform(post(depart).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON).content("{\"portee\":\"nationale\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("PORTEE_INCONNUE"));
+
+        // Sans corps : les deux portées, la version 1 en brouillon, déclarée, sans blocage ni autre avertissement que l'essai PDF.
+        String v1 = mvc.perform(post(depart).header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.numero").value(1)).andExpect(jsonPath("$.etat").value("BROUILLON"))
+                .andExpect(jsonPath("$.bloquant").value(false))
+                .andExpect(jsonPath("$.nomFichier").value("depart-PV-DEPART.docx"))
+                .andExpect(jsonPath("$.motif").value(containsString("à faire valider par la CNM")))
+                .andExpect(jsonPath("$.conditions[*].nom").value(org.hamcrest.Matchers.contains("FAVORABLE", "AVEC_RESERVES", "DEFAVORABLE",
+                        "OBS_GENERALE", "CENTRALE", "REGIONALE")))
+                .andExpect(jsonPath("$.champs[0].code").value("motif_defavorable")).andExpect(jsonPath("$.champs[0].obligatoire").value(true))
+                .andExpect(jsonPath("$.champs[0].visibleSi").value("DEFAVORABLE"))
+                .andExpect(jsonPath("$.champs[1].code").value("observation_generale"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<java.util.List<String>>read(v1, "$.rapport.points[?(@.niveau!='OK')].code"))
+                .containsExactly("ESSAI_PDF_NON_VERIFIE");
+
+        // Essayée sur le dossier 1 : la réserve imprime l'annexe, le défavorable son motif.
+        seedPvSigne(9703, 1);
+        byte[] favr = mvc.perform(post(BASE + "/" + id + "/versions/1/apercu").param("dossier", "1").param("avis", "FAVR")
+                .param("format", "docx").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        byte[] def = mvc.perform(post(BASE + "/" + id + "/versions/1/apercu").param("dossier", "1").param("avis", "DEF")
+                .param("format", "docx").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"saisis\":{\"motif_defavorable\":\"pièces manquantes\"}}")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        try (XWPFDocument a = new XWPFDocument(new ByteArrayInputStream(favr)); XWPFDocument b = new XWPFDocument(new ByteArrayInputStream(def))) {
+            String ta = a.getParagraphs().stream().map(p -> p.getText()).reduce("", (x, y) -> x + "\n" + y);
+            String tb = b.getParagraphs().stream().map(p -> p.getText()).reduce("", (x, y) -> x + "\n" + y);
+            assertThat(ta).contains("PROCÈS-VERBAL D’EXAMEN DU DOSSIER DE MISE EN CONCURRENCE", "ANNEXE", "sous réserve qu’il soit tenu compte")
+                    .doesNotContain("{{", "<");
+            assertThat(tb).contains("AVIS NON FAVORABLE au dossier de mise en concurrence, pour le motif suivant : pièces manquantes.")
+                    .doesNotContain("ANNEXE", "{{");
+        }
+
+        // Une deuxième génération ajoute une version ; la portée choisie ne déclare pas CENTRALE / REGIONALE.
+        mvc.perform(post(depart).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON).content("{\"portee\":\"centrale\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.numero").value(2)).andExpect(jsonPath("$.conditions.length()").value(4));
+        mvc.perform(get(BASE + "/" + id).header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.historique[0].action").value("DEPART_GENERE"))
+                .andExpect(jsonPath("$.historique[0].detail").value(containsString("famille DMC, base PV_AFSR_PPM_CENTRALE.docx, portée centrale")))
+                .andExpect(jsonPath("$.historique[1].detail").value(containsString("PV_AFSR_PPM_CENTRALE.docx + PV_AFSR_PPM_REGIONALE.docx")));
+
+        // Le plan n'a pas de modèle de départ ; une lettre de renvoi non plus ; un modèle archivé, rien.
+        long plan = creer("PV-PLAN-DEPART");
+        mvc.perform(put(BASE + "/" + plan + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sousTypes\":[\"PPM\"]}")).andExpect(status().isOk());
+        mvc.perform(post(BASE + "/" + plan + "/versions/depart").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FAMILLE_SANS_DEPART"));
+        String lr = mvc.perform(post(BASE).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"LR-DEPART\",\"libelle\":\"Lettre\",\"nature\":\"LETTRE_RENVOI\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        mvc.perform(post(BASE + "/" + ((Number) JsonPath.read(lr, "$.id")).longValue() + "/versions/depart").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("NATURE_SANS_DEPART"));
+        mvc.perform(post(BASE + "/" + plan + "/archiver").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"motif\":\"essai\"}")).andExpect(status().isOk());
+        mvc.perform(post(BASE + "/" + plan + "/versions/depart").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MODELE_ARCHIVE"));
+    }
+
     /** ⚠️ 2026-10-20 (« modeles-pv-integres », §B1-B2) — les modèles intégrés au JAR et la couverture par sous-type. */
     @Test
     void integresEtCouverture() throws Exception {

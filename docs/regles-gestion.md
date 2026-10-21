@@ -1584,6 +1584,13 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   champs saisis se déclarent dans l'écran de la version, pas dans le Word. Les fichiers sont en base. L'aperçu sur un dossier réel
 >   n'enregistre rien. La production des PV par ces modèles (un PV signé garde son document, un projet suit la version en vigueur)
 >   viendra au lot G2 ; jusque-là, les PV de mise en concurrence et de marché restent sans document.
+> - ⚠️ **2026-10-21 (« modele-pv-depart »)** — **l'application peut assembler le modèle de départ** d'un PV (dossier de mise en
+>   concurrence, de marché, acte de gestion, déclaration sans suite) depuis le PV officiel du plan. Elle **assemble, elle ne rédige
+>   pas** (décision du pilote, 21/10) : les phrases de chaque famille sont écrites une fois dans le code et restent à faire valider
+>   par la CNM. La version produite est un brouillon : l'Administrateur la fait relire, la corrige dans Word et la redépose ; rien
+>   n'est mis en vigueur sans lui. Deux écarts avec le PV intégré : une ligne de présence s'imprime même sans nom (pas de clé de
+>   condition sur la présence) et le viseur n'a ni qualité ni mention d'intérim. Les actes de gestion et la déclaration sans suite ne
+>   nomment que la référence du dossier : le catalogue n'a pas encore leurs variables propres.
 > - **Non fait** : des points de contrôle propres au contrat-cadre pour le marché (plusieurs titulaires classés, offre indicative,
 >   sélection par la PRMP, décret n° 2019-1064, art. 13) demandent des textes, du pilote ou de l'Administrateur.
 >

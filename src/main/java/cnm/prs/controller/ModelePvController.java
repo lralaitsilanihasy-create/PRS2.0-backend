@@ -27,7 +27,8 @@ import jakarta.validation.Valid;
 /**
  * ⚠️ 2026-10-20 (demande front « generateur-modeles-pv », §B4, lot G1) — les modèles de PV, réservés à l'<strong>Administrateur</strong>
  * (403 sinon). Codes d'erreur : 400 {@code NATURE_INCONNUE}, {@code CODE_INVALIDE}, {@code FICHIER_INVALIDE}, {@code CONDITION_INVALIDE},
- * {@code CHAMP_INVALIDE}, {@code SOUS_TYPE_INCONNU}, {@code MOTIF_REQUIS}, {@code AVIS_INCONNU} ; 409 {@code CODE_DEJA_PRIS},
+ * {@code CHAMP_INVALIDE}, {@code SOUS_TYPE_INCONNU}, {@code MOTIF_REQUIS}, {@code AVIS_INCONNU}, {@code SANS_SOUS_TYPE},
+ * {@code NATURE_SANS_DEPART}, {@code PORTEE_INCONNUE} ; 409 {@code FAMILLES_MULTIPLES}, {@code FAMILLE_SANS_DEPART}, {@code CODE_DEJA_PRIS},
  * {@code MODELE_ARCHIVE}, {@code VERSION_FIGEE}, {@code RAPPORT_BLOQUANT}, {@code SOUS_TYPE_DEJA_SERVI}, {@code MODELE_EN_SERVICE},
  * {@code CONVERSION_INDISPONIBLE}, {@code APERCU_IMPOSSIBLE} ; 404.
  */
@@ -115,6 +116,15 @@ public class ModelePvController {
     @PostMapping("/{id}/versions")
     public ModelePvDto.Version deposer(@PathVariable Long id, @RequestParam("fichier") MultipartFile fichier) {
         return service.deposer(id, fichier);
+    }
+
+    /**
+     * Le modèle de départ assemblé par l'application (« modele-pv-depart ») : une version en brouillon, conditions et champs
+     * déclarés, texte à faire valider par la CNM. Corps facultatif {@code { portee }}.
+     */
+    @PostMapping("/{id}/versions/depart")
+    public ModelePvDto.Version depart(@PathVariable Long id, @RequestBody(required = false) ModelePvDto.DepartRequest corps) {
+        return service.depart(id, corps == null ? null : corps.portee());
     }
 
     @GetMapping("/{id}/versions/{numero}")
