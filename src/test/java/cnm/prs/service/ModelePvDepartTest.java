@@ -75,6 +75,50 @@ class ModelePvDepartTest {
         }
     }
 
+    /**
+     * ⚠️ 2026-10-21 (« modele-lettre-renvoi », B2) — la lettre de départ : valide pour chaque portée, sans marqueur resté en texte,
+     * avec ses variables requises ; une page, la ligne de commission et le titre du signataire selon la portée, le corps ligne à ligne.
+     */
+    @Test
+    void lettreDeRenvoi() throws Exception {
+        for (String portee : ModelePvDepart.PORTEES) {
+            ModelePvDepart.Depart d = ModelePvDepart.lettre(portee, 3);
+            ModelePvPage.valider(d.document(), id -> id == 3);
+            assertThat(textes(d.document())).doesNotContain("<", "{{").contains("lettre de renvoi");
+            List<String> codes = ModelePvPage.relever(d.document()).marqueurs().stream().map(m -> m.type() + ":" + m.code()).toList();
+            assertThat(codes).contains("VARIABLE:DOSSIER.REFERENCE", "VARIABLE:LETTRE.CORPS", "VARIABLE:LETTRE.SIGNATAIRE",
+                    "VARIABLE:LETTRE.DATE", "VARIABLE:LETTRE.DATE_EXAMEN", "VARIABLE:DOSSIER.ENTITE")
+                    .noneMatch(c -> c.startsWith("VARIABLE:PV."));
+            assertThat(codes.contains("SI:CENTRALE")).isEqualTo(ModelePvDepart.LES_DEUX.equals(portee));
+            assertThat(codes.contains("VARIABLE:LETTRE.LOCALITE")).isEqualTo(!ModelePvDepart.CENTRALE.equals(portee));
+            assertThat(d.conditions()).hasSize(ModelePvDepart.LES_DEUX.equals(portee) ? 2 : 0);
+            assertThat(d.champs()).isEmpty();
+        }
+        ModelePvDepart.Depart d = ModelePvDepart.lettre(ModelePvDepart.LES_DEUX, 3);
+        Map<String, String> cond = new LinkedHashMap<>();
+        d.conditions().forEach(c -> cond.put(c.nom(), c.expression()));
+        ModelePvWord.Contexte ex = CatalogueModelesPv.exemple();
+        for (String portee : List.of("centrale", "regionale")) {
+            Map<String, String> cles = new java.util.HashMap<>(ex.cles());
+            cles.put("portee", portee);
+            byte[] pdf = ModelePvPage.pdf(ModelePvPage.xhtml(d.document(), new ModelePvWord.Contexte(ex.variables(), ex.listes(), cles,
+                    Map.of()), cond, id -> null));
+            try (PDDocument doc = Loader.loadPDF(pdf)) {
+                String t = trie().getText(doc).replace("\r\n", "\n");
+                assertThat(doc.getNumberOfPages()).as(portee).isEqualTo(1);
+                assertThat(t).contains("Antananarivo, le 23 octobre 2026", "en date du 22 octobre 2026",
+                        "- produire l'attestation fiscale à jour ;\n- corriger le délai de validité des offres.", "Andry RAKOTOMALALA");
+                if ("centrale".equals(portee)) {
+                    assertThat(t).contains("COMMISSION CENTRALE", "Le Président de la Commission Nationale des Marchés")
+                            .doesNotContain("REGIONALE", "TOAMASINA");
+                } else {
+                    assertThat(t).contains("COMMISSION REGIONALE DES MARCHES TOAMASINA", "Le Chef de la Commission Régionale des Marchés")
+                            .doesNotContain("COMMISSION CENTRALE", "Le Président");
+                }
+            }
+        }
+    }
+
     /** Le texte dans l’ordre de la page (un texte justifié ou un compteur sinon sortent dans le désordre). */
     static PDFTextStripper trie() throws java.io.IOException {
         PDFTextStripper s = new PDFTextStripper();

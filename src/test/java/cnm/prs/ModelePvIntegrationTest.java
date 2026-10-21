@@ -475,17 +475,12 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
                         "famille DMC, page reconstruite d'après PV_AFSR_PPM_CENTRALE.docx, portée centrale")))
                 .andExpect(jsonPath("$.historique[1].detail").value(containsString("PV_AFSR_PPM_CENTRALE.docx + PV_AFSR_PPM_REGIONALE.docx")));
 
-        // Le plan n'a pas de modèle de départ ; une lettre de renvoi non plus ; un modèle archivé, rien.
+        // Le plan n'a pas de modèle de départ ; un modèle archivé, rien (la lettre de renvoi en a un : lettreDeRenvoi).
         long plan = creer("PV-PLAN-DEPART");
         mvc.perform(put(BASE + "/" + plan + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"sousTypes\":[\"PPM\"]}")).andExpect(status().isOk());
         mvc.perform(post(BASE + "/" + plan + "/versions/depart").header("Authorization", tokenAdmin))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FAMILLE_SANS_DEPART"));
-        String lr = mvc.perform(post(BASE).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"code\":\"LR-DEPART\",\"libelle\":\"Lettre\",\"nature\":\"LETTRE_RENVOI\"}"))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        mvc.perform(post(BASE + "/" + ((Number) JsonPath.read(lr, "$.id")).longValue() + "/versions/depart").header("Authorization", tokenAdmin))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("NATURE_SANS_DEPART"));
         mvc.perform(post(BASE + "/" + plan + "/archiver").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"motif\":\"essai\"}")).andExpect(status().isOk());
         mvc.perform(post(BASE + "/" + plan + "/versions/depart").header("Authorization", tokenAdmin))
@@ -529,6 +524,69 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
                 .containsExactly("INTEGRE");
         assertThat(JsonPath.<java.util.List<String>>read(couverture, "$[?(@.sousType=='DAOO' && @.nature=='PV')].famille"))
                 .containsExactly("DMC");
+    }
+
+    /**
+     * ⚠️ 2026-10-21 (« modele-lettre-renvoi », L1) — les variables de la lettre au catalogue, par nature ; le départ d'une lettre, sans
+     * rattachement, contrôlé sans blocage ; une variable hors de sa nature ; l'aperçu sur une lettre réelle du dossier.
+     */
+    @Test
+    void lettreDeRenvoi() throws Exception {
+        String lettre = mvc.perform(get(BASE + "/variables").param("nature", "LETTRE_RENVOI").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.nature").value("LETTRE_RENVOI"))
+                .andExpect(jsonPath("$.listes").isEmpty()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(lettre, "$.groupes[?(@.nom=='Lettre de renvoi')].variables[*].code"))
+                .containsExactly("LETTRE.DATE", "LETTRE.DATE_EXAMEN", "LETTRE.CORPS", "LETTRE.SIGNATAIRE", "LETTRE.LOCALITE");
+        assertThat(JsonPath.<List<String>>read(lettre, "$.groupes[*].variables[*].code")).contains("DOSSIER.ENTITE")
+                .noneMatch(c -> c.startsWith("PV.") || c.startsWith("OBS."));
+        String pv = mvc.perform(get(BASE + "/variables").param("nature", "PV").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(pv, "$.groupes[*].variables[*].code")).contains("PV.REFERENCE")
+                .noneMatch(c -> c.startsWith("LETTRE."));
+        mvc.perform(get(BASE + "/variables").param("nature", "AVIS").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("NATURE_INCONNUE"));
+
+        // Le départ : sans sous-type rattaché (une lettre pour tous, Q1), les deux portées en blocs, aucun bloquant.
+        String cree = mvc.perform(post(BASE).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"LR-DEPART\",\"libelle\":\"Lettre de renvoi\",\"nature\":\"LETTRE_RENVOI\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(cree, "$.id")).longValue();
+        String v1 = mvc.perform(post(BASE + "/" + id + "/versions/depart").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.support").value("PAGE")).andExpect(jsonPath("$.bloquant").value(false))
+                .andExpect(jsonPath("$.motif").value(containsString("texte à faire valider")))
+                .andExpect(jsonPath("$.conditions[*].nom").value(org.hamcrest.Matchers.contains("CENTRALE", "REGIONALE")))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(v1, "$.rapport.points[*].code")).contains("ESSAI", "SECTIONS")
+                .doesNotContain("SECTION_ABSENTE", "VARIABLE_HORS_NATURE");
+        mvc.perform(get(BASE + "/" + id).header("Authorization", tokenAdmin)).andExpect(jsonPath("$.historique[0].detail")
+                .value(containsString("lettre de renvoi, page reconstruite d'après LR_CENTRALE.docx + LR_REGIONALE.docx, portée les-deux")));
+
+        // Une variable du PV dans une lettre est bloquante ; le corps et le signataire sont attendus.
+        String horsNature = enregistrer(id, "{\"document\":" + ModelePvPageTest.document(ModelePvPageTest.paragraphe(
+                "{{DOSSIER.REFERENCE}} {{PV.MEMBRE}}")) + "}");
+        assertThat(JsonPath.<List<String>>read(horsNature, "$.rapport.points[?(@.niveau=='BLOQUANT')].code"))
+                .contains("VARIABLE_HORS_NATURE", "SECTION_ABSENTE");
+        assertThat(JsonPath.<List<String>>read(horsNature, "$.rapport.points[?(@.code=='SECTION_ABSENTE')].suggestion"))
+                .containsExactlyInAnyOrder("LETTRE.CORPS", "LETTRE.SIGNATAIRE");
+
+        // L'aperçu : sur la dernière lettre du dossier (même non signée), ou sur lettre= ; une lettre d'un autre dossier, 404.
+        mvc.perform(post(BASE + "/" + id + "/versions/1/apercu").param("dossier", "1").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LETTRE_ABSENTE"));
+        int idLettre = seedLettreSoumise();
+        cnm.prs.entity.LettreRenvoi l = lettreRenvoiRepository.findById(idLettre).orElseThrow();
+        l.setCorpsLettre("- produire l'attestation fiscale ;\n- corriger le délai de validité.");
+        l.setDateLettre(java.time.LocalDate.of(2026, 10, 23));
+        l.setDateExamen(java.time.LocalDate.of(2026, 10, 22));
+        lettreRenvoiRepository.saveAndFlush(l);
+        byte[] apercu = mvc.perform(post(BASE + "/" + id + "/versions/1/apercu").param("dossier", "1").param("lettre", String.valueOf(idLettre))
+                .header("Authorization", tokenAdmin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(pages(apercu)).isEqualTo(1);
+        assertThat(texte(apercu)).contains("Antananarivo, le 23 octobre 2026", "en date du 22 octobre 2026",
+                "- produire l'attestation fiscale ; - corriger le délai de validité.").doesNotContain("{{");
+        assertThat(texte(mvc.perform(post(BASE + "/" + id + "/versions/1/apercu").param("dossier", "1").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray())).contains("23 octobre 2026");
+        mvc.perform(post(BASE + "/" + id + "/versions/1/apercu").param("dossier", "2").param("lettre", String.valueOf(idLettre))
+                .header("Authorization", tokenAdmin)).andExpect(status().isNotFound());
     }
 
     /**

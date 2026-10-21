@@ -90,10 +90,11 @@ public class ModelePvController {
         return service.lister();
     }
 
-    /** Le catalogue des variables, filtré par la famille du sous-type (§B3). */
+    /** Le catalogue des variables, filtré par la famille du sous-type (§B3) et par la nature (« modele-lettre-renvoi », B1). */
     @GetMapping("/variables")
-    public ModelePvDto.Catalogue variables(@RequestParam(required = false) String sousType) {
-        return service.catalogue(sousType);
+    public ModelePvDto.Catalogue variables(@RequestParam(required = false) String sousType,
+            @RequestParam(required = false) String nature) {
+        return service.catalogue(sousType, nature);
     }
 
     /** Les modèles intégrés au JAR, choisis par le code (« modeles-pv-integres », §B1). */
@@ -206,9 +207,9 @@ public class ModelePvController {
     @PostMapping("/{id}/versions/{numero}/apercu")
     public ResponseEntity<byte[]> apercu(@PathVariable Long id, @PathVariable Integer numero, @RequestParam Integer dossier,
             @RequestParam(required = false) String avis, @RequestParam(defaultValue = "pdf") String format,
-            @RequestBody(required = false) ModelePvDto.ApercuRequest corps) {
+            @RequestParam(required = false) Integer lettre, @RequestBody(required = false) ModelePvDto.ApercuRequest corps) {
         boolean pdf = !"docx".equalsIgnoreCase(format);
-        byte[] contenu = service.apercu(id, numero, dossier, avis, pdf, corps == null ? null : corps.saisis());
+        byte[] contenu = service.apercu(id, numero, dossier, avis, lettre, pdf, corps == null ? null : corps.saisis());
         return ResponseEntity.ok().contentType(pdf ? MediaType.APPLICATION_PDF : DOCX)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
                         .filename("apercu-" + id + "-v" + numero + "-dossier-" + dossier + (pdf ? ".pdf" : ".docx"), StandardCharsets.UTF_8)

@@ -97,7 +97,8 @@ public final class ModelePvDto {
     }
 
     /** Le catalogue des variables (§B3), par groupe, filtré par la famille du sous-type demandé. */
-    public record Catalogue(String sousType, String famille, List<Groupe> groupes, List<Liste> listes, List<Cle> cles,
+    /** ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — {@code nature} : celle demandée ({@code PV}, {@code LETTRE_RENVOI}), ou nulle. */
+    public record Catalogue(String sousType, String famille, String nature, List<Groupe> groupes, List<Liste> listes, List<Cle> cles,
             List<String> formats, Map<String, String> alias) {
     }
 

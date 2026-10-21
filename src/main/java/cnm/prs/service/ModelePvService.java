@@ -68,7 +68,8 @@ public class ModelePvService {
     private static final Pattern CODE_MODELE = Pattern.compile("[A-Za-z0-9_.-]{1,50}");
     private static final Pattern TERME = Pattern.compile("^\\s*(" + ConditionsModele.CLE + ")\\s*(?:!?=|contient\\s|renseigne|vide)");
     private static final Map<String, String> SECTIONS = Map.of("PV.REFERENCE", "en-tête et identification",
-            "PV.MEMBRE", "signatures", "PV.AVIS", "avis", "DOSSIER.REFERENCE", "identification");
+            "PV.MEMBRE", "signatures", "PV.AVIS", "avis", "DOSSIER.REFERENCE", "identification",
+            "LETTRE.CORPS", "corps de la lettre", "LETTRE.SIGNATAIRE", "signature");
 
     private final ModelePvRepository modeles;
     private final VersionModelePvRepository versions;
@@ -145,23 +146,32 @@ public class ModelePvService {
         return ModelePvPage.schema();
     }
 
-    /** Le catalogue des variables (§B3), filtré par la famille du sous-type ({@code null} : tout). */
+    /**
+     * Le catalogue des variables (§B3), filtré par la famille du sous-type ({@code null} : tout) et, depuis « modele-lettre-renvoi »
+     * (B1), par la nature : la lettre de renvoi a ses variables {@code LETTRE.*}, sans celles du PV ni ses listes.
+     */
     @Transactional(readOnly = true)
-    public ModelePvDto.Catalogue catalogue(String sousType) {
+    public ModelePvDto.Catalogue catalogue(String sousType, String nature) {
+        String n = nature == null || nature.isBlank() ? null : nature.trim().toUpperCase(Locale.ROOT);
+        if (n != null && !NATURES.contains(n)) {
+            throw new BadRequestException("Nature inconnue : « " + nature + " » (PV, LETTRE_RENVOI).", "NATURE_INCONNUE");
+        }
         String famille = null;
         if (sousType != null && !sousType.isBlank()) {
             famille = sousTypes.findById(sousType).map(SousTypeDossier::getIdTypeDossier)
                     .orElseThrow(() -> new BadRequestException("Sous-type inconnu : « " + sousType + " ».", "SOUS_TYPE_INCONNU"));
         }
         Map<String, List<ModelePvDto.Variable>> groupes = new LinkedHashMap<>();
-        for (CatalogueModelesPv.Variable v : CatalogueModelesPv.pourFamille(famille)) {
+        for (CatalogueModelesPv.Variable v : CatalogueModelesPv.pourFamille(famille).stream().filter(v -> CatalogueModelesPv.sert(v, n))
+                .toList()) {
             groupes.computeIfAbsent(v.groupe(), g -> new ArrayList<>())
                     .add(new ModelePvDto.Variable(v.code(), v.libelle(), v.exemple(), v.liste()));
         }
         String f = famille;
-        return new ModelePvDto.Catalogue(sousType, famille,
+        return new ModelePvDto.Catalogue(sousType, famille, n,
                 groupes.entrySet().stream().map(e -> new ModelePvDto.Groupe(e.getKey(), e.getValue())).toList(),
-                CatalogueModelesPv.LISTES.stream().filter(l -> f == null || l.familles() == null || l.familles().contains(f))
+                CatalogueModelesPv.LISTES.stream().filter(l -> !"LETTRE_RENVOI".equals(n))
+                        .filter(l -> f == null || l.familles() == null || l.familles().contains(f))
                         .map(l -> new ModelePvDto.Liste(l.nom(), l.prefixe(), l.libelle())).toList(),
                 CatalogueModelesPv.CLES.stream().map(c -> new ModelePvDto.Cle(c.cle(), c.libelle(), c.valeurs())).toList(),
                 CatalogueModelesPv.FORMATS, CatalogueModelesPv.ALIAS);
@@ -414,12 +424,16 @@ public class ModelePvService {
      */
     public ModelePvDto.Version depart(Long id, String portee) {
         ModelePv m = actif(id);
-        if (!"PV".equals(m.getNature())) {
-            throw new BadRequestException("Le modèle de départ s'assemble pour un PV, pas pour une lettre de renvoi.", "NATURE_SANS_DEPART");
-        }
         String p = portee == null || portee.isBlank() ? ModelePvDepart.LES_DEUX : portee.trim().toLowerCase(Locale.ROOT);
         if (!ModelePvDepart.PORTEES.contains(p)) {
             throw new BadRequestException("Portée inconnue : « " + portee + " » " + ModelePvDepart.PORTEES + ".", "PORTEE_INCONNUE");
+        }
+        if ("LETTRE_RENVOI".equals(m.getNature())) {
+            // ⚠️ 2026-10-21 (« modele-lettre-renvoi », B2) — une seule lettre pour tous les sous-types (Q1) : pas de famille à lire.
+            return enregistrerDepart(m, ModelePvDepart.lettre(p, images.embleme().idImage()), "lettre de renvoi", p);
+        }
+        if (!"PV".equals(m.getNature())) {
+            throw new BadRequestException("Pas de modèle de départ pour la nature " + m.getNature() + ".", "NATURE_SANS_DEPART");
         }
         Map<String, Object> parFamille = new java.util.TreeMap<>();
         rattachements.findByIdModele(m.getIdModele()).stream().map(RattachementModelePv::getIdSousType).sorted().forEach(st -> {
@@ -443,13 +457,17 @@ public class ModelePvService {
                     + "leur reprise relève du lot G4.", "FAMILLE_SANS_DEPART");
         }
         // ⚠️ 2026-10-21 (« modele-pv-page », §B5) — le départ est une page, reconstruite d'après la base et son emblème.
-        ModelePvDepart.Depart d = ModelePvDepart.assembler(f, p, images.embleme().idImage());
+        return enregistrerDepart(m, ModelePvDepart.assembler(f, p, images.embleme().idImage()), "famille " + famille, p);
+    }
+
+    /** Le départ assemblé, enregistré en brouillon avec ses conditions et ses champs, contrôlé et journalisé. */
+    private ModelePvDto.Version enregistrerDepart(ModelePv m, ModelePvDepart.Depart d, String quoi, String p) {
         VersionModelePv v = enregistrerPage(m, json.writeValueAsString(d.document()));
         v.setMotif(ModelePvDepart.MOTIF);
         enregistrerConditions(v, d.conditions());
         enregistrerChamps(v, d.champs());
         ModelePvDto.Rapport r = controlerEtEnregistrer(m, v);
-        tracer(m, v.getNumero(), "DEPART_GENERE", "famille " + famille + ", page reconstruite d'après " + String.join(" + ", d.bases())
+        tracer(m, v.getNumero(), "DEPART_GENERE", quoi + ", page reconstruite d'après " + String.join(" + ", d.bases())
                 + ", portée " + p + (r.bloquant() ? ", contrôle bloquant (" + r.nbBloquants() + ")" : ", contrôle sans blocage"));
         return dto(v, true);
     }
@@ -488,8 +506,9 @@ public class ModelePvService {
      * (409 {@code CONVERSION_INDISPONIBLE} sans Word sur le serveur). Toute version s'essaie, brouillon compris.
      */
     @Transactional(readOnly = true)
-    public byte[] apercu(Long id, Integer numero, Integer idDossier, String avis, boolean pdf, Map<String, String> saisis) {
-        VersionModelePv v = version(modele(id), numero);
+    public byte[] apercu(Long id, Integer numero, Integer idDossier, String avis, Integer idLettre, boolean pdf, Map<String, String> saisis) {
+        ModelePv m = modele(id);
+        VersionModelePv v = version(m, numero);
         if (avis != null && !avis.isBlank() && !List.of("FAV", "FAVR", "DEF", "NSP").contains(avis)) {
             throw new BadRequestException("Avis inconnu : « " + avis + " » (FAV, FAVR, DEF, NSP).", "AVIS_INCONNU");
         }
@@ -497,7 +516,9 @@ public class ModelePvService {
         if (page && !pdf) {
             throw new BadRequestException("Une page s'aperçoit en PDF seulement : il n'y a plus d'export Word.", "FORMAT_INDISPONIBLE");
         }
-        ModelePvWord.Contexte ctx = contextes.pour(idDossier, avis == null || avis.isBlank() ? null : avis, saisis);
+        // ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — une lettre s'aperçoit sur une lettre du dossier (lettre=, à défaut la dernière).
+        ModelePvWord.Contexte ctx = "LETTRE_RENVOI".equals(m.getNature()) ? contextes.pourLettre(idDossier, idLettre, saisis)
+                : contextes.pour(idDossier, avis == null || avis.isBlank() ? null : avis, saisis);
         if (page) {
             // ⚠️ 2026-10-21 (« modele-pv-page », §B5) — le même rendu que l'essai du contrôle et que la production à venir (G2).
             try {
@@ -748,6 +769,13 @@ public class ModelePvService {
                                 s == null ? null : page ? s : "{{" + s + "}}", ch));
                         continue;
                     }
+                    // ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — une variable du PV dans une lettre, ou l'inverse.
+                    String sienne = CatalogueModelesPv.nature(var.code());
+                    if (sienne != null && !sienne.equals(nature)) {
+                        pts.add(point("BLOQUANT", "VARIABLE_HORS_NATURE", mk.brut() + " ne vaut que pour "
+                                + ("PV".equals(sienne) ? "un PV" : "une lettre de renvoi") + " : ce modèle est "
+                                + ("PV".equals(nature) ? "un PV." : "une lettre de renvoi."), mk.ou(), null, ch));
+                    }
                     if (mk.format() != null && !CatalogueModelesPv.FORMATS.contains(mk.format())) {
                         pts.add(point("BLOQUANT", "FORMAT_INCONNU", "Format inconnu « " + mk.format() + " » dans " + mk.brut() + " "
                                 + CatalogueModelesPv.FORMATS, mk.ou(), null, ch));
@@ -828,7 +856,7 @@ public class ModelePvService {
         }
         if (manquantes.isEmpty()) {
             pts.add(point("OK", "SECTIONS", "PV".equals(nature) ? "Sections attendues : en-tête, identification, avis, signatures"
-                    : "Section attendue : identification du dossier", null, null));
+                    : "Sections attendues : identification du dossier, corps de la lettre, signature", null, null));
         }
         pts.add(point("OK", "VARIABLES", variables.size() + " variable(s) reconnue(s)" + (repetees == 0 ? ""
                 : ", dont " + repetees + " répétée(s) (" + String.join(", ", listes) + ")"), null, null));

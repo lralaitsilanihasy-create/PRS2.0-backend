@@ -37,6 +37,8 @@ public final class ModelePvDepart {
     static final String MOTIF = "Modèle de départ généré par l'application — texte à faire valider par la CNM";
     private static final String BASE_CENTRALE = "PV_AFSR_PPM_CENTRALE.docx";
     private static final String BASE_REGIONALE = "PV_AFSR_PPM_REGIONALE.docx";
+    private static final String LETTRE_CENTRALE = "LR_CENTRALE.docx";
+    private static final String LETTRE_REGIONALE = "LR_REGIONALE.docx";
     private static final String POINTILLES = "………………………………..";
 
     /** Les phrases d'une famille : complément du titre, intitulé du dossier, ce sur quoi porte l'avis, titulaires proposés. */
@@ -197,6 +199,89 @@ public final class ModelePvDepart {
                         "Facultative : un constat d'ensemble sur le dossier.", null));
         List<String> bases = deux ? List.of(BASE_CENTRALE, BASE_REGIONALE) : List.of(regionale ? BASE_REGIONALE : BASE_CENTRALE);
         return new Depart(doc, bases, conditions, champs);
+    }
+
+    /**
+     * ⚠️ 2026-10-21 (demande front « modele-lettre-renvoi », B2) — le départ de la <strong>lettre de renvoi</strong>, reconstruit
+     * d'après {@code LR_CENTRALE.docx} / {@code LR_REGIONALE.docx} : en-tête officiel (l'emblème des PV, qui porte déjà « REPOBLIKAN'I
+     * MADAGASIKARA » et la devise, écrites une seconde fois sous l'image du Word), date, signataire, destinataire, objet, référence,
+     * formule, corps, nom du signataire. Les deux fichiers ne diffèrent que par la ligne de commission et le titre du signataire :
+     * blocs {@code CENTRALE} / {@code REGIONALE} pour {@code les-deux}. Le texte est repris tel quel, régional compris (« Antananarivo,
+     * le », « la Commission Nationale des Marchés renvoie ») : la comparaison avec le fichier intégré (lot L2) doit rester honnête.
+     * Les retraits du Word (marge gauche de 7,5 mm, aucune à droite) sont ramenés à des marges de page de 25 et 23 mm.
+     */
+    public static Depart lettre(String portee, long idEmbleme) {
+        boolean deux = LES_DEUX.equals(portee);
+        boolean regionale = REGIONALE.equals(portee);
+        ArrayNode c = F.arrayNode();
+        ArrayNode arial = F.arrayNode();
+        ObjectNode style = ModelePvPage.noeud("textStyle");
+        style.putObject("attrs").put("fontFamily", "Arial").put("fontSize", "10pt");
+        arial.add(style);
+
+        ObjectNode emb = ModelePvPage.noeud("image");
+        emb.putObject("attrs").put("idImage", idEmbleme).put("largeur", 45.0).put("alignement", "center");
+        c.add(emb);
+        c.add(p("MINISTERE DE L’ECONOMIE ET DES FINANCES", attrs("center", null, 60.0), arial));
+        c.add(p(POINTILLES, attrs("center", null, 60.0), arial));
+        c.add(p("COMMISSION NATIONALE DES MARCHES", attrs("center", null, 60.0), arial));
+        c.add(p(POINTILLES, attrs("center", null, 60.0), arial));
+        String regionaleLigne = "REGIONALE DES MARCHES {{LETTRE.LOCALITE|majuscules}}";
+        c.add(p("COMMISSION " + (deux ? "{{SI:CENTRALE}}CENTRALE{{FINSI:CENTRALE}}{{SI:REGIONALE}}" + regionaleLigne + "{{FINSI:REGIONALE}}"
+                : regionale ? regionaleLigne : "CENTRALE"), attrs("center", null, 60.0), arial));
+        c.add(p(POINTILLES, attrs("center", null, 60.0), arial));
+        c.add(vide());
+        c.add(vide());
+
+        c.add(p("Antananarivo, le {{LETTRE.DATE}}", attrs("center", null, null), null));
+        c.add(vide());
+        String president = "Le Président de la Commission Nationale des Marchés";
+        String chef = "Le Chef de la Commission Régionale des Marchés";
+        c.add(p(deux ? "{{SI:CENTRALE}}" + president + "{{FINSI:CENTRALE}}{{SI:REGIONALE}}" + chef + "{{FINSI:REGIONALE}}"
+                : regionale ? chef : president, attrs("center", 53.0, 3.0), null));
+        c.add(vide());
+        c.add(vide());
+        c.add(p("à", attrs("center", 50.0, null), null));
+        c.add(vide());
+        c.add(vide());
+        c.add(p("Madame/Monsieur la Personne Responsable des Marchés Publics de {{DOSSIER.ENTITE}}", attrs("center", 57.0, 7.0), null));
+        for (int i = 0; i < 4; i++) {
+            c.add(vide());
+        }
+
+        ArrayNode souligne = gras();
+        souligne.add(ModelePvPage.noeud("underline"));
+        ObjectNode objet = ModelePvPage.noeud("paragraph");
+        objet.putArray("content").addAll(ModelePvPage.enLigne("Objet", souligne)).addAll(ModelePvPage.enLigne(" : lettre de renvoi", null));
+        c.add(objet);
+        ObjectNode ref = ModelePvPage.noeud("paragraph");
+        ref.putObject("attrs").put("espaceAvant", 12);
+        ref.putArray("content").addAll(ModelePvPage.enLigne("Réf", souligne)).addAll(ModelePvPage.enLigne(" :   {{DOSSIER.REFERENCE}}", null));
+        c.add(ref);
+        c.add(vide());
+        c.add(vide());
+        c.add(p("Madame/Monsieur,", attrs(null, 25.0, null), null));
+        ObjectNode corps = ModelePvPage.noeud("paragraph");
+        corps.putObject("attrs").put("espaceAvant", 12).put("interligne", 1.15);
+        corps.putArray("content").addAll(ModelePvPage.enLigne("Faisant suite à la séance d’instruction en date du {{LETTRE.DATE_EXAMEN}}, "
+                + "la Commission Nationale des Marchés renvoie l’examen du dossier à une séance ultérieure en demandant au service de :", null))
+                .add(ModelePvPage.noeud("hardBreak")).addAll(ModelePvPage.enLigne("{{LETTRE.CORPS}}", null));
+        c.add(corps);
+        for (int i = 0; i < 7; i++) {
+            c.add(vide());
+        }
+        c.add(p("{{LETTRE.SIGNATAIRE}}", attrs("right", null, 16.0), null));
+
+        ObjectNode doc = F.objectNode();
+        ObjectNode page = doc.putObject("page").put("format", "A4").put("orientation", "portrait").put("police", "Times New Roman")
+                .put("taille", 12);
+        page.putObject("marges").put("haut", 23).put("bas", 17).put("gauche", 25).put("droite", 23);
+        doc.putObject("corps").put("type", "doc").set("content", c);
+        List<ModelePvDto.Condition> conditions = deux ? List.of(
+                new ModelePvDto.Condition("CENTRALE", "portee = centrale", "Commission centrale"),
+                new ModelePvDto.Condition("REGIONALE", "portee = regionale", "Commission régionale")) : List.of();
+        List<String> bases = deux ? List.of(LETTRE_CENTRALE, LETTRE_REGIONALE) : List.of(regionale ? LETTRE_REGIONALE : LETTRE_CENTRALE);
+        return new Depart(doc, bases, conditions, List.of());
     }
 
     // ───────────────────────────────────────────── outils ─────────────────────────────────────────────

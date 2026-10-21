@@ -81,7 +81,15 @@ public final class CatalogueModelesPv {
             t("TIT.CANDIDAT", "Candidat", "Hygiène & Services Madagascar SARL"),
             t("TIT.MONTANT_HT", "Montant hors taxes (Ariary)", "179 570 562"),
             t("TIT.MONTANT_TTC", "Montant toutes taxes (Ariary)", "215 484 674"),
-            t("TIT.DELAI", "Délai d'exécution", "12 mois"));
+            t("TIT.DELAI", "Délai d'exécution", "12 mois"),
+            // ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — la lettre de renvoi : les marqueurs de LR_CENTRALE / LR_REGIONALE.
+            d("LETTRE.DATE", "Lettre de renvoi", "Date de la lettre", "2026-10-23"),
+            d("LETTRE.DATE_EXAMEN", "Lettre de renvoi", "Date de l'examen (séance d'instruction)", "2026-10-22"),
+            v("LETTRE.CORPS", "Lettre de renvoi", "Corps de la lettre, avec les informations de la fiche DAO visées (un saut de ligne "
+                    + "par ligne saisie)", "- produire l'attestation fiscale à jour ;\n- corriger le délai de validité des offres."),
+            v("LETTRE.SIGNATAIRE", "Lettre de renvoi", "Signataire : Président (centrale) ou Chef de la Commission (régionale)",
+                    "Andry RAKOTOMALALA"),
+            v("LETTRE.LOCALITE", "Lettre de renvoi", "Localité du dossier (|majuscules pour l'en-tête régional)", "Toamasina"));
 
     /**
      * Les marqueurs entre chevrons des modèles du plan, lus comme les variables nouvelles. {@code <DATE EXAMEN>} se lit en date
@@ -101,7 +109,25 @@ public final class CatalogueModelesPv {
     /** Les variables sans lesquelles un PV n'a pas ses sections attendues (l'avis se vérifie à part : variable ou condition). */
     static final Map<String, List<String>> REQUISES = Map.of(
             "PV", List.of("PV.REFERENCE", "PV.MEMBRE"),
-            "LETTRE_RENVOI", List.of("DOSSIER.REFERENCE"));
+            "LETTRE_RENVOI", List.of("DOSSIER.REFERENCE", "LETTRE.CORPS", "LETTRE.SIGNATAIRE"));
+
+    /**
+     * ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — la nature qu'une variable sert, lue sur son préfixe : {@code LETTRE.} la lettre
+     * de renvoi ; {@code PV.}, {@code OBS.}, {@code TIT.}, {@code MARCHE.} le PV ; les autres (commission, dossier, procédure) les
+     * deux ({@code null}).
+     */
+    public static String nature(String code) {
+        if (code.startsWith("LETTRE.")) {
+            return "LETTRE_RENVOI";
+        }
+        return code.startsWith("PV.") || code.startsWith("OBS.") || code.startsWith("TIT.") || code.startsWith("MARCHE.") ? "PV" : null;
+    }
+
+    /** Une variable sert-elle cette nature ({@code null} : toutes) ? */
+    public static boolean sert(Variable v, String nature) {
+        String n = nature(v.code());
+        return nature == null || n == null || n.equals(nature);
+    }
 
     private CatalogueModelesPv() {
     }

@@ -1591,6 +1591,10 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   n'est mis en vigueur sans lui. Deux écarts avec le PV intégré : une ligne de présence s'imprime même sans nom (pas de clé de
 >   condition sur la présence) et le viseur n'a ni qualité ni mention d'intérim. Les actes de gestion et la déclaration sans suite ne
 >   nomment que la référence du dossier : le catalogue n'a pas encore leurs variables propres.
+> - ⚠️ **2026-10-21 (« modele-lettre-renvoi », L1)** — **la lettre de renvoi se rédige aussi comme une page** : un seul modèle pour
+>   tous les sous-types, la portée (centrale / régionale) en blocs. Ses variables sont propres à la lettre et ne valent pas dans
+>   un PV (et inversement). Elle continue d'être produite par les fichiers intégrés tant que la relève (L2) n'est pas faite, après
+>   comparaison des rendus sur des dossiers réels.
 > - ⚠️ **2026-10-21 (« modele-pv-suppression »)** — **ne se supprime que ce dont aucun PV n'a pu dépendre** :
 >   - une version en brouillon ;
 >   - un modèle qui n'a jamais été en vigueur et ne sert aucun sous-type.

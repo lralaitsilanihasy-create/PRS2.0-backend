@@ -15,6 +15,7 @@ import cnm.prs.dto.FichePresentationDto;
 import cnm.prs.entity.Attribution;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Examen;
+import cnm.prs.entity.LettreRenvoi;
 import cnm.prs.entity.Localite;
 import cnm.prs.entity.PvExamen;
 import cnm.prs.exception.BusinessRuleException;
@@ -23,6 +24,7 @@ import cnm.prs.repository.AttributionRepository;
 import cnm.prs.repository.ControleurRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.ExamenRepository;
+import cnm.prs.repository.LettreRenvoiRepository;
 import cnm.prs.repository.LocaliteRepository;
 import cnm.prs.repository.PvExamenRepository;
 
@@ -51,11 +53,14 @@ public class ContexteModelePvService {
     private final FicheMarcheService fiches;
     private final ObjectProvider<FichePresentationService> fichePresentation;
     private final ObjectProvider<EvaluationService> evaluation;
+    private final LettreRenvoiRepository lettres;
+    private final ObjectProvider<LettreRenvoiService> lettresService;
 
     public ContexteModelePvService(DossierRepository dossiers, ExamenRepository examens, PvExamenRepository pvs,
             LocaliteRepository localites, ControleurRepository controleurs, AttributionRepository attributions,
             PvDocumentService pvDocuments, FicheMarcheService fiches, ObjectProvider<FichePresentationService> fichePresentation,
-            ObjectProvider<EvaluationService> evaluation) {
+            ObjectProvider<EvaluationService> evaluation, LettreRenvoiRepository lettres,
+            ObjectProvider<LettreRenvoiService> lettresService) {
         this.dossiers = dossiers;
         this.examens = examens;
         this.pvs = pvs;
@@ -66,6 +71,8 @@ public class ContexteModelePvService {
         this.fiches = fiches;
         this.fichePresentation = fichePresentation;
         this.evaluation = evaluation;
+        this.lettres = lettres;
+        this.lettresService = lettresService;
     }
 
     /**
@@ -126,6 +133,36 @@ public class ContexteModelePvService {
         cles.put("agpm", DossierIntegriteService.SOUS_TYPE_PPM_AGPM.equals(d.getIdSousType()) ? "oui" : "non");
         procedure(d, v, listes, cles);
         return new ModelePvWord.Contexte(v, listes, cles, saisis == null ? Map.of() : saisis);
+    }
+
+    /**
+     * ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — le contexte d'une lettre de renvoi : celui du dossier, plus les variables
+     * {@code LETTRE.*} de la lettre {@code idLettre} (une lettre du dossier), à défaut de la dernière du dossier, même non signée ; la
+     * portée est celle de la lettre (localité du dossier, à défaut de la réception), comme le choix du fichier intégré. 404 pour une
+     * lettre d'un autre dossier, 409 {@code LETTRE_ABSENTE} pour un dossier sans lettre.
+     */
+    @Transactional(readOnly = true)
+    public ModelePvWord.Contexte pourLettre(Integer idDossier, Integer idLettre, Map<String, String> saisis) {
+        ModelePvWord.Contexte base = pour(idDossier, null, saisis);
+        LettreRenvoi lettre;
+        if (idLettre != null) {
+            lettre = lettres.findById(idLettre).filter(l -> idDossier.equals(l.getIdDossier()))
+                    .orElseThrow(() -> new ResourceNotFoundException("La lettre " + idLettre + " n'est pas une lettre du dossier " + idDossier + "."));
+        } else {
+            lettre = lettres.findFirstByIdDossierOrderByIdLettreDesc(idDossier).orElseThrow(() -> new BusinessRuleException(
+                    "Le dossier " + idDossier + " n'a pas de lettre de renvoi : l'aperçu d'une lettre se fait sur un dossier renvoyé.",
+                    "LETTRE_ABSENTE"));
+        }
+        LettreRenvoiService.ValeursLettre l = lettresService.getObject().valeurs(lettre.getIdLettre());
+        Map<String, ModelePvWord.Valeur> v = new LinkedHashMap<>(base.variables());
+        v.put("LETTRE.DATE", ModelePvWord.Valeur.date(l.date()));
+        v.put("LETTRE.DATE_EXAMEN", ModelePvWord.Valeur.date(l.dateExamen()));
+        texte(v, "LETTRE.CORPS", l.corps());
+        texte(v, "LETTRE.SIGNATAIRE", l.signataire());
+        texte(v, "LETTRE.LOCALITE", l.localite());
+        Map<String, String> cles = new LinkedHashMap<>(base.cles());
+        cles.put("portee", l.centrale() ? "centrale" : "regionale");
+        return new ModelePvWord.Contexte(v, base.listes(), cles, base.saisis());
     }
 
     /** Le PV du dernier examen du dossier, ou {@code null}. */

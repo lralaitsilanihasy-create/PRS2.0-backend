@@ -8728,6 +8728,29 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-21 (demande front « modele-lettre-renvoi », lot L1)** — la lettre de renvoi se rédige comme une page. Pas de migration.
+- **Catalogue** : `GET /api/modeles-pv/variables?nature=LETTRE_RENVOI` (ou `PV`) filtre par nature ; la réponse porte `nature`.
+  400 `NATURE_INCONNUE`.
+  - Groupe « Lettre de renvoi » : `LETTRE.DATE` et `LETTRE.DATE_EXAMEN` (dates : `long` par défaut, `court`, `lettres`),
+    `LETTRE.CORPS` (avec les informations de la fiche DAO visées ; un saut de ligne saisi = un retour à la ligne),
+    `LETTRE.SIGNATAIRE` (Président en centrale, Chef de commission en régionale : le signataire de la lettre), `LETTRE.LOCALITE`
+    (libellé ; `|majuscules` pour l'en-tête régional).
+  - La nature se lit au préfixe : `LETTRE.` pour la lettre ; `PV.`, `OBS.`, `TIT.`, `MARCHE.` pour le PV ; commission,
+    dossier et procédure pour les deux. Une lettre n'a pas de liste répétée.
+  - Contrôle : une variable hors de la nature du modèle est bloquante (**`VARIABLE_HORS_NATURE`**). Variables requises d'une
+    lettre : `DOSSIER.REFERENCE`, `LETTRE.CORPS`, `LETTRE.SIGNATAIRE` (`SECTION_ABSENTE` sinon).
+- **`POST …/versions/depart`** sur une lettre : une page reconstruite d'après `LR_CENTRALE.docx` / `LR_REGIONALE.docx`, sans
+  rattachement exigé (une lettre pour tous les sous-types, Q1).
+  - `les-deux` par défaut : la ligne de commission et le titre du signataire en blocs `CENTRALE` / `REGIONALE`, déclarés
+    d'office ; aucun champ saisi ; motif « texte à faire valider ».
+  - L'en-tête reprend l'emblème des PV (`EMBLEME`). Times New Roman 12, marges 23 / 17 / 25 / 23 mm ; une page.
+  - Journal : « lettre de renvoi, page reconstruite d'après LR_CENTRALE.docx + LR_REGIONALE.docx, portée les-deux ».
+  - `NATURE_SANS_DEPART` ne vaut plus pour aucune nature connue.
+- **`POST …/versions/{n}/apercu`** d'une lettre : sur la lettre `lettre=` du dossier, à défaut la dernière (même non signée).
+  404 pour une lettre d'un autre dossier, 409 **`LETTRE_ABSENTE`** pour un dossier sans lettre. La portée est celle de la lettre
+  (localité du dossier, à défaut de la réception). Les valeurs sont calculées par `LettreRenvoiService.valeurs`, comme le Word.
+- **Non fait (L2)** : la relève. La production de la lettre passe toujours par les fichiers intégrés ; la couverture reste `INTEGRE`.
+
 ⚠️ **2026-10-21 (demande front « modele-pv-suppression »)** — on ne supprime que ce dont aucun PV n'a pu dépendre. Réservé à
 l'Administrateur. Pas de migration.
 - **`DELETE /api/modeles-pv/{id}/versions/{n}`** (B1) : supprime un **brouillon** (page ou Word), avec ses conditions et ses champs ;

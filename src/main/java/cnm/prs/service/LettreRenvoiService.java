@@ -463,6 +463,30 @@ public class LettreRenvoiService {
         return new Rendu(centrale, construireRemplacements(lettre, dossier, signataire, centrale, localiteLibelle));
     }
 
+    /**
+     * ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — les valeurs d'une lettre pour un modèle en page ({@code LETTRE.*}) : le même calcul
+     * que les remplacements du Word (localité du dossier, à défaut de la réception ; corps avec les informations de la fiche DAO
+     * visées ; nom du signataire). Les dates restent des dates : le modèle choisit leur format.
+     */
+    public record ValeursLettre(java.time.LocalDate date, java.time.LocalDate dateExamen, String corps, String signataire,
+            String localite, boolean centrale) {
+    }
+
+    @Transactional(readOnly = true)
+    public ValeursLettre valeurs(Integer idLettre) {
+        LettreRenvoi lettre = exigerExistante(idLettre);
+        Dossier dossier = lettre.getIdDossier() == null ? null : dossierRepository.findById(lettre.getIdDossier()).orElse(null);
+        String localite = dossier == null ? null : dossier.getIdLocalite();
+        if (localite == null || localite.isBlank()) {
+            localite = repository.findLocaliteByLettre(lettre.getIdLettre()).orElse(null);
+        }
+        String localiteLibelle = localite == null ? null : localiteRepository.findById(localite)
+                .map(l -> l.getLibelleLocalite()).orElse(null);
+        return new ValeursLettre(lettre.getDateLettre(), lettre.getDateExamen(),
+                corpsAvecInformationsFiche(lettre.getCorpsLettre(), lignesAncrees(lettre.getIdExamen())),
+                nomComplet(lettre.getImSignataire()), localiteLibelle, Localite.estCentrale(localite));
+    }
+
     /** ⚠️ 2026-10-20 (« modeles-pv-integres-consultation », §B2) — le fichier qui a servi et le Word rempli. */
     public record ApercuLettre(String modele, byte[] docx) {
     }
