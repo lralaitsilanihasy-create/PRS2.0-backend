@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -229,6 +230,19 @@ public class ModelePvController {
     @PostMapping("/{id}/archiver")
     public ModelePvDto.Fiche archiver(@PathVariable Long id, @Valid @RequestBody(required = false) ModelePvDto.MotifRequest corps) {
         return service.archiver(id, corps == null ? null : corps.motif());
+    }
+
+    /** ⚠️ 2026-10-21 (« modele-pv-suppression », B1) — un brouillon seulement ; rend la fiche. */
+    @DeleteMapping("/{id}/versions/{numero}")
+    public ModelePvDto.Fiche supprimerVersion(@PathVariable Long id, @PathVariable Integer numero) {
+        return service.supprimerVersion(id, numero);
+    }
+
+    /** ⚠️ 2026-10-21 (« modele-pv-suppression », B2) — un modèle jamais en vigueur et sans sous-type ; 204. */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> supprimer(@PathVariable Long id) {
+        service.supprimer(id);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{id}/versions/{numero}/fichier")

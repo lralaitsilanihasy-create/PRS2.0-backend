@@ -8728,6 +8728,24 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-21 (demande front « modele-pv-suppression »)** — on ne supprime que ce dont aucun PV n'a pu dépendre. Réservé à
+l'Administrateur. Pas de migration.
+- **`DELETE /api/modeles-pv/{id}/versions/{n}`** (B1) : supprime un **brouillon** (page ou Word), avec ses conditions et ses champs ;
+  les images de la bibliothèque restent. Rend la fiche du modèle.
+  - 409 **`VERSION_NON_SUPPRIMABLE`** sur une version `EN_VIGUEUR` ou `REMPLACEE` (« une version qui a été en vigueur ne se
+    supprime pas ») ; 409 `MODELE_ARCHIVE` ; 404 si la version n'existe pas.
+  - Journal du modèle : `VERSION_SUPPRIMEE` (« version 2, page »).
+  - **Les numéros ne sont jamais repris** (Q1) : la version suivante prend le plus grand numéro des versions **et du journal**,
+    plus un. Supprimer la v2 puis enregistrer donne une v3.
+- **`DELETE /api/modeles-pv/{id}`** (B2) : 204. Le modèle part avec ses versions, conditions, champs, rattachements et journal.
+  - 409 **`MODELE_NON_SUPPRIMABLE`**, `details.raison` :
+    - `A_ETE_EN_VIGUEUR` : une version `EN_VIGUEUR` ou `REMPLACEE`, ou une `MISE_EN_VIGUEUR` au journal ;
+    - `SERT_DES_SOUS_TYPES` (avec `details.sousTypes`) : détacher les sous-types ou archiver le modèle.
+  - Un modèle actif, jamais en vigueur et sans sous-type se supprime aussi.
+  - **Trace** (Q2) : une entrée du journal général (`/admin/audit`), table `modeles-pv`, action `MODELE_SUPPRIME`, champ = le
+    code, valeur = code, libellé, nature, état, motif d'archivage, nombre de versions et auteur. Pas de suppression logique.
+  - Q3 : aucune restriction liée à la reprise des fichiers du plan (G4) ; un modèle qui n'a jamais été en vigueur ne produit rien.
+
 ⚠️ **2026-10-21 (demande front « modele-pv-page », lots P1-P2 ; V139)** — **une version de modèle de PV est une page** construite dans
 l'application, plus un Word déposé (option C' du pilote). Réservé à l'Administrateur, comme le reste de `/api/modeles-pv`.
 - **Le document** (Q1 : JSON de l'éditeur, jamais de HTML) : `{ page?, entete?, enteteSurPremiereSeulement?, corps, piedDePage? }`.

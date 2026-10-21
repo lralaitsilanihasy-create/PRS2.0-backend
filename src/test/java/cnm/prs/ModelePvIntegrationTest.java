@@ -3,6 +3,7 @@ package cnm.prs;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -24,6 +25,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import com.jayway.jsonpath.JsonPath;
 
 import cnm.prs.entity.VersionModelePv;
+import cnm.prs.repository.AuditLogRepository;
 import cnm.prs.repository.VersionModelePvRepository;
 import cnm.prs.service.ModelePvPageTest;
 import cnm.prs.service.ModelePvWordTest;
@@ -44,6 +46,9 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
 
     @Autowired
     private VersionModelePvRepository versionsModele;
+
+    @Autowired
+    private AuditLogRepository auditLogs;
 
     /** Un PV minimal en page : identification, avis par blocs, observations répétées, champ saisi, signatures. */
     private static String modelePv(String codeReference) {
@@ -524,5 +529,65 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
                 .containsExactly("INTEGRE");
         assertThat(JsonPath.<java.util.List<String>>read(couverture, "$[?(@.sousType=='DAOO' && @.nature=='PV')].famille"))
                 .containsExactly("DMC");
+    }
+
+    /**
+     * ⚠️ 2026-10-21 (« modele-pv-suppression », B1-B2, Q1-Q2) — un brouillon se supprime, son numéro n'est pas repris ; une version
+     * qui a été en vigueur, non ; un modèle se supprime s'il n'a jamais été en vigueur et ne sert aucun sous-type, la trace reste au
+     * journal général.
+     */
+    @Test
+    void suppressions() throws Exception {
+        long id = creer("PV-SUPPR");
+        enregistrer(id, modelePv("PV.REFERENCE"));
+        enregistrer(id, modelePv("PV.REFERENCE"));
+        mvc.perform(delete(BASE + "/" + id + "/versions/2").header("Authorization", tokenMembre)).andExpect(status().isForbidden());
+        mvc.perform(delete(BASE + "/" + id + "/versions/2").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.versions[*].numero").value(org.hamcrest.Matchers.contains(1)))
+                .andExpect(jsonPath("$.historique[0].action").value("VERSION_SUPPRIMEE"))
+                .andExpect(jsonPath("$.historique[0].detail").value("version 2, page"));
+        mvc.perform(delete(BASE + "/" + id + "/versions/2").header("Authorization", tokenAdmin)).andExpect(status().isNotFound());
+        // Q1 : le numéro 2 n'est pas repris.
+        assertThat(JsonPath.<Integer>read(enregistrer(id, modelePv("PV.REFERENCE")), "$.numero")).isEqualTo(3);
+
+        // Une version qui a été en vigueur ne se supprime pas, son modèle non plus.
+        VersionModelePv v1 = versionsModele.findByIdModeleAndNumero(id, 1).orElseThrow();
+        v1.setEtat(VersionModelePv.REMPLACEE);
+        versionsModele.saveAndFlush(v1);
+        mvc.perform(delete(BASE + "/" + id + "/versions/1").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("VERSION_NON_SUPPRIMABLE"))
+                .andExpect(jsonPath("$.message").value(containsString("une version qui a été en vigueur ne se supprime pas")));
+        mvc.perform(delete(BASE + "/" + id).header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MODELE_NON_SUPPRIMABLE"))
+                .andExpect(jsonPath("$.details.raison").value("A_ETE_EN_VIGUEUR"));
+
+        // Un modèle jamais en vigueur : refusé tant qu'il sert un sous-type ; archivé (détaché), il se supprime avec tout ce qu'il a.
+        long essai = creer("ESSAI-SUPPR");
+        enregistrer(essai, modelePv("PV.REFERENCE"));
+        mvc.perform(put(BASE + "/" + essai + "/versions/1/conditions").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("[{\"nom\":\"AVEC_RESERVES\",\"expression\":\"avis = FAVR\"}]"))
+                .andExpect(status().isOk());
+        mvc.perform(put(BASE + "/" + essai + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sousTypes\":[\"DAOO\"]}")).andExpect(status().isOk());
+        mvc.perform(delete(BASE + "/" + essai).header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MODELE_NON_SUPPRIMABLE"))
+                .andExpect(jsonPath("$.details.raison").value("SERT_DES_SOUS_TYPES"))
+                .andExpect(jsonPath("$.details.sousTypes[0]").value("DAOO"));
+        mvc.perform(post(BASE + "/" + essai + "/archiver").header("Authorization", tokenAdmin)).andExpect(status().isOk());
+        mvc.perform(delete(BASE + "/" + essai + "/versions/1").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MODELE_ARCHIVE"));
+        mvc.perform(delete(BASE + "/" + essai).header("Authorization", tokenMembre)).andExpect(status().isForbidden());
+        mvc.perform(delete(BASE + "/" + essai).header("Authorization", tokenAdmin)).andExpect(status().isNoContent());
+        mvc.perform(get(BASE + "/" + essai).header("Authorization", tokenAdmin)).andExpect(status().isNotFound());
+        mvc.perform(delete(BASE + "/" + essai).header("Authorization", tokenAdmin)).andExpect(status().isNotFound());
+        assertThat(versionsModele.findByIdModeleOrderByNumeroDesc(essai)).isEmpty();
+        // Q2 : la trace reste au journal général, avec le code et le libellé.
+        assertThat(auditLogs.findAll()).anySatisfy(a -> {
+            assertThat(a.getNomTable()).isEqualTo("modeles-pv");
+            assertThat(a.getTypeAction()).isEqualTo("MODELE_SUPPRIME");
+            assertThat(a.getIdEnregistrement()).isEqualTo(String.valueOf(essai));
+            assertThat(a.getChampModifie()).isEqualTo("ESSAI-SUPPR");
+            assertThat(a.getNouvelleValeur()).contains("PV d'examen du dossier de marché", "1 version(s)");
+        });
     }
 }

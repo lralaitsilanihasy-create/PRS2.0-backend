@@ -15,4 +15,6 @@ public interface VersionModelePvRepository extends JpaRepository<VersionModelePv
     Optional<VersionModelePv> findByIdModeleAndNumero(Long idModele, Integer numero);
 
     Optional<VersionModelePv> findByIdModeleAndEtat(Long idModele, String etat);
+
+    boolean existsByIdModeleAndEtatIn(Long idModele, java.util.Collection<String> etats);
 }

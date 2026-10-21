@@ -80,13 +80,14 @@ public class ModelePvService {
     private final ContexteModelePvService contextes;
     private final PvDocumentGenerator convertisseur;
     private final ImagesModelePvService images;
+    private final AuditLogService audit;
     private final ObjectMapper json;
     private final boolean essaiPdf;
 
     public ModelePvService(ModelePvRepository modeles, VersionModelePvRepository versions, ConditionModelePvRepository conditions,
             ChampSaisiModelePvRepository champs, RattachementModelePvRepository rattachements, JournalModelePvRepository journal,
             SousTypeDossierRepository sousTypes, ContexteModelePvService contextes, PvDocumentGenerator convertisseur,
-            ImagesModelePvService images, ObjectMapper json, @Value("${app.modeles-pv.essai-pdf:true}") boolean essaiPdf) {
+            ImagesModelePvService images, AuditLogService audit, ObjectMapper json, @Value("${app.modeles-pv.essai-pdf:true}") boolean essaiPdf) {
         this.modeles = modeles;
         this.versions = versions;
         this.conditions = conditions;
@@ -97,6 +98,7 @@ public class ModelePvService {
         this.contextes = contextes;
         this.convertisseur = convertisseur;
         this.images = images;
+        this.audit = audit;
         this.json = json;
         this.essaiPdf = essaiPdf;
     }
@@ -625,6 +627,60 @@ public class ModelePvService {
         return fiche(m);
     }
 
+    /**
+     * ⚠️ 2026-10-21 (« modele-pv-suppression », B1) — supprime un brouillon, avec ses conditions et ses champs ; les images de la
+     * bibliothèque restent. Une version qui a été en vigueur ne se supprime pas (409 {@code VERSION_NON_SUPPRIMABLE}). Le numéro
+     * n'est jamais réutilisé (Q1).
+     */
+    public ModelePvDto.Fiche supprimerVersion(Long id, Integer numero) {
+        ModelePv m = actif(id);
+        VersionModelePv v = version(m, numero);
+        if (!VersionModelePv.BROUILLON.equals(v.getEtat())) {
+            throw new BusinessRuleException("La version " + numero + " est " + (VersionModelePv.EN_VIGUEUR.equals(v.getEtat()) ? "en vigueur"
+                    : "remplacée") + " : une version qui a été en vigueur ne se supprime pas.", "VERSION_NON_SUPPRIMABLE");
+        }
+        conditions.deleteByIdVersion(v.getIdVersion());
+        champs.deleteByIdVersion(v.getIdVersion());
+        versions.delete(v);
+        versions.flush();
+        tracer(m, numero, "VERSION_SUPPRIMEE", "version " + numero + ", " + (VersionModelePv.PAGE.equals(v.getSupport()) ? "page" : "Word"));
+        return fiche(m);
+    }
+
+    /**
+     * ⚠️ 2026-10-21 (« modele-pv-suppression », B2) — supprime un modèle dont aucun PV n'a pu dépendre : jamais en vigueur (ni
+     * version {@code EN_VIGUEUR} / {@code REMPLACEE}, ni mise en vigueur au journal) et ne servant aucun sous-type. Ses versions,
+     * conditions, champs, rattachements et journal partent avec lui ; la trace reste au journal général (Q2).
+     */
+    public void supprimer(Long id) {
+        ModelePv m = modele(id);
+        if (versions.existsByIdModeleAndEtatIn(m.getIdModele(), List.of(VersionModelePv.EN_VIGUEUR, VersionModelePv.REMPLACEE))
+                || journal.existsByIdModeleAndAction(m.getIdModele(), "MISE_EN_VIGUEUR")) {
+            throw new BusinessRuleException("Le modèle « " + m.getCode() + " » a été en vigueur : il ne se supprime pas, il reste pour la "
+                    + "traçabilité.", "MODELE_NON_SUPPRIMABLE", null, Map.of("raison", "A_ETE_EN_VIGUEUR"));
+        }
+        List<RattachementModelePv> servis = rattachements.findByIdModele(m.getIdModele());
+        if (!servis.isEmpty()) {
+            List<String> st = servis.stream().map(RattachementModelePv::getIdSousType).sorted().toList();
+            throw new BusinessRuleException("Le modèle « " + m.getCode() + " » sert encore des sous-types " + st
+                    + " : détachez-les ou archivez le modèle.", "MODELE_NON_SUPPRIMABLE", null,
+                    Map.of("raison", "SERT_DES_SOUS_TYPES", "sousTypes", st));
+        }
+        List<VersionModelePv> vs = versions.findByIdModeleOrderByNumeroDesc(m.getIdModele());
+        for (VersionModelePv v : vs) {
+            conditions.deleteByIdVersion(v.getIdVersion());
+            champs.deleteByIdVersion(v.getIdVersion());
+        }
+        versions.deleteAll(vs);
+        journal.deleteByIdModele(m.getIdModele());
+        modeles.delete(m);
+        modeles.flush();
+        audit.enregistrerDetail(CurrentUser.ref().orElse(null), "modeles-pv", String.valueOf(m.getIdModele()), "MODELE_SUPPRIME",
+                m.getCode(), m.getCode() + " — " + m.getLibelle() + " (" + m.getNature() + ", " + m.getEtat()
+                        + (m.getMotifArchivage() == null ? "" : ", archivé : " + m.getMotifArchivage()) + ") ; " + vs.size()
+                        + " version(s) en brouillon supprimée(s) ; par " + CurrentUser.login().orElse("?"), null);
+    }
+
     // ───────────────────────────────────────────── contrôle (§B5) ─────────────────────────────────────────────
 
     /** Contrôle la version sur ses conditions et champs actuels, et enregistre le rapport. */
@@ -884,7 +940,9 @@ public class ModelePvService {
         List<VersionModelePv> vs = versions.findByIdModeleOrderByNumeroDesc(m.getIdModele());
         VersionModelePv v = new VersionModelePv();
         v.setIdModele(m.getIdModele());
-        v.setNumero(vs.isEmpty() ? 1 : vs.get(0).getNumero() + 1);
+        // ⚠️ 2026-10-21 (« modele-pv-suppression », Q1) — un numéro supprimé n'est jamais repris : le journal le cite encore.
+        Integer cite = journal.numeroMax(m.getIdModele());
+        v.setNumero(Math.max(vs.isEmpty() ? 0 : vs.get(0).getNumero(), cite == null ? 0 : cite) + 1);
         v.setSupport(VersionModelePv.PAGE);
         poserDocument(v, document);
         v.setEtat(VersionModelePv.BROUILLON);

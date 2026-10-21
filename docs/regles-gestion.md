@@ -1591,6 +1591,12 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   n'est mis en vigueur sans lui. Deux écarts avec le PV intégré : une ligne de présence s'imprime même sans nom (pas de clé de
 >   condition sur la présence) et le viseur n'a ni qualité ni mention d'intérim. Les actes de gestion et la déclaration sans suite ne
 >   nomment que la référence du dossier : le catalogue n'a pas encore leurs variables propres.
+> - ⚠️ **2026-10-21 (« modele-pv-suppression »)** — **ne se supprime que ce dont aucun PV n'a pu dépendre** :
+>   - une version en brouillon ;
+>   - un modèle qui n'a jamais été en vigueur et ne sert aucun sous-type.
+>
+>   Tout ce qui a été en vigueur reste, pour la traçabilité. Le numéro d'une version supprimée n'est jamais réutilisé. La suppression
+>   d'un modèle s'inscrit au journal général.
 > - ⚠️ **2026-10-21 (« modele-pv-page », V139)** — **un modèle de PV est une page construite dans l'application**, plus un Word
 >   (décision du pilote du 21/10, option C') :
 >   - un PV produit depuis cette page reconstruite est acceptable ;
