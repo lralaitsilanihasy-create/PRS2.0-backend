@@ -242,6 +242,95 @@ public class ProjetMarcheService {
                 "Procédure " + in.idDmc() + " — projet de contrat-cadre" + (in.allotie() ? ", lot " + in.lot() : ""));
     }
 
+    // ------------------------------------------------------------------ le modèle de document (M1)
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-documents-marche », M1) — les valeurs du projet pour un <strong>modèle de document</strong>
+     * (nature {@code PROJET_MARCHE}) : chaque variable est le fragment que {@link #document} écrit, calculé par les mêmes méthodes, pour
+     * que le modèle de départ redonne le même texte mot pour mot. Une donnée inconnue vaut « …… » là où le texte l'écrit, ou reste vide
+     * quand le texte l'omet (la page teste alors « renseigne »). Les titulaires d'un contrat-cadre forment la liste {@code TITULAIRES}.
+     */
+    public ModelePvWord.Contexte contexte(Entree in) {
+        FicheMarcheService.EtatVersion v = fiches.etatValide(in.idDmc()).orElse(null);
+        Valeurs val = new Valeurs(v, in.lot());
+        Map<String, ModelePvWord.Valeur> x = new java.util.LinkedHashMap<>();
+        String lot = in.allotie() ? lotLibelle(in) : null;
+        texte(x, "MARCHE.OBJET", objetDuMarche(v == null ? in.plan().get("OBJET") : v.etat().getDesignationMarche(), lot));
+        texte(x, "MARCHE.NUMERO_AO", val.get(NUMERO_AO));
+        texte(x, "MARCHE.LOT", lot);
+        texte(x, "MARCHE.PROCEDURE", String.valueOf(in.idDmc()));
+        texte(x, "MARCHE.LOT_NUMERO", in.allotie() && in.lot() != null ? String.valueOf(in.lot()) : null);
+        texte(x, "MARCHE.BASE_LEGALE", baseLegale(in.plan().get("MODE"), in.pi()));
+        texte(x, "MARCHE.ORIGINAL_AE", originalAe(in));
+        texte(x, "AC.ENTITE", Objects.toString(in.plan().get("ENTITE"), "l'Autorité contractante"));
+        texte(x, "AC.MINISTERE", in.plan().get("MINISTERE"));
+        texte(x, "AC.SIGNATAIRE", signataire(in));
+        texte(x, "MARCHE.DATE_NOTIFICATION", in.dateNotification() == null ? A_COMPLETER : DATE.format(in.dateNotification()));
+        List<Map<String, ModelePvWord.Valeur>> titulaires = new ArrayList<>();
+        boolean cadre = in.titulaires() != null && !in.titulaires().isEmpty();
+        if (cadre) {
+            texte(x, "MARCHE.NB_TITULAIRES", String.valueOf(in.titulaires().size()));
+            for (Titulaire t : in.titulaires()) {
+                Map<String, ModelePvWord.Valeur> item = new java.util.LinkedHashMap<>();
+                EntrepriseCandidatDto.Entreprise e = entreprise(t.offre());
+                texte(item, "TIT.CANDIDAT", t.offre().getRaisonSociale());
+                texte(item, "TIT.NIF", t.offre().getNif());
+                texte(item, "TIT.ADRESSE", e == null ? null : e.adresse());
+                texte(item, "TIT.REPRESENTANT", representant(e));
+                texte(item, "TIT.OFFRE_NUMERO", String.valueOf(t.offre().getNumero()));
+                texte(item, "TIT.MONTANT_HT", t.montant() == null ? null : FormulairesEnLigne.lisible(t.montant()));
+                texte(item, "TIT.DELAI", t.delai());
+                titulaires.add(item);
+            }
+        } else {
+            EntrepriseCandidatDto.Entreprise e = entreprise(in.offre());
+            EvaluationDto.Proposition p = in.proposition();
+            texte(x, "TITULAIRE.RAISON_SOCIALE", in.offre().getRaisonSociale());
+            texte(x, "TITULAIRE.NIF", in.offre().getNif());
+            texte(x, "TITULAIRE.ADRESSE", e == null ? null : e.adresse());
+            texte(x, "TITULAIRE.REPRESENTANT", representant(e));
+            texte(x, "TITULAIRE.OFFRE_NUMERO", String.valueOf(in.offre().getNumero()));
+            texte(x, "MARCHE.MONTANT_HT", p.montant() == null ? null : FormulairesEnLigne.lisible(p.montant()));
+            texte(x, "MARCHE.MONTANT_TTC", p.montantTtc() == null ? null : FormulairesEnLigne.lisible(p.montantTtc()));
+            texte(x, "MARCHE.DELAI", delai(p.delai(), val));
+            texte(x, "MARCHE.SANCTION_RETARD", sanction(val));
+            texte(x, "MARCHE.COMPTABLE", Objects.toString(val.premiere(COMPTABLE_FS, COMPTABLE_TRAVAUX), A_COMPLETER));
+            texte(x, "MARCHE.IMPUTATION", Objects.toString(val.premiere(IMPUTATION), Objects.toString(in.plan().get("COMPTES"), A_COMPLETER)));
+            texte(x, "MARCHE.DOMICILIATION", Objects.toString(val.premiere(DOMICILIATION), A_COMPLETER));
+            String indemnite = val.premiere(INDEMNITE_RESILIATION, INDEMNITE_RESILIATION_PI);
+            texte(x, "MARCHE.INDEMNITE_RESILIATION", indemnite == null ? null : pourcent(indemnite));
+        }
+        Map<String, String> cles = new java.util.LinkedHashMap<>();
+        cles.put("contratCadre", cadre ? "oui" : "non");
+        cles.put("pi", in.pi() ? "oui" : "non");
+        cles.put("international", international(in.plan().get("MODE")) ? "oui" : "non");
+        cles.put("receptionParTranches", "OUI".equalsIgnoreCase(val.get(RECEPTION_PAR_TRANCHES)) ? "oui" : "non");
+        cles.put("alloti", in.allotie() ? "oui" : "non");
+        return new ModelePvWord.Contexte(x, Map.of("TITULAIRES", titulaires), cles, Map.of());
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-documents-marche », M1, Q1) — la catégorie de la procédure, celle de sa fiche validée (à défaut
+     * fournitures et services, comme la fiche) : elle choisit le modèle de projet en vigueur.
+     */
+    public String categorie(Long idDmc) {
+        return fiches.etatValide(idDmc).map(FicheMarcheService.EtatVersion::categorie).filter(c -> c != null && !c.isBlank())
+                .orElse(cnm.prs.enums.CategorieDao.FOURNITURES_SERVICES.name());
+    }
+
+    /** « Prénom NOM, fonction » du représentant, ou {@code null} : le texte écrit alors « …… (nom et qualité du signataire) ». */
+    private static String representant(EntrepriseCandidatDto.Entreprise e) {
+        if (e == null || e.representant() == null) {
+            return null;
+        }
+        return e.representant().prenom() + " " + e.representant().nom()
+                + (e.representant().fonction() == null ? "" : ", " + e.representant().fonction());
+    }
+
+    private static void texte(Map<String, ModelePvWord.Valeur> m, String code, String valeur) {
+        m.put(code, ModelePvWord.Valeur.de(valeur));
+    }
+
     // ------------------------------------------------------------------ art. 28 : l'objet du lot
 
     /** « répartis en cinq (05) lots : Lot n°01 … » : l'énumération des lots qui suit l'objet de l'appel d'offres. */

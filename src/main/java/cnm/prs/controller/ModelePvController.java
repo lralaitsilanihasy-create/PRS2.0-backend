@@ -178,7 +178,7 @@ public class ModelePvController {
      */
     @PostMapping("/{id}/versions/depart")
     public ModelePvDto.Version depart(@PathVariable Long id, @RequestBody(required = false) ModelePvDto.DepartRequest corps) {
-        return service.depart(id, corps == null ? null : corps.portee());
+        return service.depart(id, corps == null ? null : corps.portee(), corps == null ? null : corps.categorie());
     }
 
     @GetMapping("/{id}/versions/{numero}")
@@ -207,14 +207,16 @@ public class ModelePvController {
      */
     @PostMapping("/{id}/versions/{numero}/apercu")
     public ResponseEntity<byte[]> apercu(@PathVariable Long id, @PathVariable Integer numero, @RequestParam(required = false) Integer dossier,
-            @RequestParam(defaultValue = "false") boolean exemple,
+            @RequestParam(defaultValue = "false") boolean exemple, @RequestParam(required = false) Long procedure,
+            @RequestParam(required = false) Integer lot,
             @RequestParam(required = false) String avis, @RequestParam(defaultValue = "pdf") String format,
             @RequestParam(required = false) Integer lettre, @RequestBody(required = false) ModelePvDto.ApercuRequest corps) {
         boolean pdf = !"docx".equalsIgnoreCase(format);
-        byte[] contenu = service.apercu(id, numero, dossier, exemple, avis, lettre, pdf, corps == null ? null : corps.saisis());
+        byte[] contenu = service.apercu(id, numero, dossier, procedure, lot, exemple, avis, lettre, pdf, corps == null ? null : corps.saisis());
         return ResponseEntity.ok().contentType(pdf ? MediaType.APPLICATION_PDF : DOCX)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
-                        .filename("apercu-" + id + "-v" + numero + (exemple ? "-exemple" : "-dossier-" + dossier) + (pdf ? ".pdf" : ".docx"), StandardCharsets.UTF_8)
+                        .filename("apercu-" + id + "-v" + numero + (exemple ? "-exemple" : procedure != null ? "-procedure-" + procedure + "-lot-" + (lot == null ? 1 : lot)
+                                : "-dossier-" + dossier) + (pdf ? ".pdf" : ".docx"), StandardCharsets.UTF_8)
                         .build().toString())
                 .body(contenu);
     }
@@ -227,7 +229,7 @@ public class ModelePvController {
 
     @PutMapping("/{id}/rattachements")
     public ModelePvDto.Fiche rattacher(@PathVariable Long id, @RequestBody ModelePvDto.RattachementsRequest corps) {
-        return service.rattacher(id, corps == null ? null : corps.sousTypes());
+        return service.rattacher(id, corps == null ? null : corps.sousTypes(), corps == null ? null : corps.categories());
     }
 
     @PostMapping("/{id}/archiver")

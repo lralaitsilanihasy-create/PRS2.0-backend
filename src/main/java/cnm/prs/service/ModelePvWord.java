@@ -241,8 +241,11 @@ public final class ModelePvWord {
                     : "lettres".equals(format) ? NombreEnLettres.dateExamenPourLAn(v.date()) : v.date().format(LONG);
         } else {
             s = nz(v.texte());
-            if ("lettres".equals(format) && s.matches("\\d{1,12}")) {
-                s = NombreEnLettres.cardinal(Long.parseLong(s));
+            // ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — un montant écrit en groupes (« 179 570 562 », espaces insécables
+            // compris), décimales tronquées comme le projet de marché (longValue).
+            String chiffres = s.replaceAll("[\\s\\u00A0\\u202F]", "").replaceAll("[,.]\\d*$", "");
+            if ("lettres".equals(format) && chiffres.matches("\\d{1,12}")) {
+                s = NombreEnLettres.cardinal(Long.parseLong(chiffres));
             }
         }
         if ("majuscules".equals(format)) {

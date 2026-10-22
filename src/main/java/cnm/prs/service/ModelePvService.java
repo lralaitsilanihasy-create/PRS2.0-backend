@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ import cnm.prs.entity.ConditionModelePv;
 import cnm.prs.entity.JournalModelePv;
 import cnm.prs.entity.ModelePv;
 import cnm.prs.entity.PvExamen;
+import cnm.prs.entity.RattachementCategorieModelePv;
 import cnm.prs.entity.RattachementModelePv;
 import cnm.prs.entity.SousTypeDossier;
 import cnm.prs.entity.VersionModelePv;
@@ -37,6 +39,7 @@ import cnm.prs.repository.ChampSaisiModelePvRepository;
 import cnm.prs.repository.ConditionModelePvRepository;
 import cnm.prs.repository.JournalModelePvRepository;
 import cnm.prs.repository.ModelePvRepository;
+import cnm.prs.repository.RattachementCategorieModelePvRepository;
 import cnm.prs.repository.RattachementModelePvRepository;
 import cnm.prs.repository.SousTypeDossierRepository;
 import cnm.prs.repository.VersionModelePvRepository;
@@ -63,7 +66,11 @@ import tools.jackson.databind.ObjectMapper;
 @Transactional
 public class ModelePvService {
 
-    static final Set<String> NATURES = Set.of("PV", "LETTRE_RENVOI");
+    static final Set<String> NATURES = Set.of("PV", "LETTRE_RENVOI", "PROJET_MARCHE");
+    /** ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — les catégories auxquelles se rattache un modèle de projet de marché. */
+    static final List<String> CATEGORIES = List.of("FOURNITURES_SERVICES", "TRAVAUX", "PRESTATIONS_INTELLECTUELLES");
+    private static final Map<String, String> NATURES_EN_CLAIR = Map.of("PV", "un PV", "LETTRE_RENVOI", "une lettre de renvoi",
+            "PROJET_MARCHE", "un projet de marché");
     static final Set<String> TYPES_CHAMP = Set.of("TEXTE", "TEXTE_LONG", "LISTE", "CASE", "DATE", "NOMBRE", "PIECE");
     private static final Pattern NOM_CONDITION = Pattern.compile("[A-Za-z0-9_-]{1,60}");
     private static final Pattern CODE_CHAMP = Pattern.compile("[A-Za-z0-9_]{1,60}");
@@ -71,13 +78,15 @@ public class ModelePvService {
     private static final Pattern TERME = Pattern.compile("^\\s*(" + ConditionsModele.CLE + ")\\s*(?:!?=|contient\\s|renseigne|vide)");
     private static final Map<String, String> SECTIONS = Map.of("PV.REFERENCE", "en-tête et identification",
             "PV.MEMBRE", "signatures", "PV.AVIS", "avis", "DOSSIER.REFERENCE", "identification",
-            "LETTRE.CORPS", "corps de la lettre", "LETTRE.SIGNATAIRE", "signature");
+            "LETTRE.CORPS", "corps de la lettre", "LETTRE.SIGNATAIRE", "signature", "MARCHE.OBJET", "objet du marché",
+            "AC.SIGNATAIRE", "parties", "MARCHE.DATE_NOTIFICATION", "notification");
 
     private final ModelePvRepository modeles;
     private final VersionModelePvRepository versions;
     private final ConditionModelePvRepository conditions;
     private final ChampSaisiModelePvRepository champs;
     private final RattachementModelePvRepository rattachements;
+    private final RattachementCategorieModelePvRepository categories;
     private final JournalModelePvRepository journal;
     private final SousTypeDossierRepository sousTypes;
     private final ContexteModelePvService contextes;
@@ -86,13 +95,21 @@ public class ModelePvService {
     private final AuditLogService audit;
     private final ObjectMapper json;
     private final boolean essaiPdf;
+    /** ⚠️ 2026-10-22 (M1) — le projet de marché : ses valeurs et la procédure d'un aperçu réel. */
+    private final ObjectProvider<ProjetMarcheService> projets;
+    private final ObjectProvider<AttributionService> attributions;
     /** ⚠️ 2026-10-22 (« modeles-documents-marche », W1) — les natures dont la page se remet aussi en Word (complétée par un tiers). */
     static final Set<String> NATURES_WORD = Set.of("PROJET_MARCHE");
 
     public ModelePvService(ModelePvRepository modeles, VersionModelePvRepository versions, ConditionModelePvRepository conditions,
             ChampSaisiModelePvRepository champs, RattachementModelePvRepository rattachements, JournalModelePvRepository journal,
             SousTypeDossierRepository sousTypes, ContexteModelePvService contextes, PvDocumentGenerator convertisseur,
-            ImagesModelePvService images, AuditLogService audit, ObjectMapper json, @Value("${app.modeles-pv.essai-pdf:true}") boolean essaiPdf) {
+            ImagesModelePvService images, AuditLogService audit, ObjectMapper json, @Value("${app.modeles-pv.essai-pdf:true}") boolean essaiPdf,
+            RattachementCategorieModelePvRepository categories, ObjectProvider<ProjetMarcheService> projets,
+            ObjectProvider<AttributionService> attributions) {
+        this.categories = categories;
+        this.projets = projets;
+        this.attributions = attributions;
         this.modeles = modeles;
         this.versions = versions;
         this.conditions = conditions;
@@ -118,7 +135,7 @@ public class ModelePvService {
             VersionModelePv enVigueur = vs.stream().filter(v -> VersionModelePv.EN_VIGUEUR.equals(v.getEtat())).findFirst().orElse(null);
             out.add(new ModelePvDto.Resume(m.getIdModele(), m.getCode(), m.getLibelle(), m.getNature(), m.getEtat(),
                     rattachements.findByIdModele(m.getIdModele()).stream().map(RattachementModelePv::getIdSousType).sorted().toList(),
-                    courte(enVigueur), vs.isEmpty() ? null : courte(vs.get(0))));
+                    courte(enVigueur), vs.isEmpty() ? null : courte(vs.get(0)), categoriesDe(m)));
         }
         return out;
     }
@@ -158,7 +175,7 @@ public class ModelePvService {
     public ModelePvDto.Catalogue catalogue(String sousType, String nature) {
         String n = nature == null || nature.isBlank() ? null : nature.trim().toUpperCase(Locale.ROOT);
         if (n != null && !NATURES.contains(n)) {
-            throw new BadRequestException("Nature inconnue : « " + nature + " » (PV, LETTRE_RENVOI).", "NATURE_INCONNUE");
+            throw new BadRequestException("Nature inconnue : « " + nature + " » (PV, LETTRE_RENVOI, PROJET_MARCHE).", "NATURE_INCONNUE");
         }
         String famille = null;
         if (sousType != null && !sousType.isBlank()) {
@@ -175,6 +192,7 @@ public class ModelePvService {
         return new ModelePvDto.Catalogue(sousType, famille, n,
                 groupes.entrySet().stream().map(e -> new ModelePvDto.Groupe(e.getKey(), e.getValue())).toList(),
                 CatalogueModelesPv.LISTES.stream().filter(l -> !"LETTRE_RENVOI".equals(n))
+                        .filter(l -> !"PROJET_MARCHE".equals(n) || "TITULAIRES".equals(l.nom()))
                         .filter(l -> f == null || l.familles() == null || l.familles().contains(f))
                         .map(l -> new ModelePvDto.Liste(l.nom(), l.prefixe(), l.libelle())).toList(),
                 CatalogueModelesPv.CLES.stream().map(c -> new ModelePvDto.Cle(c.cle(), c.libelle(), c.valeurs())).toList(),
@@ -239,12 +257,50 @@ public class ModelePvService {
                 .map(v -> rendre(v.getDocument(), contextes.pourLettre(idDossier, idLettre, Map.of()), declarees(v)));
     }
 
-    /** Les couples « sous-type|nature » relevés : comparés avant et après un changement pour le journal général (R3). */
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-documents-marche », M1) — la version qui produit le projet de marché d'une catégorie :
+     * modèle actif rattaché à la catégorie, version en vigueur en page ; vide : le texte du code ({@link ProjetMarcheService}), comme
+     * avant. Lue à chaque production : archivé, détaché ou sans version en vigueur, le projet revient au code.
+     */
+    @Transactional(readOnly = true)
+    public Optional<VersionModelePv> versionProjet(String categorie) {
+        if (categorie == null) {
+            return Optional.empty();
+        }
+        return categories.findByCategorieAndNature(categorie, "PROJET_MARCHE")
+                .flatMap(r -> modeles.findById(r.getIdModele()))
+                .filter(m -> !ModelePv.ARCHIVE.equals(m.getEtat()))
+                .flatMap(m -> versions.findByIdModeleAndEtat(m.getIdModele(), VersionModelePv.EN_VIGUEUR))
+                .filter(v -> VersionModelePv.PAGE.equals(v.getSupport()));
+    }
+
+    /** ⚠️ 2026-10-22 (M1) — le projet de marché produit par la page relevée : le Word et le PDF (Q4). */
+    public record Fichiers(byte[] docx, byte[] pdf) {
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (M1) — le projet d'une procédure par le modèle en vigueur de sa catégorie, ou vide (texte du code). Les valeurs sont
+     * celles de {@link ProjetMarcheService#contexte} ; une page qui ne se rend pas lève l'erreur, sans repli silencieux.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Fichiers> produireProjet(ProjetMarcheService.Entree in, String categorie) {
+        return versionProjet(categorie).map(v -> {
+            ModelePvWord.Contexte ctx = projets.getObject().contexte(in);
+            return new Fichiers(rendre(v.getDocument(), ctx, declarees(v), false, null), rendre(v.getDocument(), ctx, declarees(v), true, null));
+        });
+    }
+
+    /** Les couples « sous-type|nature » (et « catégorie|PROJET_MARCHE ») relevés : comparés avant et après un changement (R3). */
     private Set<String> releves() {
         Set<String> out = new java.util.TreeSet<>();
         for (RattachementModelePv r : rattachements.findAll()) {
             if (versionQuiProduit(r.getIdSousType(), r.getNature()).isPresent()) {
                 out.add(r.getIdSousType() + "|" + r.getNature());
+            }
+        }
+        for (RattachementCategorieModelePv r : categories.findAll()) {
+            if (versionProjet(r.getCategorie()).isPresent()) {
+                out.add(r.getCategorie() + "|" + r.getNature());
             }
         }
         return out;
@@ -265,11 +321,15 @@ public class ModelePvService {
                 continue;
             }
             String[] p = cle.split("\\|");
+            boolean projet = "PROJET_MARCHE".equals(p[1]);
             String integre = "PV".equals(p[1]) ? "PV-PLAN-INTEGRE" : "LETTRE-RENVOI-INTEGREE";
             String detail = b
-                    ? p[0] + " (" + p[1] + ") : produit désormais par " + m.getCode() + " v" + versionQuiProduit(p[0], p[1])
-                            .map(VersionModelePv::getNumero).map(String::valueOf).orElse("?") + " à la place de " + integre
-                    : p[0] + " (" + p[1] + ") : rendu aux fichiers intégrés " + integre + " (" + m.getCode() + ")";
+                    ? p[0] + " (" + p[1] + ") : produit désormais par " + m.getCode() + " v"
+                            + (projet ? versionProjet(p[0]) : versionQuiProduit(p[0], p[1]))
+                            .map(VersionModelePv::getNumero).map(String::valueOf).orElse("?")
+                            + (projet ? " à la place du texte du code (ProjetMarcheService)" : " à la place de " + integre)
+                    : p[0] + " (" + p[1] + ") : rendu " + (projet ? "au texte du code (ProjetMarcheService)" : "aux fichiers intégrés " + integre)
+                            + " (" + m.getCode() + ")";
             audit.enregistrerDetail(CurrentUser.ref().orElse(null), "modeles-pv", String.valueOf(m.getIdModele()),
                     b ? "RELEVE_MODELE_INTEGRE" : "RETOUR_MODELE_INTEGRE", p[0], detail + " — " + cause + " ; par "
                             + CurrentUser.login().orElse("?"), null);
@@ -313,7 +373,7 @@ public class ModelePvService {
     public ModelePvDto.Fiche creer(ModelePvDto.CreationRequest r) {
         String nature = r.nature().trim().toUpperCase(Locale.ROOT);
         if (!NATURES.contains(nature)) {
-            throw new BadRequestException("Nature inconnue : « " + r.nature() + " » (PV, LETTRE_RENVOI).", "NATURE_INCONNUE");
+            throw new BadRequestException("Nature inconnue : « " + r.nature() + " » (PV, LETTRE_RENVOI, PROJET_MARCHE).", "NATURE_INCONNUE");
         }
         ModelePv m = nouveau(r.code(), r.libelle(), nature);
         tracer(m, null, "CREE", m.getLibelle());
@@ -505,7 +565,31 @@ public class ModelePvService {
      * modèle a déjà des versions : elle en ajoute une.
      */
     public ModelePvDto.Version depart(Long id, String portee) {
+        return depart(id, portee, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — {@code categorie} : le départ d'un projet de marché, recopié du texte de
+     * {@link ProjetMarcheService} pour cette catégorie (« la proposition » en prestations intellectuelles) ; à défaut, la seule
+     * catégorie rattachée. 400 {@code CATEGORIE_INCONNUE}, {@code CATEGORIE_REQUISE}.
+     */
+    public ModelePvDto.Version depart(Long id, String portee, String categorie) {
         ModelePv m = actif(id);
+        if ("PROJET_MARCHE".equals(m.getNature())) {
+            String c = categorie == null || categorie.isBlank() ? null : categorie.trim().toUpperCase(Locale.ROOT);
+            if (c == null) {
+                List<String> rattachees = categoriesDe(m);
+                if (rattachees.size() != 1) {
+                    throw new BadRequestException("Précisez la catégorie du départ (" + String.join(", ", CATEGORIES) + ") : le modèle en sert "
+                            + rattachees.size() + ".", "CATEGORIE_REQUISE");
+                }
+                c = rattachees.get(0);
+            }
+            if (!CATEGORIES.contains(c)) {
+                throw new BadRequestException("Catégorie inconnue : « " + categorie + " » " + CATEGORIES + ".", "CATEGORIE_INCONNUE");
+            }
+            return enregistrerDepart(m, ModelePvDepart.projetMarche(c), "projet de marché, catégorie " + c, "sans objet");
+        }
         String p = portee == null || portee.isBlank() ? ModelePvDepart.LES_DEUX : portee.trim().toLowerCase(Locale.ROOT);
         if (!ModelePvDepart.PORTEES.contains(p)) {
             throw new BadRequestException("Portée inconnue : « " + portee + " » " + ModelePvDepart.PORTEES + ".", "PORTEE_INCONNUE");
@@ -593,11 +677,28 @@ public class ModelePvService {
     @Transactional(readOnly = true)
     public byte[] apercu(Long id, Integer numero, Integer idDossier, boolean exemple, String avis, Integer idLettre, boolean pdf,
             Map<String, String> saisis) {
-        if (exemple == (idDossier != null)) {
+        return apercu(id, numero, idDossier, null, null, exemple, avis, idLettre, pdf, saisis);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — un projet de marché s'aperçoit sur une procédure réelle ({@code idDmc} et
+     * {@code lot}, les valeurs du projet de ce lot) ou sur le dossier d'exemple : 400 {@code PROCEDURE_OU_EXEMPLE} ; un PV ou une
+     * lettre, sur un dossier (400 {@code DOSSIER_OU_EXEMPLE}).
+     */
+    @Transactional(readOnly = true)
+    public byte[] apercu(Long id, Integer numero, Integer idDossier, Long idDmc, Integer lot, boolean exemple, String avis, Integer idLettre,
+            boolean pdf, Map<String, String> saisis) {
+        ModelePv m = modele(id);
+        boolean projet = "PROJET_MARCHE".equals(m.getNature());
+        if (projet && (exemple == (idDmc != null) || idDossier != null)) {
+            throw new BadRequestException(exemple || idDossier != null ? "Un projet de marché s'aperçoit sur une procédure (procedure= et lot=) "
+                    + "ou sur le dossier d'exemple, pas sur un dossier." : "L'aperçu demande une procédure (procedure= et lot=) ou le dossier "
+                    + "d'exemple (exemple=true).", "PROCEDURE_OU_EXEMPLE");
+        }
+        if (!projet && exemple == (idDossier != null)) {
             throw new BadRequestException(exemple ? "L'aperçu se fait sur un dossier réel ou sur le dossier d'exemple, pas les deux."
                     : "L'aperçu demande un dossier (dossier=) ou le dossier d'exemple (exemple=true).", "DOSSIER_OU_EXEMPLE");
         }
-        ModelePv m = modele(id);
         VersionModelePv v = version(m, numero);
         if (avis != null && !avis.isBlank() && !List.of("FAV", "FAVR", "DEF", "NSP").contains(avis)) {
             throw new BadRequestException("Avis inconnu : « " + avis + " » (FAV, FAVR, DEF, NSP).", "AVIS_INCONNU");
@@ -609,7 +710,9 @@ public class ModelePvService {
         }
         // ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — une lettre s'aperçoit sur une lettre du dossier (lettre=, à défaut la dernière).
         ModelePvWord.Contexte ctx;
-        if (exemple) {
+        if (projet && !exemple) {
+            ctx = projets.getObject().contexte(attributions.getObject().entreeProjet(idDmc, lot == null ? 1 : lot));
+        } else if (exemple) {
             String sousType = rattachements.findByIdModele(m.getIdModele()).stream().map(RattachementModelePv::getIdSousType).sorted()
                     .findFirst().orElse(null);
             ctx = CatalogueModelesPv.exempleApercu(avis, sousType,
@@ -682,7 +785,29 @@ public class ModelePvService {
      * {@code SOUS_TYPE_DEJA_SERVI} s'il est rattaché à un autre modèle (à détacher d'abord).
      */
     public ModelePvDto.Fiche rattacher(Long id, List<String> demandes) {
+        return rattacher(id, demandes, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-documents-marche », M1, Q1) — un modèle de projet de marché se rattache à des <strong>catégories</strong>
+     * ({@code categories}), pas à des sous-types : 400 {@code RATTACHEMENT_PAR_CATEGORIE} avec des sous-types, {@code CATEGORIE_INCONNUE} ;
+     * 409 {@code CATEGORIE_DEJA_SERVIE}. Les autres natures gardent les sous-types (400 {@code RATTACHEMENT_PAR_SOUS_TYPE} avec des
+     * catégories).
+     */
+    public ModelePvDto.Fiche rattacher(Long id, List<String> demandes, List<String> categoriesVoulues) {
         ModelePv m = actif(id);
+        boolean projet = "PROJET_MARCHE".equals(m.getNature());
+        if (projet && demandes != null && !demandes.isEmpty()) {
+            throw new BadRequestException("Un modèle de projet de marché se rattache à des catégories (categories), pas à des sous-types.",
+                    "RATTACHEMENT_PAR_CATEGORIE");
+        }
+        if (!projet && categoriesVoulues != null && !categoriesVoulues.isEmpty()) {
+            throw new BadRequestException("Seul un modèle de projet de marché se rattache à des catégories : celui-ci sert des sous-types.",
+                    "RATTACHEMENT_PAR_SOUS_TYPE");
+        }
+        if (projet) {
+            return rattacherCategories(m, categoriesVoulues);
+        }
         Set<String> voulus = new LinkedHashSet<>();
         for (String s : demandes == null ? List.<String>of() : demandes) {
             if (s != null && !s.isBlank()) {
@@ -736,21 +861,30 @@ public class ModelePvService {
     public ModelePvDto.Fiche archiver(Long id, String motif) {
         ModelePv m = actif(id);
         List<RattachementModelePv> servis = rattachements.findByIdModele(m.getIdModele());
+        List<RattachementCategorieModelePv> parCategorie = categories.findByIdModele(m.getIdModele());
         boolean enVigueur = versions.findByIdModeleAndEtat(m.getIdModele(), VersionModelePv.EN_VIGUEUR).isPresent();
         if (enVigueur && !servis.isEmpty() && (motif == null || motif.isBlank())) {
             throw new BusinessRuleException("Ce modèle est en vigueur pour " + servis.stream().map(RattachementModelePv::getIdSousType).toList()
                     + " : ces sous-types n'auraient plus de modèle. Donnez un motif pour l'archiver quand même.", "MODELE_EN_SERVICE", null,
                     Map.of("sousTypes", servis.stream().map(RattachementModelePv::getIdSousType).toList()));
         }
+        if (enVigueur && !parCategorie.isEmpty() && (motif == null || motif.isBlank())) {
+            throw new BusinessRuleException("Ce modèle est en vigueur pour les catégories " + categoriesDe(m) + " : leurs projets reviendraient "
+                    + "au texte du code. Donnez un motif pour l'archiver quand même.", "MODELE_EN_SERVICE", null, Map.of("categories", categoriesDe(m)));
+        }
         Set<String> relevesAvant = releves();
         rattachements.deleteAll(servis);
         rattachements.flush();
+        categories.deleteAll(parCategorie);
+        categories.flush();
         m.setEtat(ModelePv.ARCHIVE);
         m.setArchiveLe(LocalDateTime.now());
         m.setMotifArchivage(motif == null || motif.isBlank() ? null : motif.trim());
         modeles.save(m);
         tracer(m, null, "ARCHIVE", (motif == null || motif.isBlank() ? "sans motif" : motif.trim())
-                + (servis.isEmpty() ? "" : ", détaché de " + servis.stream().map(RattachementModelePv::getIdSousType).toList()));
+                + (servis.isEmpty() ? "" : ", détaché de " + servis.stream().map(RattachementModelePv::getIdSousType).toList())
+                + (parCategorie.isEmpty() ? "" : ", détaché des catégories " + parCategorie.stream().map(RattachementCategorieModelePv::getCategorie)
+                        .sorted().toList()));
         tracerReleve(m, relevesAvant, "archivage");
         return fiche(m);
     }
@@ -793,6 +927,11 @@ public class ModelePvService {
             throw new BusinessRuleException("Le modèle « " + m.getCode() + " » sert encore des sous-types " + st
                     + " : détachez-les ou archivez le modèle.", "MODELE_NON_SUPPRIMABLE", null,
                     Map.of("raison", "SERT_DES_SOUS_TYPES", "sousTypes", st));
+        }
+        if (!categoriesDe(m).isEmpty()) {
+            throw new BusinessRuleException("Le modèle « " + m.getCode() + " » sert encore les catégories " + categoriesDe(m)
+                    + " : détachez-les ou archivez le modèle.", "MODELE_NON_SUPPRIMABLE", null,
+                    Map.of("raison", "SERT_DES_CATEGORIES", "categories", categoriesDe(m)));
         }
         List<VersionModelePv> vs = versions.findByIdModeleOrderByNumeroDesc(m.getIdModele());
         for (VersionModelePv v : vs) {
@@ -880,11 +1019,11 @@ public class ModelePvService {
                         continue;
                     }
                     // ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — une variable du PV dans une lettre, ou l'inverse.
-                    String sienne = CatalogueModelesPv.nature(var.code());
-                    if (sienne != null && !sienne.equals(nature)) {
+                    Set<String> siennes = CatalogueModelesPv.natures(var.code());
+                    if (!siennes.contains(nature)) {
                         pts.add(point("BLOQUANT", "VARIABLE_HORS_NATURE", mk.brut() + " ne vaut que pour "
-                                + ("PV".equals(sienne) ? "un PV" : "une lettre de renvoi") + " : ce modèle est "
-                                + ("PV".equals(nature) ? "un PV." : "une lettre de renvoi."), mk.ou(), null, ch));
+                                + String.join(" ou ", siennes.stream().sorted().map(NATURES_EN_CLAIR::get).toList()) + " : ce modèle est "
+                                + NATURES_EN_CLAIR.getOrDefault(nature, nature) + ".", mk.ou(), null, ch));
                     }
                     if (mk.format() != null && !CatalogueModelesPv.FORMATS.contains(mk.format())) {
                         pts.add(point("BLOQUANT", "FORMAT_INCONNU", "Format inconnu « " + mk.format() + " » dans " + mk.brut() + " "
@@ -966,6 +1105,7 @@ public class ModelePvService {
         }
         if (manquantes.isEmpty()) {
             pts.add(point("OK", "SECTIONS", "PV".equals(nature) ? "Sections attendues : en-tête, identification, avis, signatures"
+                    : "PROJET_MARCHE".equals(nature) ? "Sections attendues : parties, objet du marché, notification"
                     : "Sections attendues : identification du dossier, corps de la lettre, signature", null, null));
         }
         pts.add(point("OK", "VARIABLES", variables.size() + " variable(s) reconnue(s)" + (repetees == 0 ? ""
@@ -1171,7 +1311,61 @@ public class ModelePvService {
                 versions.findByIdModeleOrderByNumeroDesc(m.getIdModele()).stream().map(this::dto).toList(),
                 journal.findByIdModeleOrderByLeDescIdJournalDesc(m.getIdModele()).stream()
                         .map(j -> new ModelePvDto.Evenement(j.getLe(), j.getAction(), j.getNumeroVersion(), j.getDetail(), j.getPar()))
-                        .toList());
+                        .toList(), categoriesDe(m));
+    }
+
+    /** ⚠️ 2026-10-22 (M1) — les catégories que le modèle sert, dans l'ordre de {@link #CATEGORIES}. */
+    private List<String> categoriesDe(ModelePv m) {
+        Set<String> c = new java.util.HashSet<>();
+        categories.findByIdModele(m.getIdModele()).forEach(r -> c.add(r.getCategorie()));
+        return CATEGORIES.stream().filter(c::contains).toList();
+    }
+
+    /** ⚠️ 2026-10-22 (M1, Q1) — les catégories servies par le modèle de projet, remplacées en bloc ; une catégorie, un modèle. */
+    private ModelePvDto.Fiche rattacherCategories(ModelePv m, List<String> demandes) {
+        Set<String> voulues = new LinkedHashSet<>();
+        for (String s : demandes == null ? List.<String>of() : demandes) {
+            if (s != null && !s.isBlank()) {
+                voulues.add(s.trim().toUpperCase(Locale.ROOT));
+            }
+        }
+        List<String> inconnues = voulues.stream().filter(s -> !CATEGORIES.contains(s)).toList();
+        if (!inconnues.isEmpty()) {
+            throw new BadRequestException("Catégorie(s) inconnue(s) : " + String.join(", ", inconnues) + " " + CATEGORIES + ".",
+                    "CATEGORIE_INCONNUE");
+        }
+        Map<String, Object> prises = new LinkedHashMap<>();
+        for (String c : voulues) {
+            categories.findByCategorieAndNature(c, m.getNature()).filter(r -> !r.getIdModele().equals(m.getIdModele()))
+                    .ifPresent(r -> prises.put(c, modeles.findById(r.getIdModele()).map(ModelePv::getCode).orElse(String.valueOf(r.getIdModele()))));
+        }
+        if (!prises.isEmpty()) {
+            throw new BusinessRuleException("Catégorie(s) déjà servie(s) par un autre modèle : " + prises + ". Une catégorie n'a qu'un modèle "
+                    + "à la fois : détachez-la d'abord.", "CATEGORIE_DEJA_SERVIE", null, prises);
+        }
+        Set<String> relevesAvant = releves();
+        Set<String> avant = new LinkedHashSet<>();
+        for (RattachementCategorieModelePv r : categories.findByIdModele(m.getIdModele())) {
+            avant.add(r.getCategorie());
+            if (!voulues.contains(r.getCategorie())) {
+                categories.delete(r);
+            }
+        }
+        for (String c : voulues) {
+            if (!avant.contains(c)) {
+                RattachementCategorieModelePv r = new RattachementCategorieModelePv();
+                r.setCategorie(c);
+                r.setNature(m.getNature());
+                r.setIdModele(m.getIdModele());
+                r.setRattacheLe(LocalDateTime.now());
+                r.setRattachePar(CurrentUser.login().orElse(null));
+                categories.save(r);
+            }
+        }
+        categories.flush();
+        tracer(m, null, "RATTACHEMENTS", voulues.isEmpty() ? "aucune catégorie" : "catégories " + String.join(", ", voulues));
+        tracerReleve(m, relevesAvant, "rattachements");
+        return fiche(m);
     }
 
     private ModelePvDto.Version dto(VersionModelePv v) {

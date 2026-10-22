@@ -72,7 +72,7 @@ public final class ModelePvPage {
     private static final Pattern MARQUEUR = Pattern.compile("\\{\\{(?:(SI|FINSI|SAISI):([A-Za-z0-9_-]+)|([A-Za-z][A-Za-z0-9_.]*)(?:\\|([a-z]+))?)}}");
 
     private static final Set<String> BLOCS = Set.of("paragraph", "heading", "bulletList", "orderedList", "table", "image", "pageBreak",
-            "bloc");
+            "bloc", "repetition");
     private static final Set<String> EN_LIGNE = Set.of("text", "hardBreak", "variable", "champ", "numeroPage", "nombrePages", "image",
             "bloc", "renvoi");
     /** ⚠️ 2026-10-22 (« modeles-documents-marche », W2) — l'identifiant d'un titre, que cite un renvoi. */
@@ -85,7 +85,8 @@ public final class ModelePvPage {
             Map.entry("tableCell", "cellule"), Map.entry("tableHeader", "cellule"), Map.entry("image", "image"),
             Map.entry("pageBreak", "saut de page"), Map.entry("bloc", "bloc"), Map.entry("text", "texte"),
             Map.entry("hardBreak", "retour à la ligne"), Map.entry("variable", "variable"), Map.entry("champ", "champ"),
-            Map.entry("numeroPage", "numéro de page"), Map.entry("nombrePages", "nombre de pages"), Map.entry("renvoi", "renvoi"));
+            Map.entry("numeroPage", "numéro de page"), Map.entry("nombrePages", "nombre de pages"), Map.entry("renvoi", "renvoi"),
+            Map.entry("repetition", "répétition"));
     private static final Map<String, String> ZONES = ordonnee("entete", "en-tête", "corps", "corps", "piedDePage", "pied de page");
     private static final Set<String> ENVELOPPE = Set.of("page", "entete", "enteteSurPremiereSeulement", "corps", "piedDePage");
     private static final Set<String> MARQUES = Set.of("bold", "italic", "underline", "textStyle");
@@ -403,6 +404,18 @@ public final class ModelePvPage {
                         erreur(lieu, "format est un texte");
                     }
                 }
+                case "repetition" -> {
+                    // ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — des blocs répétés par élément d'une liste (un paragraphe par
+                    // titulaire d'un contrat-cadre), comme une ligne de tableau répétée.
+                    cles(n, lieu, "content");
+                    attrs(n, lieu, Set.of("liste"));
+                    JsonNode liste = n.path("attrs").path("liste");
+                    if (!liste.isString() || !CODE.matcher(liste.asString()).matches()) {
+                        erreur(lieu, "liste est un nom de liste (TITULAIRES)");
+                    }
+                    nonVide(n, lieu);
+                    contenu(n, lieu, BLOCS, profondeur, true);
+                }
                 case "renvoi" -> {
                     cles(n, lieu, "marks");
                     marques(n.path("marks"), lieu);
@@ -583,7 +596,7 @@ public final class ModelePvPage {
                         a.path("code").asString(), null, l.ou(), liste, false);
                 case "bloc" -> mk = new ModelePvWord.Marqueur("{{SI:" + a.path("condition").asString() + "}}", "SI",
                         a.path("condition").asString(), null, l.ou(), liste, false);
-                case "tableRow" -> {
+                case "tableRow", "repetition" -> {
                     if (a.path("liste").isString()) {
                         String nom = a.path("liste").asString();
                         // Une ligne répétée dans une autre : la liste relevée ne correspond pas (POUR_MAL_PLACE).
@@ -667,10 +680,7 @@ public final class ModelePvPage {
      * depuis lui, un seul calcul pour les deux.
      */
     public static ObjectNode resoudre(JsonNode doc, ModelePvWord.Contexte ctx, Map<String, String> conditions) {
-        Resolution r = new Resolution(ctx, nom -> {
-            String expression = conditions.get(nom);
-            return expression != null && ConditionsModele.vraie(expression, cle -> ModelePvWord.lire(ctx, cle));
-        });
+        Resolution r = new Resolution(ctx, conditions);
         ObjectNode out = F.objectNode();
         for (String cle : ENVELOPPE) {
             JsonNode v = doc.path(cle);
@@ -759,11 +769,26 @@ public final class ModelePvPage {
     private static final class Resolution {
 
         private final ModelePvWord.Contexte ctx;
-        private final Predicate<String> vraie;
+        private final Map<String, String> conditions;
 
-        Resolution(ModelePvWord.Contexte ctx, Predicate<String> vraie) {
+        Resolution(ModelePvWord.Contexte ctx, Map<String, String> conditions) {
             this.ctx = ctx;
-            this.vraie = vraie;
+            this.conditions = conditions;
+        }
+
+        /**
+         * Une condition déclarée, évaluée sur le contexte ; ⚠️ 2026-10-22 (M1) dans une ligne ou une répétition, une variable de la liste
+         * se lit sur l'élément courant (« TIT.ADRESSE renseigne »).
+         */
+        boolean vraie(String nom, Map<String, ModelePvWord.Valeur> item) {
+            String expression = conditions.get(nom);
+            return expression != null && ConditionsModele.vraie(expression, cle -> {
+                if (item != null && item.containsKey(cle)) {
+                    ModelePvWord.Valeur v = item.get(cle);
+                    return v == null ? null : v.texte() != null ? v.texte() : v.date() == null ? null : v.date().toString();
+                }
+                return ModelePvWord.lire(ctx, cle);
+            });
         }
 
         ArrayNode blocs(JsonNode content, Map<String, ModelePvWord.Valeur> item) {
@@ -812,9 +837,17 @@ public final class ModelePvPage {
                     }
                 }
                 case "bloc" -> {
-                    if (vraie.test(n.path("attrs").path("condition").asString(""))) {
+                    if (vraie(n.path("attrs").path("condition").asString(""), item)) {
                         for (JsonNode c : n.path("content")) {
                             bloc(c, out, item);
+                        }
+                    }
+                }
+                case "repetition" -> {
+                    String liste = n.path("attrs").path("liste").asString("");
+                    for (Map<String, ModelePvWord.Valeur> element : ctx.listes().getOrDefault(liste, List.of())) {
+                        for (JsonNode c : n.path("content")) {
+                            bloc(c, out, element);
                         }
                     }
                 }
@@ -848,7 +881,7 @@ public final class ModelePvPage {
                     }
                     case "champ" -> texte(out, ctx.saisis() == null ? null : ctx.saisis().get(a.path("code").asString("")), n.path("marks"));
                     case "bloc" -> {
-                        if (vraie.test(a.path("condition").asString(""))) {
+                        if (vraie(a.path("condition").asString(""), item)) {
                             out.addAll(enLigne(n.path("content"), item));
                         }
                     }
@@ -1326,6 +1359,7 @@ public final class ModelePvPage {
         noeuds.put("variable", List.of("code", "format", "marks"));
         noeuds.put("champ", List.of("code", "marks"));
         noeuds.put("renvoi", List.of("cible", "marks"));
+        noeuds.put("repetition", List.of("liste"));
         noeuds.put("numeroPage", List.of());
         noeuds.put("nombrePages", List.of());
         s.put("noeuds", noeuds);

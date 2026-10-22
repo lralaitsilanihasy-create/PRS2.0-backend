@@ -44,7 +44,8 @@ public final class CatalogueModelesPv {
 
     public static final List<Liste> LISTES = List.of(
             new Liste("OBSERVATIONS", "OBS", "Observations de l'examen (une ligne de tableau par observation)", null),
-            new Liste("TITULAIRES", "TIT", "Titulaires proposés (une ligne de tableau par titulaire)", MARCHES));
+            new Liste("TITULAIRES", "TIT", "Titulaires proposés (une ligne de tableau par titulaire) ; ⚠️ 2026-10-22 : les titulaires d'un "
+                    + "contrat-cadre, au projet de marché (un paragraphe répété par titulaire)", MARCHES));
 
     public static final List<Variable> VARIABLES = List.of(
             v("COMMISSION.NOM", "Commission", "Nom de la Commission", "Commission Nationale des Marchés"),
@@ -85,6 +86,47 @@ public final class CatalogueModelesPv {
             t("TIT.MONTANT_HT", "Montant hors taxes (Ariary)", "179 570 562"),
             t("TIT.MONTANT_TTC", "Montant toutes taxes (Ariary)", "215 484 674"),
             t("TIT.DELAI", "Délai d'exécution", "12 mois"),
+            // ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — les titulaires d'un contrat-cadre au projet de marché.
+            t("TIT.NIF", "NIF du titulaire", "3001234567"),
+            t("TIT.ADRESSE", "Adresse du titulaire (vide si inconnue)", "Lot II A 12 Antanimena, Antananarivo"),
+            t("TIT.REPRESENTANT", "Représentant : « Prénom NOM, fonction » (vide si inconnu)", "Hery RAKOTO, Gérant"),
+            t("TIT.OFFRE_NUMERO", "Numéro de l'offre", "3"),
+            // ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — le projet de marché : les données que ProjetMarcheService lit. Une
+            // donnée inconnue vaut « …… » (art. 60 : à compléter par la PRMP), ou est vide quand le texte l'omet (règle « renseigne »).
+            v("AC.ENTITE", "Autorité contractante", "Entité contractante (« l'Autorité contractante » si inconnue)",
+                    "Direction des Affaires Administratives et Financières"),
+            v("AC.MINISTERE", "Autorité contractante", "Ministère de rattachement (vide si inconnu)", "Ministère de l'Économie et des Finances"),
+            v("AC.SIGNATAIRE", "Autorité contractante", "PRMP signataire et son acte de nomination",
+                    "RANDRIANARIVO La Personne, nommée par arrêté n° 1234/2026 du 15/01/2026"),
+            v("TITULAIRE.RAISON_SOCIALE", "Titulaire", "Raison sociale du titulaire", "Hygiène & Services Madagascar SARL"),
+            v("TITULAIRE.NIF", "Titulaire", "NIF du titulaire", "3001234567"),
+            v("TITULAIRE.ADRESSE", "Titulaire", "Adresse du titulaire (vide si inconnue)", "Lot II A 12 Antanimena, Antananarivo"),
+            v("TITULAIRE.REPRESENTANT", "Titulaire", "Représentant : « Prénom NOM, fonction » (vide si inconnu)", "Hery RAKOTO, Gérant"),
+            v("TITULAIRE.OFFRE_NUMERO", "Titulaire", "Numéro de l'offre retenue", "3"),
+            v("MARCHE.OBJET", "Projet de marché", "Objet du marché (celui de l'appel d'offres, puis du seul lot)",
+                    "Fourniture de produits d'entretien et des petits matériels — Lot n°01 : Produits d'entretien"),
+            v("MARCHE.NUMERO_AO", "Projet de marché", "Numéro de l'appel d'offres (vide si inconnu)", "13-CC/MEF/SG/PRMP.2026"),
+            v("MARCHE.LOT", "Projet de marché", "Lot du marché, « Lot n°01 : désignation » (vide hors allotissement)",
+                    "Lot n°01 : Produits d'entretien"),
+            v("MARCHE.BASE_LEGALE", "Projet de marché", "Phrase de la base légale, selon le mode de passation",
+                    "Le présent marché est passé par appel d'offres ouvert, en application des articles 35 et 60 de " + ProjetMarcheService.LOI + "."),
+            v("MARCHE.ORIGINAL_AE", "Projet de marché", "Mention de l'original de l'acte d'engagement (offre en ligne ; vide sinon)", ""),
+            v("MARCHE.MONTANT_HT", "Projet de marché", "Montant hors taxes en Ariary (|lettres : en toutes lettres ; vide si inconnu)",
+                    "179 570 562"),
+            v("MARCHE.MONTANT_TTC", "Projet de marché", "Montant toutes taxes comprises en Ariary (vide si inconnu)", "215 484 674"),
+            v("MARCHE.DELAI", "Projet de marché", "Délai d'exécution avec son unité", "12 mois"),
+            v("MARCHE.SANCTION_RETARD", "Projet de marché", "Phrase des pénalités de retard (taux et plafond s'ils sont saisis)",
+                    "Tout dépassement de ce délai expose le Titulaire aux pénalités de retard prévues au cahier des clauses administratives "
+                            + "particulières (ou au cahier des prescriptions spéciales) et au cahier des clauses administratives générales, "
+                            + "au taux de 1/2000 du montant du marché par jour de retard, dans la limite de 10 % du montant du marché."),
+            v("MARCHE.COMPTABLE", "Projet de marché", "Comptable public assignataire", "Payeur général d'Antananarivo"),
+            v("MARCHE.IMPUTATION", "Projet de marché", "Imputation budgétaire", "6011 — Fournitures de bureau"),
+            v("MARCHE.DOMICILIATION", "Projet de marché", "Domiciliation bancaire des paiements", "BNI Madagascar 00005 00001 12345678901 23"),
+            v("MARCHE.INDEMNITE_RESILIATION", "Projet de marché", "Indemnité de résiliation (vide si non saisie)", "2 %"),
+            v("MARCHE.DATE_NOTIFICATION", "Projet de marché", "Date de notification (jj/mm/aaaa)", "05/11/2026"),
+            v("MARCHE.NB_TITULAIRES", "Projet de marché", "Nombre de titulaires d'un contrat-cadre", "2"),
+            v("MARCHE.PROCEDURE", "Projet de marché", "Numéro de la procédure dans l'application (pied de page)", "40"),
+            v("MARCHE.LOT_NUMERO", "Projet de marché", "Rang du lot (pied de page ; vide hors allotissement)", "1"),
             // ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — la lettre de renvoi : les marqueurs de LR_CENTRALE / LR_REGIONALE.
             d("LETTRE.DATE", "Lettre de renvoi", "Date de la lettre", "2026-10-23"),
             d("LETTRE.DATE_EXAMEN", "Lettre de renvoi", "Date de l'examen (séance d'instruction)", "2026-10-22"),
@@ -107,29 +149,51 @@ public final class CatalogueModelesPv {
             new CleCondition("portee", "Portée de la Commission", List.of("centrale", "regionale")),
             new CleCondition("sousType", "Sous-type du dossier", List.of()),
             new CleCondition("forme", "Forme du marché", List.of("QUANTITE_FIXE", "A_COMMANDE", "CONTRAT_CADRE")),
-            new CleCondition("titulaires", "Nombre de titulaires proposés", List.of()));
+            new CleCondition("titulaires", "Nombre de titulaires proposés", List.of()),
+            // ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — les règles du projet de marché.
+            new CleCondition("contratCadre", "Contrat-cadre à plusieurs titulaires", List.of("oui", "non")),
+            new CleCondition("pi", "Prestations intellectuelles (« la proposition » au lieu de « l'offre »)", List.of("oui", "non")),
+            new CleCondition("international", "Appel d'offres international", List.of("oui", "non")),
+            new CleCondition("receptionParTranches", "Réception partielle par tranches", List.of("oui", "non")),
+            new CleCondition("alloti", "Procédure allotie", List.of("oui", "non")));
 
     /** Les variables sans lesquelles un PV n'a pas ses sections attendues (l'avis se vérifie à part : variable ou condition). */
     static final Map<String, List<String>> REQUISES = Map.of(
             "PV", List.of("PV.REFERENCE", "PV.MEMBRE"),
-            "LETTRE_RENVOI", List.of("DOSSIER.REFERENCE", "LETTRE.CORPS", "LETTRE.SIGNATAIRE"));
+            "LETTRE_RENVOI", List.of("DOSSIER.REFERENCE", "LETTRE.CORPS", "LETTRE.SIGNATAIRE"),
+            "PROJET_MARCHE", List.of("MARCHE.OBJET", "AC.SIGNATAIRE", "MARCHE.DATE_NOTIFICATION"));
+
+    /** Les variables {@code MARCHE.} du projet de marché (les autres {@code MARCHE.} sont celles du PV du dossier de marché). */
+    private static final Set<String> MARCHE_DU_PROJET = Set.of("MARCHE.OBJET", "MARCHE.NUMERO_AO", "MARCHE.LOT", "MARCHE.BASE_LEGALE",
+            "MARCHE.ORIGINAL_AE", "MARCHE.MONTANT_HT", "MARCHE.MONTANT_TTC", "MARCHE.DELAI", "MARCHE.SANCTION_RETARD", "MARCHE.COMPTABLE",
+            "MARCHE.IMPUTATION", "MARCHE.DOMICILIATION", "MARCHE.INDEMNITE_RESILIATION", "MARCHE.DATE_NOTIFICATION", "MARCHE.NB_TITULAIRES",
+            "MARCHE.PROCEDURE", "MARCHE.LOT_NUMERO");
 
     /**
-     * ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — la nature qu'une variable sert, lue sur son préfixe : {@code LETTRE.} la lettre
-     * de renvoi ; {@code PV.}, {@code OBS.}, {@code TIT.}, {@code MARCHE.} le PV ; les autres (commission, dossier, procédure) les
-     * deux ({@code null}).
+     * ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1), étendu le 2026-10-22 (« modeles-documents-marche », M1) — les natures qu'une
+     * variable sert : {@code LETTRE.} la lettre de renvoi ; {@code PV.}, {@code OBS.} et les {@code MARCHE.} du dossier de marché le
+     * PV ; {@code AC.}, {@code TITULAIRE.} et les {@code MARCHE.} du projet le projet de marché ; {@code TIT.} le PV et le projet ;
+     * commission, dossier et procédure le PV et la lettre.
      */
-    public static String nature(String code) {
+    public static Set<String> natures(String code) {
         if (code.startsWith("LETTRE.")) {
-            return "LETTRE_RENVOI";
+            return Set.of("LETTRE_RENVOI");
         }
-        return code.startsWith("PV.") || code.startsWith("OBS.") || code.startsWith("TIT.") || code.startsWith("MARCHE.") ? "PV" : null;
+        if (code.startsWith("AC.") || code.startsWith("TITULAIRE.") || MARCHE_DU_PROJET.contains(code)) {
+            return Set.of("PROJET_MARCHE");
+        }
+        if (code.startsWith("TIT.")) {
+            return Set.of("PV", "PROJET_MARCHE");
+        }
+        if (code.startsWith("PV.") || code.startsWith("OBS.") || code.startsWith("MARCHE.")) {
+            return Set.of("PV");
+        }
+        return Set.of("PV", "LETTRE_RENVOI");
     }
 
     /** Une variable sert-elle cette nature ({@code null} : toutes) ? */
     public static boolean sert(Variable v, String nature) {
-        String n = nature(v.code());
-        return nature == null || n == null || n.equals(nature);
+        return nature == null || natures(v.code()).contains(nature);
     }
 
     private CatalogueModelesPv() {
@@ -149,9 +213,9 @@ public final class CatalogueModelesPv {
     }
 
     public static boolean cleConnue(String cle) {
-        // ⚠️ 2026-10-22 — une variable hors liste se lit aussi (« PV.PRESIDENT renseigne »).
-        return cle.startsWith("saisi.") || CLES.stream().anyMatch(c -> c.cle().equals(cle))
-                || variable(cle).filter(v -> v.liste() == null).isPresent();
+        // ⚠️ 2026-10-22 — une variable se lit aussi (« PV.PRESIDENT renseigne ») ; une variable de liste, dans une répétition, lit
+        // l'élément courant (« TIT.ADRESSE renseigne »).
+        return cle.startsWith("saisi.") || CLES.stream().anyMatch(c -> c.cle().equals(cle)) || variable(cle).isPresent();
     }
 
     /** Le code connu le plus proche d'un code inconnu (au plus trois caractères d'écart), pour « vouliez-vous … ? ». */
@@ -190,10 +254,10 @@ public final class CatalogueModelesPv {
             }
             listes.put(nom, List.of(item, seconde));
         });
-        return new ModelePvWord.Contexte(variables, listes,
-                Map.of("avis", "FAV", "agpm", "non", "portee", "centrale", "sousType", "MAOO-CC", "forme", "CONTRAT_CADRE",
-                        "titulaires", "2"),
-                Map.of());
+        Map<String, String> cles = new LinkedHashMap<>(Map.of("avis", "FAV", "agpm", "non", "portee", "centrale", "sousType", "MAOO-CC",
+                "forme", "CONTRAT_CADRE", "titulaires", "2"));
+        cles.putAll(Map.of("contratCadre", "non", "pi", "non", "international", "non", "receptionParTranches", "non", "alloti", "oui"));
+        return new ModelePvWord.Contexte(variables, listes, cles, Map.of());
     }
 
     /** ⚠️ 2026-10-22 (demande front « apercu-exemple », Q1) — la mention portée par chaque page d'un aperçu d'exemple. */

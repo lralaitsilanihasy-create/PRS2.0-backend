@@ -18,8 +18,9 @@ public final class ModelePvDto {
     }
 
     /** Une ligne de la liste : le modèle, ses sous-types, sa version en vigueur et sa dernière version. */
+    /** ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — {@code categories} : celles qu'un modèle de projet de marché sert. */
     public record Resume(Long id, String code, String libelle, String nature, String etat, List<String> sousTypes,
-            VersionCourte enVigueur, VersionCourte derniere) {
+            VersionCourte enVigueur, VersionCourte derniere, List<String> categories) {
     }
 
     public record VersionCourte(Integer numero, String etat, boolean bloquant, LocalDateTime deposeeLe, LocalDateTime enVigueurLe) {
@@ -27,7 +28,8 @@ public final class ModelePvDto {
 
     /** La fiche d'un modèle. */
     public record Fiche(Long id, String code, String libelle, String nature, String etat, LocalDateTime creeLe, String creePar,
-            LocalDateTime archiveLe, String motifArchivage, List<SousType> sousTypes, List<Version> versions, List<Evenement> historique) {
+            LocalDateTime archiveLe, String motifArchivage, List<SousType> sousTypes, List<Version> versions, List<Evenement> historique,
+            List<String> categories) {
     }
 
     public record SousType(String id, String libelle, String famille) {
@@ -78,7 +80,7 @@ public final class ModelePvDto {
     public record MotifRequest(@Size(max = 1000) String motif) {
     }
 
-    public record RattachementsRequest(List<String> sousTypes) {
+    public record RattachementsRequest(List<String> sousTypes, List<String> categories) {
     }
 
     public record ApercuRequest(Map<String, String> saisis) {
@@ -93,7 +95,8 @@ public final class ModelePvDto {
     }
 
     /** Le modèle de départ (« modele-pv-depart ») : {@code centrale}, {@code regionale} ou {@code les-deux} (défaut). */
-    public record DepartRequest(String portee) {
+    /** ⚠️ 2026-10-22 (M1) — {@code categorie} : celle du départ d'un projet de marché (à défaut, la seule rattachée). */
+    public record DepartRequest(String portee, String categorie) {
     }
 
     /** Le catalogue des variables (§B3), par groupe, filtré par la famille du sous-type demandé. */

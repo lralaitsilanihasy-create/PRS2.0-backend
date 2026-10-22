@@ -359,6 +359,202 @@ public final class ModelePvDepart {
         return new Depart(doc, bases, conditions, List.of());
     }
 
+    // ───────────────────────────────────────────── projet de marché (M1) ─────────────────────────────────────────────
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-documents-marche », M1) — le départ du <strong>projet de marché</strong> d'une catégorie,
+     * recopié mot pour mot du texte de {@link ProjetMarcheService} : ses deux variantes dans une page, séparées par {@code SIMPLE} /
+     * {@code CONTRAT_CADRE} ; les articles en titres numérotés (« Article {n} — », W2), l'article « Droit applicable » sous
+     * {@code INTERNATIONAL} ; les titulaires d'un contrat-cadre en paragraphes répétés ({@code repetition} sur {@code TITULAIRES}) ;
+     * « la proposition » au lieu de « l'offre » en prestations intellectuelles. Les fragments que le code omet quand la donnée manque
+     * (ministère, adresse, numéro d'appel d'offres, montants, indemnité) sont sous une règle « renseigne » ; ceux qu'il écrit « …… »
+     * sont dans la valeur. Mise en forme proche du document actuel (PDF en Helvetica) : Arial 10, titre 13 gras centré, articles 11
+     * gras, paragraphes justifiés, interligne 1,3, 3 pt après chaque paragraphe ; le pied de page « Procédure n — projet de marché,
+     * lot n ».
+     */
+    public static Depart projetMarche(String categorie) {
+        String offre = "PRESTATIONS_INTELLECTUELLES".equals(categorie) ? "la proposition" : "l'offre";
+        String loi = ProjetMarcheService.LOI;
+        String ac = "{{AC.ENTITE}}{{SI:MINISTERE}} ({{AC.MINISTERE}}){{FINSI:MINISTERE}}, représentée par sa Personne responsable des "
+                + "marchés publics, {{AC.SIGNATAIRE}}, ci-après « l'Autorité contractante »,";
+        ArrayNode c = F.arrayNode();
+
+        List<ObjectNode> simple = new ArrayList<>();
+        simple.add(titreProjet("PROJET DE MARCHÉ"));
+        simple.add(pp("{{MARCHE.OBJET}}", "center"));
+        simple.add(pp("", null));
+        simple.add(pp("Entre :", "justify"));
+        simple.add(pp(ac, "justify"));
+        simple.add(pp("et :", "justify"));
+        simple.add(pp("{{TITULAIRE.RAISON_SOCIALE}}, NIF {{TITULAIRE.NIF}}{{SI:ADRESSE}}, {{TITULAIRE.ADRESSE}}{{FINSI:ADRESSE}}, représentée "
+                + "par {{SI:REPRESENTANT}}{{TITULAIRE.REPRESENTANT}}{{FINSI:REPRESENTANT}}{{SI:SANS_REPRESENTANT}}" + POINTS
+                + " (nom et qualité du signataire){{FINSI:SANS_REPRESENTANT}}, ci-après « le Titulaire ».", "justify"));
+        simple.add(article("objet", "Objet"));
+        simple.add(pp("Le présent marché a pour objet : {{MARCHE.OBJET}}, issu de l'appel d'offres{{SI:NUMERO_AO}} n° {{MARCHE.NUMERO_AO}}"
+                + "{{FINSI:NUMERO_AO}}.", "justify"));
+        simple.add(article("base-legale", "Base légale"));
+        simple.add(pp("{{MARCHE.BASE_LEGALE}}", "justify"));
+        simple.add(article("pieces", "Pièces constitutives"));
+        simple.add(pp("Le marché est constitué, par ordre de priorité : l'acte d'engagement du Titulaire{{MARCHE.ORIGINAL_AE}} ; le cahier des "
+                + "clauses administratives particulières (ou le cahier des prescriptions spéciales) et ses annexes, les spécifications "
+                + "techniques ou les termes de référence ; " + offre + " du Titulaire (n° {{TITULAIRE.OFFRE_NUMERO}}), dont le bordereau des "
+                + "prix ; le cahier des clauses administratives générales — tels qu'ils figurent au dossier et à " + offre + " retenue, sans "
+                + "modification substantielle.", "justify"));
+        simple.add(article("prix", "Prix"));
+        simple.add(pp("Le montant du marché est fixé à {{SI:MONTANT}}{{MARCHE.MONTANT_HT}} Ariary hors taxes ({{MARCHE.MONTANT_HT|lettres}} "
+                + "ariary){{FINSI:MONTANT}}{{SI:SANS_MONTANT}}" + POINTS + " (montant hors taxes){{FINSI:SANS_MONTANT}}{{SI:TTC}}, soit "
+                + "{{MARCHE.MONTANT_TTC}} Ariary toutes taxes comprises{{FINSI:TTC}}, tel qu'il résulte de l'évaluation (prix corrigé, rabais "
+                + "déduit), selon les prix et les modalités de leur détermination fixés au bordereau des prix et au cahier des clauses "
+                + "administratives particulières.", "justify"));
+        simple.add(article("delai", "Délai d'exécution"));
+        simple.add(pp("Le délai d'exécution est de {{MARCHE.DELAI}}, à compter de la date fixée par l'ordre de service de commencer les "
+                + "prestations. {{MARCHE.SANCTION_RETARD}}", "justify"));
+        simple.add(article("reception", "Réception"));
+        simple.add(pp("La réception des prestations{{SI:PAR_TRANCHES}}, et leur réception partielle par tranches,{{FINSI:PAR_TRANCHES}}"
+                + "{{SI:SANS_TRANCHES}} et, le cas échéant, leur réception partielle,{{FINSI:SANS_TRANCHES}} sont prononcées dans les "
+                + "conditions du cahier des clauses administratives particulières (ou du cahier des prescriptions spéciales) et du cahier des "
+                + "clauses administratives générales.", "justify"));
+        simple.add(article("reglement", "Règlement"));
+        simple.add(pp("Les sommes dues au Titulaire sont réglées, après constatation du service fait et selon les modalités de réception, "
+                + "dans les conditions du cahier des clauses administratives particulières (ou du cahier des prescriptions spéciales) et du "
+                + "cahier des clauses administratives générales, dans le délai de paiement de l'article 74 de " + loi + ".", "justify"));
+        simple.add(pp("Comptable public assignataire chargé du paiement : {{MARCHE.COMPTABLE}}.", "justify"));
+        simple.add(pp("Imputation budgétaire : {{MARCHE.IMPUTATION}}.", "justify"));
+        simple.add(pp("Domiciliation bancaire des paiements : {{MARCHE.DOMICILIATION}} (banque, code banque, code guichet, numéro de compte, "
+                + "clé).", "justify"));
+        simple.add(article("resiliation", "Résiliation"));
+        simple.add(pp("Le marché peut être résilié dans les conditions de l'article 76 de " + loi + ", du cahier des clauses administratives "
+                + "générales et du cahier des clauses administratives particulières (ou du cahier des prescriptions spéciales){{SI:INDEMNITE}} ; "
+                + "l'indemnité de résiliation due au Titulaire est de {{MARCHE.INDEMNITE_RESILIATION}}{{FINSI:INDEMNITE}}.", "justify"));
+        simple.add(article("notification", "Notification et entrée en vigueur"));
+        simple.add(pp("Date de notification du marché : {{MARCHE.DATE_NOTIFICATION}}.", "justify"));
+        simple.add(pp("Le marché prend effet à sa notification au Titulaire, après son approbation et l'avis de l'organe de contrôle.",
+                "justify"));
+        simple.add(bloc("INTERNATIONAL", List.of(article("droit", "Droit applicable"),
+                pp("Le présent marché est régi par le droit de la République de Madagascar.", "justify"))));
+        simple.add(pp("", null));
+        simple.add(pp("Pour le Titulaire : ……………………………………  (nom, qualité, date et signature)", "justify"));
+        simple.add(pp("Pour l'Autorité contractante, la Personne responsable des marchés publics : ……………………………………  (date et signature)",
+                "justify"));
+        c.add(bloc("SIMPLE", simple));
+
+        List<ObjectNode> cadre = new ArrayList<>();
+        cadre.add(titreProjet("PROJET DE CONTRAT-CADRE"));
+        cadre.add(pp("{{MARCHE.OBJET}}", "center"));
+        cadre.add(pp("", null));
+        cadre.add(pp("Entre :", "justify"));
+        cadre.add(pp(ac, "justify"));
+        cadre.add(pp("et les {{MARCHE.NB_TITULAIRES}} titulaire(s) suivant(s), ci-après « les Titulaires » :", "justify"));
+        cadre.add(repetition("TITULAIRES", pp("– {{TIT.CANDIDAT}}, NIF {{TIT.NIF}}{{SI:T_ADRESSE}}, {{TIT.ADRESSE}}{{FINSI:T_ADRESSE}}, "
+                + "représentée par {{SI:T_REPRESENTANT}}{{TIT.REPRESENTANT}}{{FINSI:T_REPRESENTANT}}{{SI:T_SANS_REPRESENTANT}}" + POINTS
+                + " (nom et qualité du signataire){{FINSI:T_SANS_REPRESENTANT}} (offre n° {{TIT.OFFRE_NUMERO}}) ;", "justify")));
+        cadre.add(article("cc-objet", "Objet"));
+        cadre.add(pp("Le présent contrat-cadre a pour objet de définir les termes régissant les marchés subséquents à passer au cours de sa "
+                + "période de validité : {{MARCHE.OBJET}}, issu de l'appel d'offres{{SI:NUMERO_AO}} n° {{MARCHE.NUMERO_AO}}{{FINSI:NUMERO_AO}}. "
+                + "Il n'est pas ouvert à de nouveaux opérateurs économiques (décret n° 2019-1064, art. 18).", "justify"));
+        cadre.add(article("cc-base-legale", "Base légale"));
+        cadre.add(pp("{{MARCHE.BASE_LEGALE}} Article 67 de " + loi + " et décret n° 2019-1064 du 28 mai 2019.", "justify"));
+        cadre.add(article("cc-pieces", "Pièces constitutives"));
+        cadre.add(pp("Le contrat-cadre est constitué, par ordre de priorité : le contrat-cadre valant acte d'engagement et cahier des clauses "
+                + "administratives particulières ; les spécifications techniques ; l'offre de chacun des Titulaires, dont le bordereau des prix "
+                + "indicatif ; le cahier des clauses administratives générales — tels qu'ils figurent au dossier et aux offres retenues.",
+                "justify"));
+        cadre.add(article("cc-prix", "Offres indicatives et prix des marchés subséquents"));
+        cadre.add(repetition("TITULAIRES", pp("– {{TIT.CANDIDAT}} : offre indicative de {{SI:T_MONTANT}}{{TIT.MONTANT_HT}} Ariary hors taxes"
+                + "{{FINSI:T_MONTANT}}{{SI:T_SANS_MONTANT}}" + POINTS + " (montant hors taxes){{FINSI:T_SANS_MONTANT}}{{SI:T_DELAI}}, délai : "
+                + "{{TIT.DELAI}}{{FINSI:T_DELAI}}.", "justify")));
+        cadre.add(pp("Le montant à payer est défini, après remise en concurrence des Titulaires, dans chaque marché subséquent attribué sur la "
+                + "base du présent contrat-cadre (décret n° 2019-1064, art. 16).", "justify"));
+        cadre.add(article("cc-notification", "Notification et entrée en vigueur"));
+        cadre.add(pp("Date de notification du contrat-cadre : {{MARCHE.DATE_NOTIFICATION}}.", "justify"));
+        cadre.add(pp("Le contrat-cadre, signé par la Personne responsable des marchés publics et par chacun des Titulaires, prend effet à sa "
+                + "notification aux Titulaires (décret n° 2019-1064, art. 15).", "justify"));
+        cadre.add(pp("", null));
+        cadre.add(repetition("TITULAIRES", pp("Pour {{TIT.CANDIDAT}} : ……………………………………  (nom, qualité, date et signature)", "justify")));
+        cadre.add(pp("Pour l'Autorité contractante, la Personne responsable des marchés publics : ……………………………………  (date et signature)",
+                "justify"));
+        c.add(bloc("CONTRAT_CADRE", cadre));
+
+        ObjectNode doc = F.objectNode();
+        ObjectNode page = doc.putObject("page").put("format", "A4").put("orientation", "portrait").put("police", "Arial")
+                .put("taille", 10);
+        page.putObject("marges").put("haut", 25).put("bas", 20).put("gauche", 25).put("droite", 20);
+        doc.putObject("corps").put("type", "doc").set("content", c);
+        ObjectNode pied = p("Procédure {{MARCHE.PROCEDURE}} — projet de {{SI:SIMPLE}}marché{{FINSI:SIMPLE}}{{SI:CONTRAT_CADRE}}contrat-cadre"
+                + "{{FINSI:CONTRAT_CADRE}}{{SI:ALLOTI}}, lot {{MARCHE.LOT_NUMERO}}{{FINSI:ALLOTI}}", attrs("center", null, null),
+                marquesProjet(false, 8));
+        doc.putObject("piedDePage").put("type", "doc").set("content", F.arrayNode().add(pied));
+
+        List<ModelePvDto.Condition> conditions = List.of(
+                new ModelePvDto.Condition("SIMPLE", "contratCadre != oui", "Marché à un titulaire"),
+                new ModelePvDto.Condition("CONTRAT_CADRE", "contratCadre = oui", "Contrat-cadre à plusieurs titulaires"),
+                new ModelePvDto.Condition("MINISTERE", "AC.MINISTERE renseigne", "Le ministère est connu"),
+                new ModelePvDto.Condition("ADRESSE", "TITULAIRE.ADRESSE renseigne", "L'adresse du titulaire est connue"),
+                new ModelePvDto.Condition("REPRESENTANT", "TITULAIRE.REPRESENTANT renseigne", "Le représentant du titulaire est connu"),
+                new ModelePvDto.Condition("SANS_REPRESENTANT", "TITULAIRE.REPRESENTANT vide", "Le représentant est à compléter"),
+                new ModelePvDto.Condition("NUMERO_AO", "MARCHE.NUMERO_AO renseigne", "Le numéro de l'appel d'offres est connu"),
+                new ModelePvDto.Condition("MONTANT", "MARCHE.MONTANT_HT renseigne", "Le montant hors taxes est connu"),
+                new ModelePvDto.Condition("SANS_MONTANT", "MARCHE.MONTANT_HT vide", "Le montant est à compléter"),
+                new ModelePvDto.Condition("TTC", "MARCHE.MONTANT_TTC renseigne", "Le montant toutes taxes est connu"),
+                new ModelePvDto.Condition("PAR_TRANCHES", "receptionParTranches = oui", "Réception partielle par tranches"),
+                new ModelePvDto.Condition("SANS_TRANCHES", "receptionParTranches != oui", "Pas de réception par tranches"),
+                new ModelePvDto.Condition("INDEMNITE", "MARCHE.INDEMNITE_RESILIATION renseigne", "Une indemnité de résiliation est saisie"),
+                new ModelePvDto.Condition("INTERNATIONAL", "international = oui", "Appel d'offres international"),
+                new ModelePvDto.Condition("ALLOTI", "alloti = oui", "Procédure allotie"),
+                new ModelePvDto.Condition("T_ADRESSE", "TIT.ADRESSE renseigne", "L'adresse du titulaire est connue"),
+                new ModelePvDto.Condition("T_REPRESENTANT", "TIT.REPRESENTANT renseigne", "Le représentant du titulaire est connu"),
+                new ModelePvDto.Condition("T_SANS_REPRESENTANT", "TIT.REPRESENTANT vide", "Le représentant est à compléter"),
+                new ModelePvDto.Condition("T_MONTANT", "TIT.MONTANT_HT renseigne", "L'offre indicative est connue"),
+                new ModelePvDto.Condition("T_SANS_MONTANT", "TIT.MONTANT_HT vide", "L'offre indicative est à compléter"),
+                new ModelePvDto.Condition("T_DELAI", "TIT.DELAI renseigne", "Le délai du titulaire est connu"));
+        return new Depart(doc, List.of("ProjetMarcheService (texte du code, catégorie " + categorie + ")"), conditions, List.of());
+    }
+
+    /** « …… » : une donnée à compléter par la PRMP (art. 60). */
+    private static final String POINTS = ProjetMarcheService.A_COMPLETER;
+
+    /** Un paragraphe du projet : justifié ou centré, 3 pt après (le document actuel). */
+    private static ObjectNode pp(String texte, String alignement) {
+        ObjectNode a = attrs(alignement, null, null);
+        a.put("espaceApres", 3).put("interligne", 1.3);
+        return texte.isEmpty() ? (ObjectNode) vide().set("attrs", a) : p(texte, a, null);
+    }
+
+    private static ObjectNode titreProjet(String texte) {
+        ObjectNode a = attrs("center", null, null);
+        a.put("espaceApres", 3);
+        return p(texte, a, marquesProjet(true, 13));
+    }
+
+    /** Un article : titre numéroté « Article {n} — » (W2), 11 pt gras, son {@code id} pour les renvois. */
+    private static ObjectNode article(String id, String titre) {
+        ObjectNode h = ModelePvPage.noeud("heading");
+        h.putObject("attrs").put("level", 3).put("textAlign", "left").put("espaceApres", 3).put("numerotation", "Article {n} — ").put("id", id);
+        h.set("content", ModelePvPage.enLigne(titre, marquesProjet(true, 11)));
+        return h;
+    }
+
+    private static ObjectNode repetition(String liste, ObjectNode... contenu) {
+        ObjectNode r = ModelePvPage.noeud("repetition");
+        r.putObject("attrs").put("liste", liste);
+        ArrayNode a = r.putArray("content");
+        for (ObjectNode n : contenu) {
+            a.add(n);
+        }
+        return r;
+    }
+
+    private static ArrayNode marquesProjet(boolean gras, int taille) {
+        ArrayNode m = F.arrayNode();
+        if (gras) {
+            m.add(ModelePvPage.noeud("bold"));
+        }
+        ObjectNode style = ModelePvPage.noeud("textStyle");
+        style.putObject("attrs").put("fontSize", taille + "pt");
+        m.add(style);
+        return m;
+    }
+
     // ───────────────────────────────────────────── outils ─────────────────────────────────────────────
 
     /** Un paragraphe écrit avec les marqueurs du Word ({@link ModelePvPage#enLigne}). */

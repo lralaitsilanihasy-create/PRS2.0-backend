@@ -8728,6 +8728,42 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-22 (demande front « modeles-documents-marche », lots W1, W2, M1)** — le Word des pages, les articles numérotés, le projet de
+marché comme modèle. Migration **V140**.
+- **W1 — le Word d'une page** : `ModelePvPage.resoudre` produit le document résolu (passages, lignes répétées, variables) ; le PDF et
+  le Word (`ModelePvDocx`, POI) s'écrivent depuis lui. `format=docx` sur `POST …/versions/{n}/apercu` pour les natures qui se
+  remettent en Word (`PROJET_MARCHE`) ; 400 `FORMAT_INDISPONIBLE` pour un PV ou une lettre (PDF seul, option C').
+  Couvert : page, police et taille, paragraphes (alignement, retraits, espacements, interligne), titres, marques, listes, tableaux
+  (fusions, fonds, bordures), images, sauts de page, en-tête et pied, champs PAGE / NUMPAGES, mention d'exemple.
+- **W2 — titres numérotés** : sur `heading`, `numerotation` (gabarit avec `{n}`, « Article {n} — », 40 caractères) et `id`
+  (unique). Numéro calculé après les règles (sans trou), un compteur par niveau. Nœud en ligne **`renvoi` { cible }** : le numéro
+  du titre cité, « …… » s'il est retiré. Contrôle : `RENVOI_INCONNU` (bloquant). `GET /schema` les sert.
+- **Nœud `repetition` { liste }** : des blocs répétés par élément d'une liste (un paragraphe par titulaire). Dans une ligne répétée ou
+  une répétition, une condition lit l'élément courant (`TIT.ADRESSE renseigne`) ; une condition peut désormais citer une variable
+  de liste.
+- **M1 — nature `PROJET_MARCHE`** :
+  - `GET /variables?nature=PROJET_MARCHE` : groupes « Autorité contractante » (`AC.ENTITE`, `AC.MINISTERE`, `AC.SIGNATAIRE`),
+    « Titulaire » (`TITULAIRE.RAISON_SOCIALE`, `.NIF`, `.ADRESSE`, `.REPRESENTANT`, `.OFFRE_NUMERO`), « Projet de marché »
+    (`MARCHE.OBJET`, `NUMERO_AO`, `LOT`, `BASE_LEGALE`, `ORIGINAL_AE`, `MONTANT_HT` (`|lettres`), `MONTANT_TTC`,
+    `DELAI`, `SANCTION_RETARD`, `COMPTABLE`, `IMPUTATION`, `DOMICILIATION`, `INDEMNITE_RESILIATION`, `DATE_NOTIFICATION`,
+    `NB_TITULAIRES`, `PROCEDURE`, `LOT_NUMERO`) ; liste `TITULAIRES` (`TIT.CANDIDAT`, `NIF`, `ADRESSE`, `REPRESENTANT`,
+    `OFFRE_NUMERO`, `MONTANT_HT`, `DELAI`) ; clés `contratCadre`, `pi`, `international`, `receptionParTranches`,
+    `alloti`. La nature d'une variable est une propriété du catalogue (`CatalogueModelesPv.natures`), plus le seul préfixe.
+  - Une donnée inconnue vaut « …… » (avec sa précision, comme le texte du code) ou reste vide quand le texte l'omet.
+  - **Rattachement par catégorie** : `PUT …/rattachements` { categories: [FOURNITURES_SERVICES, TRAVAUX, PRESTATIONS_INTELLECTUELLES] }
+    (table `t_rattachement_categorie_modele_pv`, V140) ; 400 `RATTACHEMENT_PAR_CATEGORIE` (sous-types sur un projet),
+    `RATTACHEMENT_PAR_SOUS_TYPE` (catégories sur un PV), `CATEGORIE_INCONNUE` ; 409 `CATEGORIE_DEJA_SERVIE`. La fiche et la liste
+    servent `categories`. Suppression : 409 `MODELE_NON_SUPPRIMABLE` (`raison` SERT_DES_CATEGORIES) ; archivage :
+    `MODELE_EN_SERVICE` sans motif.
+  - **Départ** : `POST …/versions/depart` { categorie? } (à défaut la seule rattachée ; 400 `CATEGORIE_REQUISE`) : une page recopiée
+    mot pour mot de `ProjetMarcheService` (vérifié par test sur trois variantes), variantes `SIMPLE` / `CONTRAT_CADRE`, articles
+    numérotés, « la proposition » en PI, 21 règles déclarées, Arial 10.
+  - **Aperçu** : `exemple=true`, ou `procedure=&lot=` (les valeurs du projet de ce lot, sans rien enregistrer) ; 400
+    `PROCEDURE_OU_EXEMPLE` (un dossier n'est pas permis) ; Word ou PDF.
+  - **Relève** : à la création du dossier de marché et à la régénération du projet, le modèle en vigueur de la catégorie de la procédure
+    (celle de sa fiche) produit le Word et le PDF ; sinon le texte du code, comme avant. Journal général `RELEVE_MODELE_INTEGRE` /
+    `RETOUR_MODELE_INTEGRE` (champ = catégorie).
+
 ⚠️ **2026-10-22 (demande front « apercu-exemple », E1)** — l'aperçu sur le dossier d'exemple. Pas de migration.
 - **`POST /api/modeles-pv/{id}/versions/{n}/apercu?exemple=true`** (sans `dossier=`), pour tout modèle : PV de toute famille,
   lettre de renvoi. 400 **`DOSSIER_OU_EXEMPLE`** avec les deux, ou sans aucun (`dossier` est désormais facultatif).

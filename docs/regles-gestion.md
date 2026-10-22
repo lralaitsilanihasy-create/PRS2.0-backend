@@ -1591,6 +1591,11 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   n'est mis en vigueur sans lui. Deux écarts avec le PV intégré : une ligne de présence s'imprime même sans nom (pas de clé de
 >   condition sur la présence) et le viseur n'a ni qualité ni mention d'intérim. Les actes de gestion et la déclaration sans suite ne
 >   nomment que la référence du dossier : le catalogue n'a pas encore leurs variables propres.
+> - ⚠️ **2026-10-22 (« modeles-documents-marche », W1, W2, M1)** — **le projet de marché se rédige comme un modèle**, un par catégorie
+>   de procédure (fournitures et services, travaux, prestations intellectuelles), et se remet **en Word et en PDF** (la PRMP le
+>   complète). Une donnée inconnue reste « …… » à compléter avant la signature (art. 60). Tant qu'aucun modèle n'est en vigueur pour la
+>   catégorie, le projet garde le texte du code ; l'archivage d'un modèle y revient. Les articles d'un modèle se numérotent
+>   automatiquement, après les règles. Les PV et la lettre de renvoi restent en PDF seul.
 > - ⚠️ **2026-10-22 (« releve-plan-lettre », D2 et L2)** — **la relève est faite** (décision du pilote) : le PV du plan et la lettre
 >   de renvoi sont produits par la page en vigueur du modèle rattaché au sous-type, dès sa mise en vigueur, sans autre geste. Un
 >   modèle archivé ou détaché rend la main aux fichiers intégrés : un document est toujours produit. Chaque bascule est tracée au

@@ -53,6 +53,9 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired
     private cnm.prs.service.LettreRenvoiService lettreRenvoiService;
 
+    @Autowired
+    private cnm.prs.service.ModelePvService modelePvService;
+
     /** Un PV minimal en page : identification, avis par blocs, observations répétées, champ saisi, signatures. */
     private static String modelePv(String codeReference) {
         ObjectNode doc = ModelePvPageTest.document(ModelePvPageTest.paragraphe("{{COMMISSION.NOM|majuscules}}"),
@@ -499,12 +502,13 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get(BASE + "/" + plan).header("Authorization", tokenAdmin)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.historique[0].detail").value(containsString("famille DDP, page reconstruite d'après "
                         + "PV_AF_PPM_CENTRALE.docx + PV_AF_PPM_REGIONALE.docx + PV_AF_PPMAGPM_CENTRALE.docx")));
-        // Une condition peut lire une variable du catalogue hors liste, pas une variable inconnue ni une variable de liste.
+        // Une condition peut lire une variable du catalogue (⚠️ M1 : une variable de liste aussi, l'élément courant), pas une variable
+        // inconnue.
         mvc.perform(put(BASE + "/" + plan + "/versions/1/conditions").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("[{\"nom\":\"A\",\"expression\":\"PV.INCONNUE renseigne\"},{\"nom\":\"B\",\"expression\":\"OBS.POINT renseigne\"}]"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CONDITION_INVALIDE"))
                 .andExpect(jsonPath("$.details.A").value(containsString("PV.INCONNUE")))
-                .andExpect(jsonPath("$.details.B").value(containsString("OBS.POINT")));
+                .andExpect(jsonPath("$.details.B").doesNotExist());
         mvc.perform(post(BASE + "/" + plan + "/archiver").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"motif\":\"essai\"}")).andExpect(status().isOk());
         mvc.perform(post(BASE + "/" + plan + "/versions/depart").header("Authorization", tokenAdmin))
@@ -809,5 +813,112 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(texte(l)).contains("La Commission émet un avis favorable avec réserves.", "Observation : à revoir",
                 "COMMISSION NATIONALE DES MARCHÉS");
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-documents-marche », M1) — le projet de marché comme modèle : catalogue de sa nature, rattachement
+     * par catégorie (une catégorie, un modèle), départ par catégorie sans blocage, aperçu d'exemple en Word et en PDF, la relève par la
+     * catégorie (Word et PDF produits par la page, journal général), le retour au texte du code à l'archivage ; les refus.
+     */
+    @Test
+    void projetDeMarche() throws Exception {
+        String cat = mvc.perform(get(BASE + "/variables").param("nature", "PROJET_MARCHE").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.nature").value("PROJET_MARCHE")).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(cat, "$.groupes[*].variables[*].code")).contains("MARCHE.OBJET", "AC.SIGNATAIRE",
+                "TITULAIRE.RAISON_SOCIALE", "TIT.NIF").noneMatch(c -> c.startsWith("PV.") || c.startsWith("LETTRE.") || c.equals("MARCHE.ECART"));
+        assertThat(JsonPath.<List<String>>read(cat, "$.listes[*].nom")).containsExactly("TITULAIRES");
+        assertThat(JsonPath.<List<String>>read(cat, "$.cles[*].cle")).contains("contratCadre", "pi", "international", "receptionParTranches",
+                "alloti");
+
+        String cree = mvc.perform(post(BASE).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"PROJET-FS\",\"libelle\":\"Projet de marché — fournitures\",\"nature\":\"PROJET_MARCHE\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(cree, "$.id")).longValue();
+        String depart = BASE + "/" + id + "/versions/depart";
+        mvc.perform(post(depart).header("Authorization", tokenAdmin)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CATEGORIE_REQUISE"));
+        mvc.perform(put(BASE + "/" + id + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sousTypes\":[\"MAOO\"]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("RATTACHEMENT_PAR_CATEGORIE"));
+        mvc.perform(put(BASE + "/" + id + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"categories\":[\"AUTRE\"]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CATEGORIE_INCONNUE"));
+        mvc.perform(put(BASE + "/" + id + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"categories\":[\"fournitures_services\"]}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.categories").value(org.hamcrest.Matchers.contains("FOURNITURES_SERVICES")));
+        mvc.perform(get(BASE).header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.code=='PROJET-FS')].categories[0]").value(org.hamcrest.Matchers.contains("FOURNITURES_SERVICES")));
+        long pv = creer("PV-AUTRE");
+        mvc.perform(put(BASE + "/" + pv + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"categories\":[\"TRAVAUX\"]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("RATTACHEMENT_PAR_SOUS_TYPE"));
+
+        // Le départ de la catégorie : page sans blocage, articles numérotés, deux variantes.
+        String v1 = mvc.perform(post(depart).header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.bloquant").value(false)).andExpect(jsonPath("$.support").value("PAGE"))
+                .andExpect(jsonPath("$.conditions[0].nom").value("SIMPLE")).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(v1, "$.rapport.points[?(@.niveau=='BLOQUANT')].code")).isEmpty();
+        assertThat(JsonPath.<List<String>>read(v1, "$.rapport.points[*].code")).contains("ESSAI");
+        mvc.perform(get(BASE + "/" + id).header("Authorization", tokenAdmin)).andExpect(jsonPath("$.historique[0].detail")
+                .value(containsString("projet de marché, catégorie FOURNITURES_SERVICES")));
+
+        // L'aperçu : sur l'exemple, en PDF et en Word ; une procédure ou l'exemple, jamais un dossier.
+        String apercu = BASE + "/" + id + "/versions/1/apercu";
+        mvc.perform(post(apercu).param("dossier", "1").header("Authorization", tokenAdmin)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PROCEDURE_OU_EXEMPLE"));
+        byte[] pdf = mvc.perform(post(apercu).param("exemple", "true").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(texte(pdf)).contains("PROJET DE MARCHÉ", "Article 1 — Objet", "Article 9 — Notification et entrée en vigueur",
+                "cent soixante-dix-neuf millions", "EXEMPLE — valeurs fictives").doesNotContain("{{", "CONTRAT-CADRE", "Article 10");
+        byte[] docx = mvc.perform(post(apercu).param("exemple", "true").param("format", "docx").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (XWPFDocument d = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            String texte = d.getParagraphs().stream().map(p -> p.getText()).reduce("", (a, b) -> a + "\n" + b);
+            assertThat(texte).contains("PROJET DE MARCHÉ", "Article 4 — Prix", "Hygiène & Services Madagascar SARL");
+            assertThat(d.getFooterList().get(0).getText()).contains("EXEMPLE — valeurs fictives", "Procédure 40 — projet de marché, lot 1");
+        }
+
+        // La relève : mise en vigueur, la catégorie produit le projet par la page (Word et PDF), au journal général.
+        mvc.perform(post(BASE + "/" + id + "/versions/1/mettre-en-vigueur").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motif\":\"relève du projet\"}")).andExpect(status().isOk());
+        assertThat(modelePvService.versionProjet("FOURNITURES_SERVICES")).isPresent();
+        assertThat(modelePvService.versionProjet("TRAVAUX")).isEmpty();
+        cnm.prs.entity.Offre offre = new cnm.prs.entity.Offre();
+        offre.setRaisonSociale("Papeterie Réelle SA");
+        offre.setNif("123");
+        offre.setNumero(7);
+        cnm.prs.service.ProjetMarcheService.Entree in = new cnm.prs.service.ProjetMarcheService.Entree(999_999L, 1,
+                new cnm.prs.dto.EvaluationDto.Proposition("O", 7, "Papeterie Réelle SA", new java.math.BigDecimal("1000"), null, "30 jours", false,
+                        null, null), offre, java.util.Map.of("ENTITE", "DAAF", "MODE", "Appel d'offres ouvert"), false, false, null, null, false, null);
+        cnm.prs.service.ModelePvService.Fichiers f = modelePvService.produireProjet(in, "FOURNITURES_SERVICES").orElseThrow();
+        assertThat(texte(f.pdf())).contains("PROJET DE MARCHÉ", "Papeterie Réelle SA, NIF 123", "1 000 Ariary hors taxes",
+                "Date de notification du marché : …….").doesNotContain("EXEMPLE");
+        try (XWPFDocument d = new XWPFDocument(new ByteArrayInputStream(f.docx()))) {
+            assertThat(d.getParagraphs().stream().map(p -> p.getText()).toList()).contains("Article 2 — Base légale");
+        }
+        assertThat(modelePvService.produireProjet(in, "TRAVAUX")).isEmpty();
+        assertThat(auditLogs.findAll()).filteredOn(a -> "RELEVE_MODELE_INTEGRE".equals(a.getTypeAction()))
+                .anySatisfy(a -> assertThat(a.getNouvelleValeur()).contains("FOURNITURES_SERVICES (PROJET_MARCHE) : produit désormais par "
+                        + "PROJET-FS v1 à la place du texte du code"));
+
+        // Une catégorie, un modèle ; un modèle qui sert une catégorie ne se supprime pas ; l'archivage rend la main au code.
+        String autre = mvc.perform(post(BASE).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"PROJET-FS-2\",\"libelle\":\"x\",\"nature\":\"PROJET_MARCHE\"}")).andReturn().getResponse()
+                .getContentAsString();
+        long id2 = ((Number) JsonPath.read(autre, "$.id")).longValue();
+        mvc.perform(put(BASE + "/" + id2 + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"categories\":[\"FOURNITURES_SERVICES\"]}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CATEGORIE_DEJA_SERVIE"));
+        mvc.perform(put(BASE + "/" + id2 + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"categories\":[\"TRAVAUX\"]}")).andExpect(status().isOk());
+        mvc.perform(delete(BASE + "/" + id2).header("Authorization", tokenAdmin)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.details.raison").value("SERT_DES_CATEGORIES"));
+        mvc.perform(post(BASE + "/" + id + "/archiver").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MODELE_EN_SERVICE"));
+        mvc.perform(post(BASE + "/" + id + "/archiver").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"motif\":\"retour\"}")).andExpect(status().isOk());
+        assertThat(modelePvService.versionProjet("FOURNITURES_SERVICES")).isEmpty();
+        assertThat(auditLogs.findAll()).filteredOn(a -> "RETOUR_MODELE_INTEGRE".equals(a.getTypeAction()))
+                .extracting(a -> a.getChampModifie()).containsExactly("FOURNITURES_SERVICES");
     }
 }

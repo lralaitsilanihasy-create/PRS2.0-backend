@@ -114,6 +114,8 @@ public class AttributionService {
     private final SansSuiteService sansSuite;
     /** ⚠️ 2026-10-10 (demande « projet-de-marche ») — le projet de marché conforme à la loi (art. 28, art. 60). */
     private final ProjetMarcheService projetMarche;
+    /** ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — le modèle de projet en vigueur de la catégorie, qui relève le texte du code. */
+    private final org.springframework.beans.factory.ObjectProvider<ModelePvService> modelesDocuments;
     /** ⚠️ R6c (règle 6, QB1 ; V108) — le délai d'attente part de la réception présumée de l'information. */
     private final DelaiAttenteCalcul delais;
     /** ⚠️ R7 (§B2 ; V109) — la pièce « Questions et réponses » du dossier de marché (fournisseur paresseux : pas de cycle). */
@@ -133,7 +135,9 @@ public class AttributionService {
             ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution, ResultatsPi resultatsPi,
             cnm.prs.repository.AttributionRepriseRepository reprises, SansSuiteService sansSuite, ProjetMarcheService projetMarche,
             DelaiAttenteCalcul delais, org.springframework.beans.factory.ObjectProvider<QuestionsCandidatService> questionsCandidats,
-            cnm.prs.repository.AttributionTitulaireRepository titulaires) {
+            cnm.prs.repository.AttributionTitulaireRepository titulaires,
+            org.springframework.beans.factory.ObjectProvider<ModelePvService> modelesDocuments) {
+        this.modelesDocuments = modelesDocuments;
         this.titulaires = titulaires;
         this.questionsCandidats = questionsCandidats;
         this.delais = delais;
@@ -1040,14 +1044,7 @@ public class AttributionService {
         a.setDossierCreePar(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         // Le projet de marché (Q1) : produit par le serveur, Word et PDF.
         Offre offre = offres.findById(p.idOffre()).orElseThrow();
-        for (GenerateurDocumentsFiche.Fichier f : generateur.generer(projet(idDmc, lot, p, offre, plan, ev.lots().size() > 1, dossier.getIdPrmp(),
-                null))) {
-            if ("pdf".equals(f.extension())) {
-                a.setProjetPdf(f.contenu());
-            } else if ("docx".equals(f.extension())) {
-                a.setProjetDocx(f.contenu());
-            }
-        }
+        produireProjet(a, entree(idDmc, lot, p, offre, plan, ev.lots().size() > 1, dossier.getIdPrmp(), null));
         attributions.save(a);
         String suffixe = "_" + idDmc + "_lot" + lot + ".pdf";
         int jointes = 0;
@@ -1152,10 +1149,54 @@ public class AttributionService {
      * Le projet de marché (Q1 : produit par le serveur) — ⚠️ 2026-10-10 : rédigé par {@link ProjetMarcheService}, conforme à la loi
      * (objet du seul lot, art. 28 ; mentions obligatoires de l'art. 60).
      */
-    private DocumentLibre projet(Long idDmc, Integer lot, EvaluationDto.Proposition p, Offre offre, Map<String, String> plan, boolean allotie,
-            String idPrmp, java.time.LocalDate dateNotification) {
-        return projetMarche.document(new ProjetMarcheService.Entree(idDmc, lot, p, offre, plan, allotie, evaluation.estPi(idDmc), idPrmp,
-                dateNotification, execution.aeOriginalExige(idDmc), execution.aeOriginalRemisLe(idDmc, lot), titulairesDuProjet(idDmc, lot, p)));
+    private ProjetMarcheService.Entree entree(Long idDmc, Integer lot, EvaluationDto.Proposition p, Offre offre, Map<String, String> plan,
+            boolean allotie, String idPrmp, java.time.LocalDate dateNotification) {
+        return new ProjetMarcheService.Entree(idDmc, lot, p, offre, plan, allotie, evaluation.estPi(idDmc), idPrmp,
+                dateNotification, execution.aeOriginalExige(idDmc), execution.aeOriginalRemisLe(idDmc, lot), titulairesDuProjet(idDmc, lot, p));
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-documents-marche », M1) — le projet (Word et PDF) : par le modèle de projet en vigueur de la
+     * catégorie de la procédure s'il y en a un (relève), sinon par le texte du code, comme avant.
+     */
+    private void produireProjet(Attribution a, ProjetMarcheService.Entree in) {
+        ModelePvService.Fichiers releve = modelesDocuments.getObject().produireProjet(in, projetMarche.categorie(in.idDmc())).orElse(null);
+        if (releve != null) {
+            a.setProjetPdf(releve.pdf());
+            a.setProjetDocx(releve.docx());
+            return;
+        }
+        for (GenerateurDocumentsFiche.Fichier f : generateur.generer(projetMarche.document(in))) {
+            if ("pdf".equals(f.extension())) {
+                a.setProjetPdf(f.contenu());
+            } else if ("docx".equals(f.extension())) {
+                a.setProjetDocx(f.contenu());
+            }
+        }
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — ce que lit le projet du lot, pour l'aperçu d'un modèle sur une procédure réelle,
+     * sans rien enregistrer : la proposition du rapport, l'offre, le plan ; la PRMP et la date de notification du dossier de marché s'il
+     * existe, sinon celles de la procédure. 404 sans évaluation ou lot inconnu ; 409 {@code LOT_INFRUCTUEUX}.
+     */
+    @Transactional(readOnly = true)
+    public ProjetMarcheService.Entree entreeProjet(Long idDmc, Integer lot) {
+        EvaluationDto ev = evaluation.vueSansGarde(idDmc)
+                .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
+        EvaluationDto.Proposition p = ev.lots().stream().filter(x -> Objects.equals(x.lot(), lot)).findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Lot introuvable dans l'évaluation : " + lot + ".")).proposition();
+        if (p == null || p.infructueux() || p.idOffre() == null) {
+            throw new BusinessRuleException("Le rapport propose de déclarer ce lot infructueux : pas de projet de marché.", "LOT_INFRUCTUEUX");
+        }
+        Offre offre = offres.findById(p.idOffre()).orElseThrow();
+        DossierMec dmc = dmcRepository.findById(idDmc).orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
+        Map<String, String> plan = valeursPpm.lire(dmc.getIdDetail()).valeurs();
+        Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElse(null);
+        Dossier dossier = a != null && a.getIdDossier() != null ? dossierRepository.findById(a.getIdDossier()).orElse(null)
+                : dossierRepository.findIdDossierByIdDmc(idDmc).flatMap(dossierRepository::findById).orElse(null);
+        return entree(idDmc, lot, p, offre, plan, ev.lots().size() > 1, dossier == null ? null : dossier.getIdPrmp(),
+                a == null ? null : a.getDateNotification());
     }
 
     /**
@@ -1199,14 +1240,7 @@ public class AttributionService {
         DossierMec dmc = dmcRepository.findById(idDmc).orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
         Map<String, String> plan = valeursPpm.lire(dmc.getIdDetail()).valeurs();
         Dossier dossier = dossierRepository.findById(a.getIdDossier()).orElseThrow();
-        for (GenerateurDocumentsFiche.Fichier f : generateur.generer(projet(idDmc, lot, p, offre, plan, ev.lots().size() > 1, dossier.getIdPrmp(),
-                a.getDateNotification()))) {
-            if ("pdf".equals(f.extension())) {
-                a.setProjetPdf(f.contenu());
-            } else if ("docx".equals(f.extension())) {
-                a.setProjetDocx(f.contenu());
-            }
-        }
+        produireProjet(a, entree(idDmc, lot, p, offre, plan, ev.lots().size() > 1, dossier.getIdPrmp(), a.getDateNotification()));
         attributions.save(a);
         boolean remplacee = false;
         if (DOSSIER_MODIFIABLE.contains(dossier.getStatut()) && a.getProjetPdf() != null) {
