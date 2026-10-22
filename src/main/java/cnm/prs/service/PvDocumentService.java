@@ -91,6 +91,8 @@ public class PvDocumentService {
     private final ControleurDirectory controleurDirectory;
     /** ⚠️ R5 (manuel révisé, lot 1, §B6) — les non-conformités des contrôles, à l'ANNEXE du PV. */
     private final org.springframework.beans.factory.ObjectProvider<ControlesService> controles;
+    /** ⚠️ 2026-10-22 (« releve-plan-lettre », R1) — la page en vigueur qui relève les fichiers intégrés. */
+    private final org.springframework.beans.factory.ObjectProvider<ModelePvService> modelesPv;
 
     @Value("${storage.pv-examen.path:${java.io.tmpdir}/prs-fsx/PV}")
     private String cheminStockagePv;
@@ -105,8 +107,10 @@ public class PvDocumentService {
             ExamenPieceRepository examenPieceRepository,
             PieceJointeDossierRepository pieceJointeDossierRepository,
             TypePieceJointeRepository typePieceJointeRepository,
-            ControleurDirectory controleurDirectory, org.springframework.beans.factory.ObjectProvider<ControlesService> controles) {
+            ControleurDirectory controleurDirectory, org.springframework.beans.factory.ObjectProvider<ControlesService> controles,
+            org.springframework.beans.factory.ObjectProvider<ModelePvService> modelesPv) {
         this.controles = controles;
+        this.modelesPv = modelesPv;
         this.generator = generator;
         this.perimetreExamenService = perimetreExamenService;
         this.examenRepository = examenRepository;
@@ -140,8 +144,13 @@ public class PvDocumentService {
         Dossier dossier = dossierRepository.findById(idDossier).orElse(null);
         String localite = examenRepository.findLocaliteByExamen(idExamen).orElse(null);
         Ppm ppm = ppmRepository.findByIdDossier(idDossier).stream().findFirst().orElse(null);
-        PvDocumentContexte ctx = construireContexte(pv, dossier, ppm, idExamen, localite);
-        byte[] pdf = generator.genererPdf(ctx, modele);
+        // ⚠️ 2026-10-22 (demande front « releve-plan-lettre », R1) — la page en vigueur rattachée au sous-type produit le PV, avec les
+        // mêmes règles d'éligibilité ; à défaut, les fichiers intégrés comme avant.
+        byte[] pdf = dossier == null ? null : modelesPv.getObject().produirePv(pv, dossier.getIdSousType()).orElse(null);
+        if (pdf == null) {
+            PvDocumentContexte ctx = construireContexte(pv, dossier, ppm, idExamen, localite);
+            pdf = generator.genererPdf(ctx, modele);
+        }
         return Optional.of(stockerSurFsx(pv, pdf));
     }
 

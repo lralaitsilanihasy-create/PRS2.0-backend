@@ -50,6 +50,9 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired
     private AuditLogRepository auditLogs;
 
+    @Autowired
+    private cnm.prs.service.LettreRenvoiService lettreRenvoiService;
+
     /** Un PV minimal en page : identification, avis par blocs, observations répétées, champ saisi, signatures. */
     private static String modelePv(String codeReference) {
         ObjectNode doc = ModelePvPageTest.document(ModelePvPageTest.paragraphe("{{COMMISSION.NOM|majuscules}}"),
@@ -668,5 +671,81 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
             assertThat(a.getChampModifie()).isEqualTo("ESSAI-SUPPR");
             assertThat(a.getNouvelleValeur()).contains("PV d'examen du dossier de marché", "1 version(s)");
         });
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « releve-plan-lettre », R1-R3) — la relève : une page en vigueur rattachée au plan produit le PV
+     * signé (l'avis NSP reste sans document), une page de lettre rattachée à un sous-type produit sa lettre ; la couverture passe à
+     * GERE, l'intégré qui ne sert plus personne sort du service ; chaque bascule est au journal général ; l'archivage rend la main aux
+     * fichiers intégrés (Q1).
+     */
+    @Test
+    void releve() throws Exception {
+        long plan = creer("PV-PLAN-RELEVE");
+        mvc.perform(put(BASE + "/" + plan + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sousTypes\":[\"PPM\",\"PPM-AGPM\"]}")).andExpect(status().isOk());
+        mvc.perform(post(BASE + "/" + plan + "/versions/depart").header("Authorization", tokenAdmin)).andExpect(status().isOk());
+        // Un brouillon ne relève rien.
+        String avant = mvc.perform(get(BASE + "/couverture").header("Authorization", tokenAdmin)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(avant, "$[?(@.sousType=='PPM' && @.nature=='PV')].produitPar")).containsExactly("INTEGRE");
+        mvc.perform(post(BASE + "/" + plan + "/versions/1/mettre-en-vigueur").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motif\":\"relève du plan\"}")).andExpect(status().isOk());
+
+        // Lettre : un modèle en vigueur rattaché au seul sous-type PPM.
+        String cree = mvc.perform(post(BASE).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"LR-RELEVE\",\"libelle\":\"Lettre de renvoi\",\"nature\":\"LETTRE_RENVOI\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long lr = ((Number) JsonPath.read(cree, "$.id")).longValue();
+        mvc.perform(post(BASE + "/" + lr + "/versions/depart").header("Authorization", tokenAdmin)).andExpect(status().isOk());
+        mvc.perform(post(BASE + "/" + lr + "/versions/1/mettre-en-vigueur").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motif\":\"relève de la lettre\"}")).andExpect(status().isOk());
+        mvc.perform(put(BASE + "/" + lr + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sousTypes\":[\"PPM\"]}")).andExpect(status().isOk());
+
+        String couverture = mvc.perform(get(BASE + "/couverture").header("Authorization", tokenAdmin)).andReturn().getResponse()
+                .getContentAsString();
+        assertThat(JsonPath.<List<String>>read(couverture, "$[?(@.sousType in ['PPM','PPM-AGPM'] && @.nature=='PV')].produitPar"))
+                .containsExactly("GERE", "GERE");
+        assertThat(JsonPath.<List<String>>read(couverture, "$[?(@.sousType=='PPM' && @.nature=='LETTRE_RENVOI')].produitPar"))
+                .containsExactly("GERE");
+        assertThat(JsonPath.<List<String>>read(couverture, "$[?(@.sousType=='DAOO' && @.nature=='LETTRE_RENVOI')].produitPar"))
+                .containsExactly("INTEGRE");
+        mvc.perform(get(BASE + "/integres").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].enService").value(false)).andExpect(jsonPath("$[1].enService").value(true));
+        assertThat(auditLogs.findAll()).filteredOn(a -> "RELEVE_MODELE_INTEGRE".equals(a.getTypeAction()))
+                .extracting(a -> a.getChampModifie()).containsExactlyInAnyOrder("PPM", "PPM-AGPM", "PPM");
+        assertThat(auditLogs.findAll()).filteredOn(a -> "RELEVE_MODELE_INTEGRE".equals(a.getTypeAction()))
+                .anySatisfy(a -> assertThat(a.getNouvelleValeur()).contains("PPM-AGPM (PV) : produit désormais par PV-PLAN-RELEVE v1 à "
+                        + "la place de PV-PLAN-INTEGRE", "mise en vigueur de la version 1"));
+
+        // Le PV signé du dossier 1 (PPM, centrale) : produit par la page, sans Word ; l'avis NSP reste sans document.
+        marcheRepository.save(marche(9811, 1, 1));
+        seedPvSigne(9711, 1);
+        cnm.prs.entity.PvExamen pv = pvExamenRepository.findById(9711).orElseThrow();
+        String chemin = pvDocumentService.genererSiEligible(pv).orElseThrow();
+        assertThat(texte(java.nio.file.Files.readAllBytes(java.nio.file.Path.of(chemin)))).contains(
+                "PROCES-VERBAL DE LA COMMISSION CENTRALE", "AVIS FAVORABLE à l’affichage du PPM.").doesNotContain("{{", "ANNEXE");
+        pv.setIdAvis("NSP");
+        assertThat(pvDocumentService.genererSiEligible(pv)).isEmpty();
+
+        // La lettre signée du dossier 1 : produite par la page.
+        int idLettre = seedLettreSoumise();
+        cnm.prs.entity.LettreRenvoi l = lettreRenvoiRepository.findById(idLettre).orElseThrow();
+        l.setStatut("SIGNE");
+        l.setCorpsLettre("- produire l'attestation fiscale.");
+        lettreRenvoiRepository.save(l);
+        assertThat(lettreRenvoiService.genererEtStockerDocument(idLettre)).isTrue();
+        String cheminLettre = lettreRenvoiRepository.findById(idLettre).orElseThrow().getCheminDocument();
+        assertThat(texte(java.nio.file.Files.readAllBytes(java.nio.file.Path.of(cheminLettre))))
+                .contains("lettre de renvoi", "- produire l'attestation fiscale.").doesNotContain("{{");
+
+        // Q1 — l'archivage rend la main aux fichiers intégrés, et le dit au journal.
+        mvc.perform(post(BASE + "/" + plan + "/archiver").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"motif\":\"retour\"}")).andExpect(status().isOk());
+        String apres = mvc.perform(get(BASE + "/couverture").header("Authorization", tokenAdmin)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(apres, "$[?(@.sousType=='PPM' && @.nature=='PV')].produitPar")).containsExactly("INTEGRE");
+        mvc.perform(get(BASE + "/integres").header("Authorization", tokenAdmin)).andExpect(jsonPath("$[0].enService").value(true));
+        assertThat(auditLogs.findAll()).filteredOn(a -> "RETOUR_MODELE_INTEGRE".equals(a.getTypeAction()))
+                .extracting(a -> a.getChampModifie()).containsExactlyInAnyOrder("PPM", "PPM-AGPM");
     }
 }

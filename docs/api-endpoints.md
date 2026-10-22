@@ -8728,6 +8728,24 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-22 (demande front « releve-plan-lettre », D2 et L2)** — la relève des modèles intégrés. Pas de migration.
+- **Règle unique** (`ModelePvService.versionQuiProduit`) : un sous-type est produit par une page quand un modèle actif lui est
+  rattaché pour la nature, avec une version **en vigueur en page**, dans le périmètre relevé : le PV de `PPM` / `PPM-AGPM`, la
+  lettre de renvoi de tout sous-type. Sinon, les fichiers intégrés comme avant. Lue à chaque production.
+- **Production** : `PvDocumentService.genererSiEligible` (après la signature, et au téléchargement) garde ses règles d'éligibilité
+  (`NSP` sans document, plan sans ligne, localité inconnue) puis rend la page avec le contexte de **ce** PV
+  (`ContexteModelePvService.pourPv`) ; `LettreRenvoiService.genererEtStockerDocument` rend la page de la lettre (`pourLettre`).
+  Une page qui ne se rend pas lève l'erreur (journalisée par la génération de fond, retentée au téléchargement) : pas de repli
+  silencieux sur l'intégré. Les documents déjà produits ne changent pas.
+- **`GET /api/modeles-pv/couverture`** : `produitPar: GERE` pour un sous-type relevé. Un modèle rattaché hors périmètre (autres PV)
+  reste `AUCUN`.
+- **`GET /api/modeles-pv/integres`** : `enService: false` quand plus aucun sous-type n'est produit par les fichiers de l'intégré.
+  Ses fichiers et son aperçu restent servis (l'aperçu de l'intégré passe toujours par les fichiers Word).
+- **Journal général** (`t_audit_log`, table `modeles-pv`) : une entrée par sous-type qui change de producteur, à la mise en
+  vigueur, aux rattachements et à l'archivage : `RELEVE_MODELE_INTEGRE` / `RETOUR_MODELE_INTEGRE`, champ = sous-type,
+  valeur = « PPM (PV) : produit désormais par PV-PLAN v1 à la place de PV-PLAN-INTEGRE — mise en vigueur de la version 1 ; par … ».
+- **Q1** : retour aux fichiers intégrés quand le modèle est archivé, détaché ou sans version en vigueur. **Q2** : automatique.
+
 ⚠️ **2026-10-22 (demande front « modele-pv-plan-depart », lot D1)** — le PV du plan a son modèle de départ. Pas de migration.
 - **`POST /api/modeles-pv/{id}/versions/depart`** sur un modèle rattaché à `PPM` et/ou `PPM-AGPM` (famille DDP) : une page
   recopiée des 12 fichiers intégrés `PV_{AF|AFSR|ANF}_{PPM|PPMAGPM}_{CENTRALE|REGIONALE}.docx`. `FAMILLE_SANS_DEPART` ne vaut

@@ -81,12 +81,26 @@ public class ContexteModelePvService {
      */
     @Transactional(readOnly = true)
     public ModelePvWord.Contexte pour(Integer idDossier, String avis, Map<String, String> saisis) {
+        return pour(idDossier, dernierPv(idDossier), avis, saisis);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « releve-plan-lettre », R1) — le contexte de la <strong>production</strong> d'un PV : celui de ce
+     * PV (pas du dernier du dossier), avec son avis, sans champ saisi.
+     */
+    @Transactional(readOnly = true)
+    public ModelePvWord.Contexte pourPv(PvExamen pv) {
+        Integer idDossier = examens.findIdDossierByExamen(pv.getIdExamen())
+                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable pour le PV " + pv.getIdPv()));
+        return pour(idDossier, pv, null, Map.of());
+    }
+
+    private ModelePvWord.Contexte pour(Integer idDossier, PvExamen pv, String avis, Map<String, String> saisis) {
         Dossier d = dossiers.findById(idDossier).orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
         Map<String, ModelePvWord.Valeur> v = new LinkedHashMap<>();
         Map<String, List<Map<String, ModelePvWord.Valeur>>> listes = new LinkedHashMap<>();
         Map<String, String> cles = new LinkedHashMap<>();
 
-        PvExamen pv = dernierPv(idDossier);
         PvDocumentContexte pc = pv == null ? null : pvDocuments.contexteDuDossier(pv);
         String idLocalite = pv == null ? d.getIdLocalite() : examens.findLocaliteByExamen(pv.getIdExamen()).orElse(d.getIdLocalite());
         Localite loc = idLocalite == null ? null : localites.findById(idLocalite).orElse(null);

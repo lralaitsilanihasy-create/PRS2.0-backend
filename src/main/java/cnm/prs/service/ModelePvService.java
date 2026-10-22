@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -25,6 +26,7 @@ import cnm.prs.entity.ChampSaisiModelePv;
 import cnm.prs.entity.ConditionModelePv;
 import cnm.prs.entity.JournalModelePv;
 import cnm.prs.entity.ModelePv;
+import cnm.prs.entity.PvExamen;
 import cnm.prs.entity.RattachementModelePv;
 import cnm.prs.entity.SousTypeDossier;
 import cnm.prs.entity.VersionModelePv;
@@ -181,7 +183,7 @@ public class ModelePvService {
      * ⚠️ 2026-10-20 (demande front « modeles-pv-integres », §B1) — les modèles intégrés au JAR, lus là où le choix se fait
      * ({@link PvDocumentGenerator#modeles}, {@link LettreRenvoiDocumentGenerator#modeles},
      * {@link PvDocumentService#SOUS_TYPES_MODELES_INTEGRES}) ; seuls les fichiers présents sont servis. {@code enService} est vrai tant
-     * que la production ne passe pas par le générateur (lot G2).
+     * qu'un sous-type au moins est encore produit par ces fichiers (⚠️ 2026-10-22, « releve-plan-lettre » : {@link #versionQuiProduit}).
      */
     @Transactional(readOnly = true)
     public List<ModelePvDto.Integre> integres() {
@@ -191,16 +193,91 @@ public class ModelePvService {
                         "Un fichier par avis (FAV ; FAVR avec l'annexe des observations ; DEF), avec ou sans AGPM (sous-type PPM-AGPM), "
                                 + "commission centrale ou régionale. Seul un dossier dont le PPM garde au moins une ligne reçoit un "
                                 + "document ; l'avis NSP n'en a pas.",
-                        true),
+                        PvDocumentService.SOUS_TYPES_MODELES_INTEGRES.stream().anyMatch(st -> versionQuiProduit(st, "PV").isEmpty())),
                 new ModelePvDto.Integre("LETTRE-RENVOI-INTEGREE", "Lettre de renvoi", "LETTRE_RENVOI", null,
                         presents(LettreRenvoiDocumentGenerator.modeles()),
-                        "Un fichier par commission, centrale ou régionale, pour toute lettre signée, quel que soit le sous-type.", true));
+                        "Un fichier par commission, centrale ou régionale, pour toute lettre signée, quel que soit le sous-type.",
+                        sousTypes.findAll().stream().anyMatch(s -> versionQuiProduit(s.getIdSousType(), "LETTRE_RENVOI").isEmpty())));
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « releve-plan-lettre », R1-R3) — <strong>la relève</strong> : la version qui produit le document
+     * d'un sous-type pour une nature, à la place des fichiers intégrés. Il la faut rattachée (modèle actif), en vigueur, en page, et
+     * dans le périmètre relevé : le PV du plan ({@link PvDocumentService#SOUS_TYPES_MODELES_INTEGRES}) et la lettre de renvoi de tout
+     * sous-type. Lue à chaque production : un modèle archivé ou détaché rend la main aux fichiers intégrés (Q1), une mise en vigueur
+     * la prend sans autre geste (Q2). Les autres PV n'ont toujours pas de document.
+     */
+    @Transactional(readOnly = true)
+    public Optional<VersionModelePv> versionQuiProduit(String sousType, String nature) {
+        if (sousType == null || !("LETTRE_RENVOI".equals(nature)
+                || "PV".equals(nature) && PvDocumentService.SOUS_TYPES_MODELES_INTEGRES.contains(sousType))) {
+            return Optional.empty();
+        }
+        return rattachements.findByIdSousTypeAndNature(sousType, nature)
+                .flatMap(r -> modeles.findById(r.getIdModele()))
+                .filter(m -> !ModelePv.ARCHIVE.equals(m.getEtat()))
+                .flatMap(m -> versions.findByIdModeleAndEtat(m.getIdModele(), VersionModelePv.EN_VIGUEUR))
+                .filter(v -> VersionModelePv.PAGE.equals(v.getSupport()));
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« releve-plan-lettre », R1) — le PDF d'un PV produit par la page relevée, ou vide si le sous-type garde les
+     * fichiers intégrés. Les règles d'éligibilité restent celles de {@link PvDocumentService#choisirModele} (l'appelant les a passées).
+     * Une page qui ne se rend pas lève l'erreur : pas de repli silencieux sur l'intégré.
+     */
+    @Transactional(readOnly = true)
+    public Optional<byte[]> produirePv(PvExamen pv, String sousType) {
+        return versionQuiProduit(sousType, "PV").map(v -> rendre(v.getDocument(), contextes.pourPv(pv), declarees(v)));
+    }
+
+    /** ⚠️ 2026-10-22 (« releve-plan-lettre », R2) — le PDF d'une lettre produit par la page relevée, ou vide (fichiers intégrés). */
+    @Transactional(readOnly = true)
+    public Optional<byte[]> produireLettre(Integer idDossier, Integer idLettre, String sousType) {
+        return versionQuiProduit(sousType, "LETTRE_RENVOI")
+                .map(v -> rendre(v.getDocument(), contextes.pourLettre(idDossier, idLettre, Map.of()), declarees(v)));
+    }
+
+    /** Les couples « sous-type|nature » relevés : comparés avant et après un changement pour le journal général (R3). */
+    private Set<String> releves() {
+        Set<String> out = new java.util.TreeSet<>();
+        for (RattachementModelePv r : rattachements.findAll()) {
+            if (versionQuiProduit(r.getIdSousType(), r.getNature()).isPresent()) {
+                out.add(r.getIdSousType() + "|" + r.getNature());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« releve-plan-lettre », R3) — une entrée au journal général par sous-type qui change de producteur :
+     * {@code RELEVE_MODELE_INTEGRE} (la page prend la main) ou {@code RETOUR_MODELE_INTEGRE} (les fichiers intégrés la reprennent).
+     */
+    private void tracerReleve(ModelePv m, Set<String> avant, String cause) {
+        Set<String> apres = releves();
+        Set<String> tous = new java.util.TreeSet<>(avant);
+        tous.addAll(apres);
+        for (String cle : tous) {
+            boolean a = avant.contains(cle);
+            boolean b = apres.contains(cle);
+            if (a == b) {
+                continue;
+            }
+            String[] p = cle.split("\\|");
+            String integre = "PV".equals(p[1]) ? "PV-PLAN-INTEGRE" : "LETTRE-RENVOI-INTEGREE";
+            String detail = b
+                    ? p[0] + " (" + p[1] + ") : produit désormais par " + m.getCode() + " v" + versionQuiProduit(p[0], p[1])
+                            .map(VersionModelePv::getNumero).map(String::valueOf).orElse("?") + " à la place de " + integre
+                    : p[0] + " (" + p[1] + ") : rendu aux fichiers intégrés " + integre + " (" + m.getCode() + ")";
+            audit.enregistrerDetail(CurrentUser.ref().orElse(null), "modeles-pv", String.valueOf(m.getIdModele()),
+                    b ? "RELEVE_MODELE_INTEGRE" : "RETOUR_MODELE_INTEGRE", p[0], detail + " — " + cause + " ; par "
+                            + CurrentUser.login().orElse("?"), null);
+        }
     }
 
     /**
      * ⚠️ 2026-10-20 (demande front « modeles-pv-integres », §B2) — pour chaque sous-type du référentiel et chaque nature, ce qui
-     * produit son document. Un modèle géré rattaché ne produit encore rien (lot G2) : il est servi à part, {@code produitPar} ne vaut
-     * pas {@code GERE} avant.
+     * produit son document. ⚠️ 2026-10-22 (« releve-plan-lettre », R3) — {@code GERE} quand une page en vigueur relève les fichiers
+     * ({@link #versionQuiProduit}) ; un modèle rattaché hors du périmètre relevé (autres PV) ne produit rien et reste servi à part.
      */
     @Transactional(readOnly = true)
     public List<ModelePvDto.Couverture> couverture() {
@@ -217,7 +294,9 @@ public class ModelePvService {
                                         .orElse(null)))
                         .orElse(null);
                 out.add(new ModelePvDto.Couverture(s.getIdSousType(), s.getLibelleSousType(), s.getIdTypeDossier(), nature,
-                        integre != null && integre.enService() ? "INTEGRE" : "AUCUN", integre == null ? null : integre.code(), rattache));
+                        versionQuiProduit(s.getIdSousType(), nature).isPresent() ? "GERE"
+                                : integre != null && integre.enService() ? "INTEGRE" : "AUCUN",
+                        integre == null ? null : integre.code(), rattache));
             }
         }
         return out;
@@ -561,6 +640,7 @@ public class ModelePvService {
             throw new BusinessRuleException("Le rapport de contrôle de la version " + numero + " est bloquant (" + r.nbBloquants()
                     + ") : corrigez la page et enregistrez-la de nouveau.", "RAPPORT_BLOQUANT", null, Map.of("nbBloquants", r.nbBloquants()));
         }
+        Set<String> avant = releves();
         LocalDateTime maintenant = LocalDateTime.now();
         versions.findByIdModeleAndEtat(m.getIdModele(), VersionModelePv.EN_VIGUEUR).ifPresent(p -> {
             p.setEtat(VersionModelePv.REMPLACEE);
@@ -571,8 +651,9 @@ public class ModelePvService {
         v.setMotif(motif.trim());
         v.setEnVigueurLe(maintenant);
         v.setEnVigueurPar(CurrentUser.login().orElse(null));
-        versions.save(v);
+        versions.saveAndFlush(v);
         tracer(m, numero, "MISE_EN_VIGUEUR", motif.trim());
+        tracerReleve(m, avant, "mise en vigueur de la version " + numero);
         return fiche(m);
     }
 
@@ -601,6 +682,7 @@ public class ModelePvService {
             throw new BusinessRuleException("Sous-type(s) déjà servi(s) par un autre modèle : " + pris + ". Un sous-type n'a qu'un modèle "
                     + "à la fois : détachez-le d'abord.", "SOUS_TYPE_DEJA_SERVI", null, pris);
         }
+        Set<String> relevesAvant = releves();
         List<RattachementModelePv> actuels = rattachements.findByIdModele(m.getIdModele());
         Set<String> avant = new LinkedHashSet<>();
         for (RattachementModelePv r : actuels) {
@@ -622,12 +704,14 @@ public class ModelePvService {
         }
         rattachements.flush();
         tracer(m, null, "RATTACHEMENTS", voulus.isEmpty() ? "aucun sous-type" : String.join(", ", voulus));
+        tracerReleve(m, relevesAvant, "rattachements");
         return fiche(m);
     }
 
     /**
      * Retire le modèle. S'il sert un sous-type par une version en vigueur, 409 {@code MODELE_EN_SERVICE} sans motif ; avec un motif,
-     * il est archivé et détaché : ses sous-types n'ont plus de modèle (leurs PV, plus de document).
+     * il est archivé et détaché : ses sous-types n'ont plus de modèle ; ⚠️ 2026-10-22 (« releve-plan-lettre », Q1) ceux du plan et les
+     * lettres reviennent aux fichiers intégrés, au journal général ({@code RETOUR_MODELE_INTEGRE}).
      */
     public ModelePvDto.Fiche archiver(Long id, String motif) {
         ModelePv m = actif(id);
@@ -638,13 +722,16 @@ public class ModelePvService {
                     + " : ces sous-types n'auraient plus de modèle. Donnez un motif pour l'archiver quand même.", "MODELE_EN_SERVICE", null,
                     Map.of("sousTypes", servis.stream().map(RattachementModelePv::getIdSousType).toList()));
         }
+        Set<String> relevesAvant = releves();
         rattachements.deleteAll(servis);
+        rattachements.flush();
         m.setEtat(ModelePv.ARCHIVE);
         m.setArchiveLe(LocalDateTime.now());
         m.setMotifArchivage(motif == null || motif.isBlank() ? null : motif.trim());
         modeles.save(m);
         tracer(m, null, "ARCHIVE", (motif == null || motif.isBlank() ? "sans motif" : motif.trim())
                 + (servis.isEmpty() ? "" : ", détaché de " + servis.stream().map(RattachementModelePv::getIdSousType).toList()));
+        tracerReleve(m, relevesAvant, "archivage");
         return fiche(m);
     }
 

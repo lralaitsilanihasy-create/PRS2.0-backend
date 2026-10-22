@@ -88,6 +88,8 @@ public class LettreRenvoiService {
     /** ⚠️ Lot C (2026-09-27, §B6) — les lignes d'observation de l'examen, pour nommer les informations de la fiche DAO. */
     private final cnm.prs.repository.ExamenDetailRepository examenDetailRepository;
     private final cnm.prs.repository.ObservationControleRepository observationControleRepository;
+    /** ⚠️ 2026-10-22 (« releve-plan-lettre », R2) — la page en vigueur qui relève les fichiers intégrés. */
+    private final org.springframework.beans.factory.ObjectProvider<ModelePvService> modelesPv;
 
     public LettreRenvoiService(LettreRenvoiRepository repository, ExamenRepository examenRepository,
             DossierRepository dossierRepository, PpmRepository ppmRepository, PrmpRepository prmpRepository,
@@ -99,7 +101,9 @@ public class LettreRenvoiService {
             org.springframework.context.ApplicationEventPublisher evenements,
             ChronometrageService chronometrageService,
             cnm.prs.repository.ExamenDetailRepository examenDetailRepository,
-            cnm.prs.repository.ObservationControleRepository observationControleRepository) {
+            cnm.prs.repository.ObservationControleRepository observationControleRepository,
+            org.springframework.beans.factory.ObjectProvider<ModelePvService> modelesPv) {
+        this.modelesPv = modelesPv;
         this.examenDetailRepository = examenDetailRepository;
         this.observationControleRepository = observationControleRepository;
         this.chronometrageService = chronometrageService;
@@ -437,8 +441,16 @@ public class LettreRenvoiService {
         if (lettre.getCheminDocument() != null && !lettre.getCheminDocument().isBlank()) {
             return false;   // déjà produit
         }
-        Rendu rendu = rendu(lettre);
-        byte[] pdf = documentGenerator.genererPdf(rendu.centrale(), rendu.remplacements());
+        // ⚠️ 2026-10-22 (demande front « releve-plan-lettre », R2) — la page en vigueur rattachée au sous-type produit la lettre ; à
+        // défaut, les fichiers intégrés comme avant.
+        String sousType = lettre.getIdDossier() == null ? null
+                : dossierRepository.findById(lettre.getIdDossier()).map(Dossier::getIdSousType).orElse(null);
+        byte[] pdf = lettre.getIdDossier() == null ? null
+                : modelesPv.getObject().produireLettre(lettre.getIdDossier(), lettre.getIdLettre(), sousType).orElse(null);
+        if (pdf == null) {
+            Rendu rendu = rendu(lettre);
+            pdf = documentGenerator.genererPdf(rendu.centrale(), rendu.remplacements());
+        }
         lettre.setCheminDocument(stockerSurFsx(lettre, pdf));   // PDF écrit sur le FSX (répertoire LR/)
         repository.save(lettre);
         log.info("Document de la lettre de renvoi {} produit : {}", idLettre, lettre.getCheminDocument());
