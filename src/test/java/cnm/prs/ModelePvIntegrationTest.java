@@ -748,4 +748,66 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(auditLogs.findAll()).filteredOn(a -> "RETOUR_MODELE_INTEGRE".equals(a.getTypeAction()))
                 .extracting(a -> a.getChampModifie()).containsExactlyInAnyOrder("PPM", "PPM-AGPM");
     }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « apercu-exemple », E1 et Q1) — l'aperçu sur le dossier d'exemple fictif, pour tout modèle : le PV
+     * du plan (avec AGPM, l'avis demandé, l'annexe à une ligne), la lettre de renvoi (sans lettre en base), un modèle sans sous-type ;
+     * la mention « EXEMPLE » sur chaque page, jamais sur un dossier réel ; dossier ou exemple, pas les deux.
+     */
+    @Test
+    void apercuExemple() throws Exception {
+        long plan = creer("PV-PLAN-EXEMPLE");
+        mvc.perform(put(BASE + "/" + plan + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sousTypes\":[\"PPM\",\"PPM-AGPM\"]}")).andExpect(status().isOk());
+        mvc.perform(post(BASE + "/" + plan + "/versions/depart").header("Authorization", tokenAdmin)).andExpect(status().isOk());
+        String apercu = BASE + "/" + plan + "/versions/1/apercu";
+        mvc.perform(post(apercu).param("exemple", "true").header("Authorization", tokenMembre)).andExpect(status().isForbidden());
+        mvc.perform(post(apercu).param("exemple", "true").param("dossier", "1").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DOSSIER_OU_EXEMPLE"));
+        mvc.perform(post(apercu).header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DOSSIER_OU_EXEMPLE"));
+        byte[] favr = mvc.perform(post(apercu).param("exemple", "true").param("avis", "FAVR").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Content-Disposition", containsString("exemple")))
+                .andReturn().getResponse().getContentAsByteArray();
+        String t = texte(favr);
+        assertThat(pages(favr)).isEqualTo(2);
+        assertThat(t).contains("PROCES-VERBAL DE LA COMMISSION CENTRALE", "et d’Avis Général de Passation des Marchés INITIAL",
+                "AVIS FAVORABLE à l’affichage du PPM et à la publication de l’AGPM sous réserve", "00001/MAOO-CC/CNM/PV/2026", "ANNEXE")
+                .doesNotContain("{{");
+        assertThat(t.split("EXEMPLE — valeurs fictives", -1)).hasSize(3);
+        assertThat(t.split("Délai de validité : 60 jours", -1)).hasSize(2);
+        byte[] def = mvc.perform(post(apercu).param("exemple", "true").param("avis", "DEF").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(texte(def)).contains("AVIS NON FAVORABLE").doesNotContain("ANNEXE");
+
+        // Un dossier réel : pas de mention.
+        marcheRepository.save(marche(9812, 1, 1));
+        seedPvSigne(9712, 1);
+        byte[] reel = mvc.perform(post(apercu).param("dossier", "1").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(texte(reel)).doesNotContain("EXEMPLE");
+
+        // La lettre de renvoi : aucune lettre en base, l'exemple suffit.
+        String cree = mvc.perform(post(BASE).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"LR-EXEMPLE\",\"libelle\":\"Lettre de renvoi\",\"nature\":\"LETTRE_RENVOI\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long lr = ((Number) JsonPath.read(cree, "$.id")).longValue();
+        mvc.perform(post(BASE + "/" + lr + "/versions/depart").header("Authorization", tokenAdmin)).andExpect(status().isOk());
+        byte[] lettre = mvc.perform(post(BASE + "/" + lr + "/versions/1/apercu").param("exemple", "true").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(texte(lettre)).contains("lettre de renvoi", "- produire l'attestation fiscale à jour ;", "Andry RAKOTOMALALA",
+                "EXEMPLE — valeurs fictives").doesNotContain("{{");
+
+        // Un modèle sans sous-type : l'exemple, avec ses champs saisis.
+        long libre = creer("PV-EXEMPLE-LIBRE");
+        enregistrer(libre, modelePv("PV.REFERENCE"));
+        byte[] l = mvc.perform(post(BASE + "/" + libre + "/versions/1/apercu").param("exemple", "true").param("avis", "FAVR")
+                .header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"saisis\":{\"observation\":\"à revoir\"}}")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(texte(l)).contains("La Commission émet un avis favorable avec réserves.", "Observation : à revoir",
+                "COMMISSION NATIONALE DES MARCHÉS");
+    }
 }

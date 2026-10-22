@@ -196,6 +196,38 @@ public final class CatalogueModelesPv {
                 Map.of());
     }
 
+    /** ⚠️ 2026-10-22 (demande front « apercu-exemple », Q1) — la mention portée par chaque page d'un aperçu d'exemple. */
+    public static final String MENTION_EXEMPLE = "EXEMPLE — valeurs fictives";
+
+    private static final Map<String, String> AVIS_EN_CLAIR = Map.of("FAV", "favorable", "FAVR", "favorable avec réserves", "DEF",
+            "défavorable", "NSP", "ne se prononce pas");
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « apercu-exemple », E1) — le <strong>dossier d'exemple</strong> de l'aperçu, pour tout modèle (PV de
+     * toute famille, lettre de renvoi) : les exemples du catalogue ({@link #exemple()}), une seule observation, l'avis demandé (FAV par
+     * défaut, {@code PV.AVIS} en clair), commission centrale, avec AGPM, le sous-type donné (son libellé dans
+     * {@code DOSSIER.SOUS_TYPE}) et les champs saisis. L'essai du contrôle garde {@link #exemple()}.
+     */
+    public static ModelePvWord.Contexte exempleApercu(String avis, String sousType, String libelleSousType, Map<String, String> saisis) {
+        ModelePvWord.Contexte ex = exemple();
+        String a = avis == null || avis.isBlank() ? "FAV" : avis;
+        Map<String, ModelePvWord.Valeur> variables = new LinkedHashMap<>(ex.variables());
+        variables.put("PV.AVIS", ModelePvWord.Valeur.de(AVIS_EN_CLAIR.getOrDefault(a, a)));
+        if (libelleSousType != null) {
+            variables.put("DOSSIER.SOUS_TYPE", ModelePvWord.Valeur.de(libelleSousType));
+        }
+        Map<String, List<Map<String, ModelePvWord.Valeur>>> listes = new LinkedHashMap<>(ex.listes());
+        listes.computeIfPresent("OBSERVATIONS", (k, l) -> l.subList(0, 1));
+        Map<String, String> cles = new LinkedHashMap<>(ex.cles());
+        cles.put("avis", a);
+        cles.put("agpm", "oui");
+        cles.put("portee", "centrale");
+        if (sousType != null) {
+            cles.put("sousType", sousType);
+        }
+        return new ModelePvWord.Contexte(variables, listes, cles, saisis == null ? Map.of() : saisis);
+    }
+
     private static Variable v(String code, String groupe, String libelle, String exemple) {
         return new Variable(code, groupe, libelle, exemple, false, null, null);
     }

@@ -602,6 +602,15 @@ public final class ModelePvPage {
      * contrôle l'a signalée. Un paragraphe qui ne portait que des blocs, tous faux, disparaît (pas de ligne blanche à sa place).
      */
     public static String xhtml(JsonNode doc, ModelePvWord.Contexte ctx, Map<String, String> conditions, LongFunction<Image> images) {
+        return xhtml(doc, ctx, conditions, images, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « apercu-exemple », Q1) — le même rendu, avec une {@code mention} (« EXEMPLE — valeurs fictives »)
+     * dans la marge basse de chaque page, en petit et en gris, hors de l'en-tête et du pied du modèle ; {@code null} : aucune.
+     */
+    public static String xhtml(JsonNode doc, ModelePvWord.Contexte ctx, Map<String, String> conditions, LongFunction<Image> images,
+            String mention) {
         Rendu r = new Rendu(ctx, nom -> {
             String expression = conditions.get(nom);
             return expression != null && ConditionsModele.vraie(expression, cle -> ModelePvWord.lire(ctx, cle));
@@ -620,7 +629,10 @@ public final class ModelePvPage {
                 .append(mm(marges, "haut", 25)).append(' ').append(mm(marges, "droite", 20)).append(' ')
                 .append(mm(marges, "bas", 20)).append(' ').append(mm(marges, "gauche", 25)).append(';')
                 .append(entete && !premiere ? " @top-center { content: element(entete); vertical-align: bottom; }" : "")
-                .append(pied ? " @bottom-center { content: element(pied); vertical-align: top; }" : "").append(" }\n")
+                .append(pied ? " @bottom-center { content: element(pied); vertical-align: top; }" : "")
+                .append(mention == null ? "" : " @bottom-right { content: '" + mention.replace("\\", "").replace("'", "\\'")
+                        + "'; font-family: 'Arial'; font-size: 8pt; color: #666666; vertical-align: bottom; white-space: nowrap; }")
+                .append(" }\n")
                 .append("body { margin: 0; font-family: '").append(police).append("'; font-size: ").append(fmt(taille))
                 .append("pt; line-height: 1.15; color: #000000; }\n")
                 .append("#entete { position: running(entete); width: 100%; } #pied { position: running(pied); width: 100%; }\n")

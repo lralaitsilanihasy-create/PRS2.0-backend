@@ -8728,6 +8728,17 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-22 (demande front « apercu-exemple », E1)** — l'aperçu sur le dossier d'exemple. Pas de migration.
+- **`POST /api/modeles-pv/{id}/versions/{n}/apercu?exemple=true`** (sans `dossier=`), pour tout modèle : PV de toute famille,
+  lettre de renvoi. 400 **`DOSSIER_OU_EXEMPLE`** avec les deux, ou sans aucun (`dossier` est désormais facultatif).
+- Le dossier fictif (`CatalogueModelesPv.exempleApercu`) : chaque variable prend l'`exemple` du catalogue (`LETTRE.*` compris :
+  pas de `LETTRE_ABSENTE`) ; une observation, deux titulaires ; avis = `avis=` (FAV par défaut, `PV.AVIS` en clair) ;
+  commission centrale, avec AGPM ; sous-type = le premier rattaché au modèle (son libellé dans `DOSSIER.SOUS_TYPE`), à défaut
+  `MAOO-CC` ; champs saisis du corps `{ saisis }`. `lettre=` est ignoré. Rien n'est enregistré.
+- **Mention** « EXEMPLE — valeurs fictives » en bas à droite de chaque page (Arial 8, gris), hors de l'en-tête et du pied du modèle.
+  Jamais sur un dossier réel ni en production. Fichier nommé `apercu-{id}-v{n}-exemple.pdf`.
+- L'essai du contrôle garde son dossier fictif (FAV, sans AGPM, deux observations).
+
 ⚠️ **2026-10-22 (demande front « releve-plan-lettre », D2 et L2)** — la relève des modèles intégrés. Pas de migration.
 - **Règle unique** (`ModelePvService.versionQuiProduit`) : un sous-type est produit par une page quand un modèle actif lui est
   rattaché pour la nature, avec une version **en vigueur en page**, dans le périmètre relevé : le PV de `PPM` / `PPM-AGPM`, la

@@ -583,9 +583,18 @@ public class ModelePvService {
     /**
      * L'aperçu sur un dossier réel, <strong>sans rien enregistrer</strong> au dossier ni au modèle : le Word rempli, ou son PDF
      * (409 {@code CONVERSION_INDISPONIBLE} sans Word sur le serveur). Toute version s'essaie, brouillon compris.
+     *
+     * <p>⚠️ 2026-10-22 (demande front « apercu-exemple », E1) — ou sur le dossier d'exemple ({@code exemple},
+     * {@link CatalogueModelesPv#exempleApercu}) : l'un ou l'autre (400 {@code DOSSIER_OU_EXEMPLE}). Le sous-type de l'exemple est le
+     * premier rattaché au modèle ; une page d'exemple porte la mention « EXEMPLE — valeurs fictives » (Q1).</p>
      */
     @Transactional(readOnly = true)
-    public byte[] apercu(Long id, Integer numero, Integer idDossier, String avis, Integer idLettre, boolean pdf, Map<String, String> saisis) {
+    public byte[] apercu(Long id, Integer numero, Integer idDossier, boolean exemple, String avis, Integer idLettre, boolean pdf,
+            Map<String, String> saisis) {
+        if (exemple == (idDossier != null)) {
+            throw new BadRequestException(exemple ? "L'aperçu se fait sur un dossier réel ou sur le dossier d'exemple, pas les deux."
+                    : "L'aperçu demande un dossier (dossier=) ou le dossier d'exemple (exemple=true).", "DOSSIER_OU_EXEMPLE");
+        }
         ModelePv m = modele(id);
         VersionModelePv v = version(m, numero);
         if (avis != null && !avis.isBlank() && !List.of("FAV", "FAVR", "DEF", "NSP").contains(avis)) {
@@ -596,12 +605,21 @@ public class ModelePvService {
             throw new BadRequestException("Une page s'aperçoit en PDF seulement : il n'y a plus d'export Word.", "FORMAT_INDISPONIBLE");
         }
         // ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — une lettre s'aperçoit sur une lettre du dossier (lettre=, à défaut la dernière).
-        ModelePvWord.Contexte ctx = "LETTRE_RENVOI".equals(m.getNature()) ? contextes.pourLettre(idDossier, idLettre, saisis)
-                : contextes.pour(idDossier, avis == null || avis.isBlank() ? null : avis, saisis);
+        ModelePvWord.Contexte ctx;
+        if (exemple) {
+            String sousType = rattachements.findByIdModele(m.getIdModele()).stream().map(RattachementModelePv::getIdSousType).sorted()
+                    .findFirst().orElse(null);
+            ctx = CatalogueModelesPv.exempleApercu(avis, sousType,
+                    sousType == null ? null : sousTypes.findById(sousType).map(SousTypeDossier::getLibelleSousType).orElse(null), saisis);
+        } else {
+            ctx = "LETTRE_RENVOI".equals(m.getNature()) ? contextes.pourLettre(idDossier, idLettre, saisis)
+                    : contextes.pour(idDossier, avis == null || avis.isBlank() ? null : avis, saisis);
+        }
         if (page) {
             // ⚠️ 2026-10-21 (« modele-pv-page », §B5) — le même rendu que l'essai du contrôle et que la production à venir (G2).
             try {
-                return rendre(v.getDocument(), ctx, declarees(v));
+                return exemple ? ModelePvPage.pdf(ModelePvPage.xhtml(json.readTree(v.getDocument()), ctx, declarees(v), images::pourRendu,
+                        CatalogueModelesPv.MENTION_EXEMPLE)) : rendre(v.getDocument(), ctx, declarees(v));
             } catch (RuntimeException e) {
                 throw new BusinessRuleException("La page n'a pas pu être rendue : " + e.getMessage(), "APERCU_IMPOSSIBLE");
             }

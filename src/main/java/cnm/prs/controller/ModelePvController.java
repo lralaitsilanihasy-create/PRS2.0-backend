@@ -202,17 +202,19 @@ public class ModelePvController {
     /**
      * L'aperçu sur un dossier réel, sans rien enregistrer : {@code format=pdf} (défaut) ou {@code docx} (une version Word seulement,
      * ⚠️ 2026-10-21 : une page s'aperçoit en PDF, 400 {@code FORMAT_INDISPONIBLE}) ; {@code avis} force l'avis
-     * (FAV, FAVR, DEF, NSP) ; le corps facultatif porte les champs saisis.
+     * (FAV, FAVR, DEF, NSP) ; le corps facultatif porte les champs saisis. ⚠️ 2026-10-22 (« apercu-exemple ») — {@code exemple=true}
+     * à la place de {@code dossier} : le dossier d'exemple fictif, mention « EXEMPLE » sur chaque page.
      */
     @PostMapping("/{id}/versions/{numero}/apercu")
-    public ResponseEntity<byte[]> apercu(@PathVariable Long id, @PathVariable Integer numero, @RequestParam Integer dossier,
+    public ResponseEntity<byte[]> apercu(@PathVariable Long id, @PathVariable Integer numero, @RequestParam(required = false) Integer dossier,
+            @RequestParam(defaultValue = "false") boolean exemple,
             @RequestParam(required = false) String avis, @RequestParam(defaultValue = "pdf") String format,
             @RequestParam(required = false) Integer lettre, @RequestBody(required = false) ModelePvDto.ApercuRequest corps) {
         boolean pdf = !"docx".equalsIgnoreCase(format);
-        byte[] contenu = service.apercu(id, numero, dossier, avis, lettre, pdf, corps == null ? null : corps.saisis());
+        byte[] contenu = service.apercu(id, numero, dossier, exemple, avis, lettre, pdf, corps == null ? null : corps.saisis());
         return ResponseEntity.ok().contentType(pdf ? MediaType.APPLICATION_PDF : DOCX)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
-                        .filename("apercu-" + id + "-v" + numero + "-dossier-" + dossier + (pdf ? ".pdf" : ".docx"), StandardCharsets.UTF_8)
+                        .filename("apercu-" + id + "-v" + numero + (exemple ? "-exemple" : "-dossier-" + dossier) + (pdf ? ".pdf" : ".docx"), StandardCharsets.UTF_8)
                         .build().toString())
                 .body(contenu);
     }
