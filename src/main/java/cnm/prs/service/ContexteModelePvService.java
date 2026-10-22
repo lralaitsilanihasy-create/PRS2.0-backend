@@ -116,6 +116,8 @@ public class ContexteModelePvService {
             texte(v, "PV.PRESIDENT", pc.nomPresident());
             texte(v, "PV.CHEF_COMMISSION", pc.nomChefCommission());
             texte(v, "PV.MEMBRE", pc.nomMembre());
+            // ⚠️ 2026-10-22 (« modele-pv-plan-depart ») — comme le générateur intégré : INITIAL, ou MODIFICATIF N°n sur une version.
+            texte(v, "DOSSIER.NATURE_PLAN", pc.numMaj() != null && pc.numMaj() > 0 ? "MODIFICATIF N°" + pc.numMaj() : "INITIAL");
             for (PvDocumentContexte.Observation o : pc.observations()) {
                 Map<String, ModelePvWord.Valeur> item = new LinkedHashMap<>();
                 item.put("OBS.POINT", ModelePvWord.Valeur.de(o.pointControle()));

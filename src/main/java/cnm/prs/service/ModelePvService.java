@@ -418,7 +418,8 @@ public class ModelePvService {
      * ⚠️ 2026-10-21 (demande front « modele-pv-depart ») — le <strong>modèle de départ</strong> : l'application assemble une version
      * en brouillon depuis le PV officiel du plan ({@link ModelePvDepart}), ses conditions et ses champs déclarés d'office ; rien
      * n'est mis en vigueur. La famille se lit sur les sous-types rattachés : 400 {@code SANS_SOUS_TYPE}, 409
-     * {@code FAMILLES_MULTIPLES} (détail famille → sous-types), 409 {@code FAMILLE_SANS_DEPART} (le plan, lot G4) ; 400
+     * {@code FAMILLES_MULTIPLES} (détail famille → sous-types), 409 {@code FAMILLE_SANS_DEPART} (famille sans départ connu ; ⚠️
+     * 2026-10-22 : le plan a le sien, « modele-pv-plan-depart ») ; 400
      * {@code NATURE_SANS_DEPART} (lettre de renvoi), {@code PORTEE_INCONNUE} ; 409 {@code MODELE_ARCHIVE}. Permise même si le
      * modèle a déjà des versions : elle en ajoute une.
      */
@@ -453,8 +454,7 @@ public class ModelePvService {
         String famille = parFamille.keySet().iterator().next();
         ModelePvDepart.Famille f = ModelePvDepart.FAMILLES.get(famille);
         if (f == null) {
-            throw new BusinessRuleException("Pas de modèle de départ pour la famille " + famille + " : le plan a ses modèles intégrés, "
-                    + "leur reprise relève du lot G4.", "FAMILLE_SANS_DEPART");
+            throw new BusinessRuleException("Pas de modèle de départ pour la famille " + famille + ".", "FAMILLE_SANS_DEPART");
         }
         // ⚠️ 2026-10-21 (« modele-pv-page », §B5) — le départ est une page, reconstruite d'après la base et son emblème.
         return enregistrerDepart(m, ModelePvDepart.assembler(f, p, images.embleme().idImage()), "famille " + famille, p);

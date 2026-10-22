@@ -182,11 +182,20 @@ public final class ModelePvWord {
         });
     }
 
-    private static String lire(Contexte ctx, String cle) {
+    /**
+     * Ce qu'une condition lit : un champ saisi ({@code saisi.<code>}), une clé de condition, ⚠️ 2026-10-22 (« modele-pv-plan-depart »)
+     * ou une variable du catalogue ({@code PV.PRESIDENT renseigne} : la ligne du Président sous un nom seulement, comme le générateur
+     * intégré). Partagé par le Word et la page.
+     */
+    static String lire(Contexte ctx, String cle) {
         if (cle.startsWith("saisi.")) {
             return ctx.saisis().get(cle.substring("saisi.".length()));
         }
-        return ctx.cles().get(cle);
+        if (ctx.cles().containsKey(cle)) {
+            return ctx.cles().get(cle);
+        }
+        Valeur v = ctx.variables().get(cle);
+        return v == null ? null : v.texte() != null ? v.texte() : v.date() == null ? null : v.date().toString();
     }
 
     private interface Etape {

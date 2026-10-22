@@ -604,8 +604,7 @@ public final class ModelePvPage {
     public static String xhtml(JsonNode doc, ModelePvWord.Contexte ctx, Map<String, String> conditions, LongFunction<Image> images) {
         Rendu r = new Rendu(ctx, nom -> {
             String expression = conditions.get(nom);
-            return expression != null && ConditionsModele.vraie(expression, cle -> cle.startsWith("saisi.")
-                    ? ctx.saisis().get(cle.substring("saisi.".length())) : ctx.cles().get(cle));
+            return expression != null && ConditionsModele.vraie(expression, cle -> ModelePvWord.lire(ctx, cle));
         }, images);
         JsonNode page = doc.path("page");
         JsonNode marges = page.path("marges");

@@ -1591,6 +1591,10 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   n'est mis en vigueur sans lui. Deux écarts avec le PV intégré : une ligne de présence s'imprime même sans nom (pas de clé de
 >   condition sur la présence) et le viseur n'a ni qualité ni mention d'intérim. Les actes de gestion et la déclaration sans suite ne
 >   nomment que la référence du dossier : le catalogue n'a pas encore leurs variables propres.
+> - ⚠️ **2026-10-22 (« modele-pv-plan-depart », D1)** — **le PV du plan a son modèle de départ**, une seule page pour `PPM` et
+>   `PPM-AGPM`, recopiée des 12 fichiers intégrés : l'avis, l'AGPM et la commission en passages conditionnels, les lignes des
+>   présents sous un nom seulement, « INITIAL » ou « MODIFICATIF N°n » selon le plan. Le PV du plan reste produit par les fichiers
+>   intégrés jusqu'à la relève (D2), après comparaison des rendus sur des dossiers réels.
 > - ⚠️ **2026-10-21 (« modele-lettre-renvoi », L1)** — **la lettre de renvoi se rédige aussi comme une page** : un seul modèle pour
 >   tous les sous-types, la portée (centrale / régionale) en blocs. Ses variables sont propres à la lettre et ne valent pas dans
 >   un PV (et inversement). Elle continue d'être produite par les fichiers intégrés tant que la relève (L2) n'est pas faite, après

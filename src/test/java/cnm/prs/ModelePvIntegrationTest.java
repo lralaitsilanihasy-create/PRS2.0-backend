@@ -475,12 +475,33 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
                         "famille DMC, page reconstruite d'après PV_AFSR_PPM_CENTRALE.docx, portée centrale")))
                 .andExpect(jsonPath("$.historique[1].detail").value(containsString("PV_AFSR_PPM_CENTRALE.docx + PV_AFSR_PPM_REGIONALE.docx")));
 
-        // Le plan n'a pas de modèle de départ ; un modèle archivé, rien (la lettre de renvoi en a un : lettreDeRenvoi).
+        // ⚠️ 2026-10-22 (« modele-pv-plan-depart ») — le plan a son départ, recopié des 12 fichiers intégrés : sans champ, sans blocage
+        // ni avertissement ; essayé sur le dossier 1 (plan initial sans AGPM), en centrale. Un modèle archivé, rien.
         long plan = creer("PV-PLAN-DEPART");
         mvc.perform(put(BASE + "/" + plan + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"sousTypes\":[\"PPM\"]}")).andExpect(status().isOk());
-        mvc.perform(post(BASE + "/" + plan + "/versions/depart").header("Authorization", tokenAdmin))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FAMILLE_SANS_DEPART"));
+                .content("{\"sousTypes\":[\"PPM\",\"PPM-AGPM\"]}")).andExpect(status().isOk());
+        String p1 = mvc.perform(post(BASE + "/" + plan + "/versions/depart").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.numero").value(1)).andExpect(jsonPath("$.bloquant").value(false))
+                .andExpect(jsonPath("$.motif").value(containsString("à faire valider par la CNM")))
+                .andExpect(jsonPath("$.conditions[*].nom").value(org.hamcrest.Matchers.contains("FAVORABLE", "AVEC_RESERVES", "DEFAVORABLE",
+                        "AVEC_AGPM", "PRESIDENT", "CHEF_COMMISSION", "MEMBRE", "CENTRALE", "REGIONALE")))
+                .andExpect(jsonPath("$.champs.length()").value(0))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(p1, "$.rapport.points[?(@.niveau!='OK')].code")).isEmpty();
+        byte[] planFavr = mvc.perform(post(BASE + "/" + plan + "/versions/1/apercu").param("dossier", "1").param("avis", "FAVR")
+                .header("Authorization", tokenAdmin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(pages(planFavr)).isEqualTo(2);
+        assertThat(texte(planFavr)).contains("PROCES-VERBAL DE LA COMMISSION CENTRALE", "Projet de Plan de Passation des Marchés INITIAL pour",
+                "AVIS FAVORABLE à l’affichage du PPM sous réserve", "ANNEXE").doesNotContain("{{", "publication de l’AGPM");
+        mvc.perform(get(BASE + "/" + plan).header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.historique[0].detail").value(containsString("famille DDP, page reconstruite d'après "
+                        + "PV_AF_PPM_CENTRALE.docx + PV_AF_PPM_REGIONALE.docx + PV_AF_PPMAGPM_CENTRALE.docx")));
+        // Une condition peut lire une variable du catalogue hors liste, pas une variable inconnue ni une variable de liste.
+        mvc.perform(put(BASE + "/" + plan + "/versions/1/conditions").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("[{\"nom\":\"A\",\"expression\":\"PV.INCONNUE renseigne\"},{\"nom\":\"B\",\"expression\":\"OBS.POINT renseigne\"}]"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CONDITION_INVALIDE"))
+                .andExpect(jsonPath("$.details.A").value(containsString("PV.INCONNUE")))
+                .andExpect(jsonPath("$.details.B").value(containsString("OBS.POINT")));
         mvc.perform(post(BASE + "/" + plan + "/archiver").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"motif\":\"essai\"}")).andExpect(status().isOk());
         mvc.perform(post(BASE + "/" + plan + "/versions/depart").header("Authorization", tokenAdmin))

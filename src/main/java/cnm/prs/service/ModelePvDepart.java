@@ -26,6 +26,14 @@ import tools.jackson.databind.node.ObjectNode;
  * {@code OBSERVATIONS} ; pour {@code les-deux}, les écarts entre les PV centrale et régionale en blocs {@code CENTRALE} /
  * {@code REGIONALE} (en ligne quand l'écart est un mot) ; pour le dossier de marché, le tableau des titulaires proposés et l'écart à
  * l'estimation. Pur : aucune base.</p>
+ *
+ * <p>⚠️ 2026-10-22 (demande front « modele-pv-plan-depart », B1) — le <strong>plan</strong> (famille DDP) a son départ, recopié
+ * des 12 fichiers intégrés {@code PV_{AF|AFSR|ANF}_{PPM|PPMAGPM}_{CENTRALE|REGIONALE}} : leurs textes ne diffèrent que par la phrase
+ * d'avis (et l'annexe des réserves), la mention de l'AGPM (intitulé et avis, bloc {@code AVEC_AGPM}) et la commission. Le texte est
+ * repris tel quel, même là où il s'écarte des autres départs (titre « PROCES-VERBAL DE LA COMMISSION … », avis défavorable sans motif,
+ * pas d'observation générale) : la comparaison avec l'intégré (lot D2) doit rester honnête. Comme le générateur intégré, les lignes
+ * Président, Chef de la Commission et Membre ne s'impriment que sous un nom ({@code PV.PRESIDENT renseigne}…), et « INITIAL » est la
+ * nature du plan ({@code DOSSIER.NATURE_PLAN}).</p>
  */
 public final class ModelePvDepart {
 
@@ -49,8 +57,15 @@ public final class ModelePvDepart {
     public record Depart(JsonNode document, List<String> bases, List<ModelePvDto.Condition> conditions, List<ModelePvDto.Champ> champs) {
     }
 
-    /** §B3 — propositions du front, articles ajoutés au titre (« DE L'ACTE », « DE LA DÉCLARATION »). Le plan (DDP) n'en a pas. */
+    /**
+     * §B3 — propositions du front, articles ajoutés au titre (« DE L'ACTE », « DE LA DÉCLARATION »). ⚠️ 2026-10-22 — le plan (DDP) :
+     * ses phrases sont celles des fichiers intégrés, la commission et l'AGPM s'y écrivent en blocs (voir {@link #assembler}).
+     */
     public static final Map<String, Famille> FAMILLES = Map.of(
+            CatalogueModelesPv.PLAN, new Famille(CatalogueModelesPv.PLAN, "DE LA COMMISSION",
+                    "Projet de Plan de Passation des Marchés {{DOSSIER.NATURE_PLAN}}{{SI:AVEC_AGPM}} et d’Avis Général de Passation des "
+                            + "Marchés {{DOSSIER.NATURE_PLAN}}{{FINSI:AVEC_AGPM}} pour l’année {{DOSSIER.EXERCICE}}",
+                    "à l’affichage du PPM{{SI:AVEC_AGPM}} et à la publication de l’AGPM{{FINSI:AVEC_AGPM}}", false),
             "DMC", new Famille("DMC", "DU DOSSIER DE MISE EN CONCURRENCE",
                     "{{DOSSIER.SOUS_TYPE}} n° {{DOSSIER.REFERENCE}} — {{PROCEDURE.OBJET}} (procédure {{PROCEDURE.NUMERO}}, "
                             + "{{PROCEDURE.MODE}}, lot {{PROCEDURE.LOT}})",
@@ -76,6 +91,7 @@ public final class ModelePvDepart {
     public static Depart assembler(Famille f, String portee, long idEmbleme) {
         boolean deux = LES_DEUX.equals(portee);
         boolean regionale = REGIONALE.equals(portee);
+        boolean plan = CatalogueModelesPv.PLAN.equals(f.code());
         String commission = deux ? "{{SI:CENTRALE}}Centrale{{FINSI:CENTRALE}}{{SI:REGIONALE}}Régionale{{FINSI:REGIONALE}}"
                 : regionale ? "Régionale" : "Centrale";
         ArrayNode c = F.arrayNode();
@@ -103,13 +119,35 @@ public final class ModelePvDepart {
         c.add(vide());
 
         // Titre et identification.
-        c.add(p("PROCÈS-VERBAL D’EXAMEN " + f.titre(), attrs("center", null, null), marques(true, 12)));
-        c.add(p("Séance du {{PV.DATE_EXAMEN}}", attrs("center", null, null), marques(false, 12)));
-        c.add(vide());
-        c.add(p("PV N° : {{PV.REFERENCE}}", null, gras()));
-        c.add(p("DOSSIER DEPOSE LE : {{DOSSIER.DATE_RECEPTION}}", null, gras()));
-        c.add(p("ORGANISME CONCERNE : {{DOSSIER.ENTITE}}", null, gras()));
-        c.add(p("NATURE ET INTITULE DU DOSSIER : " + f.intitule(), null, gras()));
+        // ⚠️ 2026-10-22 — le titre du plan nomme la commission, comme ses fichiers intégrés.
+        String titre = !plan ? "PROCÈS-VERBAL D’EXAMEN " + f.titre()
+                : "PROCES-VERBAL " + f.titre() + (deux ? " {{SI:CENTRALE}}CENTRALE…{{FINSI:CENTRALE}}{{SI:REGIONALE}}REGIONALE{{FINSI:REGIONALE}}"
+                        : regionale ? " REGIONALE" : " CENTRALE…");
+        if (plan) {
+            // ⚠️ 2026-10-22 — la mise en forme des fichiers du plan : titre en Arial 12 gras, « Séance du » gras souligné, libellés
+            // de l'identification en gras et valeurs en maigre.
+            ArrayNode titreArial = gras();
+            ObjectNode arial = ModelePvPage.noeud("textStyle");
+            arial.putObject("attrs").put("fontFamily", "Arial").put("fontSize", "12pt");
+            titreArial.add(arial);
+            ArrayNode seance = gras();
+            seance.add(ModelePvPage.noeud("underline"));
+            c.add(p(titre, attrs("center", null, null), titreArial));
+            c.add(p("Séance du {{PV.DATE_EXAMEN}}", attrs("center", null, null), seance));
+            c.add(vide());
+            c.add(libelle("PV N° : ", "{{PV.REFERENCE}}"));
+            c.add(libelle("DOSSIER DEPOSE LE : ", "{{DOSSIER.DATE_RECEPTION}}"));
+            c.add(libelle("ORGANISME CONCERNE : ", "{{DOSSIER.ENTITE}}"));
+            c.add(libelle("NATURE ET INTITULE DU DOSSIER : ", f.intitule()));
+        } else {
+            c.add(p(titre, attrs("center", null, null), marques(true, 12)));
+            c.add(p("Séance du {{PV.DATE_EXAMEN}}", attrs("center", null, null), marques(false, 12)));
+            c.add(vide());
+            c.add(p("PV N° : {{PV.REFERENCE}}", null, gras()));
+            c.add(p("DOSSIER DEPOSE LE : {{DOSSIER.DATE_RECEPTION}}", null, gras()));
+            c.add(p("ORGANISME CONCERNE : {{DOSSIER.ENTITE}}", null, gras()));
+            c.add(p("NATURE ET INTITULE DU DOSSIER : " + f.intitule(), null, gras()));
+        }
         c.add(vide());
         c.add(p("L’an {{PV.DATE_EXAMEN|lettres}}, la Commission " + commission + " des Marchés, instituée par la loi N°2016-055 du "
                 + "25 janvier 2017 portant Code des Marchés Publics et le décret N°219-093 du 13 février 2019, fixant les attributions "
@@ -119,22 +157,40 @@ public final class ModelePvDepart {
 
         // Présents.
         c.add(p("Etaient présents :", null, gras()));
-        c.add(p("Président de la Commission Nationale des Marchés : {{PV.PRESIDENT}}", null, null));
-        c.add(p("Chef de la Commission : {{PV.CHEF_COMMISSION}}", null, null));
-        c.add(p("Membre de la Commission : {{PV.MEMBRE}}", null, null));
+        ObjectNode president = p("Président de la Commission Nationale des Marchés : {{PV.PRESIDENT}}", null, null);
+        ObjectNode chef = p("Chef de la Commission : {{PV.CHEF_COMMISSION}}", null, null);
+        ObjectNode membre = p("Membre de la Commission : {{PV.MEMBRE}}", null, null);
+        if (plan) {
+            // ⚠️ 2026-10-22 — comme le générateur intégré : une ligne ne s'imprime que sous un nom (qui a signé).
+            c.add(bloc("PRESIDENT", List.of(president)));
+            c.add(bloc("CHEF_COMMISSION", List.of(chef)));
+            c.add(bloc("MEMBRE", List.of(membre)));
+        } else {
+            c.add(president);
+            c.add(chef);
+            c.add(membre);
+        }
         c.add(vide());
 
         // L'avis, en trois blocs ; l'observation générale ; les titulaires du marché.
         c.add(p("AVIS DE LA COMMISSION :", null, gras()));
         c.add(vide());
         String emet = "La Commission " + commission + " des Marchés émet un ";
-        c.add(bloc("FAVORABLE", List.of(avis(emet, "AVIS FAVORABLE", " " + f.cible() + "."))));
-        c.add(bloc("AVEC_RESERVES", List.of(avis(emet, "AVIS FAVORABLE", " " + f.cible()
-                + ", sous réserve qu’il soit tenu compte des observations portées en annexe."))));
-        c.add(bloc("DEFAVORABLE", List.of(avis(emet, "AVIS NON FAVORABLE", " " + f.cible()
-                + ", pour le motif suivant : {{SAISI:motif_defavorable}}."))));
-        c.add(bloc("OBS_GENERALE", List.of(p("Observations générales de la Commission : {{SAISI:observation_generale}}",
-                attrs("justify", null, null), null))));
+        if (plan) {
+            // ⚠️ 2026-10-22 — les phrases des fichiers intégrés, telles quelles : pas de motif au défavorable, pas d'observation générale.
+            c.add(bloc("FAVORABLE", List.of(avis(emet, "AVIS FAVORABLE", " " + f.cible() + "."))));
+            c.add(bloc("AVEC_RESERVES", List.of(avis(emet, "AVIS FAVORABLE", " " + f.cible()
+                    + " sous réserve qu’il soit tenu compte des observations portées en annexe."))));
+            c.add(bloc("DEFAVORABLE", List.of(avis(emet, "AVIS NON FAVORABLE", " " + f.cible() + "."))));
+        } else {
+            c.add(bloc("FAVORABLE", List.of(avis(emet, "AVIS FAVORABLE", " " + f.cible() + "."))));
+            c.add(bloc("AVEC_RESERVES", List.of(avis(emet, "AVIS FAVORABLE", " " + f.cible()
+                    + ", sous réserve qu’il soit tenu compte des observations portées en annexe."))));
+            c.add(bloc("DEFAVORABLE", List.of(avis(emet, "AVIS NON FAVORABLE", " " + f.cible()
+                    + ", pour le motif suivant : {{SAISI:motif_defavorable}}."))));
+            c.add(bloc("OBS_GENERALE", List.of(p("Observations générales de la Commission : {{SAISI:observation_generale}}",
+                    attrs("justify", null, null), null))));
+        }
         if (f.titulaires()) {
             c.add(vide());
             c.add(p("Titulaire(s) proposé(s) :", null, null));
@@ -186,11 +242,30 @@ public final class ModelePvDepart {
         List<ModelePvDto.Condition> conditions = new ArrayList<>(List.of(
                 new ModelePvDto.Condition("FAVORABLE", "avis = FAV", "Avis favorable"),
                 new ModelePvDto.Condition("AVEC_RESERVES", "avis = FAVR", "Avis favorable avec réserves"),
-                new ModelePvDto.Condition("DEFAVORABLE", "avis = DEF", "Avis défavorable"),
-                new ModelePvDto.Condition("OBS_GENERALE", "saisi.observation_generale renseigne", "Une observation générale est saisie")));
+                new ModelePvDto.Condition("DEFAVORABLE", "avis = DEF", "Avis défavorable")));
+        if (plan) {
+            conditions.add(new ModelePvDto.Condition("AVEC_AGPM", "agpm = oui", "Le plan porte un AGPM (sous-type PPM-AGPM)"));
+            conditions.add(new ModelePvDto.Condition("PRESIDENT", "PV.PRESIDENT renseigne", "Le Président a signé"));
+            conditions.add(new ModelePvDto.Condition("CHEF_COMMISSION", "PV.CHEF_COMMISSION renseigne", "Le Chef de la Commission a signé"));
+            conditions.add(new ModelePvDto.Condition("MEMBRE", "PV.MEMBRE renseigne", "Un Membre a signé"));
+        } else {
+            conditions.add(new ModelePvDto.Condition("OBS_GENERALE", "saisi.observation_generale renseigne",
+                    "Une observation générale est saisie"));
+        }
         if (deux) {
             conditions.add(new ModelePvDto.Condition("CENTRALE", "portee = centrale", "Commission centrale"));
             conditions.add(new ModelePvDto.Condition("REGIONALE", "portee = regionale", "Commission régionale"));
+        }
+        if (plan) {
+            List<String> bases = new ArrayList<>();
+            for (String sens : List.of("AF", "AFSR", "ANF")) {
+                for (String agpm : List.of("PPM", "PPMAGPM")) {
+                    for (String lieu : deux ? List.of("CENTRALE", "REGIONALE") : List.of(regionale ? "REGIONALE" : "CENTRALE")) {
+                        bases.add("PV_" + sens + "_" + agpm + "_" + lieu + ".docx");
+                    }
+                }
+            }
+            return new Depart(doc, bases, conditions, List.of());
         }
         List<ModelePvDto.Champ> champs = List.of(
                 new ModelePvDto.Champ("motif_defavorable", "Motif de l'avis défavorable", "TEXTE_LONG", List.of(), true,
@@ -308,6 +383,15 @@ public final class ModelePvDepart {
         content.addAll(ModelePvPage.enLigne(debut, null));
         content.addAll(ModelePvPage.enLigne(avis, gras()));
         content.addAll(ModelePvPage.enLigne(fin, null));
+        return n;
+    }
+
+    /** « <b>LIBELLÉ :</b> valeur » (l'identification du plan). */
+    private static ObjectNode libelle(String libelle, String valeur) {
+        ObjectNode n = ModelePvPage.noeud("paragraph");
+        ArrayNode content = n.putArray("content");
+        content.addAll(ModelePvPage.enLigne(libelle, gras()));
+        content.addAll(ModelePvPage.enLigne(valeur, null));
         return n;
     }
 

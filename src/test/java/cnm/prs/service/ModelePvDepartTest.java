@@ -36,6 +36,9 @@ class ModelePvDepartTest {
     @Test
     void valideSansChevronPourChaqueFamilleEtPortee() {
         for (ModelePvDepart.Famille f : ModelePvDepart.FAMILLES.values()) {
+            if (CatalogueModelesPv.PLAN.equals(f.code())) {
+                continue;   // le plan a son texte propre : planDuPpm
+            }
             for (String portee : ModelePvDepart.PORTEES) {
                 ModelePvDepart.Depart d = ModelePvDepart.assembler(f, portee, 3);
                 ModelePvPage.valider(d.document(), id -> id == 3);
@@ -114,6 +117,66 @@ class ModelePvDepartTest {
                 } else {
                     assertThat(t).contains("COMMISSION REGIONALE DES MARCHES TOAMASINA", "Le Chef de la Commission Régionale des Marchés")
                             .doesNotContain("COMMISSION CENTRALE", "Le Président");
+                }
+            }
+        }
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modele-pv-plan-depart », B1) — le départ du plan, recopié des 12 fichiers intégrés : valide pour chaque portée,
+     * sans champ saisi ; rendu, pour chaque avis, AGPM et portée, les phrases des fichiers (intitulé, avis, titre), l'annexe sous les
+     * réserves seulement ; la ligne du Président disparaît sans nom, comme dans l'intégré.
+     */
+    @Test
+    void planDuPpm() throws Exception {
+        ModelePvDepart.Famille plan = ModelePvDepart.FAMILLES.get(CatalogueModelesPv.PLAN);
+        for (String portee : ModelePvDepart.PORTEES) {
+            ModelePvDepart.Depart d = ModelePvDepart.assembler(plan, portee, 3);
+            ModelePvPage.valider(d.document(), id -> id == 3);
+            assertThat(textes(d.document())).doesNotContain("<", "{{").contains("PROCES-VERBAL DE LA COMMISSION");
+            List<String> codes = ModelePvPage.relever(d.document()).marqueurs().stream().map(m -> m.type() + ":" + m.code()).toList();
+            assertThat(codes).contains("VARIABLE:DOSSIER.NATURE_PLAN", "VARIABLE:DOSSIER.EXERCICE", "SI:AVEC_AGPM", "SI:PRESIDENT",
+                    "SI:CHEF_COMMISSION", "SI:MEMBRE", "POUR:OBSERVATIONS").noneMatch(c -> c.startsWith("SAISI:"));
+            boolean deux = ModelePvDepart.LES_DEUX.equals(portee);
+            assertThat(d.conditions()).hasSize(deux ? 9 : 7);
+            assertThat(d.champs()).isEmpty();
+            assertThat(d.bases()).hasSize(deux ? 12 : 6).allMatch(b -> b.matches("PV_(AF|AFSR|ANF)_(PPM|PPMAGPM)_(CENTRALE|REGIONALE)\\.docx"));
+        }
+        ModelePvDepart.Depart d = ModelePvDepart.assembler(plan, ModelePvDepart.LES_DEUX, 3);
+        Map<String, String> cond = new LinkedHashMap<>();
+        d.conditions().forEach(c -> cond.put(c.nom(), c.expression()));
+        ModelePvWord.Contexte ex = CatalogueModelesPv.exemple();
+        Map<String, String> phrase = Map.of("FAV", "AVIS FAVORABLE à l’affichage du PPM%s.", "FAVR",
+                "AVIS FAVORABLE à l’affichage du PPM%s sous réserve qu’il soit tenu compte des observations portées en annexe.",
+                "DEF", "AVIS NON FAVORABLE à l’affichage du PPM%s.");
+        for (String avis : List.of("FAV", "FAVR", "DEF")) {
+            for (String agpm : List.of("oui", "non")) {
+                for (String portee : List.of("centrale", "regionale")) {
+                    Map<String, String> cles = new java.util.HashMap<>(ex.cles());
+                    cles.put("avis", avis);
+                    cles.put("agpm", agpm);
+                    cles.put("portee", portee);
+                    Map<String, ModelePvWord.Valeur> variables = new LinkedHashMap<>(ex.variables());
+                    variables.put("DOSSIER.NATURE_PLAN", ModelePvWord.Valeur.de("MODIFICATIF N°2"));
+                    variables.remove("PV.PRESIDENT");
+                    byte[] pdf = ModelePvPage.pdf(ModelePvPage.xhtml(d.document(), new ModelePvWord.Contexte(variables, ex.listes(), cles,
+                            Map.of()), cond, id -> null));
+                    String quoi = avis + "/" + agpm + "/" + portee;
+                    try (PDDocument doc = Loader.loadPDF(pdf)) {
+                        String t = trie().getText(doc).replaceAll("\\s+", " ");
+                        boolean oui = "oui".equals(agpm);
+                        boolean centrale = "centrale".equals(portee);
+                        assertThat(doc.getNumberOfPages()).as(quoi).isEqualTo("FAVR".equals(avis) ? 2 : 1);
+                        assertThat(t).as(quoi).contains(String.format(phrase.get(avis), oui ? " et à la publication de l’AGPM" : ""),
+                                "Projet de Plan de Passation des Marchés MODIFICATIF N°2" + (oui ? " et d’Avis Général de Passation des "
+                                        + "Marchés MODIFICATIF N°2" : "") + " pour l’année 2026",
+                                centrale ? "PROCES-VERBAL DE LA COMMISSION CENTRALE…" : "PROCES-VERBAL DE LA COMMISSION REGIONALE",
+                                "La Commission " + (centrale ? "Centrale" : "Régionale") + " des Marchés émet un",
+                                "Chef de la Commission : ", "Membre de la Commission : ")
+                                .doesNotContain("{{", "Président de la Commission Nationale des Marchés :", "Observations générales");
+                        assertThat(t.contains("et à la publication")).as(quoi).isEqualTo(oui);
+                        assertThat(t.contains("ANNEXE")).as(quoi).isEqualTo("FAVR".equals(avis));
+                    }
                 }
             }
         }

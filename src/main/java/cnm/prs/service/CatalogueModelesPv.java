@@ -56,6 +56,9 @@ public final class CatalogueModelesPv {
             v("DOSSIER.ENTITE", "Dossier", "Entité contractante", "MINISTERE DE L'ECONOMIE ET DES FINANCES"),
             v("DOSSIER.PRMP", "Dossier", "Personne responsable des marchés publics", "RANDRIANARIVO La Personne"),
             v("DOSSIER.EXERCICE", "Dossier", "Exercice", "2026"),
+            // ⚠️ 2026-10-22 (« modele-pv-plan-depart ») — le mot INITIAL des fichiers du plan, MODIFICATIF N°n sur une mise à jour.
+            new Variable("DOSSIER.NATURE_PLAN", "Dossier", "Nature du plan : INITIAL, ou MODIFICATIF N°n sur une mise à jour", "INITIAL",
+                    false, Set.of(PLAN), null),
             v("PV.REFERENCE", "PV", "Référence du PV", "00001/MAOO-CC/CNM/PV/2026"),
             d("PV.DATE_EXAMEN", "PV", "Date de l'examen (|lettres : « deux mille vingt-six et le vingt-deux octobre »)", "2026-10-22"),
             v("PV.AVIS", "PV", "Avis : favorable, favorable avec réserves, défavorable", "favorable"),
@@ -146,7 +149,9 @@ public final class CatalogueModelesPv {
     }
 
     public static boolean cleConnue(String cle) {
-        return cle.startsWith("saisi.") || CLES.stream().anyMatch(c -> c.cle().equals(cle));
+        // ⚠️ 2026-10-22 — une variable hors liste se lit aussi (« PV.PRESIDENT renseigne »).
+        return cle.startsWith("saisi.") || CLES.stream().anyMatch(c -> c.cle().equals(cle))
+                || variable(cle).filter(v -> v.liste() == null).isPresent();
     }
 
     /** Le code connu le plus proche d'un code inconnu (au plus trois caractères d'écart), pour « vouliez-vous … ? ». */

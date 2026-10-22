@@ -8728,6 +8728,24 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-22 (demande front « modele-pv-plan-depart », lot D1)** — le PV du plan a son modèle de départ. Pas de migration.
+- **`POST /api/modeles-pv/{id}/versions/depart`** sur un modèle rattaché à `PPM` et/ou `PPM-AGPM` (famille DDP) : une page
+  recopiée des 12 fichiers intégrés `PV_{AF|AFSR|ANF}_{PPM|PPMAGPM}_{CENTRALE|REGIONALE}.docx`. `FAMILLE_SANS_DEPART` ne vaut
+  plus pour aucune famille connue.
+  - Conditions déclarées d'office : `FAVORABLE`, `AVEC_RESERVES` (avec l'annexe et sa ligne `OBSERVATIONS`), `DEFAVORABLE` ;
+    `AVEC_AGPM` (`agpm = oui` : la mention de l'AGPM dans l'intitulé et l'avis) ; `PRESIDENT`, `CHEF_COMMISSION`, `MEMBRE`
+    (`PV.PRESIDENT renseigne`… : une ligne des présents ne s'imprime que sous un nom, comme dans l'intégré) ; `CENTRALE` /
+    `REGIONALE` en `les-deux`. Aucun champ saisi.
+  - Texte repris tel quel : titre « PROCES-VERBAL DE LA COMMISSION CENTRALE… / REGIONALE » (Arial 12 gras), « Séance du » gras
+    souligné, libellés de l'identification en gras ; avis défavorable sans motif ; pas d'observation générale.
+  - Journal : « famille DDP, page reconstruite d'après » les 12 fichiers (6 pour une seule portée).
+- **Variable `DOSSIER.NATURE_PLAN`** (famille DDP) : « INITIAL », ou « MODIFICATIF N°n » sur une mise à jour du plan
+  (`t_ppm.NUM_MAJ`), comme le mot INITIAL des fichiers intégrés.
+- **Une condition lit aussi une variable** du catalogue hors liste (`PV.PRESIDENT renseigne`), pour la page comme pour le Word.
+  Une variable inconnue ou de liste reste refusée (400 `CONDITION_INVALIDE`, clé inconnue).
+- **Q2** : pas de passage pour l'avis `NSP` (l'intégré ne produit aucun document dans ce cas).
+- **Non fait (D2)** : la relève. Le PV du plan est toujours produit par les fichiers intégrés.
+
 ⚠️ **2026-10-21 (demande front « modele-lettre-renvoi », lot L1)** — la lettre de renvoi se rédige comme une page. Pas de migration.
 - **Catalogue** : `GET /api/modeles-pv/variables?nature=LETTRE_RENVOI` (ou `PV`) filtre par nature ; la réponse porte `nature`.
   400 `NATURE_INCONNUE`.
