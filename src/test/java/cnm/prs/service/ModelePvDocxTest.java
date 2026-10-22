@@ -1,6 +1,7 @@
 package cnm.prs.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.util.List;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * ⚠️ 2026-10-22 (demande front « modeles-documents-marche », W1) — le Word d'une page, écrit depuis le document résolu : réglages de
@@ -95,5 +97,53 @@ class ModelePvDocxTest {
             assertThat(obs.getRow(0).getCell(0).getText()).isEqualTo("[Dossier] Pièces administratives");
             assertThat(d.getSettings().getCTSettings().xmlText()).contains("doNotExpandShiftReturn");
         }
+    }
+
+    private static final String ARTICLES = """
+            {"corps":{"type":"doc","content":[
+              {"type":"heading","attrs":{"level":1,"numerotation":"ARTICLE {n} : ","id":"objet"},"content":[{"type":"text","text":"Objet","marks":[{"type":"bold"}]}]},
+              {"type":"bloc","attrs":{"condition":"NON"},"content":[
+                {"type":"heading","attrs":{"level":1,"numerotation":"ARTICLE {n} : ","id":"retire"},"content":[{"type":"text","text":"Retiré"}]}]},
+              {"type":"heading","attrs":{"level":1,"numerotation":"ARTICLE {n} : ","id":"prix"},"content":[{"type":"text","text":"Prix"}]},
+              {"type":"heading","attrs":{"level":2,"numerotation":"{n}. "},"content":[{"type":"text","text":"Révision"}]},
+              {"type":"heading","attrs":{"level":2,"numerotation":"{n}. "},"content":[{"type":"text","text":"Avance"}]},
+              {"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Annexe sans numéro"}]},
+              {"type":"heading","attrs":{"level":1,"numerotation":"Article {n} — ","id":"fin"},"content":[{"type":"text","text":"Fin"}]},
+              {"type":"heading","attrs":{"level":2,"numerotation":"{n}. "},"content":[{"type":"text","text":"Premier sous-titre après"}]},
+              {"type":"paragraph","content":[{"type":"text","text":"Voir l'article "},{"type":"renvoi","attrs":{"cible":"prix"}},
+                {"type":"text","text":" et l'article "},{"type":"renvoi","attrs":{"cible":"retire"},"marks":[{"type":"bold"}]},{"type":"text","text":"."}]}]}}""";
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-documents-marche », W2) — les titres numérotés : comptés après les règles (sans trou), un compteur par
+     * niveau remis à zéro sous un titre supérieur, les titres sans gabarit ne comptent pas ; un renvoi prend le numéro de sa cible,
+     * « …… » quand elle est retirée ; le contrôle signale une cible inconnue, la validation un id en double ou un gabarit sans {n}.
+     */
+    @Test
+    void titresNumerotesEtRenvois() throws Exception {
+        JsonNode doc = new ObjectMapper().readTree(ARTICLES);
+        ModelePvPage.valider(doc, id -> false);
+        assertThat(ModelePvPage.renvoisSansCible(doc)).isEmpty();
+        ModelePvWord.Contexte ex = CatalogueModelesPv.exemple();
+        JsonNode resolu = ModelePvPage.resoudre(doc, ex, Map.of("NON", "avis = DEF"));
+
+        byte[] docx = ModelePvDocx.docx(resolu, id -> null, null);
+        try (XWPFDocument d = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            assertThat(d.getParagraphs().stream().map(XWPFParagraph::getText).toList()).containsExactly("ARTICLE 1 : Objet",
+                    "ARTICLE 2 : Prix", "1. Révision", "2. Avance", "Annexe sans numéro", "Article 3 — Fin", "1. Premier sous-titre après",
+                    "Voir l'article 2 et l'article …….");
+            assertThat(d.getParagraphs().get(0).getRuns().get(0).isBold()).isTrue();
+        }
+        String xhtml = ModelePvPage.xhtmlResolu(resolu, id -> null, null);
+        assertThat(xhtml).contains("ARTICLE 2 : Prix", "Article 3 — Fin", "Voir l'article 2 et l'article ").doesNotContain("Retiré");
+
+        ObjectNode faux = (ObjectNode) new ObjectMapper().readTree(ARTICLES);
+        ObjectNode h = (ObjectNode) faux.path("corps").path("content").path(2).path("attrs");
+        ((ObjectNode) faux.path("corps").path("content").path(3).path("attrs")).put("id", "objet");
+        h.put("numerotation", "ARTICLE : ");
+        ((ObjectNode) faux.path("corps").path("content").path(8).path("content").path(1).path("attrs")).put("cible", "inconnu");
+        assertThatThrownBy(() -> ModelePvPage.valider(faux, id -> false)).isInstanceOf(ModelePvPage.Invalide.class)
+                .satisfies(e -> assertThat(((ModelePvPage.Invalide) e).details().values().toString())
+                        .contains("déjà employé", "contient {n}"));
+        assertThat(ModelePvPage.renvoisSansCible(faux)).hasSize(1).containsValue("corps › paragraphe 1 › renvoi 1 : « inconnu »");
     }
 }

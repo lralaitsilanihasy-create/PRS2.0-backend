@@ -851,6 +851,9 @@ public class ModelePvService {
         JsonNode doc = json.readTree(document);
         ModelePvPage.Releve rel = ModelePvPage.relever(doc);
         pts.add(point("OK", "DOCUMENT_VALIDE", "Document de la page conforme au schéma", null, null));
+        // ⚠️ 2026-10-22 (« modeles-documents-marche », W2) — un renvoi doit citer un titre numéroté du document.
+        ModelePvPage.renvoisSansCible(doc).forEach((chemin, ou) -> pts.add(point("BLOQUANT", "RENVOI_INCONNU",
+                "Renvoi vers un titre numéroté absent du document", ou, null, chemin)));
         return points(pts, rel.marqueurs(), rel.chemins(), true, true, nature, declarees, codesChamps,
                 () -> essaiPage(document, declarees, pts));
     }

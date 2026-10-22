@@ -74,14 +74,18 @@ public final class ModelePvPage {
     private static final Set<String> BLOCS = Set.of("paragraph", "heading", "bulletList", "orderedList", "table", "image", "pageBreak",
             "bloc");
     private static final Set<String> EN_LIGNE = Set.of("text", "hardBreak", "variable", "champ", "numeroPage", "nombrePages", "image",
-            "bloc");
+            "bloc", "renvoi");
+    /** ⚠️ 2026-10-22 (« modeles-documents-marche », W2) — l'identifiant d'un titre, que cite un renvoi. */
+    private static final Pattern ID_TITRE = Pattern.compile("[A-Za-z0-9_-]{1,40}");
+    /** Le numéro d'un titre numéroté, dans son gabarit (« ARTICLE {n} : »). */
+    static final String NUMERO = "{n}";
     private static final Map<String, String> LIBELLES = Map.ofEntries(Map.entry("paragraph", "paragraphe"),
             Map.entry("heading", "titre"), Map.entry("bulletList", "liste à puces"), Map.entry("orderedList", "liste numérotée"),
             Map.entry("listItem", "élément"), Map.entry("table", "tableau"), Map.entry("tableRow", "ligne"),
             Map.entry("tableCell", "cellule"), Map.entry("tableHeader", "cellule"), Map.entry("image", "image"),
             Map.entry("pageBreak", "saut de page"), Map.entry("bloc", "bloc"), Map.entry("text", "texte"),
             Map.entry("hardBreak", "retour à la ligne"), Map.entry("variable", "variable"), Map.entry("champ", "champ"),
-            Map.entry("numeroPage", "numéro de page"), Map.entry("nombrePages", "nombre de pages"));
+            Map.entry("numeroPage", "numéro de page"), Map.entry("nombrePages", "nombre de pages"), Map.entry("renvoi", "renvoi"));
     private static final Map<String, String> ZONES = ordonnee("entete", "en-tête", "corps", "corps", "piedDePage", "pied de page");
     private static final Set<String> ENVELOPPE = Set.of("page", "entete", "enteteSurPremiereSeulement", "corps", "piedDePage");
     private static final Set<String> MARQUES = Set.of("bold", "italic", "underline", "textStyle");
@@ -206,6 +210,7 @@ public final class ModelePvPage {
 
         private final LongPredicate imageConnue;
         private final Map<String, Object> erreurs = new LinkedHashMap<>();
+        private final Set<String> ids = new java.util.HashSet<>();
         private int noeuds;
 
         Validation(LongPredicate imageConnue) {
@@ -286,11 +291,25 @@ public final class ModelePvPage {
                 case "heading" -> {
                     cles(n, lieu, "content");
                     attrs(n, lieu, Set.of("level", "textAlign", "retrait", "retraitDroite", "retraitPremiereLigne", "espaceAvant",
-                            "espaceApres", "interligne"));
+                            "espaceApres", "interligne", "numerotation", "id"));
                     paragraphe(n.path("attrs"), lieu);
                     JsonNode level = n.path("attrs").path("level");
                     if (!level.isIntegralNumber() || level.intValue() < 1 || level.intValue() > 3) {
                         erreur(lieu, "level vaut 1, 2 ou 3");
+                    }
+                    // ⚠️ 2026-10-22 (« modeles-documents-marche », W2) — titre numéroté et son identifiant.
+                    JsonNode num = n.path("attrs").path("numerotation");
+                    if (!num.isMissingNode() && !num.isNull()
+                            && (!num.isString() || num.asString().length() > 40 || !num.asString().contains(NUMERO))) {
+                        erreur(lieu, "numerotation est un gabarit de 40 caractères au plus qui contient {n} (« ARTICLE {n} : »)");
+                    }
+                    JsonNode id = n.path("attrs").path("id");
+                    if (!id.isMissingNode() && !id.isNull()) {
+                        if (!id.isString() || !ID_TITRE.matcher(id.asString()).matches()) {
+                            erreur(lieu, "id est un identifiant (lettres, chiffres, _ ou -, 40 au plus)");
+                        } else if (!ids.add(id.asString())) {
+                            erreur(lieu, "id « " + id.asString() + " » déjà employé par un autre titre");
+                        }
                     }
                     contenu(n, lieu, EN_LIGNE, profondeur, dansLigneRepetee);
                 }
@@ -382,6 +401,15 @@ public final class ModelePvPage {
                     JsonNode f = n.path("attrs").path("format");
                     if (!f.isMissingNode() && !f.isNull() && !f.isString()) {
                         erreur(lieu, "format est un texte");
+                    }
+                }
+                case "renvoi" -> {
+                    cles(n, lieu, "marks");
+                    marques(n.path("marks"), lieu);
+                    attrs(n, lieu, Set.of("cible"));
+                    JsonNode c = n.path("attrs").path("cible");
+                    if (!c.isString() || !ID_TITRE.matcher(c.asString()).matches()) {
+                        erreur(lieu, "cible est l'id d'un titre numéroté");
                     }
                 }
                 case "champ" -> {
@@ -575,6 +603,40 @@ public final class ModelePvPage {
         }
     }
 
+    /**
+     * ⚠️ 2026-10-22 (« modeles-documents-marche », W2) — les renvois dont la cible n'est l'{@code id} d'aucun titre numéroté :
+     * chemin → « lieu : cible ».
+     */
+    public static Map<String, String> renvoisSansCible(JsonNode doc) {
+        Set<String> cibles = new java.util.HashSet<>();
+        List<Map.Entry<JsonNode, Lieu>> renvois = new ArrayList<>();
+        for (String zone : ZONES.keySet()) {
+            if (doc.path(zone).isObject()) {
+                parcourir(doc.path(zone), racine(zone), cibles, renvois);
+            }
+        }
+        Map<String, String> out = new LinkedHashMap<>();
+        for (Map.Entry<JsonNode, Lieu> r : renvois) {
+            String cible = r.getKey().path("attrs").path("cible").asString("");
+            if (!cibles.contains(cible)) {
+                out.put(r.getValue().chemin(), r.getValue().ou() + " : « " + cible + " »");
+            }
+        }
+        return out;
+    }
+
+    private static void parcourir(JsonNode n, Lieu lieu, Set<String> cibles, List<Map.Entry<JsonNode, Lieu>> renvois) {
+        for (Map.Entry<JsonNode, Lieu> e : enfants(n, lieu)) {
+            JsonNode c = e.getKey();
+            if ("heading".equals(type(c)) && c.path("attrs").path("numerotation").isString() && c.path("attrs").path("id").isString()) {
+                cibles.add(c.path("attrs").path("id").asString());
+            } else if ("renvoi".equals(type(c))) {
+                renvois.add(e);
+            }
+            parcourir(c, e.getValue(), cibles, renvois);
+        }
+    }
+
     /** Les images que le document emploie. */
     public static Set<Long> images(JsonNode doc) {
         Set<Long> out = new java.util.LinkedHashSet<>();
@@ -623,7 +685,75 @@ public final class ModelePvPage {
                 out.set(cle, v.deepCopy());
             }
         }
+        numeroter(out);
         return out;
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-documents-marche », W2) — les <strong>titres numérotés</strong> : dans l'ordre du corps
+     * résolu (un titre retiré par une règle ne laisse pas de trou), un compteur par niveau, remis à zéro sous un titre de niveau
+     * supérieur ; le gabarit ({@code numerotation}, « ARTICLE {n} : ») s'écrit en tête du titre, avec les marques de son premier texte.
+     * Puis chaque {@code renvoi} prend le numéro du titre qu'il cite ({@code cible} = {@code id}) ; un titre absent (retiré par une
+     * règle, ou inconnu : le contrôle l'a signalé) donne « …… ».
+     */
+    private static void numeroter(ObjectNode doc) {
+        Map<String, Integer> numeros = new HashMap<>();
+        int[] compteurs = new int[4];
+        if (doc.path("corps").isObject()) {
+            titres(doc.path("corps"), compteurs, numeros);
+        }
+        for (String zone : ZONES.keySet()) {
+            if (doc.path(zone).isObject()) {
+                renvois(doc.path(zone), numeros);
+            }
+        }
+    }
+
+    private static void titres(JsonNode n, int[] compteurs, Map<String, Integer> numeros) {
+        for (JsonNode c : n.path("content")) {
+            JsonNode a = c.path("attrs");
+            if ("heading".equals(type(c)) && a.path("numerotation").isString()) {
+                int niveau = Math.max(1, Math.min(3, a.path("level").asInt(1)));
+                compteurs[niveau]++;
+                for (int i = niveau + 1; i < compteurs.length; i++) {
+                    compteurs[i] = 0;
+                }
+                int numero = compteurs[niveau];
+                if (a.path("id").isString()) {
+                    numeros.put(a.path("id").asString(), numero);
+                }
+                JsonNode premier = null;
+                for (JsonNode t : c.path("content")) {
+                    if ("text".equals(type(t))) {
+                        premier = t;
+                        break;
+                    }
+                }
+                ObjectNode tete = noeud("text").put("text", a.path("numerotation").asString().replace(NUMERO, String.valueOf(numero)));
+                marquer(tete, premier == null || !premier.path("marks").isArray() ? null : premier.path("marks"));
+                ((ArrayNode) c.path("content")).insert(0, tete);
+            } else {
+                titres(c, compteurs, numeros);
+            }
+        }
+    }
+
+    private static void renvois(JsonNode n, Map<String, Integer> numeros) {
+        JsonNode content = n.path("content");
+        if (!content.isArray()) {
+            return;
+        }
+        for (int i = 0; i < content.size(); i++) {
+            JsonNode c = content.get(i);
+            if ("renvoi".equals(type(c))) {
+                Integer numero = numeros.get(c.path("attrs").path("cible").asString(""));
+                ObjectNode t = noeud("text").put("text", numero == null ? "……" : String.valueOf(numero));
+                marquer(t, c.path("marks").isArray() ? c.path("marks") : null);
+                ((ArrayNode) content).set(i, t);
+            } else {
+                renvois(c, numeros);
+            }
+        }
     }
 
     private static final class Resolution {
@@ -1180,7 +1310,7 @@ public final class ModelePvPage {
         noeuds.put("paragraph", List.of("textAlign", "retrait", "retraitDroite", "retraitPremiereLigne", "espaceAvant", "espaceApres",
                 "interligne"));
         noeuds.put("heading", List.of("level", "textAlign", "retrait", "retraitDroite", "retraitPremiereLigne", "espaceAvant",
-                "espaceApres", "interligne"));
+                "espaceApres", "interligne", "numerotation", "id"));
         noeuds.put("bulletList", List.of());
         noeuds.put("orderedList", List.of("start"));
         noeuds.put("listItem", List.of());
@@ -1195,6 +1325,7 @@ public final class ModelePvPage {
         noeuds.put("hardBreak", List.of());
         noeuds.put("variable", List.of("code", "format", "marks"));
         noeuds.put("champ", List.of("code", "marks"));
+        noeuds.put("renvoi", List.of("cible", "marks"));
         noeuds.put("numeroPage", List.of());
         noeuds.put("nombrePages", List.of());
         s.put("noeuds", noeuds);
@@ -1207,6 +1338,8 @@ public final class ModelePvPage {
         s.put("couleurs", COULEURS);
         s.put("fonds", FONDS);
         s.put("formats", CatalogueModelesPv.FORMATS);
+        s.put("numerotation", Map.of("gabarit", "contient {n} (« ARTICLE {n} : », « Article {n} — »), 40 caractères au plus",
+                "id", "lettres, chiffres, _ ou -, 40 au plus, unique", "renvoi", "cible = id d'un titre numéroté"));
         s.put("limites", Map.of("tailleOctets", TAILLE_MAX, "profondeur", PROFONDEUR_MAX, "noeuds", NOEUDS_MAX, "texte", TEXTE_MAX));
         return s;
     }
