@@ -51,6 +51,8 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private FicheMarcheValeurRepository valeurRepository;
     @Autowired private cnm.prs.service.ChampFicheMarcheService champService;
     @Autowired private cnm.prs.repository.NotificationRepository notificationRepository;
+    @Autowired private cnm.prs.service.FicheMarcheService ficheMarcheService;
+    @Autowired private cnm.prs.service.DocumentsFicheMarcheService documentsFicheMarcheService;
 
     private Long idDmc;
 
@@ -576,6 +578,46 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
     private org.springframework.test.web.servlet.ResultActions imprimer(Long dmc) throws Exception {
         return mvc.perform(post("/api/fiches-marche/" + dmc + "/avis-specifique").header("Authorization", tokenPrmp)
                 .contentType(JSON).content(CORPS));
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-dao », D0 et relève) — sur une procédure à fiche validée : l'aperçu du fichier intégré AVIS-F,
+     * puis un modèle de l'application rattaché à AVIS-F, au titre modifié, mis en vigueur avec la validation du juriste : l'aperçu de
+     * sa version et l'avis rendu par la production (relecture des mentions) portent le nouveau titre ; l'archivage rend l'intégré.
+     */
+    @Test
+    void releveDeLAvisParUnModeleDeDocument() throws Exception {
+        byte[] integre = mvc.perform(post("/api/modeles-pv/integres/dao/AVIS-F/apercu").param("procedure", String.valueOf(idDmc))
+                .header("Authorization", tokenAdmin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(texteDuPdf(integre)).contains("Avis d’Appel d’Offres Ouvert", "Fourniture de mobilier de bureau")
+                .doesNotContain("{{", "modèle de l’application");
+
+        String cree = mvc.perform(post("/api/modeles-pv").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"AVIS-F-APP\",\"libelle\":\"Avis\",\"nature\":\"DOCUMENT_DAO\"}")).andReturn().getResponse()
+                .getContentAsString();
+        long id = ((Number) JsonPath.read(cree, "$.id")).longValue();
+        mvc.perform(put("/api/modeles-pv/" + id + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sigles\":[\"AVIS-F\"]}")).andExpect(status().isOk());
+        String v1 = mvc.perform(post("/api/modeles-pv/" + id + "/versions/depart").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String doc = new tools.jackson.databind.ObjectMapper().readTree(v1).path("document").toString()
+                .replace("\"Avis d’Appel d’Offres Ouvert\"", "\"Avis d’Appel d’Offres Ouvert — modèle de l’application\"");
+        mvc.perform(put("/api/modeles-pv/" + id + "/versions/1/document").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"document\":" + doc + "}")).andExpect(status().isOk());
+        byte[] apercu = mvc.perform(post("/api/modeles-pv/" + id + "/versions/1/apercu").param("procedure", String.valueOf(idDmc))
+                .header("Authorization", tokenAdmin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(texteDuPdf(apercu)).contains("Avis d’Appel d’Offres Ouvert — modèle de l’application", "Fourniture de mobilier de bureau");
+        mvc.perform(post("/api/modeles-pv/" + id + "/versions/1/mettre-en-vigueur").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motif\":\"titre\",\"juriste\":{\"nom\":\"RABE\",\"qualite\":\"Juriste\","
+                        + "\"date\":\"2026-10-22\"}}")).andExpect(status().isOk());
+
+        cnm.prs.dto.FicheMarcheDto etat = ficheMarcheService.etatValide(idDmc).orElseThrow().etat();
+        String publie = documentsFicheMarcheService.rendrePublication(etat, "AVIS-F", false).elements().toString();
+        assertThat(publie).contains("Avis d’Appel d’Offres Ouvert — modèle de l’application");
+        mvc.perform(post("/api/modeles-pv/" + id + "/archiver").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"motif\":\"retour\"}")).andExpect(status().isOk());
+        assertThat(documentsFicheMarcheService.rendrePublication(etat, "AVIS-F", false).elements().toString())
+                .doesNotContain("modèle de l’application").contains("Avis d’Appel d’Offres Ouvert");
     }
 
     private void valider() throws Exception {

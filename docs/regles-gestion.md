@@ -1591,6 +1591,10 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   n'est mis en vigueur sans lui. Deux écarts avec le PV intégré : une ligne de présence s'imprime même sans nom (pas de clé de
 >   condition sur la présence) et le viseur n'a ni qualité ni mention d'intérim. Les actes de gestion et la déclaration sans suite ne
 >   nomment que la référence du dossier : le catalogue n'a pas encore leurs variables propres.
+> - ⚠️ **2026-10-22 (« modeles-dao », D0-D3, D-ARMP)** — **les documents du DAO se modifient comme des modèles**, un par sigle, à partir
+>   du fichier intégré, et sont produits par le même moteur. Un écart au document type de l'ARMP est permis mais tracé ; la mise en
+>   vigueur d'une version qui s'écarte exige la validation du juriste (nom, qualité, date), saisie par l'Administrateur et gardée avec
+>   la version. Un modèle archivé ou détaché rend la main au fichier intégré. Les pièces fixes (CCAG, IC) restent hors du principe.
 > - ⚠️ **2026-10-22 (« modeles-documents-marche », W1, W2, M1)** — **le projet de marché se rédige comme un modèle**, un par catégorie
 >   de procédure (fournitures et services, travaux, prestations intellectuelles), et se remet **en Word et en PDF** (la PRMP le
 >   complète). Une donnée inconnue reste « …… » à compléter avant la signature (art. 60). Tant qu'aucun modèle n'est en vigueur pour la

@@ -66,7 +66,8 @@ public final class ModelePvPage {
     static final double TAILLE_MIN = 6;
     static final double TAILLE_MAX_PT = 72;
 
-    private static final Pattern CODE = Pattern.compile("[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)*");
+    /** ⚠️ 2026-10-22 (« modeles-dao ») — le tiret et le dièse aussi : les jetons du DAO ({@code B05-GS-03.lettres}). */
+    private static final Pattern CODE = Pattern.compile("[A-Za-z][A-Za-z0-9_#-]*(?:\\.[A-Za-z0-9_#-]+)*");
     private static final Pattern NOM_CONDITION = Pattern.compile("[A-Za-z0-9_-]{1,60}");
     private static final Pattern TAILLE_PT = Pattern.compile("(\\d{1,2}(?:\\.\\d+)?)\\s*pt");
     private static final Pattern MARQUEUR = Pattern.compile("\\{\\{(?:(SI|FINSI|SAISI):([A-Za-z0-9_-]+)|([A-Za-z][A-Za-z0-9_.]*)(?:\\|([a-z]+))?)}}");

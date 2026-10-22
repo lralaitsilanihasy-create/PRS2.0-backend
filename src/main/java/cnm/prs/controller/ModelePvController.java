@@ -93,8 +93,42 @@ public class ModelePvController {
     /** Le catalogue des variables, filtré par la famille du sous-type (§B3) et par la nature (« modele-lettre-renvoi », B1). */
     @GetMapping("/variables")
     public ModelePvDto.Catalogue variables(@RequestParam(required = false) String sousType,
-            @RequestParam(required = false) String nature) {
-        return service.catalogue(sousType, nature);
+            @RequestParam(required = false) String nature, @RequestParam(required = false) String sigle) {
+        return service.catalogue(sousType, nature, sigle);
+    }
+
+    /** ⚠️ 2026-10-22 (« modeles-dao », D0) — les 15 documents intégrés du DAO, leurs couvertures et leur état de service. */
+    @GetMapping("/integres/dao")
+    public List<ModelePvDto.IntegreDao> integresDao() {
+        return service.integresDao();
+    }
+
+    /** ⚠️ 2026-10-22 (D0) — le document intégré d'un sigle en rendu brut (jetons visibles), {@code format=pdf} (défaut) ou {@code docx}. */
+    @GetMapping("/integres/dao/{sigle}/fichier")
+    public ResponseEntity<byte[]> integreDaoFichier(@PathVariable String sigle, @RequestParam(defaultValue = "pdf") String format) {
+        boolean pdf = !"docx".equalsIgnoreCase(format);
+        return ResponseEntity.ok().contentType(pdf ? MediaType.APPLICATION_PDF : DOCX)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename(sigle + "-integre" + (pdf ? ".pdf" : ".docx"), StandardCharsets.UTF_8).build().toString())
+                .body(service.integreDaoBrut(sigle, pdf));
+    }
+
+    /** ⚠️ 2026-10-22 (D0) — le document intégré rendu sur la fiche validée d'une procédure, pour un lot, sans rien enregistrer. */
+    @PostMapping("/integres/dao/{sigle}/apercu")
+    public ResponseEntity<byte[]> integreDaoApercu(@PathVariable String sigle, @RequestParam Long procedure,
+            @RequestParam(required = false) Integer lot, @RequestParam(defaultValue = "pdf") String format) {
+        boolean pdf = !"docx".equalsIgnoreCase(format);
+        return ResponseEntity.ok().contentType(pdf ? MediaType.APPLICATION_PDF : DOCX)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline()
+                        .filename("apercu-" + sigle + "-procedure-" + procedure + (lot == null ? "" : "-lot-" + lot) + (pdf ? ".pdf" : ".docx"),
+                                StandardCharsets.UTF_8).build().toString())
+                .body(service.integreDaoApercu(sigle, procedure, lot, pdf));
+    }
+
+    /** ⚠️ 2026-10-22 (« modeles-dao », D-ARMP) — les écarts d'une version d'un document du DAO avec son document type. */
+    @GetMapping("/{id}/versions/{numero}/ecarts")
+    public List<ModelePvDto.Ecart> ecarts(@PathVariable Long id, @PathVariable Integer numero) {
+        return service.ecarts(id, numero);
     }
 
     /** Les modèles intégrés au JAR, choisis par le code (« modeles-pv-integres », §B1). */
@@ -178,7 +212,8 @@ public class ModelePvController {
      */
     @PostMapping("/{id}/versions/depart")
     public ModelePvDto.Version depart(@PathVariable Long id, @RequestBody(required = false) ModelePvDto.DepartRequest corps) {
-        return service.depart(id, corps == null ? null : corps.portee(), corps == null ? null : corps.categorie());
+        return service.depart(id, corps == null ? null : corps.portee(), corps == null ? null : corps.categorie(),
+                corps == null ? null : corps.sigle());
     }
 
     @GetMapping("/{id}/versions/{numero}")
@@ -224,12 +259,13 @@ public class ModelePvController {
     @PostMapping("/{id}/versions/{numero}/mettre-en-vigueur")
     public ModelePvDto.Fiche mettreEnVigueur(@PathVariable Long id, @PathVariable Integer numero,
             @Valid @RequestBody(required = false) ModelePvDto.MotifRequest corps) {
-        return service.mettreEnVigueur(id, numero, corps == null ? null : corps.motif());
+        return service.mettreEnVigueur(id, numero, corps == null ? null : corps.motif(), corps == null ? null : corps.juriste());
     }
 
     @PutMapping("/{id}/rattachements")
     public ModelePvDto.Fiche rattacher(@PathVariable Long id, @RequestBody ModelePvDto.RattachementsRequest corps) {
-        return service.rattacher(id, corps == null ? null : corps.sousTypes(), corps == null ? null : corps.categories());
+        return service.rattacher(id, corps == null ? null : corps.sousTypes(), corps == null ? null : corps.categories(),
+                corps == null ? null : corps.sigles());
     }
 
     @PostMapping("/{id}/archiver")

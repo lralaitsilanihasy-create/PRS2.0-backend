@@ -8728,6 +8728,39 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-22 (demande front « modeles-dao », D0-D3 et D-ARMP)** — les documents du DAO comme modèles de document. Migration **V141**.
+- **Principe** : la page est une vue modifiable du fichier de commande (`ConversionDao`, sans perte : aller-retour vérifié sur les 15
+  fichiers). La production garde le moteur du DAO (`FormulairesCandidat.rendreModele`, `GenerateurDocumentsFiche`) : un modèle en
+  vigueur est reconverti en fichier de commande ; un départ non modifié rend exactement le document intégré.
+  - Correspondances : TITRE = titre 1 centré, SOUS_TITRE = titre 2, PARA = paragraphe justifié, CENTRE / DROITE = centré / à droite,
+    VIDE = paragraphe vide sans réglage, `PARA {{SI:X}}` … `{{FINSI:X}}` = passage (bloc), tableaux (une cellule = ses paragraphes),
+    jetons = variables (le code porte son suffixe : `B05-GS-03.lettres`, `LOT`, `DERIVE.…`, `AVIS.…`) ; restent du texte
+    `{{IMAGE:…}}` et les marqueurs de plage de lignes dans les cellules.
+- **D0** : `GET /api/modeles-pv/integres/dao` → `[{ sigle, libelle, typeDocument, categories, couvertures[{typeMarche, categorie,
+  mode}], enService, modeleRattache }]` (15). `GET /integres/dao/{sigle}/fichier?format=pdf|docx` : rendu brut (jetons visibles).
+  `POST /integres/dao/{sigle}/apercu?procedure=&lot=&format=` : rendu sur la fiche validée de la procédure, sans rien enregistrer.
+- **Nature `DOCUMENT_DAO`** : `PUT …/rattachements { sigles: [un sigle] }` (400 `RATTACHEMENT_PAR_SIGLE`, `UN_SEUL_SIGLE`,
+  `SIGLE_INCONNU` ; 409 `SIGLE_DEJA_SERVI`) ; la fiche et la liste servent `sigles`. `POST …/versions/depart { sigle? }` : le
+  fichier intégré converti, ses règles déclarées (400 `SIGLE_REQUIS`). Suppression : `SERT_UN_SIGLE` ; archivage :
+  `MODELE_EN_SERVICE` sans motif.
+- **Catalogue** `GET /variables?nature=DOCUMENT_DAO&sigle=` : les champs actifs de la fiche des catégories du sigle (par rubrique), les
+  jetons du moteur (`LOT`, `NUM`, dérivés, publication, paramètres, besoin, moyens, pièces), les suffixes (`.lettres`,
+  `.chiffres`…) et les clés que lisent les règles des fichiers intégrés. Une règle d'un document du DAO peut lire toute clé.
+- **Contrôle** : commande reconstruite acceptée par le moteur (sinon `COMMANDE_REFUSEE`), jetons connus (`VARIABLE_INCONNUE`),
+  passage dans une phrase bloquant (`PASSAGE_EN_LIGNE`), ce que le moteur ne rend pas en avertissement (`MISE_EN_FORME_NON_RENDUE` :
+  marques, listes, images de la bibliothèque, réglages de paragraphe, de tableau et de cellule, titres numérotés, renvois, champs,
+  en-tête et pied), rendu d'essai (`ESSAI`). Les 15 départs : aucun point bloquant ni avertissement.
+- **D-ARMP** : niveau **`INFO`** nouveau. `CONFORME_ARMP` (OK) ou `ECARTS_ARMP` + un `ECART_ARMP` par écart (ligne, avant /
+  après). `GET …/versions/{n}/ecarts` → `[{ type: MODIFIE|AJOUTE|RETIRE, rang, avant, apres }]` (référence : le fichier intégré du
+  sigle, Q2). `POST …/mettre-en-vigueur { motif, juriste: { nom, qualite, date } }` : juriste exigé s'il y a au moins un écart (400
+  `VALIDATION_JURISTE_REQUISE`, `details.nbEcarts`) ; servi par la version (`juriste`) et repris au journal.
+- **Aperçu d'une version** : `exemple=true` = rendu brut ; `procedure=&lot=` = la fiche validée, comme en production (409
+  `SANS_SIGLE`, 404 sans fiche validée) ; un dossier : 400 `PROCEDURE_OU_EXEMPLE`. Word ou PDF.
+- **Relève** : `DocumentsFicheMarcheService.modeleEffectif(sigle)` aux six endroits de production (documents à la validation, avis,
+  lettres d'invitation, projets de publication, relecture des mentions) : la version en vigueur du sigle, sinon le fichier intégré.
+  Journal général `RELEVE_MODELE_INTEGRE` / `RETOUR_MODELE_INTEGRE` (champ = sigle). L'import d'un DAO (`LectureDao`) garde les
+  fichiers intégrés.
+
 ⚠️ **2026-10-22 (demande front « modeles-documents-marche », lots W1, W2, M1)** — le Word des pages, les articles numérotés, le projet de
 marché comme modèle. Migration **V140**.
 - **W1 — le Word d'une page** : `ModelePvPage.resoudre` produit le document résolu (passages, lignes répétées, variables) ; le PDF et

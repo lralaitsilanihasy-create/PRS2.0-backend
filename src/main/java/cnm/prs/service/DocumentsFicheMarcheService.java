@@ -157,6 +157,8 @@ public class DocumentsFicheMarcheService {
     private final cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository;
     /** ⚠️ 2026-10-17 (§B2) — le PDF du devis descriptif et des plans déposé sur la fiche de travaux. */
     private final cnm.prs.repository.SpecificationsFicheRepository specificationsRepository;
+    /** ⚠️ 2026-10-22 (« modeles-dao », D1-D3) — le modèle de l'application en vigueur qui relève un document intégré du DAO. */
+    private final org.springframework.beans.factory.ObjectProvider<ModelePvService> modelesDocuments;
 
     public DocumentsFicheMarcheService(DocumentFicheMarcheRepository documentRepository,
             GenerateurDocumentsFiche generateur, ChampFicheMarcheRepository champRepository,
@@ -165,7 +167,9 @@ public class DocumentsFicheMarcheService {
             PieceJointeDossierRepository pieceRepository, TypePieceJointeRepository typePieceRepository,
             ParametreService parametres, ModelesCandidat modelesCandidat,
             cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository, ModelesDao modelesDao, ValeursPpmService valeursPpm,
-            cnm.prs.repository.SpecificationsFicheRepository specificationsRepository) {
+            cnm.prs.repository.SpecificationsFicheRepository specificationsRepository,
+            org.springframework.beans.factory.ObjectProvider<ModelePvService> modelesDocuments) {
+        this.modelesDocuments = modelesDocuments;
         this.specificationsRepository = specificationsRepository;
         this.valeursPpm = valeursPpm;
         this.modelesDao = modelesDao;
@@ -244,7 +248,7 @@ public class DocumentsFicheMarcheService {
                 DocumentLibre doc;
                 List<GenerateurDocumentsFiche.Fichier> fichiers;
                 try {
-                    doc = FormulairesCandidat.rendreModele(c.typeDocument(), lot, etat, parCode, modelesDao.modele(c.sigle()), validation,
+                    doc = FormulairesCandidat.rendreModele(c.typeDocument(), lot, etat, parCode, modeleEffectif(c.sigle()), validation,
                             parametresDocuments);
                     fichiers = generateur.generer(doc);
                 } catch (RuntimeException e) {
@@ -329,7 +333,7 @@ public class DocumentsFicheMarcheService {
      * un .pdf ; le nom porte l'horodatage d'impression, chaque impression produisant une nouvelle paire.
      */
     public List<Produit> produireAvis(FicheMarcheDto etat, Map<String, String> publication, LocalDateTime impression) {
-        FichierCommande.Modele modele = modelesDao.modele(ModelesDao.sigleAvis(etat.getCategorie()));
+        FichierCommande.Modele modele = modeleEffectif(ModelesDao.sigleAvis(etat.getCategorie()));
         if (modele == null) {
             throw new GenerationDocumentsException("Aucun modèle d'avis spécifique pour la catégorie " + etat.getCategorie() + ".", null);
         }
@@ -366,7 +370,7 @@ public class DocumentsFicheMarcheService {
     public Map<Integer, List<Produit>> produireLettres(FicheMarcheDto etat, Map<String, String> commun, List<String> destinataires,
             LocalDateTime impression) {
         // ⚠️ R3c — LETTRE-PI, ou LETTRE-AOR pour un appel d'offres restreint de fournitures ou de travaux.
-        FichierCommande.Modele modele = modelesDao.modele(ModelesDao.sigleLettre(etat.getCategorie(), valeursPpm.modeRestreint(etat.getIdDetail())));
+        FichierCommande.Modele modele = modeleEffectif(ModelesDao.sigleLettre(etat.getCategorie(), valeursPpm.modeRestreint(etat.getIdDetail())));
         if (modele == null) {
             throw new GenerationDocumentsException("Aucun modèle de lettre d'invitation pour la catégorie " + etat.getCategorie() + ".", null);
         }
@@ -414,7 +418,7 @@ public class DocumentsFicheMarcheService {
         boolean restreint = valeursPpm.modeRestreint(etat.getIdDetail());
         boolean lettre = ModelesDao.sigleLettre(etat.getCategorie(), restreint) != null;
         String sigle = lettre ? ModelesDao.sigleLettre(etat.getCategorie(), restreint) : ModelesDao.sigleAvis(etat.getCategorie(), restreint);
-        FichierCommande.Modele modele = sigle == null ? null : modelesDao.modele(sigle);
+        FichierCommande.Modele modele = sigle == null ? null : modeleEffectif(sigle);
         if (modele == null) {
             return List.of();
         }
@@ -555,9 +559,52 @@ public class DocumentsFicheMarcheService {
                 .toList();
     }
 
-    /** ⚠️ R3c — le modèle d'un sigle ({@code AVIS-F}, {@code LETTRE-AOR}…), ou {@code null}. */
+    /**
+     * ⚠️ R3c — le modèle d'un sigle ({@code AVIS-F}, {@code LETTRE-AOR}…), ou {@code null}. ⚠️ 2026-10-22 (« modeles-dao ») — celui qui
+     * produit : le modèle de l'application en vigueur s'il relève le sigle, sinon le fichier intégré.
+     */
     public FichierCommande.Modele modele(String sigle) {
-        return modelesDao.modele(sigle);
+        return modeleEffectif(sigle);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-dao », D1-D3) — <strong>la relève</strong> : le fichier de commande que redonne la version
+     * en vigueur du modèle rattaché au sigle ({@link ConversionDao#enModele}), sinon le fichier intégré. Le moteur du DAO rend l'un
+     * comme l'autre : toutes les couvertures, l'avis, les lettres et le DAO complet suivent. Lu à chaque production.
+     */
+    public FichierCommande.Modele modeleEffectif(String sigle) {
+        if (sigle == null) {
+            return null;
+        }
+        return modelesDocuments.getObject().modeleDao(sigle).orElseGet(() -> modelesDao.modele(sigle));
+    }
+
+    /** ⚠️ 2026-10-22 (« modeles-dao ») — les champs actifs de la fiche, par code (le contrat des jetons du moteur). */
+    public Map<String, ChampFicheMarche> champsParCode() {
+        Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
+        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
+        return parCode;
+    }
+
+    /** ⚠️ 2026-10-22 (« modeles-dao », D0) — le rendu brut d'un modèle du DAO (jetons visibles), en Word et en PDF. */
+    public List<GenerateurDocumentsFiche.Fichier> brut(String sigle, FichierCommande.Modele modele) {
+        return generateur.generer(FormulairesCandidat.brut(sigle, modele.elements()));
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-dao », D0 et aperçu) — un document du DAO rendu sur l'état validé d'une procédure, pour un lot, par le
+     * {@code modele} donné (intégré ou version d'un modèle), comme en production, <strong>sans rien enregistrer</strong> : le type de
+     * la couverture du sigle (DPAO, AE…), ou avis et lettre avec leur bloc de signature et le pied d'équivalence SIGMP.
+     */
+    public List<GenerateurDocumentsFiche.Fichier> rendreSigle(FicheMarcheDto etat, String sigle, Integer lot, FichierCommande.Modele modele) {
+        String type = ModelesDao.COUVERTURES.stream().filter(c -> c.sigle().equals(sigle)).map(ModelesDao.Couverture::typeDocument)
+                .findFirst().orElse(sigle.startsWith("LETTRE") ? TYPE_LETTRE : TYPE_AVIS);
+        boolean publication = TYPE_LETTRE.equals(type) || TYPE_AVIS.equals(type);
+        DocumentLibre doc = FormulairesCandidat.rendreModele(type, lot, etat, champsParCode(), modele, null, parametresDocuments());
+        if (publication) {
+            doc = doc.finGardeeEnsemble(BLOC_SIGNATURE_AVIS).avecPiedDePage(parametres.piedSigmp());
+        }
+        return generateur.generer(doc);
     }
 
     /**
@@ -565,7 +612,7 @@ public class DocumentsFicheMarcheService {
      * information de publication ni destinataire, pour la relecture des mentions ({@link MentionsPublication}). Rien n'est écrit.
      */
     public DocumentLibre rendrePublication(FicheMarcheDto etat, String sigle, boolean lettre) {
-        FichierCommande.Modele modele = modelesDao.modele(sigle);
+        FichierCommande.Modele modele = modeleEffectif(sigle);
         if (modele == null) {
             throw new GenerationDocumentsException("Aucun modèle " + sigle + ".", null);
         }

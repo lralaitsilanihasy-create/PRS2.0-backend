@@ -20,7 +20,7 @@ public final class ModelePvDto {
     /** Une ligne de la liste : le modèle, ses sous-types, sa version en vigueur et sa dernière version. */
     /** ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — {@code categories} : celles qu'un modèle de projet de marché sert. */
     public record Resume(Long id, String code, String libelle, String nature, String etat, List<String> sousTypes,
-            VersionCourte enVigueur, VersionCourte derniere, List<String> categories) {
+            VersionCourte enVigueur, VersionCourte derniere, List<String> categories, List<String> sigles) {
     }
 
     public record VersionCourte(Integer numero, String etat, boolean bloquant, LocalDateTime deposeeLe, LocalDateTime enVigueurLe) {
@@ -29,7 +29,7 @@ public final class ModelePvDto {
     /** La fiche d'un modèle. */
     public record Fiche(Long id, String code, String libelle, String nature, String etat, LocalDateTime creeLe, String creePar,
             LocalDateTime archiveLe, String motifArchivage, List<SousType> sousTypes, List<Version> versions, List<Evenement> historique,
-            List<String> categories) {
+            List<String> categories, List<String> sigles) {
     }
 
     public record SousType(String id, String libelle, String famille) {
@@ -42,7 +42,30 @@ public final class ModelePvDto {
      */
     public record Version(Integer numero, String nomFichier, Long taille, String empreinte, String etat, boolean bloquant,
             Rapport rapport, String motif, LocalDateTime deposeeLe, String deposeePar, LocalDateTime enVigueurLe, String enVigueurPar,
-            LocalDateTime remplaceeLe, List<Condition> conditions, List<Champ> champs, String support, JsonNode document) {
+            LocalDateTime remplaceeLe, List<Condition> conditions, List<Champ> champs, String support, JsonNode document, Juriste juriste) {
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-dao », D-ARMP) — le juriste qui a validé une version s'écartant du document type de l'ARMP : saisi par
+     * l'Administrateur à la mise en vigueur, enregistré avec la version.
+     */
+    public record Juriste(@Size(max = 150) String nom, @Size(max = 150) String qualite, java.time.LocalDate date) {
+    }
+
+    /** ⚠️ 2026-10-22 (D-ARMP) — un écart avec le document type : MODIFIE (avant / après), AJOUTE (après), RETIRE (avant). */
+    public record Ecart(String type, int rang, String avant, String apres) {
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-dao », D0) — un document intégré du DAO : son sigle, son libellé, son type, sa catégorie, les couvertures
+     * qui le choisissent, et s'il produit encore (aucun modèle de l'application en vigueur ne le relève).
+     */
+    public record IntegreDao(String sigle, String libelle, String typeDocument, List<String> categories, List<CouvertureDao> couvertures,
+            boolean enService, ModeleRattache modeleRattache) {
+    }
+
+    /** Une couverture : forme du marché ({@code null} : toutes), catégorie, mode ({@code OUVERT}, {@code RESTREINT}, {@code null}). */
+    public record CouvertureDao(String typeMarche, String categorie, String mode) {
     }
 
     /** Le rapport de contrôle (§B5) : des points {@code OK}, {@code AVERTISSEMENT} ou {@code BLOQUANT}. */
@@ -77,10 +100,11 @@ public final class ModelePvDto {
     public record DuplicationRequest(@Size(max = 50) String code, @Size(max = 255) String libelle) {
     }
 
-    public record MotifRequest(@Size(max = 1000) String motif) {
+    /** ⚠️ 2026-10-22 (D-ARMP) — {@code juriste} : exigé à la mise en vigueur d'un document du DAO qui s'écarte du document type. */
+    public record MotifRequest(@Size(max = 1000) String motif, @jakarta.validation.Valid Juriste juriste) {
     }
 
-    public record RattachementsRequest(List<String> sousTypes, List<String> categories) {
+    public record RattachementsRequest(List<String> sousTypes, List<String> categories, List<String> sigles) {
     }
 
     public record ApercuRequest(Map<String, String> saisis) {
@@ -96,7 +120,7 @@ public final class ModelePvDto {
 
     /** Le modèle de départ (« modele-pv-depart ») : {@code centrale}, {@code regionale} ou {@code les-deux} (défaut). */
     /** ⚠️ 2026-10-22 (M1) — {@code categorie} : celle du départ d'un projet de marché (à défaut, la seule rattachée). */
-    public record DepartRequest(String portee, String categorie) {
+    public record DepartRequest(String portee, String categorie, String sigle) {
     }
 
     /** Le catalogue des variables (§B3), par groupe, filtré par la famille du sous-type demandé. */

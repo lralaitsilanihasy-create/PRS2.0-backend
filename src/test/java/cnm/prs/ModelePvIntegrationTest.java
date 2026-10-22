@@ -56,6 +56,12 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired
     private cnm.prs.service.ModelePvService modelePvService;
 
+    @Autowired
+    private cnm.prs.service.DocumentsFicheMarcheService documentsFiche;
+
+    @Autowired
+    private cnm.prs.service.ModelesDao modelesDao;
+
     /** Un PV minimal en page : identification, avis par blocs, observations répétées, champ saisi, signatures. */
     private static String modelePv(String codeReference) {
         ObjectNode doc = ModelePvPageTest.document(ModelePvPageTest.paragraphe("{{COMMISSION.NOM|majuscules}}"),
@@ -920,5 +926,128 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(modelePvService.versionProjet("FOURNITURES_SERVICES")).isEmpty();
         assertThat(auditLogs.findAll()).filteredOn(a -> "RETOUR_MODELE_INTEGRE".equals(a.getTypeAction()))
                 .extracting(a -> a.getChampModifie()).containsExactly("FOURNITURES_SERVICES");
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-dao », D0-D3 et D-ARMP) — les documents du DAO : la liste des 15 intégrés, leur rendu brut ;
+     * le catalogue d'un sigle ; un modèle par sigle ; le départ = le fichier intégré (conforme, sans écart) ; un texte modifié est un écart
+     * (INFO), une mise en forme non rendue un avertissement ; la mise en vigueur exige alors le juriste ; la relève fait produire le sigle
+     * par la page (les autres sigles gardent leur fichier) ; l'archivage rend la main au fichier intégré.
+     */
+    @Test
+    void documentsDuDao() throws Exception {
+        String integres = mvc.perform(get(BASE + "/integres/dao").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(integres, "$[*].sigle")).hasSize(15).contains("DPAO-F", "AE-CC", "AVIS-T", "LETTRE-AOR");
+        assertThat(JsonPath.<List<String>>read(integres, "$[?(@.sigle=='DPAO-F')].couvertures[*].typeMarche"))
+                .containsExactly("QUANTITE_FIXE", "A_COMMANDE");
+        assertThat(JsonPath.<List<String>>read(integres, "$[?(@.sigle=='LETTRE-AOR')].couvertures[*].mode")).containsExactly("RESTREINT",
+                "RESTREINT");
+        assertThat(JsonPath.<List<String>>read(integres, "$[?(@.sigle=='AVIS-F')].libelle")).containsExactly(
+                "Avis spécifique d'appel d'offres (fournitures et services)");
+        assertThat(JsonPath.<List<Boolean>>read(integres, "$[*].enService")).containsOnly(true);
+        byte[] brut = mvc.perform(get(BASE + "/integres/dao/AVIS-F/fichier").param("format", "docx").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(brut, 0, 2, java.nio.charset.StandardCharsets.ISO_8859_1)).isEqualTo("PK");
+        mvc.perform(get(BASE + "/integres/dao/INCONNU/fichier").header("Authorization", tokenAdmin)).andExpect(status().isNotFound());
+
+        String cat = mvc.perform(get(BASE + "/variables").param("nature", "DOCUMENT_DAO").param("sigle", "AVIS-F")
+                .header("Authorization", tokenAdmin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(cat, "$.groupes[?(@.nom=='Jetons du moteur du DAO')].variables[*].code")).contains("LOT", "NUM",
+                "AVIS.date-publication", "DERIVE.date-dao");
+        assertThat(JsonPath.<List<String>>read(cat, "$.cles[*].cle")).contains("typeMarche", "alloti");
+        assertThat(JsonPath.<List<String>>read(cat, "$.formats")).contains(".lettres", ".chiffres");
+
+        String cree = mvc.perform(post(BASE).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"AVIS-F-GERE\",\"libelle\":\"Avis spécifique — fournitures\",\"nature\":\"DOCUMENT_DAO\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(cree, "$.id")).longValue();
+        String ratt = BASE + "/" + id + "/rattachements";
+        mvc.perform(post(BASE + "/" + id + "/versions/depart").header("Authorization", tokenAdmin)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SIGLE_REQUIS"));
+        mvc.perform(put(ratt).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON).content("{\"sousTypes\":[\"DAOO\"]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("RATTACHEMENT_PAR_SIGLE"));
+        mvc.perform(put(ratt).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sigles\":[\"AVIS-F\",\"AVIS-T\"]}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("UN_SEUL_SIGLE"));
+        mvc.perform(put(ratt).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON).content("{\"sigles\":[\"XX\"]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("SIGLE_INCONNU"));
+        mvc.perform(put(ratt).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON).content("{\"sigles\":[\"avis-f\"]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sigles").value(org.hamcrest.Matchers.contains("AVIS-F")));
+
+        // Le départ : le fichier intégré, conforme ; ses règles déclarées.
+        String v1 = mvc.perform(post(BASE + "/" + id + "/versions/depart").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.bloquant").value(false)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(v1, "$.conditions[*].nom")).hasSize(modelesDao.modele("AVIS-F").conditions().size());
+        assertThat(JsonPath.<List<String>>read(v1, "$.rapport.points[*].code")).contains("COMMANDE", "CONFORME_ARMP", "ESSAI")
+                .doesNotContain("MISE_EN_FORME_NON_RENDUE", "VARIABLE_INCONNUE");
+        mvc.perform(get(BASE + "/" + id + "/versions/1/ecarts").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        // Un titre modifié (écart) et un mot en gras (non rendu).
+        ObjectNode doc = (ObjectNode) new tools.jackson.databind.ObjectMapper().readTree(v1).path("document");
+        tools.jackson.databind.JsonNode titre = null;
+        for (tools.jackson.databind.JsonNode n : doc.path("corps").path("content")) {
+            if ("heading".equals(n.path("type").asString()) && n.path("attrs").path("level").asInt() == 1) {
+                titre = n;
+                break;
+            }
+        }
+        assertThat(titre).isNotNull();
+        ((ObjectNode) titre.path("content").get(0)).put("text", "Avis d’Appel d’Offres Ouvert — modèle de l’application");
+        ((ObjectNode) titre.path("content").get(0)).putArray("marks").addObject().put("type", "bold");
+        String v1b = mvc.perform(put(BASE + "/" + id + "/versions/1/document").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"document\":" + doc + "}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.bloquant").value(false)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(v1b, "$.rapport.points[?(@.niveau=='INFO')].code")).contains("ECARTS_ARMP", "ECART_ARMP");
+        assertThat(JsonPath.<List<String>>read(v1b, "$.rapport.points[?(@.niveau=='AVERTISSEMENT')].code"))
+                .contains("MISE_EN_FORME_NON_RENDUE");
+        mvc.perform(get(BASE + "/" + id + "/versions/1/ecarts").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].type").value("MODIFIE"))
+                .andExpect(jsonPath("$[0].avant").value("[TITRE] Avis d’Appel d’Offres Ouvert"))
+                .andExpect(jsonPath("$[0].apres").value("[TITRE] Avis d’Appel d’Offres Ouvert — modèle de l’application"));
+
+        // Mise en vigueur : sans juriste, refusée ; avec, enregistrée et tracée.
+        String vigueur = BASE + "/" + id + "/versions/1/mettre-en-vigueur";
+        mvc.perform(post(vigueur).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON).content("{\"motif\":\"titre\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_JURISTE_REQUISE"))
+                .andExpect(jsonPath("$.details.nbEcarts").value(1));
+        mvc.perform(post(vigueur).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON).content(
+                "{\"motif\":\"titre\",\"juriste\":{\"nom\":\"RAKOTO Lalao\",\"qualite\":\"Juriste de l'ARMP\",\"date\":\"2026-10-22\"}}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.versions[0].juriste.nom").value("RAKOTO Lalao"))
+                .andExpect(jsonPath("$.historique[0].detail").value(containsString("1 écart(s) au document type validé(s) par RAKOTO Lalao")));
+
+        // La relève : AVIS-F produit par la page ; DPAO-F garde son fichier intégré.
+        cnm.prs.service.FichierCommande.Modele effectif = documentsFiche.modeleEffectif("AVIS-F");
+        assertThat(effectif.elements()).anySatisfy(e -> assertThat(e.toString()).contains("modèle de l’application"));
+        assertThat(documentsFiche.modeleEffectif("DPAO-F")).isSameAs(modelesDao.modele("DPAO-F"));
+        mvc.perform(get(BASE + "/integres/dao").header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$[?(@.sigle=='AVIS-F')].enService").value(org.hamcrest.Matchers.contains(false)))
+                .andExpect(jsonPath("$[?(@.sigle=='AVIS-F')].modeleRattache.code").value(org.hamcrest.Matchers.contains("AVIS-F-GERE")));
+        assertThat(auditLogs.findAll()).filteredOn(a -> "RELEVE_MODELE_INTEGRE".equals(a.getTypeAction()))
+                .anySatisfy(a -> assertThat(a.getNouvelleValeur()).contains("AVIS-F (DOCUMENT_DAO) : produit désormais par AVIS-F-GERE v1 à la "
+                        + "place du fichier intégré AVIS-F"));
+
+        // Aperçus : l'exemple (rendu brut) ; ni dossier, ni procédure sans fiche validée.
+        byte[] apercu = mvc.perform(post(BASE + "/" + id + "/versions/1/apercu").param("exemple", "true").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(texte(apercu)).contains("modèle de l’application");
+        mvc.perform(post(BASE + "/" + id + "/versions/1/apercu").param("dossier", "1").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("PROCEDURE_OU_EXEMPLE"));
+        mvc.perform(post(BASE + "/" + id + "/versions/1/apercu").param("procedure", "987654").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+
+        // Un sigle, un modèle ; l'archivage rend la main au fichier intégré.
+        String autre = mvc.perform(post(BASE).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"AVIS-F-BIS\",\"libelle\":\"x\",\"nature\":\"DOCUMENT_DAO\"}")).andReturn().getResponse().getContentAsString();
+        mvc.perform(put(BASE + "/" + JsonPath.read(autre, "$.id") + "/rattachements").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"sigles\":[\"AVIS-F\"]}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SIGLE_DEJA_SERVI"));
+        mvc.perform(post(BASE + "/" + id + "/archiver").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MODELE_EN_SERVICE"));
+        mvc.perform(post(BASE + "/" + id + "/archiver").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"motif\":\"retour\"}")).andExpect(status().isOk());
+        assertThat(documentsFiche.modeleEffectif("AVIS-F")).isSameAs(modelesDao.modele("AVIS-F"));
+        assertThat(auditLogs.findAll()).filteredOn(a -> "RETOUR_MODELE_INTEGRE".equals(a.getTypeAction()))
+                .extracting(a -> a.getChampModifie()).containsExactly("AVIS-F");
     }
 }

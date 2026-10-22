@@ -93,4 +93,14 @@ public class VersionModelePv {
     @Basic(fetch = FetchType.LAZY)
     @Column(name = "DOCUMENT", columnDefinition = "text")
     private String document;
+
+    /** ⚠️ 2026-10-22 (« modeles-dao », D-ARMP ; V141) — le juriste qui a validé une version s'écartant du document type. */
+    @Column(name = "JURISTE_NOM", length = 150)
+    private String juristeNom;
+
+    @Column(name = "JURISTE_QUALITE", length = 150)
+    private String juristeQualite;
+
+    @Column(name = "JURISTE_DATE")
+    private java.time.LocalDate juristeDate;
 }

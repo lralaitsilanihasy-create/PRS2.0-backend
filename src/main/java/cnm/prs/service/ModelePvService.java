@@ -30,6 +30,7 @@ import cnm.prs.entity.ModelePv;
 import cnm.prs.entity.PvExamen;
 import cnm.prs.entity.RattachementCategorieModelePv;
 import cnm.prs.entity.RattachementModelePv;
+import cnm.prs.entity.RattachementSigleModelePv;
 import cnm.prs.entity.SousTypeDossier;
 import cnm.prs.entity.VersionModelePv;
 import cnm.prs.exception.BadRequestException;
@@ -41,6 +42,7 @@ import cnm.prs.repository.JournalModelePvRepository;
 import cnm.prs.repository.ModelePvRepository;
 import cnm.prs.repository.RattachementCategorieModelePvRepository;
 import cnm.prs.repository.RattachementModelePvRepository;
+import cnm.prs.repository.RattachementSigleModelePvRepository;
 import cnm.prs.repository.SousTypeDossierRepository;
 import cnm.prs.repository.VersionModelePvRepository;
 import cnm.prs.security.CurrentUser;
@@ -66,11 +68,17 @@ import tools.jackson.databind.ObjectMapper;
 @Transactional
 public class ModelePvService {
 
-    static final Set<String> NATURES = Set.of("PV", "LETTRE_RENVOI", "PROJET_MARCHE");
+    static final Set<String> NATURES = Set.of("PV", "LETTRE_RENVOI", "PROJET_MARCHE", "DOCUMENT_DAO");
     /** ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — les catégories auxquelles se rattache un modèle de projet de marché. */
     static final List<String> CATEGORIES = List.of("FOURNITURES_SERVICES", "TRAVAUX", "PRESTATIONS_INTELLECTUELLES");
     private static final Map<String, String> NATURES_EN_CLAIR = Map.of("PV", "un PV", "LETTRE_RENVOI", "une lettre de renvoi",
-            "PROJET_MARCHE", "un projet de marché");
+            "PROJET_MARCHE", "un projet de marché", "DOCUMENT_DAO", "un document du DAO");
+    /** ⚠️ 2026-10-22 (« modeles-dao ») — les suffixes de format d'un jeton du DAO ({@code {{B05-GS-03.lettres}}}). */
+    static final List<String> FORMATS_DAO = List.of("lettres", "chiffres", "doublet", "heure", "heureLocale", "parLot", "lignesParLot");
+    /** Les familles de jetons du moteur du DAO, rendues par l'appelant ou calculées (jamais des champs de la fiche). */
+    private static final List<String> PREFIXES_DAO = List.of("DERIVE.", "AVIS.", "LETTRE.", "PARAM.", "BESOIN.", "MOYENS.", "PIECES.");
+    private static final Map<String, String> CATEGORIES_EN_CLAIR = Map.of("FOURNITURES_SERVICES", "fournitures et services", "TRAVAUX",
+            "travaux", "PRESTATIONS_INTELLECTUELLES", "prestations intellectuelles");
     static final Set<String> TYPES_CHAMP = Set.of("TEXTE", "TEXTE_LONG", "LISTE", "CASE", "DATE", "NOMBRE", "PIECE");
     private static final Pattern NOM_CONDITION = Pattern.compile("[A-Za-z0-9_-]{1,60}");
     private static final Pattern CODE_CHAMP = Pattern.compile("[A-Za-z0-9_]{1,60}");
@@ -98,15 +106,25 @@ public class ModelePvService {
     /** ⚠️ 2026-10-22 (M1) — le projet de marché : ses valeurs et la procédure d'un aperçu réel. */
     private final ObjectProvider<ProjetMarcheService> projets;
     private final ObjectProvider<AttributionService> attributions;
+    /** ⚠️ 2026-10-22 (« modeles-dao », D0-D3) — les documents du DAO : rattachement par sigle, fichiers intégrés, moteur, fiches. */
+    private final RattachementSigleModelePvRepository sigles;
+    private final ModelesDao modelesDao;
+    private final ObjectProvider<DocumentsFicheMarcheService> documentsDao;
+    private final ObjectProvider<FicheMarcheService> fichesDao;
     /** ⚠️ 2026-10-22 (« modeles-documents-marche », W1) — les natures dont la page se remet aussi en Word (complétée par un tiers). */
-    static final Set<String> NATURES_WORD = Set.of("PROJET_MARCHE");
+    static final Set<String> NATURES_WORD = Set.of("PROJET_MARCHE", "DOCUMENT_DAO");
 
     public ModelePvService(ModelePvRepository modeles, VersionModelePvRepository versions, ConditionModelePvRepository conditions,
             ChampSaisiModelePvRepository champs, RattachementModelePvRepository rattachements, JournalModelePvRepository journal,
             SousTypeDossierRepository sousTypes, ContexteModelePvService contextes, PvDocumentGenerator convertisseur,
             ImagesModelePvService images, AuditLogService audit, ObjectMapper json, @Value("${app.modeles-pv.essai-pdf:true}") boolean essaiPdf,
             RattachementCategorieModelePvRepository categories, ObjectProvider<ProjetMarcheService> projets,
-            ObjectProvider<AttributionService> attributions) {
+            ObjectProvider<AttributionService> attributions, RattachementSigleModelePvRepository sigles, ModelesDao modelesDao,
+            ObjectProvider<DocumentsFicheMarcheService> documentsDao, ObjectProvider<FicheMarcheService> fichesDao) {
+        this.sigles = sigles;
+        this.modelesDao = modelesDao;
+        this.documentsDao = documentsDao;
+        this.fichesDao = fichesDao;
         this.categories = categories;
         this.projets = projets;
         this.attributions = attributions;
@@ -135,7 +153,7 @@ public class ModelePvService {
             VersionModelePv enVigueur = vs.stream().filter(v -> VersionModelePv.EN_VIGUEUR.equals(v.getEtat())).findFirst().orElse(null);
             out.add(new ModelePvDto.Resume(m.getIdModele(), m.getCode(), m.getLibelle(), m.getNature(), m.getEtat(),
                     rattachements.findByIdModele(m.getIdModele()).stream().map(RattachementModelePv::getIdSousType).sorted().toList(),
-                    courte(enVigueur), vs.isEmpty() ? null : courte(vs.get(0)), categoriesDe(m)));
+                    courte(enVigueur), vs.isEmpty() ? null : courte(vs.get(0)), categoriesDe(m), siglesDe(m)));
         }
         return out;
     }
@@ -173,9 +191,19 @@ public class ModelePvService {
      */
     @Transactional(readOnly = true)
     public ModelePvDto.Catalogue catalogue(String sousType, String nature) {
+        return catalogue(sousType, nature, null);
+    }
+
+    /** ⚠️ 2026-10-22 (« modeles-dao ») — {@code sigle} : le catalogue d'un document du DAO ({@code nature=DOCUMENT_DAO}). */
+    @Transactional(readOnly = true)
+    public ModelePvDto.Catalogue catalogue(String sousType, String nature, String sigle) {
         String n = nature == null || nature.isBlank() ? null : nature.trim().toUpperCase(Locale.ROOT);
         if (n != null && !NATURES.contains(n)) {
-            throw new BadRequestException("Nature inconnue : « " + nature + " » (PV, LETTRE_RENVOI, PROJET_MARCHE).", "NATURE_INCONNUE");
+            throw new BadRequestException("Nature inconnue : « " + nature + " » (PV, LETTRE_RENVOI, PROJET_MARCHE, DOCUMENT_DAO).",
+                    "NATURE_INCONNUE");
+        }
+        if ("DOCUMENT_DAO".equals(n)) {
+            return catalogueDao(sigle);
         }
         String famille = null;
         if (sousType != null && !sousType.isBlank()) {
@@ -290,6 +318,390 @@ public class ModelePvService {
         });
     }
 
+    // ───────────────────────────────────────────── documents du DAO (« modeles-dao ») ─────────────────────────────────────────────
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-dao », D1-D3) — la version qui produit le document d'un sigle à la place du fichier
+     * intégré : modèle actif rattaché au sigle, version en vigueur en page ; vide : le fichier intégré.
+     */
+    @Transactional(readOnly = true)
+    public Optional<VersionModelePv> versionDao(String sigle) {
+        if (sigle == null) {
+            return Optional.empty();
+        }
+        return sigles.findBySigleAndNature(sigle, "DOCUMENT_DAO")
+                .flatMap(r -> modeles.findById(r.getIdModele()))
+                .filter(m -> !ModelePv.ARCHIVE.equals(m.getEtat()))
+                .flatMap(m -> versions.findByIdModeleAndEtat(m.getIdModele(), VersionModelePv.EN_VIGUEUR))
+                .filter(v -> VersionModelePv.PAGE.equals(v.getSupport()));
+    }
+
+    /** ⚠️ 2026-10-22 (D1-D3) — le fichier de commande que redonne la version en vigueur du sigle, ou vide (fichier intégré). */
+    @Transactional(readOnly = true)
+    public Optional<FichierCommande.Modele> modeleDao(String sigle) {
+        return versionDao(sigle).map(v -> ConversionDao.enModele(json.readTree(v.getDocument()), declarees(v)));
+    }
+
+    private List<String> siglesDe(ModelePv m) {
+        return sigles.findByIdModele(m.getIdModele()).stream().map(RattachementSigleModelePv::getSigle).sorted().toList();
+    }
+
+    /** Le sigle d'un document du DAO (un au plus), ou {@code null}. */
+    private String sigleDe(ModelePv m) {
+        return siglesDe(m).stream().findFirst().orElse(null);
+    }
+
+    private ModelePvDto.Fiche rattacherSigle(ModelePv m, List<String> demandes) {
+        Set<String> voulus = new LinkedHashSet<>();
+        for (String s : demandes == null ? List.<String>of() : demandes) {
+            if (s != null && !s.isBlank()) {
+                voulus.add(s.trim().toUpperCase(Locale.ROOT));
+            }
+        }
+        if (voulus.size() > 1) {
+            throw new BadRequestException("Un document du DAO se rattache à un seul sigle : ses écarts se mesurent à ce fichier intégré.",
+                    "UN_SEUL_SIGLE");
+        }
+        List<String> inconnus = voulus.stream().filter(s -> modelesDao.modele(s) == null).toList();
+        if (!inconnus.isEmpty()) {
+            throw new BadRequestException("Sigle inconnu : " + String.join(", ", inconnus) + " " + modelesDao.modeles().keySet() + ".",
+                    "SIGLE_INCONNU");
+        }
+        Map<String, Object> pris = new LinkedHashMap<>();
+        for (String s : voulus) {
+            sigles.findBySigleAndNature(s, m.getNature()).filter(r -> !r.getIdModele().equals(m.getIdModele()))
+                    .ifPresent(r -> pris.put(s, modeles.findById(r.getIdModele()).map(ModelePv::getCode).orElse(String.valueOf(r.getIdModele()))));
+        }
+        if (!pris.isEmpty()) {
+            throw new BusinessRuleException("Sigle déjà servi par un autre modèle : " + pris + ". Un sigle n'a qu'un modèle à la fois : "
+                    + "détachez-le d'abord.", "SIGLE_DEJA_SERVI", null, pris);
+        }
+        Set<String> relevesAvant = releves();
+        Set<String> avant = new LinkedHashSet<>();
+        for (RattachementSigleModelePv r : sigles.findByIdModele(m.getIdModele())) {
+            avant.add(r.getSigle());
+            if (!voulus.contains(r.getSigle())) {
+                sigles.delete(r);
+            }
+        }
+        sigles.flush();
+        for (String s : voulus) {
+            if (!avant.contains(s)) {
+                RattachementSigleModelePv r = new RattachementSigleModelePv();
+                r.setSigle(s);
+                r.setNature(m.getNature());
+                r.setIdModele(m.getIdModele());
+                r.setRattacheLe(LocalDateTime.now());
+                r.setRattachePar(CurrentUser.login().orElse(null));
+                sigles.save(r);
+            }
+        }
+        sigles.flush();
+        tracer(m, null, "RATTACHEMENTS", voulus.isEmpty() ? "aucun sigle" : "sigle " + String.join(", ", voulus));
+        tracerReleve(m, relevesAvant, "rattachements");
+        return fiche(m);
+    }
+
+    /** ⚠️ 2026-10-22 (D-ARMP) — les écarts d'une version avec le fichier intégré de son sigle (aucun sans sigle). */
+    private List<ModelePvDto.Ecart> ecartsDe(ModelePv m, VersionModelePv v) {
+        String sigle = sigleDe(m);
+        FichierCommande.Modele integre = sigle == null ? null : modelesDao.modele(sigle);
+        if (integre == null || v.getDocument() == null) {
+            return List.of();
+        }
+        ConversionDao.Page reference = ConversionDao.enPage(integre);
+        Map<String, String> conditionsReference = new LinkedHashMap<>();
+        reference.conditions().forEach(c -> conditionsReference.put(c.nom(), c.expression()));
+        return EcartsDao.ecarts(ConversionDao.enCommande(reference.document(), conditionsReference),
+                ConversionDao.enCommande(json.readTree(v.getDocument()), declarees(v)));
+    }
+
+    /** ⚠️ 2026-10-22 (D-ARMP) — les écarts d'une version d'un document du DAO avec son document type, pour le panneau du contrôle. */
+    @Transactional(readOnly = true)
+    public List<ModelePvDto.Ecart> ecarts(Long id, Integer numero) {
+        ModelePv m = modele(id);
+        if (!"DOCUMENT_DAO".equals(m.getNature())) {
+            throw new BadRequestException("Les écarts au document type ne valent que pour un document du DAO.", "NATURE_SANS_ECARTS");
+        }
+        return ecartsDe(m, version(m, numero));
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (D1-D3, D-ARMP) — le contrôle d'un document du DAO : la page reconvertie en fichier de commande passe le contrôle
+     * de démarrage du moteur ({@link ModelesDao#charger} : sections déclarées et emboîtées, jetons internes) ; les jetons sont ceux du
+     * moteur ; ce qu'il ne rend pas est signalé ; les écarts avec le fichier intégré du sigle sont listés (INFO), sans bloquer.
+     */
+    private ModelePvDto.Rapport controlerDao(ModelePv m, VersionModelePv v) {
+        List<ModelePvDto.Point> pts = new ArrayList<>();
+        JsonNode doc = json.readTree(v.getDocument());
+        pts.add(point("OK", "DOCUMENT_VALIDE", "Document de la page conforme au schéma", null, null));
+        Map<String, String> decl = declarees(v);
+        FichierCommande.Modele commande = null;
+        try {
+            commande = ModelesDao.charger("version " + v.getNumero(), ConversionDao.enCommande(doc, decl));
+            pts.add(point("OK", "COMMANDE", "Fichier de commande du DAO reconstruit et accepté par le moteur", null, null));
+        } catch (RuntimeException e) {
+            pts.add(point("BLOQUANT", "COMMANDE_REFUSEE", "Le moteur du DAO refuse le document : " + e.getMessage(), null, null));
+        }
+        ConversionDao.passagesEnLigne(doc).forEach(ch -> pts.add(point("BLOQUANT", "PASSAGE_EN_LIGNE", "Un passage dans une phrase n'est "
+                + "pas rendu par le moteur du DAO (son texte serait toujours imprimé) : placez la règle sur des paragraphes entiers.", ch, null, ch)));
+        ConversionDao.nonRendus(doc).forEach((ch, raison) -> pts.add(point("AVERTISSEMENT", "MISE_EN_FORME_NON_RENDUE",
+                "Non rendu par le moteur du DAO — " + raison, ch, null, ch)));
+        ModelePvPage.Releve rel = ModelePvPage.relever(doc);
+        // Les champs du référentiel de la fiche, et ceux qu'emploient les fichiers intégrés (un jeton du document type est connu).
+        Set<String> champsFiche = new java.util.HashSet<>(documentsDao.getObject().champsParCode().keySet());
+        champsFiche.addAll(champsDesIntegres());
+        Set<String> variables = new LinkedHashSet<>();
+        Set<String> conditionsUtilisees = new LinkedHashSet<>();
+        for (ModelePvWord.Marqueur mk : rel.marqueurs()) {
+            if ("SI".equals(mk.type())) {
+                conditionsUtilisees.add(mk.code());
+            } else if ("VARIABLE".equals(mk.type())) {
+                variables.add(mk.code());
+                if (!jetonDaoConnu(mk.code(), champsFiche)) {
+                    pts.add(point("BLOQUANT", "VARIABLE_INCONNUE", "Jeton inconnu du moteur du DAO : {{" + mk.code() + "}}", mk.ou(), null,
+                            rel.chemins().get(mk)));
+                }
+            }
+        }
+        String sigle = sigleDe(m);
+        if (sigle == null) {
+            pts.add(point("AVERTISSEMENT", "SANS_SIGLE", "Rattachez le modèle à un sigle : les écarts au document type se mesurent à son "
+                    + "fichier intégré.", null, null));
+        } else {
+            List<ModelePvDto.Ecart> ecarts = ecartsDe(m, v);
+            if (ecarts.isEmpty()) {
+                pts.add(point("OK", "CONFORME_ARMP", "Conforme au document type (" + sigle + ") : aucun écart", null, null));
+            } else {
+                pts.add(point("INFO", "ECARTS_ARMP", ecarts.size() + " écart(s) avec le document type (" + sigle + ") : la mise en vigueur "
+                        + "demandera la validation du juriste", null, null));
+                for (ModelePvDto.Ecart e : ecarts) {
+                    pts.add(point("INFO", "ECART_ARMP", switch (e.type()) {
+                        case "MODIFIE" -> "Modifié — avant : « " + e.avant() + " » ; après : « " + e.apres() + " »";
+                        case "AJOUTE" -> "Ajouté : « " + e.apres() + " »";
+                        default -> "Retiré : « " + e.avant() + " »";
+                    }, "ligne " + e.rang(), null));
+                }
+            }
+        }
+        if (commande != null) {
+            try {
+                documentsDao.getObject().brut(sigle == null ? m.getCode() : sigle, commande);
+                pts.add(point("OK", "ESSAI", "Rendu d'essai du modèle (jetons non substitués) jusqu'au Word et au PDF", null, null));
+            } catch (RuntimeException e) {
+                pts.add(point("BLOQUANT", "ESSAI_ECHEC", "Le rendu d'essai a échoué : " + e.getMessage(), null, null));
+            }
+        }
+        return rapport(pts, new ArrayList<>(variables), new ArrayList<>(conditionsUtilisees), List.of());
+    }
+
+    /** Les codes de champ (sans suffixe ni lot) qu'emploient les 15 fichiers intégrés, en jetons ou dans leurs règles. */
+    private Set<String> champsDesIntegres() {
+        Set<String> out = new java.util.HashSet<>();
+        java.util.regex.Pattern code = java.util.regex.Pattern.compile("\\b(B\\d{2}-[A-Z]{2}-\\d{2})\\b");
+        for (FichierCommande.Modele mod : modelesDao.modeles().values()) {
+            StringBuilder s = new StringBuilder();
+            mod.elements().forEach(e -> s.append(e).append('\n'));
+            mod.conditions().values().forEach(x -> s.append(x).append('\n'));
+            java.util.regex.Matcher mt = code.matcher(s);
+            while (mt.find()) {
+                out.add(mt.group(1));
+            }
+        }
+        return out;
+    }
+
+    /** Un jeton du moteur du DAO : un champ de la fiche (suffixe de format admis), {@code LOT}, {@code NUM}, ou une famille connue. */
+    static boolean jetonDaoConnu(String code, Set<String> champsFiche) {
+        if ("LOT".equals(code) || "NUM".equals(code) || PREFIXES_DAO.stream().anyMatch(code::startsWith)) {
+            return true;
+        }
+        String base = code;
+        int point = code.lastIndexOf('.');
+        if (point > 0 && FORMATS_DAO.contains(code.substring(point + 1))) {
+            base = code.substring(0, point);
+        }
+        int diese = base.indexOf('#');
+        return champsFiche.contains(diese < 0 ? base : base.substring(0, diese));
+    }
+
+    /** Les catégories d'un sigle, d'après les couvertures, l'avis et les lettres. */
+    private static List<String> categoriesDuSigle(String sigle) {
+        Set<String> c = new LinkedHashSet<>();
+        ModelesDao.COUVERTURES.stream().filter(x -> x.sigle().equals(sigle)).forEach(x -> c.add(x.categorie()));
+        ModelesDao.AVIS.forEach((cat, s) -> {
+            if (s.equals(sigle)) {
+                c.add(cat);
+            }
+        });
+        ModelesDao.LETTRES.forEach((cat, s) -> {
+            if (s.equals(sigle)) {
+                c.add(cat);
+            }
+        });
+        if (ModelesDao.LETTRE_AOR.equals(sigle)) {
+            c.add("FOURNITURES_SERVICES");
+            c.add("TRAVAUX");
+        }
+        return CATEGORIES.stream().filter(c::contains).toList();
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-dao ») — le catalogue d'un document du DAO : les champs actifs de la fiche des catégories du sigle (par
+     * rubrique), les jetons du moteur ({@code LOT}, {@code NUM}, dérivés, publication, paramètres, besoin, moyens, pièces) tels que
+     * les fichiers intégrés les emploient, les suffixes de format, et les clés que leurs règles lisent.
+     */
+    private ModelePvDto.Catalogue catalogueDao(String sigle) {
+        String s = sigle == null || sigle.isBlank() ? null : sigle.trim().toUpperCase(Locale.ROOT);
+        if (s != null && modelesDao.modele(s) == null) {
+            throw new BadRequestException("Sigle inconnu : « " + sigle + " ».", "SIGLE_INCONNU");
+        }
+        List<String> cats = s == null ? CATEGORIES : categoriesDuSigle(s);
+        Map<String, List<ModelePvDto.Variable>> groupes = new LinkedHashMap<>();
+        for (cnm.prs.entity.ChampFicheMarche c : documentsDao.getObject().champsParCode().values()) {
+            if (cats.stream().anyMatch(c::pourCategorie)) {
+                groupes.computeIfAbsent("Fiche — rubrique " + c.getCodeRubrique(), k -> new ArrayList<>())
+                        .add(new ModelePvDto.Variable(c.getCode(), c.getLibelle(), "", null));
+            }
+        }
+        Set<String> jetons = new java.util.TreeSet<>();
+        Set<String> cles = new java.util.TreeSet<>();
+        Set<String> champs = documentsDao.getObject().champsParCode().keySet();
+        for (FichierCommande.Modele mod : modelesDao.modeles().values()) {
+            for (DocumentLibre.Element e : mod.elements()) {
+                String texte = e instanceof DocumentLibre.Paragraphe p ? p.texte() : e instanceof DocumentLibre.Tableau t ? t.lignes().toString() : "";
+                java.util.regex.Matcher mt = java.util.regex.Pattern.compile("\\{\\{([A-Za-z][A-Za-z0-9_.#-]*)}}").matcher(texte);
+                while (mt.find()) {
+                    String j = mt.group(1);
+                    if ("LOT".equals(j) || "NUM".equals(j) || PREFIXES_DAO.stream().anyMatch(j::startsWith)) {
+                        jetons.add(j);
+                    }
+                }
+            }
+            mod.conditions().values().forEach(expr -> cles(expr).stream().filter(k -> !champs.contains(k)).forEach(cles::add));
+        }
+        List<ModelePvDto.Variable> moteur = new ArrayList<>();
+        moteur.add(new ModelePvDto.Variable("LOT", "Numéro du lot du document", "1", null));
+        moteur.add(new ModelePvDto.Variable("NUM", "Numérotation des paragraphes imprimés (« 1. », « 2. »), en tête de paragraphe", "1.", null));
+        jetons.stream().filter(j -> !"LOT".equals(j) && !"NUM".equals(j))
+                .forEach(j -> moteur.add(new ModelePvDto.Variable(j, "Jeton du moteur du DAO (calculé, ou saisi à l'impression)", "", null)));
+        groupes.put("Jetons du moteur du DAO", moteur);
+        return new ModelePvDto.Catalogue(null, null, "DOCUMENT_DAO",
+                groupes.entrySet().stream().map(e -> new ModelePvDto.Groupe(e.getKey(), e.getValue())).toList(), List.of(),
+                cles.stream().map(k -> new ModelePvDto.Cle(k, "Clé du cadrage ou de la procédure", List.of())).toList(),
+                FORMATS_DAO.stream().map(f -> "." + f).toList(), Map.of());
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-dao », D0) — les 15 documents intégrés du DAO : sigle, libellé, type, catégories, couvertures (forme,
+     * catégorie, mode), {@code enService} (faux dès qu'un modèle de l'application en vigueur relève le sigle), modèle rattaché.
+     */
+    @Transactional(readOnly = true)
+    public List<ModelePvDto.IntegreDao> integresDao() {
+        List<ModelePvDto.IntegreDao> out = new ArrayList<>();
+        for (String sigle : modelesDao.modeles().keySet()) {
+            List<ModelePvDto.CouvertureDao> couv = new ArrayList<>();
+            String type = null;
+            for (ModelesDao.Couverture c : ModelesDao.COUVERTURES) {
+                if (c.sigle().equals(sigle)) {
+                    couv.add(new ModelePvDto.CouvertureDao(c.typeMarche(), c.categorie(), null));
+                    type = c.typeDocument();
+                }
+            }
+            ModelesDao.AVIS.forEach((cat, s) -> {
+                if (s.equals(sigle)) {
+                    couv.add(new ModelePvDto.CouvertureDao(null, cat, "OUVERT"));
+                }
+            });
+            ModelesDao.LETTRES.forEach((cat, s) -> {
+                if (s.equals(sigle)) {
+                    couv.add(new ModelePvDto.CouvertureDao(null, cat, null));
+                }
+            });
+            if (ModelesDao.LETTRE_AOR.equals(sigle)) {
+                couv.add(new ModelePvDto.CouvertureDao(null, "FOURNITURES_SERVICES", "RESTREINT"));
+                couv.add(new ModelePvDto.CouvertureDao(null, "TRAVAUX", "RESTREINT"));
+            }
+            List<String> cats = categoriesDuSigle(sigle);
+            String enClair = String.join(", ", cats.stream().map(CATEGORIES_EN_CLAIR::get).toList());
+            String libelle;
+            if (type != null) {
+                ModelePvDto.CouvertureDao premiere = couv.get(0);
+                libelle = SelectionDocumentsFiche.titre(type, null, premiere.typeMarche(), premiere.categorie()) + " (" + enClair + ")";
+            } else if (sigle.startsWith("AVIS")) {
+                type = "AVIS";
+                libelle = "Avis spécifique d'appel d'offres (" + enClair + ")";
+            } else {
+                type = "LETTRE";
+                libelle = ModelesDao.LETTRE_AOR.equals(sigle) ? "Lettre d'invitation à soumissionner (appel d'offres restreint)"
+                        : "Lettre d'invitation (" + enClair + ")";
+            }
+            ModelePvDto.ModeleRattache rattache = sigles.findBySigleAndNature(sigle, "DOCUMENT_DAO").flatMap(r -> modeles.findById(r.getIdModele()))
+                    .map(mm -> new ModelePvDto.ModeleRattache(mm.getIdModele(), mm.getCode(), versions.findByIdModeleAndEtat(mm.getIdModele(),
+                            VersionModelePv.EN_VIGUEUR).map(VersionModelePv::getNumero).orElse(null)))
+                    .orElse(null);
+            out.add(new ModelePvDto.IntegreDao(sigle, libelle, type, cats, couv, versionDao(sigle).isEmpty(), rattache));
+        }
+        return out;
+    }
+
+    /** ⚠️ 2026-10-22 (D0) — le document intégré d'un sigle, en rendu brut (jetons visibles), Word ou PDF ; 404 sigle inconnu. */
+    @Transactional(readOnly = true)
+    public byte[] integreDaoBrut(String sigle, boolean pdf) {
+        FichierCommande.Modele integre = modelesDao.modele(sigle);
+        if (integre == null) {
+            throw new ResourceNotFoundException("Document intégré du DAO inconnu : " + sigle);
+        }
+        return choisir(documentsDao.getObject().brut(sigle, integre), pdf);
+    }
+
+    /** ⚠️ 2026-10-22 (D0) — le document intégré rendu sur la fiche validée d'une procédure et un lot, sans rien enregistrer. */
+    @Transactional(readOnly = true)
+    public byte[] integreDaoApercu(String sigle, Long idDmc, Integer lot, boolean pdf) {
+        FichierCommande.Modele integre = modelesDao.modele(sigle);
+        if (integre == null) {
+            throw new ResourceNotFoundException("Document intégré du DAO inconnu : " + sigle);
+        }
+        return choisir(documentsDao.getObject().rendreSigle(etatValide(idDmc), sigle, lot, integre), pdf);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (D1-D3) — l'aperçu d'une version d'un document du DAO : sur le dossier d'exemple, le rendu brut (jetons visibles :
+     * il n'y a pas de fiche fictive) ; sur une procédure ({@code procedure=&lot=}), la fiche validée rendue comme en production. Un
+     * dossier n'est pas permis (400 {@code PROCEDURE_OU_EXEMPLE}) ; 409 {@code SANS_SIGLE} sur une procédure sans sigle rattaché.
+     */
+    private byte[] apercuDao(ModelePv m, VersionModelePv v, Integer idDossier, Long idDmc, Integer lot, boolean exemple, boolean pdf) {
+        if (exemple == (idDmc != null) || idDossier != null) {
+            throw new BadRequestException("Un document du DAO s'aperçoit sur une procédure (procedure= et lot=) ou sur l'exemple, pas sur un "
+                    + "dossier.", "PROCEDURE_OU_EXEMPLE");
+        }
+        FichierCommande.Modele modele;
+        try {
+            modele = ConversionDao.enModele(json.readTree(v.getDocument()), declarees(v));
+        } catch (RuntimeException e) {
+            throw new BusinessRuleException("La page ne se convertit pas pour le moteur du DAO : " + e.getMessage(), "APERCU_IMPOSSIBLE");
+        }
+        String sigle = sigleDe(m);
+        if (exemple) {
+            return choisir(documentsDao.getObject().brut(sigle == null ? m.getCode() : sigle, modele), pdf);
+        }
+        if (sigle == null) {
+            throw new BusinessRuleException("Rattachez le modèle à un sigle : il dit quel document de la procédure rendre.", "SANS_SIGLE");
+        }
+        return choisir(documentsDao.getObject().rendreSigle(etatValide(idDmc), sigle, lot, modele), pdf);
+    }
+
+    private cnm.prs.dto.FicheMarcheDto etatValide(Long idDmc) {
+        return fichesDao.getObject().etatValide(idDmc).map(FicheMarcheService.EtatVersion::etat)
+                .orElseThrow(() -> new ResourceNotFoundException("La procédure " + idDmc + " n'a pas de fiche validée."));
+    }
+
+    private static byte[] choisir(List<GenerateurDocumentsFiche.Fichier> fichiers, boolean pdf) {
+        String ext = pdf ? "pdf" : "docx";
+        return fichiers.stream().filter(f -> ext.equals(f.extension())).map(GenerateurDocumentsFiche.Fichier::contenu).findFirst()
+                .orElseThrow(() -> new IllegalStateException("Le rendu n'a pas produit de " + ext));
+    }
+
     /** Les couples « sous-type|nature » (et « catégorie|PROJET_MARCHE ») relevés : comparés avant et après un changement (R3). */
     private Set<String> releves() {
         Set<String> out = new java.util.TreeSet<>();
@@ -301,6 +713,11 @@ public class ModelePvService {
         for (RattachementCategorieModelePv r : categories.findAll()) {
             if (versionProjet(r.getCategorie()).isPresent()) {
                 out.add(r.getCategorie() + "|" + r.getNature());
+            }
+        }
+        for (RattachementSigleModelePv r : sigles.findAll()) {
+            if (versionDao(r.getSigle()).isPresent()) {
+                out.add(r.getSigle() + "|" + r.getNature());
             }
         }
         return out;
@@ -322,14 +739,16 @@ public class ModelePvService {
             }
             String[] p = cle.split("\\|");
             boolean projet = "PROJET_MARCHE".equals(p[1]);
-            String integre = "PV".equals(p[1]) ? "PV-PLAN-INTEGRE" : "LETTRE-RENVOI-INTEGREE";
+            boolean dao = "DOCUMENT_DAO".equals(p[1]);
+            String integre = dao ? "fichier intégré " + p[0] : "PV".equals(p[1]) ? "PV-PLAN-INTEGRE" : "LETTRE-RENVOI-INTEGREE";
             String detail = b
                     ? p[0] + " (" + p[1] + ") : produit désormais par " + m.getCode() + " v"
-                            + (projet ? versionProjet(p[0]) : versionQuiProduit(p[0], p[1]))
+                            + (projet ? versionProjet(p[0]) : dao ? versionDao(p[0]) : versionQuiProduit(p[0], p[1]))
                             .map(VersionModelePv::getNumero).map(String::valueOf).orElse("?")
-                            + (projet ? " à la place du texte du code (ProjetMarcheService)" : " à la place de " + integre)
-                    : p[0] + " (" + p[1] + ") : rendu " + (projet ? "au texte du code (ProjetMarcheService)" : "aux fichiers intégrés " + integre)
-                            + " (" + m.getCode() + ")";
+                            + (projet ? " à la place du texte du code (ProjetMarcheService)" : dao ? " à la place du " + integre
+                                    : " à la place de " + integre)
+                    : p[0] + " (" + p[1] + ") : rendu " + (projet ? "au texte du code (ProjetMarcheService)" : dao ? "au " + integre
+                            : "aux fichiers intégrés " + integre) + " (" + m.getCode() + ")";
             audit.enregistrerDetail(CurrentUser.ref().orElse(null), "modeles-pv", String.valueOf(m.getIdModele()),
                     b ? "RELEVE_MODELE_INTEGRE" : "RETOUR_MODELE_INTEGRE", p[0], detail + " — " + cause + " ; par "
                             + CurrentUser.login().orElse("?"), null);
@@ -509,7 +928,9 @@ public class ModelePvService {
             } else if (!ConditionsModele.lisible(c.expression())) {
                 erreurs.put(nom, "expression illisible : « " + c.expression() + " »");
             } else {
-                List<String> inconnues = cles(c.expression()).stream().filter(k -> !CatalogueModelesPv.cleConnue(k)).toList();
+                // ⚠️ 2026-10-22 (« modeles-dao ») — un document du DAO lit les champs et le cadrage de la fiche : le moteur les résout.
+                List<String> inconnues = "DOCUMENT_DAO".equals(m.getNature()) ? List.of()
+                        : cles(c.expression()).stream().filter(k -> !CatalogueModelesPv.cleConnue(k)).toList();
                 if (!inconnues.isEmpty()) {
                     erreurs.put(nom, "clé(s) inconnue(s) : " + String.join(", ", inconnues));
                 }
@@ -574,7 +995,30 @@ public class ModelePvService {
      * catégorie rattachée. 400 {@code CATEGORIE_INCONNUE}, {@code CATEGORIE_REQUISE}.
      */
     public ModelePvDto.Version depart(Long id, String portee, String categorie) {
+        return depart(id, portee, categorie, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-dao », D1-D3) — {@code sigle} : le départ d'un document du DAO, le fichier intégré converti en page
+     * ({@link ConversionDao#enPage}) avec ses règles ; à défaut le sigle rattaché. Il ne s'écarte pas du document type : c'est la
+     * référence des écarts. 400 {@code SIGLE_REQUIS}, {@code SIGLE_INCONNU}.
+     */
+    public ModelePvDto.Version depart(Long id, String portee, String categorie, String sigle) {
         ModelePv m = actif(id);
+        if ("DOCUMENT_DAO".equals(m.getNature())) {
+            String s = sigle == null || sigle.isBlank() ? siglesDe(m).stream().findFirst().orElse(null) : sigle.trim().toUpperCase(Locale.ROOT);
+            if (s == null) {
+                throw new BadRequestException("Précisez le sigle du départ (" + String.join(", ", modelesDao.modeles().keySet()) + ").",
+                        "SIGLE_REQUIS");
+            }
+            FichierCommande.Modele integre = modelesDao.modele(s);
+            if (integre == null) {
+                throw new BadRequestException("Sigle inconnu : « " + sigle + " ».", "SIGLE_INCONNU");
+            }
+            ConversionDao.Page page = ConversionDao.enPage(integre);
+            return enregistrerDepart(m, new ModelePvDepart.Depart(page.document(), List.of(s + ".txt (fichier intégré)"), page.conditions(),
+                    List.of()), "document du DAO " + s, "sans objet");
+        }
         if ("PROJET_MARCHE".equals(m.getNature())) {
             String c = categorie == null || categorie.isBlank() ? null : categorie.trim().toUpperCase(Locale.ROOT);
             if (c == null) {
@@ -689,6 +1133,9 @@ public class ModelePvService {
     public byte[] apercu(Long id, Integer numero, Integer idDossier, Long idDmc, Integer lot, boolean exemple, String avis, Integer idLettre,
             boolean pdf, Map<String, String> saisis) {
         ModelePv m = modele(id);
+        if ("DOCUMENT_DAO".equals(m.getNature())) {
+            return apercuDao(m, version(m, numero), idDossier, idDmc, lot, exemple, pdf);
+        }
         boolean projet = "PROJET_MARCHE".equals(m.getNature());
         if (projet && (exemple == (idDmc != null) || idDossier != null)) {
             throw new BadRequestException(exemple || idDossier != null ? "Un projet de marché s'aperçoit sur une procédure (procedure= et lot=) "
@@ -748,6 +1195,15 @@ public class ModelePvService {
 
     /** La version remplace la précédente pour les PV à venir (409 si son rapport est bloquant ; motif obligatoire). */
     public ModelePvDto.Fiche mettreEnVigueur(Long id, Integer numero, String motif) {
+        return mettreEnVigueur(id, numero, motif, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-dao », D-ARMP) — un document du DAO qui s'écarte de son document type (au moins un écart) ne se met en
+     * vigueur qu'avec la validation du juriste : nom, qualité et date (400 {@code VALIDATION_JURISTE_REQUISE}, détail
+     * {@code nbEcarts}) ; enregistrée avec la version et reprise au journal. Sans écart, elle n'est pas demandée.
+     */
+    public ModelePvDto.Fiche mettreEnVigueur(Long id, Integer numero, String motif, ModelePvDto.Juriste juriste) {
         ModelePv m = actif(id);
         VersionModelePv v = brouillon(m, numero);
         if (!VersionModelePv.PAGE.equals(v.getSupport())) {
@@ -763,6 +1219,23 @@ public class ModelePvService {
             throw new BusinessRuleException("Le rapport de contrôle de la version " + numero + " est bloquant (" + r.nbBloquants()
                     + ") : corrigez la page et enregistrez-la de nouveau.", "RAPPORT_BLOQUANT", null, Map.of("nbBloquants", r.nbBloquants()));
         }
+        String validation = "";
+        if ("DOCUMENT_DAO".equals(m.getNature())) {
+            int nbEcarts = ecartsDe(m, v).size();
+            if (nbEcarts > 0) {
+                if (juriste == null || juriste.nom() == null || juriste.nom().isBlank() || juriste.qualite() == null
+                        || juriste.qualite().isBlank() || juriste.date() == null) {
+                    throw new BadRequestException("La version " + numero + " s'écarte du document type de l'ARMP (" + nbEcarts + " écart(s)) : "
+                            + "sa mise en vigueur demande la validation du juriste (nom, qualité, date).", "VALIDATION_JURISTE_REQUISE",
+                            Map.of("nbEcarts", nbEcarts));
+                }
+                v.setJuristeNom(juriste.nom().trim());
+                v.setJuristeQualite(juriste.qualite().trim());
+                v.setJuristeDate(juriste.date());
+                validation = " ; " + nbEcarts + " écart(s) au document type validé(s) par " + v.getJuristeNom() + " (" + v.getJuristeQualite()
+                        + ") le " + juriste.date();
+            }
+        }
         Set<String> avant = releves();
         LocalDateTime maintenant = LocalDateTime.now();
         versions.findByIdModeleAndEtat(m.getIdModele(), VersionModelePv.EN_VIGUEUR).ifPresent(p -> {
@@ -775,7 +1248,7 @@ public class ModelePvService {
         v.setEnVigueurLe(maintenant);
         v.setEnVigueurPar(CurrentUser.login().orElse(null));
         versions.saveAndFlush(v);
-        tracer(m, numero, "MISE_EN_VIGUEUR", motif.trim());
+        tracer(m, numero, "MISE_EN_VIGUEUR", motif.trim() + validation);
         tracerReleve(m, avant, "mise en vigueur de la version " + numero);
         return fiche(m);
     }
@@ -795,7 +1268,28 @@ public class ModelePvService {
      * catégories).
      */
     public ModelePvDto.Fiche rattacher(Long id, List<String> demandes, List<String> categoriesVoulues) {
+        return rattacher(id, demandes, categoriesVoulues, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-dao », Q1) — un document du DAO se rattache à <strong>un sigle</strong> ({@code sigles}, un au plus) :
+     * 400 {@code RATTACHEMENT_PAR_SIGLE} (sous-types ou catégories), {@code SIGLE_INCONNU}, {@code UN_SEUL_SIGLE} ; 409
+     * {@code SIGLE_DEJA_SERVI}. Les autres natures refusent des sigles (400 {@code RATTACHEMENT_PAR_SIGLE}).
+     */
+    public ModelePvDto.Fiche rattacher(Long id, List<String> demandes, List<String> categoriesVoulues, List<String> siglesVoulus) {
         ModelePv m = actif(id);
+        boolean dao = "DOCUMENT_DAO".equals(m.getNature());
+        boolean avecSigles = siglesVoulus != null && !siglesVoulus.isEmpty();
+        if (dao && (demandes != null && !demandes.isEmpty() || categoriesVoulues != null && !categoriesVoulues.isEmpty())) {
+            throw new BadRequestException("Un document du DAO se rattache à un sigle (sigles), pas à des sous-types ni à des catégories.",
+                    "RATTACHEMENT_PAR_SIGLE");
+        }
+        if (!dao && avecSigles) {
+            throw new BadRequestException("Seul un document du DAO se rattache à un sigle.", "RATTACHEMENT_PAR_SIGLE");
+        }
+        if (dao) {
+            return rattacherSigle(m, siglesVoulus);
+        }
         boolean projet = "PROJET_MARCHE".equals(m.getNature());
         if (projet && demandes != null && !demandes.isEmpty()) {
             throw new BadRequestException("Un modèle de projet de marché se rattache à des catégories (categories), pas à des sous-types.",
@@ -862,7 +1356,12 @@ public class ModelePvService {
         ModelePv m = actif(id);
         List<RattachementModelePv> servis = rattachements.findByIdModele(m.getIdModele());
         List<RattachementCategorieModelePv> parCategorie = categories.findByIdModele(m.getIdModele());
+        List<RattachementSigleModelePv> parSigle = sigles.findByIdModele(m.getIdModele());
         boolean enVigueur = versions.findByIdModeleAndEtat(m.getIdModele(), VersionModelePv.EN_VIGUEUR).isPresent();
+        if (enVigueur && !parSigle.isEmpty() && (motif == null || motif.isBlank())) {
+            throw new BusinessRuleException("Ce modèle est en vigueur pour " + siglesDe(m) + " : le document reviendrait au fichier intégré. "
+                    + "Donnez un motif pour l'archiver quand même.", "MODELE_EN_SERVICE", null, Map.of("sigles", siglesDe(m)));
+        }
         if (enVigueur && !servis.isEmpty() && (motif == null || motif.isBlank())) {
             throw new BusinessRuleException("Ce modèle est en vigueur pour " + servis.stream().map(RattachementModelePv::getIdSousType).toList()
                     + " : ces sous-types n'auraient plus de modèle. Donnez un motif pour l'archiver quand même.", "MODELE_EN_SERVICE", null,
@@ -877,6 +1376,8 @@ public class ModelePvService {
         rattachements.flush();
         categories.deleteAll(parCategorie);
         categories.flush();
+        sigles.deleteAll(parSigle);
+        sigles.flush();
         m.setEtat(ModelePv.ARCHIVE);
         m.setArchiveLe(LocalDateTime.now());
         m.setMotifArchivage(motif == null || motif.isBlank() ? null : motif.trim());
@@ -933,6 +1434,11 @@ public class ModelePvService {
                     + " : détachez-les ou archivez le modèle.", "MODELE_NON_SUPPRIMABLE", null,
                     Map.of("raison", "SERT_DES_CATEGORIES", "categories", categoriesDe(m)));
         }
+        if (!siglesDe(m).isEmpty()) {
+            throw new BusinessRuleException("Le modèle « " + m.getCode() + " » sert encore " + siglesDe(m)
+                    + " : détachez-le ou archivez le modèle.", "MODELE_NON_SUPPRIMABLE", null,
+                    Map.of("raison", "SERT_UN_SIGLE", "sigles", siglesDe(m)));
+        }
         List<VersionModelePv> vs = versions.findByIdModeleOrderByNumeroDesc(m.getIdModele());
         for (VersionModelePv v : vs) {
             conditions.deleteByIdVersion(v.getIdVersion());
@@ -955,7 +1461,7 @@ public class ModelePvService {
         Set<String> codesChamps = new LinkedHashSet<>();
         champs.findByIdVersionOrderByOrdreAsc(v.getIdVersion()).forEach(c -> codesChamps.add(c.getCode()));
         ModelePvDto.Rapport r = VersionModelePv.PAGE.equals(v.getSupport())
-                ? controlerPage(v.getDocument(), m.getNature(), declarees(v), codesChamps)
+                ? "DOCUMENT_DAO".equals(m.getNature()) ? controlerDao(m, v) : controlerPage(v.getDocument(), m.getNature(), declarees(v), codesChamps)
                 : controler(v.getContenu(), m.getNature(), declarees(v), codesChamps);
         v.setRapport(json.writeValueAsString(r));
         v.setBloquant(r.bloquant());
@@ -1311,7 +1817,7 @@ public class ModelePvService {
                 versions.findByIdModeleOrderByNumeroDesc(m.getIdModele()).stream().map(this::dto).toList(),
                 journal.findByIdModeleOrderByLeDescIdJournalDesc(m.getIdModele()).stream()
                         .map(j -> new ModelePvDto.Evenement(j.getLe(), j.getAction(), j.getNumeroVersion(), j.getDetail(), j.getPar()))
-                        .toList(), categoriesDe(m));
+                        .toList(), categoriesDe(m), siglesDe(m));
     }
 
     /** ⚠️ 2026-10-22 (M1) — les catégories que le modèle sert, dans l'ordre de {@link #CATEGORIES}. */
@@ -1392,7 +1898,8 @@ public class ModelePvService {
                                 c.getOptions() == null || c.getOptions().isBlank() ? List.of() : List.of(c.getOptions().split("\n")),
                                 Boolean.TRUE.equals(c.getObligatoire()), c.getAide(), c.getVisibleSi()))
                         .toList(),
-                v.getSupport(), avecDocument && v.getDocument() != null ? json.readTree(v.getDocument()) : null);
+                v.getSupport(), avecDocument && v.getDocument() != null ? json.readTree(v.getDocument()) : null,
+                v.getJuristeNom() == null ? null : new ModelePvDto.Juriste(v.getJuristeNom(), v.getJuristeQualite(), v.getJuristeDate()));
     }
 
     private static ModelePvDto.VersionCourte courte(VersionModelePv v) {
