@@ -594,6 +594,169 @@ public final class ModelePvPage {
         return out;
     }
 
+    // ───────────────────────────────────────────── résolution ─────────────────────────────────────────────
+
+    /**
+     * ⚠️ 2026-10-22 (demande front « modeles-documents-marche », W1) — le document <strong>résolu</strong> : passages conditionnels
+     * évalués (une règle fausse retire son contenu ; un paragraphe qui ne portait que des passages, tous faux, disparaît), lignes
+     * répétées dépliées (une par élément de leur liste ; un tableau sans ligne disparaît), variables et champs remplacés par leur texte
+     * (marques gardées, un saut de ligne devient un retour à la ligne ; une variable inconnue s'écrit {@code {{CODE}}}). Le résultat
+     * n'a plus ni {@code bloc}, ni {@code variable}, ni {@code champ}, ni ligne {@code liste} : le XHTML (PDF) et le Word s'écrivent
+     * depuis lui, un seul calcul pour les deux.
+     */
+    public static ObjectNode resoudre(JsonNode doc, ModelePvWord.Contexte ctx, Map<String, String> conditions) {
+        Resolution r = new Resolution(ctx, nom -> {
+            String expression = conditions.get(nom);
+            return expression != null && ConditionsModele.vraie(expression, cle -> ModelePvWord.lire(ctx, cle));
+        });
+        ObjectNode out = F.objectNode();
+        for (String cle : ENVELOPPE) {
+            JsonNode v = doc.path(cle);
+            if (v.isMissingNode() || v.isNull()) {
+                continue;
+            }
+            if (ZONES.containsKey(cle) && v.isObject()) {
+                ObjectNode zone = noeud("doc");
+                zone.set("content", r.blocs(v.path("content"), null));
+                out.set(cle, zone);
+            } else {
+                out.set(cle, v.deepCopy());
+            }
+        }
+        return out;
+    }
+
+    private static final class Resolution {
+
+        private final ModelePvWord.Contexte ctx;
+        private final Predicate<String> vraie;
+
+        Resolution(ModelePvWord.Contexte ctx, Predicate<String> vraie) {
+            this.ctx = ctx;
+            this.vraie = vraie;
+        }
+
+        ArrayNode blocs(JsonNode content, Map<String, ModelePvWord.Valeur> item) {
+            ArrayNode out = F.arrayNode();
+            for (JsonNode n : content) {
+                bloc(n, out, item);
+            }
+            return out;
+        }
+
+        void bloc(JsonNode n, ArrayNode out, Map<String, ModelePvWord.Valeur> item) {
+            switch (type(n)) {
+                case "paragraph", "heading" -> {
+                    ArrayNode dedans = enLigne(n.path("content"), item);
+                    boolean queDesBlocs = n.path("content").isArray() && !n.path("content").isEmpty();
+                    for (JsonNode c : n.path("content")) {
+                        queDesBlocs &= "bloc".equals(type(c));
+                    }
+                    if (queDesBlocs && dedans.isEmpty()) {
+                        return;
+                    }
+                    out.add(copie(n, dedans));
+                }
+                case "bulletList", "orderedList" -> {
+                    ArrayNode elements = F.arrayNode();
+                    for (JsonNode li : n.path("content")) {
+                        elements.add(copie(li, blocs(li.path("content"), item)));
+                    }
+                    out.add(copie(n, elements));
+                }
+                case "table" -> {
+                    ArrayNode lignes = F.arrayNode();
+                    for (JsonNode ligne : n.path("content")) {
+                        JsonNode liste = ligne.path("attrs").path("liste");
+                        if (liste.isString()) {
+                            boolean propre = CatalogueModelesPv.liste(liste.asString()).isPresent();
+                            for (Map<String, ModelePvWord.Valeur> element : ctx.listes().getOrDefault(liste.asString(), List.of())) {
+                                lignes.add(ligne(ligne, propre ? element : item));
+                            }
+                        } else {
+                            lignes.add(ligne(ligne, item));
+                        }
+                    }
+                    if (!lignes.isEmpty()) {
+                        out.add(copie(n, lignes));
+                    }
+                }
+                case "bloc" -> {
+                    if (vraie.test(n.path("attrs").path("condition").asString(""))) {
+                        for (JsonNode c : n.path("content")) {
+                            bloc(c, out, item);
+                        }
+                    }
+                }
+                default -> out.add(n.deepCopy());
+            }
+        }
+
+        ObjectNode ligne(JsonNode ligne, Map<String, ModelePvWord.Valeur> item) {
+            ArrayNode cellules = F.arrayNode();
+            for (JsonNode c : ligne.path("content")) {
+                cellules.add(copie(c, blocs(c.path("content"), item)));
+            }
+            ObjectNode l = noeud("tableRow");
+            l.set("content", cellules);
+            return l;
+        }
+
+        ArrayNode enLigne(JsonNode content, Map<String, ModelePvWord.Valeur> item) {
+            ArrayNode out = F.arrayNode();
+            for (JsonNode n : content) {
+                JsonNode a = n.path("attrs");
+                switch (type(n)) {
+                    case "variable" -> {
+                        String code = a.path("code").asString("");
+                        String format = a.path("format").isString() ? a.path("format").asString() : null;
+                        CatalogueModelesPv.Variable v = CatalogueModelesPv.variable(code).orElse(null);
+                        String valeur = v == null ? "{{" + code + "}}"
+                                : ModelePvWord.formater(v.liste() != null ? (item == null ? null : item.get(v.code())) : ctx.variables().get(v.code()),
+                                        format);
+                        texte(out, valeur, n.path("marks"));
+                    }
+                    case "champ" -> texte(out, ctx.saisis() == null ? null : ctx.saisis().get(a.path("code").asString("")), n.path("marks"));
+                    case "bloc" -> {
+                        if (vraie.test(a.path("condition").asString(""))) {
+                            out.addAll(enLigne(n.path("content"), item));
+                        }
+                    }
+                    default -> out.add(n.deepCopy());
+                }
+            }
+            return out;
+        }
+
+        /** Un texte rempli : un nœud par ligne, un retour à la ligne entre deux ; rien pour une valeur vide. */
+        static void texte(ArrayNode out, String valeur, JsonNode marques) {
+            if (valeur == null || valeur.isEmpty()) {
+                return;
+            }
+            String[] lignes = valeur.replace("\r\n", "\n").split("\n", -1);
+            for (int i = 0; i < lignes.length; i++) {
+                if (i > 0) {
+                    out.add(noeud("hardBreak"));
+                }
+                if (!lignes[i].isEmpty()) {
+                    out.add(marquer(noeud("text").put("text", lignes[i]), marques.isArray() ? marques : null));
+                }
+            }
+        }
+
+        /** Le nœud, ses attributs (sans {@code liste}) et ses marques, avec un contenu nouveau. */
+        static ObjectNode copie(JsonNode n, ArrayNode content) {
+            ObjectNode c = noeud(type(n));
+            if (n.path("attrs").isObject()) {
+                ObjectNode a = (ObjectNode) n.path("attrs").deepCopy();
+                a.remove("liste");
+                c.set("attrs", a);
+            }
+            c.set("content", content);
+            return c;
+        }
+    }
+
     // ───────────────────────────────────────────── rendu (§B5) ─────────────────────────────────────────────
 
     /**
@@ -611,10 +774,12 @@ public final class ModelePvPage {
      */
     public static String xhtml(JsonNode doc, ModelePvWord.Contexte ctx, Map<String, String> conditions, LongFunction<Image> images,
             String mention) {
-        Rendu r = new Rendu(ctx, nom -> {
-            String expression = conditions.get(nom);
-            return expression != null && ConditionsModele.vraie(expression, cle -> ModelePvWord.lire(ctx, cle));
-        }, images);
+        return xhtmlResolu(resoudre(doc, ctx, conditions), images, mention);
+    }
+
+    /** Le XHTML de page d'un document déjà résolu ({@link #resoudre}). */
+    static String xhtmlResolu(JsonNode doc, LongFunction<Image> images, String mention) {
+        Rendu r = new Rendu(images);
         JsonNode page = doc.path("page");
         JsonNode marges = page.path("marges");
         String police = page.path("police").isString() ? page.path("police").asString() : "Times New Roman";
@@ -643,50 +808,40 @@ public final class ModelePvPage {
                 .append("</style></head><body>");
         if (pied) {
             h.append("<div id=\"pied\">");
-            r.blocs(doc.path("piedDePage"), h, null);
+            r.blocs(doc.path("piedDePage"), h);
             h.append("</div>");
         }
         if (entete) {
             h.append(premiere ? "<div>" : "<div id=\"entete\">");
-            r.blocs(doc.path("entete"), h, null);
+            r.blocs(doc.path("entete"), h);
             h.append("</div>");
         }
-        r.blocs(doc.path("corps"), h, null);
+        r.blocs(doc.path("corps"), h);
         return h.append("</body></html>").toString();
     }
 
+    /** Le XHTML d'un document résolu : il n'a plus ni bloc, ni variable, ni champ, ni ligne répétée. */
     private static final class Rendu {
 
-        private final ModelePvWord.Contexte ctx;
-        private final Predicate<String> vraie;
         private final LongFunction<Image> images;
 
-        Rendu(ModelePvWord.Contexte ctx, Predicate<String> vraie, LongFunction<Image> images) {
-            this.ctx = ctx;
-            this.vraie = vraie;
+        Rendu(LongFunction<Image> images) {
             this.images = images;
         }
 
-        void blocs(JsonNode parent, StringBuilder h, Map<String, ModelePvWord.Valeur> item) {
+        void blocs(JsonNode parent, StringBuilder h) {
             for (JsonNode n : parent.path("content")) {
-                bloc(n, h, item);
+                bloc(n, h);
             }
         }
 
-        void bloc(JsonNode n, StringBuilder h, Map<String, ModelePvWord.Valeur> item) {
+        void bloc(JsonNode n, StringBuilder h) {
             JsonNode a = n.path("attrs");
             switch (type(n)) {
                 case "paragraph", "heading" -> {
                     String balise = "heading".equals(type(n)) ? "h" + Math.max(1, Math.min(3, a.path("level").asInt(1))) : "p";
                     StringBuilder dedans = new StringBuilder();
-                    enLigne(n, dedans, item);
-                    boolean queDesBlocs = n.path("content").isArray() && !n.path("content").isEmpty();
-                    for (JsonNode c : n.path("content")) {
-                        queDesBlocs &= "bloc".equals(type(c));
-                    }
-                    if (queDesBlocs && dedans.isEmpty()) {
-                        return;
-                    }
+                    enLigne(n, dedans);
                     h.append('<').append(balise).append(styleParagraphe(a)).append('>')
                             .append(dedans.isEmpty() ? "&#160;" : dedans).append("</").append(balise).append('>');
                 }
@@ -699,12 +854,12 @@ public final class ModelePvPage {
                     h.append('>');
                     for (JsonNode li : n.path("content")) {
                         h.append("<li>");
-                        blocs(li, h, item);
+                        blocs(li, h);
                         h.append("</li>");
                     }
                     h.append("</").append(balise).append('>');
                 }
-                case "table" -> table(n, h, item);
+                case "table" -> table(n, h);
                 case "image" -> {
                     String align = a.path("alignement").asString("center");
                     h.append("<div style=\"text-align: ").append(align).append(";\">");
@@ -712,34 +867,18 @@ public final class ModelePvPage {
                     h.append("</div>");
                 }
                 case "pageBreak" -> h.append("<div style=\"page-break-before: always;\"></div>");
-                case "bloc" -> {
-                    if (vraie.test(a.path("condition").asString(""))) {
-                        blocs(n, h, item);
-                    }
-                }
                 default -> {
                     // validé : rien d'autre à cette place
                 }
             }
         }
 
-        void table(JsonNode t, StringBuilder h, Map<String, ModelePvWord.Valeur> item) {
+        void table(JsonNode t, StringBuilder h) {
             JsonNode a = t.path("attrs");
             boolean bordures = a.path("bordures").asBoolean(true);
             StringBuilder lignes = new StringBuilder();
             for (JsonNode ligne : t.path("content")) {
-                JsonNode liste = ligne.path("attrs").path("liste");
-                if (liste.isString()) {
-                    String prefixe = CatalogueModelesPv.liste(liste.asString()).map(CatalogueModelesPv.Liste::prefixe).orElse(null);
-                    for (Map<String, ModelePvWord.Valeur> element : ctx.listes().getOrDefault(liste.asString(), List.of())) {
-                        ligne(ligne, lignes, bordures, prefixe == null ? item : element);
-                    }
-                } else {
-                    ligne(ligne, lignes, bordures, item);
-                }
-            }
-            if (lignes.isEmpty()) {
-                return;
+                ligne(ligne, lignes, bordures);
             }
             h.append("<table style=\"width: ").append(fmt(a.path("largeur").asDouble(100))).append("%;");
             if (a.path("retrait").isNumber()) {
@@ -758,7 +897,7 @@ public final class ModelePvPage {
             h.append("<tbody>").append(lignes).append("</tbody></table>");
         }
 
-        void ligne(JsonNode ligne, StringBuilder h, boolean bordures, Map<String, ModelePvWord.Valeur> item) {
+        void ligne(JsonNode ligne, StringBuilder h, boolean bordures) {
             h.append("<tr>");
             for (JsonNode c : ligne.path("content")) {
                 JsonNode a = c.path("attrs");
@@ -779,36 +918,21 @@ public final class ModelePvPage {
                 }
                 String va = a.path("alignementVertical").asString("haut");
                 h.append("vertical-align: ").append("milieu".equals(va) ? "middle" : "bas".equals(va) ? "bottom" : "top").append(";\">");
-                blocs(c, h, item);
+                blocs(c, h);
                 h.append("</").append(balise).append('>');
             }
             h.append("</tr>");
         }
 
-        void enLigne(JsonNode parent, StringBuilder h, Map<String, ModelePvWord.Valeur> item) {
+        void enLigne(JsonNode parent, StringBuilder h) {
             for (JsonNode n : parent.path("content")) {
                 JsonNode a = n.path("attrs");
                 switch (type(n)) {
                     case "text" -> marque(n.path("marks"), echapper(n.path("text").asString("")), h);
                     case "hardBreak" -> h.append("<br/>");
-                    case "variable" -> {
-                        String code = a.path("code").asString("");
-                        String format = a.path("format").isString() ? a.path("format").asString() : null;
-                        CatalogueModelesPv.Variable v = CatalogueModelesPv.variable(code).orElse(null);
-                        String valeur = v == null ? "{{" + code + "}}"
-                                : ModelePvWord.formater(v.liste() != null ? (item == null ? null : item.get(v.code())) : ctx.variables().get(v.code()),
-                                        format);
-                        marque(n.path("marks"), lignes(valeur), h);
-                    }
-                    case "champ" -> marque(n.path("marks"), lignes(ctx.saisis() == null ? null : ctx.saisis().get(a.path("code").asString(""))), h);
                     case "numeroPage" -> h.append("<span class=\"np\"></span>");
                     case "nombrePages" -> h.append("<span class=\"nps\"></span>");
                     case "image" -> image(a, h);
-                    case "bloc" -> {
-                        if (vraie.test(a.path("condition").asString(""))) {
-                            enLigne(n, h, item);
-                        }
-                    }
                     default -> {
                         // validé : rien d'autre à cette place
                     }
@@ -911,10 +1035,6 @@ public final class ModelePvPage {
 
     private static String mm(JsonNode marges, String cle, double defaut) {
         return fmt(marges.path(cle).isNumber() ? marges.path(cle).doubleValue() : defaut) + "mm";
-    }
-
-    private static String lignes(String valeur) {
-        return valeur == null ? "" : echapper(valeur).replace("\r\n", "\n").replace("\n", "<br/>");
     }
 
     static String echapper(String s) {

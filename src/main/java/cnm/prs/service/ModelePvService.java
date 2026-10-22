@@ -86,6 +86,8 @@ public class ModelePvService {
     private final AuditLogService audit;
     private final ObjectMapper json;
     private final boolean essaiPdf;
+    /** ⚠️ 2026-10-22 (« modeles-documents-marche », W1) — les natures dont la page se remet aussi en Word (complétée par un tiers). */
+    static final Set<String> NATURES_WORD = Set.of("PROJET_MARCHE");
 
     public ModelePvService(ModelePvRepository modeles, VersionModelePvRepository versions, ConditionModelePvRepository conditions,
             ChampSaisiModelePvRepository champs, RattachementModelePvRepository rattachements, JournalModelePvRepository journal,
@@ -601,8 +603,9 @@ public class ModelePvService {
             throw new BadRequestException("Avis inconnu : « " + avis + " » (FAV, FAVR, DEF, NSP).", "AVIS_INCONNU");
         }
         boolean page = VersionModelePv.PAGE.equals(v.getSupport());
-        if (page && !pdf) {
-            throw new BadRequestException("Une page s'aperçoit en PDF seulement : il n'y a plus d'export Word.", "FORMAT_INDISPONIBLE");
+        if (page && !pdf && !NATURES_WORD.contains(m.getNature())) {
+            throw new BadRequestException("Une page de cette nature s'aperçoit en PDF seulement : le Word est réservé aux documents que le "
+                    + "candidat ou la PRMP complètent.", "FORMAT_INDISPONIBLE");
         }
         // ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — une lettre s'aperçoit sur une lettre du dossier (lettre=, à défaut la dernière).
         ModelePvWord.Contexte ctx;
@@ -618,8 +621,7 @@ public class ModelePvService {
         if (page) {
             // ⚠️ 2026-10-21 (« modele-pv-page », §B5) — le même rendu que l'essai du contrôle et que la production à venir (G2).
             try {
-                return exemple ? ModelePvPage.pdf(ModelePvPage.xhtml(json.readTree(v.getDocument()), ctx, declarees(v), images::pourRendu,
-                        CatalogueModelesPv.MENTION_EXEMPLE)) : rendre(v.getDocument(), ctx, declarees(v));
+                return rendre(v.getDocument(), ctx, declarees(v), pdf, exemple ? CatalogueModelesPv.MENTION_EXEMPLE : null);
             } catch (RuntimeException e) {
                 throw new BusinessRuleException("La page n'a pas pu être rendue : " + e.getMessage(), "APERCU_IMPOSSIBLE");
             }
@@ -985,8 +987,17 @@ public class ModelePvService {
 
     /** Le PDF d'une page remplie : le seul rendu, pour l'aperçu, l'essai et la production à venir (G2). */
     private byte[] rendre(String document, ModelePvWord.Contexte ctx, Map<String, String> declarees) {
-        JsonNode doc = json.readTree(document);
-        return ModelePvPage.pdf(ModelePvPage.xhtml(doc, ctx, declarees, images::pourRendu));
+        return rendre(document, ctx, declarees, true, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-22 (« modeles-documents-marche », W1) — le PDF ou le Word d'une page remplie, depuis le même document résolu ;
+     * {@code mention} sur chaque page (aperçu d'exemple), {@code null} : aucune.
+     */
+    private byte[] rendre(String document, ModelePvWord.Contexte ctx, Map<String, String> declarees, boolean pdf, String mention) {
+        JsonNode resolu = ModelePvPage.resoudre(json.readTree(document), ctx, declarees);
+        return pdf ? ModelePvPage.pdf(ModelePvPage.xhtmlResolu(resolu, images::pourRendu, mention))
+                : ModelePvDocx.docx(resolu, images::pourRendu, mention);
     }
 
     /** La production d'essai sur le dossier fictif du catalogue, jusqu'au PDF quand Word est là. */
