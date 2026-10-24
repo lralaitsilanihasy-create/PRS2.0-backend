@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.SpecificationsDto;
 import cnm.prs.entity.SpecificationsFiche;
 import cnm.prs.enums.CategorieDao;
@@ -106,7 +107,7 @@ public class SpecificationsService {
             exigerDocx(contenu);
         }
         SpecificationsFiche s = repository.save(new SpecificationsFiche(idFiche, nom(fichier.getOriginalFilename(), travaux),
-                (long) contenu.length, sha256(contenu), contenu, LocalDateTime.now(), CurrentUser.login().orElse(null)));
+                (long) contenu.length, sha256(contenu), contenu, LocalDateTime.now(HorlogeRecette.HORLOGE), CurrentUser.login().orElse(null)));
         return new SpecificationsDto(s.getNomFichier(), s.getTailleOctets(), s.getDeposeLe(), s.getDeposePar());
     }
 

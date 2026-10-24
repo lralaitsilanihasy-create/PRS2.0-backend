@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.VersionArchiveeDetailDto;
 import cnm.prs.dto.VersionArchiveeDetailDto.BeneficiaireVersion;
 import cnm.prs.dto.VersionArchiveeDetailDto.LigneVersion;
@@ -156,7 +157,7 @@ public class VersionDossierService {
         int numero = versionRepository.findFirstByIdDossierOrderByNumeroDesc(idDossier)
                 .map(v -> v.getNumero() + 1).orElse(1);
         List<Marche> marches = marcheRepository.findByIdDossier(idDossier);
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         String operateur = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
 
         VersionDossier v = new VersionDossier();

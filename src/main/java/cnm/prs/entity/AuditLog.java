@@ -1,8 +1,12 @@
 package cnm.prs.entity;
 
+import cnm.prs.config.HorlogeRecette;
+import cnm.prs.config.MentionHorlogeRecette;
+
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -19,12 +23,13 @@ import lombok.Setter;
  * Générée à partir du MLD (db_ppm110626.pgerd).
  */
 @Entity
+@EntityListeners(MentionHorlogeRecette.class)
 @Table(name = "t_audit_log")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class AuditLog {
+public class AuditLog implements MentionHorlogeRecette.Journal {
 
     @Id
     @Column(name = "ID_LOG", nullable = false)
@@ -64,4 +69,10 @@ public class AuditLog {
     @JoinColumn(name = "SESSION_ID", insertable = false, updatable = false)
     @JsonIgnore
     private SessionUtilisateur sessionutilisateur;
+
+    /** ⚠️ 2026-10-24 (« horloge-recette », R1) — sous horloge décalée, l'heure réelle au détail. */
+    @Override
+    public void mentionnerHeureReelle() {
+        nouvelleValeur = HorlogeRecette.mentionner(nouvelleValeur, 0);
+    }
 }

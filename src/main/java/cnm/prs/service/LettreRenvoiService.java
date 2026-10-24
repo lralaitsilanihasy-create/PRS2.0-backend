@@ -19,6 +19,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.LettreRenvoiDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
@@ -196,7 +197,7 @@ public class LettreRenvoiService {
         trace.setIdLettre(idLettre);
         trace.setLoginAgent(login);
         trace.setIdPrmp(idPrmpTutelle);
-        trace.setDateLecture(LocalDateTime.now());
+        trace.setDateLecture(LocalDateTime.now(HorlogeRecette.HORLOGE));
         lueRepository.save(trace);
     }
 
@@ -293,7 +294,7 @@ public class LettreRenvoiService {
         lettre.setCorpsLettre(dto.getCorpsLettre());
         lettre.setRefLettre(genererRefLettre(idExamen));
         lettre.setDateExamen(examen.getDateExamen());
-        lettre.setDateLettre(LocalDate.now());
+        lettre.setDateLettre(LocalDate.now(HorlogeRecette.HORLOGE));
         lettre.setStatut(StatutLettreRenvoi.BROUILLON.name());
         return LettreRenvoiMapper.toDto(repository.save(lettre));
     }
@@ -533,7 +534,7 @@ public class LettreRenvoiService {
         if (!PredicatsIdentite.localiteStricteAdmise(localite, maLocalite)) {
             throw new AccessDeniedException("Archivage réservé à l'Assistant contrôleur de la localité du dossier.");
         }
-        lettre.setDateArchivage(LocalDate.now());
+        lettre.setDateArchivage(LocalDate.now(HorlogeRecette.HORLOGE));
         lettre.setImArchiveur(CurrentUser.ref().orElse(null));
         return peuplerNomSignataire(LettreRenvoiMapper.toDto(repository.save(lettre)));
     }

@@ -1,9 +1,13 @@
 package cnm.prs.entity;
 
+import cnm.prs.config.HorlogeRecette;
+import cnm.prs.config.MentionHorlogeRecette;
+
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -15,12 +19,13 @@ import lombok.Setter;
 
 /** ⚠️ V69 (lot 4, §B7) — le journal de la séance ; jamais une part. */
 @Entity
+@EntityListeners(MentionHorlogeRecette.class)
 @Table(name = "t_seance_journal")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class SeanceJournal {
+public class SeanceJournal implements MentionHorlogeRecette.Journal {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -41,4 +46,10 @@ public class SeanceJournal {
 
     @Column(name = "DETAIL")
     private String detail;
+
+    /** ⚠️ 2026-10-24 (« horloge-recette », R1) — sous horloge décalée, l'heure réelle au détail. */
+    @Override
+    public void mentionnerHeureReelle() {
+        detail = HorlogeRecette.mentionner(detail, 0);
+    }
 }

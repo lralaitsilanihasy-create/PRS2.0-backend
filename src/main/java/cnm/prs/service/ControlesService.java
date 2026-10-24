@@ -15,6 +15,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ControleResultatDto;
 import cnm.prs.dto.EvaluationDto;
 import cnm.prs.dto.SeanceDto;
@@ -147,7 +148,7 @@ public class ControlesService {
         }
         Integer precedent = repository.maxNumero(d.getIdDossier());
         int numero = (precedent == null ? 0 : precedent) + 1;
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         List<ControleResultat> out = new ArrayList<>();
         for (Evalue e : evalues) {
             out.add(repository.save(new ControleResultat(null, d.getIdDossier(), numero, e.regle().reference(), null, e.regle().code(),
@@ -212,7 +213,7 @@ public class ControlesService {
                 : point != null && point.getLibelPointCtrl() != null ? point.getLibelPointCtrl() : regle;
         ControleResultat saved = repository.save(new ControleResultat(null, idDossier, precedent == null ? 1 : precedent,
                 c.reference() == null || c.reference().isBlank() ? null : c.reference().trim(), c.idPointCtrl(), regle, libelle, null, resultat,
-                Boolean.TRUE.equals(c.bloquant()), CurrentUser.ref().or(CurrentUser::login).orElse("?"), LocalDateTime.now(), observation));
+                Boolean.TRUE.equals(c.bloquant()), CurrentUser.ref().or(CurrentUser::login).orElse("?"), LocalDateTime.now(HorlogeRecette.HORLOGE), observation));
         return dto(saved);
     }
 

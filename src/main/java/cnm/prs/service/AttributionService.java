@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.AttributionDto;
 import cnm.prs.dto.EntrepriseCandidatDto;
 import cnm.prs.dto.EvaluationDto;
@@ -1033,7 +1034,7 @@ public class AttributionService {
         String sousType = SousTypesDossier.dossierMarche(plan.get("MODE"), evaluation.estPi(idDmc), sousTypeDmc);
         ValeursPpmService.EnTete enTete = valeursPpm.enTete(dmc.getIdDetail());
         Dossier dossier = saisie.creerDossierMarche(sousType, enTete.idLocalite(), enTete.idEntiteContract());
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         Attribution a = existante != null ? existante : new Attribution();
         a.setIdDmc(idDmc);
         a.setLot(lot);
@@ -1104,7 +1105,7 @@ public class AttributionService {
         p.setContenu(contenu);
         p.setFormat("PDF");
         p.setTaille((long) contenu.length);
-        p.setDateUpload(LocalDateTime.now());
+        p.setDateUpload(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setApresLettreRenvoi(false);
         p.setProduitePar(PieceJointeDossier.PAR_ATTRIBUTION);   // ⚠️ 2026-10-19 (§B3) : ni retrait ni remplacement à la main
         pieces.save(p);
@@ -1249,7 +1250,7 @@ public class AttributionService {
                 if (type.getIdTypePiece().equals(piece.getIdTypePiece())) {
                     piece.setContenu(a.getProjetPdf());
                     piece.setTaille((long) a.getProjetPdf().length);
-                    piece.setDateUpload(LocalDateTime.now());
+                    piece.setDateUpload(LocalDateTime.now(HorlogeRecette.HORLOGE));
                     pieces.save(piece);
                     remplacee = true;
                 }

@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ActionDossierDto;
 import cnm.prs.entity.ActionDossier;
 import cnm.prs.entity.Dossier;
@@ -154,7 +155,7 @@ public class JournalDossierService {
         String operateur = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         ActionDossier action = new ActionDossier();
         action.setIdDossier(idDossier);
-        action.setDateAction(LocalDateTime.now());
+        action.setDateAction(LocalDateTime.now(HorlogeRecette.HORLOGE));
         action.setTypeAction(typeAction);
         action.setIdPrmpOperateur(operateur);
         action.setNomOperateur(nomOperateur(operateur));
@@ -196,7 +197,7 @@ public class JournalDossierService {
         String im = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         ActionDossier action = new ActionDossier();
         action.setIdDossier(idDossier);
-        action.setDateAction(LocalDateTime.now());
+        action.setDateAction(LocalDateTime.now(HorlogeRecette.HORLOGE));
         action.setTypeAction(typeAction);
         action.setIdPrmpOperateur(null);
         action.setIdMandatOperateur(null);
@@ -340,7 +341,7 @@ public class JournalDossierService {
         for (ActionDossierDto e : evenements) {
             ActionDossier action = new ActionDossier();
             action.setIdDossier(idDossier);
-            action.setDateAction(e.getDateAction() == null ? LocalDateTime.now() : e.getDateAction());
+            action.setDateAction(e.getDateAction() == null ? LocalDateTime.now(HorlogeRecette.HORLOGE) : e.getDateAction());
             action.setTypeAction(e.getTypeAction());
             action.setIdPrmpOperateur(null);
             action.setIdMandatOperateur(null);

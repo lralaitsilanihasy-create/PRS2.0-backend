@@ -8,6 +8,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.VerificationDto;
 import cnm.prs.entity.AuditLog;
 import cnm.prs.entity.Controleur;
@@ -105,7 +106,7 @@ public class VerificationService {
         Verification entity = VerificationMapper.toEntity(dto);
         entity.setIdVerification(null);                    // ID auto-généré (D6)
         entity.setImCtrlVerif(verificateurAuthentifie());  // identité = JWT, jamais le corps
-        entity.setDateVerif(LocalDate.now());              // date serveur
+        entity.setDateVerif(LocalDate.now(HorlogeRecette.HORLOGE));              // date serveur
         Verification saved = repository.save(entity);
         traiterApresPassage(saved);
         return VerificationMapper.toDto(saved);
@@ -203,7 +204,7 @@ public class VerificationService {
         existing.setIdReception(dto.getIdReception());
         existing.setIdPv(dto.getIdPv());
         existing.setImCtrlVerif(verificateurAuthentifie());  // identité = JWT
-        existing.setDateVerif(LocalDate.now());              // date serveur
+        existing.setDateVerif(LocalDate.now(HorlogeRecette.HORLOGE));              // date serveur
         existing.setObservation(dto.getObservation());
         existing.setObsLevees(dto.getObsLevees());
         Verification saved = repository.save(existing);
@@ -310,7 +311,7 @@ public class VerificationService {
     private void tracerObservationNonLevee(Dossier dossier, Verification v) {
         AuditLog log = new AuditLog();
         log.setIdLog(auditLogRepository.nextIdAuditLog());   // PK serveur (sequence)
-        log.setDateAction(LocalDateTime.now());
+        log.setDateAction(LocalDateTime.now(HorlogeRecette.HORLOGE));
         log.setImActeur(v.getImCtrlVerif());
         log.setNomTable("t_verification");
         log.setIdEnregistrement(v.getIdVerification() == null ? null : String.valueOf(v.getIdVerification()));

@@ -13223,3 +13223,23 @@ optimiste. Seed, converti × 8 le 2026-09-02 : `RECEPTION 8`, `DISPATCH 8`, `EXA
 
 > **Transition** : la base ayant été réinitialisée le 01/09, **aucune reprise d'historique**. Les
 > dossiers créés après le déploiement sont chronométrés dès leur soumission ; rien n'est reconstitué.
+
+## Horloge de recette (Administrateur, recette seulement) ⚠️ 2026-10-24
+
+Demande front `demande-backend-2026-10-24-horloge-recette.md`, R1 ; ADR-0016. Sert à jouer une chaîne de recette (plan → dossier de
+marché) **aux dates de la fiche**, sans retoucher la base. Les routes n'existent qu'avec `app.recette.horloge.active=true` (variable
+`APP_RECETTE_HORLOGE`, posée par `lancer-backend-jar.cmd`) : **404** ailleurs, donc en production. **403** hors `ADMINISTRATEUR`.
+
+- `GET /api/admin/horloge-recette` → `{ maintenant, heureReelle, decalage, decalageMinutes, decalee }` (`decalage` en ISO-8601,
+  « PT792H »).
+- `PUT /api/admin/horloge-recette`, corps `{ maintenant?, avancer?, motif }` : **soit** `maintenant` (l'heure que le serveur lit
+  désormais, `2026-11-27T09:30:00`), **soit** `avancer` (une durée ISO-8601 ajoutée au décalage : `PT2H`, `P3D`, `-PT30M`) ; rend
+  l'état. **400** `MAINTENANT_OU_AVANCER` (les deux ou aucun), `DUREE_INVALIDE`, `motif` absent (validation).
+- `DELETE /api/admin/horloge-recette?motif=` → retour à l'heure réelle ; rend l'état.
+
+Effet immédiat, sans redémarrage, sur **toute** la règle du temps (dépôts, heure limite, frais, séance, signatures, échéances,
+journaux) : tout le serveur lit cette horloge. Le décalage est écrit dans `app.recette.horloge.fichier`
+(`${user.home}/prs-horloge-recette.txt`) et relu au démarrage. Chaque réglage est tracé au journal général (`HORLOGE_RECETTE`,
+champ `decalage` : ancien → nouveau, motif, auteur). Sous horloge décalée, **chaque entrée de journal** (journal général, journal du
+dossier, journaux de l'offre, du reçu, de la séance, de l'évaluation, des modèles) est datée à l'heure de recette et porte dans son
+détail `[recette — heure réelle : 24/10/2026 13:46]`.

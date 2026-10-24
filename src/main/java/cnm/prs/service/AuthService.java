@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ChangePasswordRequest;
 import cnm.prs.dto.EntiteNonListeeRequest;
 import cnm.prs.dto.LoginRequest;
@@ -305,7 +306,7 @@ public class AuthService {
         compteRepository.save(compte);
 
         // Déclarations d'entités (en attente de validation par l'Administrateur).
-        LocalDate aujourdhui = LocalDate.now();
+        LocalDate aujourdhui = LocalDate.now(HorlogeRecette.HORLOGE);
         for (Integer id : idEntites) {
             PrmpEntiteDemande d = new PrmpEntiteDemande();
             // ⚠️ LOT 3b (2026-08-26) — PK allouée à la séquence seq_prmp_entite_demande, déclaration par

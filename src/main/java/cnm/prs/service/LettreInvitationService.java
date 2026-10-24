@@ -10,6 +10,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.AvisDisponibiliteDto;
 import cnm.prs.dto.DocumentFicheDto;
 import cnm.prs.dto.FicheMarcheDto;
@@ -114,7 +115,7 @@ public class LettreInvitationService {
         FicheMarche validee = avis.derniereValidee(idDmc, true);
         FicheMarcheDto etat = fiches.lireVersion(idDmc, validee.getNumeroVersion());
         avis.exigerDaoComplet(validee, etat, dispo.idDossierSoumis());   // ⚠️ R9a (§B4 n° 2, art. 31)
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         cnm.prs.entity.Marche ligne = avis.ligne(etat);
         Integer origine = AvisSpecifiqueService.origine(ligne);
         boolean premiereImpression = avis.premiereImpression(origine);

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.PieceJointeMetaDto;
 import cnm.prs.entity.PieceJointe;
 import cnm.prs.enums.TypePieceJointe;
@@ -68,7 +69,7 @@ public class PieceJointeService {
         piece.setLibelle(fichier.getOriginalFilename());
         piece.setFormat(mime);
         piece.setTailleOctets((long) contenu.length);
-        piece.setDateDepot(LocalDateTime.now());
+        piece.setDateDepot(LocalDateTime.now(HorlogeRecette.HORLOGE));
         piece.setHashSha256(sha256Hex(contenu));
         piece.setContenu(contenu);
         return PieceJointeMapper.toDto(repository.save(piece));

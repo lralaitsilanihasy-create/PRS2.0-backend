@@ -1,9 +1,13 @@
 package cnm.prs.entity;
 
+import cnm.prs.config.HorlogeRecette;
+import cnm.prs.config.MentionHorlogeRecette;
+
 import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -15,12 +19,13 @@ import lombok.Setter;
 
 /** ⚠️ V72 — le journal des reçus de frais de dossier : {@code RECU_DEPOSE}, {@code RECU_VALIDE}, {@code RECU_REFUSE}. */
 @Entity
+@EntityListeners(MentionHorlogeRecette.class)
 @Table(name = "t_recu_journal")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class RecuJournal {
+public class RecuJournal implements MentionHorlogeRecette.Journal {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -44,4 +49,10 @@ public class RecuJournal {
 
     @Column(name = "DETAIL")
     private String detail;
+
+    /** ⚠️ 2026-10-24 (« horloge-recette », R1) — sous horloge décalée, l'heure réelle au détail. */
+    @Override
+    public void mentionnerHeureReelle() {
+        detail = HorlogeRecette.mentionner(detail, 0);
+    }
 }

@@ -10,6 +10,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.VerificationPieceDepotDto;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.TypePieceJointe;
@@ -101,7 +102,7 @@ public class VerificationPieceDepotService {
         v.setDecision(dto.getDecision());
         v.setObservation(dto.getObservation());
         v.setImSecretaire(CurrentUser.ref().orElse(null));
-        v.setDateVerif(LocalDateTime.now());
+        v.setDateVerif(LocalDateTime.now(HorlogeRecette.HORLOGE));
         return toDto(repository.save(v));
     }
 

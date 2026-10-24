@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ReceptionDto;
 import cnm.prs.entity.Reception;
 
@@ -37,7 +38,7 @@ public final class ReceptionMapper {
         String t = s.trim();
         // Date seule (« yyyy-MM-dd », 10 caractères) → compléter avec l'heure courante (le formulaire n'envoie pas l'heure).
         if (t.length() <= 10) {
-            return LocalDate.parse(t).atTime(LocalTime.now());
+            return LocalDate.parse(t).atTime(LocalTime.now(HorlogeRecette.HORLOGE));
         }
         return LocalDateTime.parse(t, FMT);
     }

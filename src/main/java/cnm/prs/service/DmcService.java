@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.DmcDto;
 import cnm.prs.dto.LigneEligibleDto;
 import cnm.prs.entity.Dossier;
@@ -221,7 +222,7 @@ public class DmcService {
         dmc.setIdDetail(idDetail);
         dmc.setIdTypeDmc(type.getIdTypeDmc());
         dmc.setStatut(StatutDmc.A_PREPARER);
-        dmc.setDateCreation(LocalDateTime.now());
+        dmc.setDateCreation(LocalDateTime.now(HorlogeRecette.HORLOGE));
         DossierMec saved = repository.save(dmc);
         saved.setTypeDmc(type);   // pour l'affichage code/libellé (association lecture seule)
         // ⚠️ 2026-09-30 (décision du pilote, demande front « Lancé à l'avis spécifique », §B1) — la création du DMC ne

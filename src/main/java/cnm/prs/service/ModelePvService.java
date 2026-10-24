@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ModelePvDto;
 import cnm.prs.entity.ChampSaisiModelePv;
 import cnm.prs.entity.ConditionModelePv;
@@ -391,7 +392,7 @@ public class ModelePvService {
                 r.setSigle(s);
                 r.setNature(m.getNature());
                 r.setIdModele(m.getIdModele());
-                r.setRattacheLe(LocalDateTime.now());
+                r.setRattacheLe(LocalDateTime.now(HorlogeRecette.HORLOGE));
                 r.setRattachePar(CurrentUser.login().orElse(null));
                 sigles.save(r);
             }
@@ -1252,7 +1253,7 @@ public class ModelePvService {
             }
         }
         Set<String> avant = releves();
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         versions.findByIdModeleAndEtat(m.getIdModele(), VersionModelePv.EN_VIGUEUR).ifPresent(p -> {
             p.setEtat(VersionModelePv.REMPLACEE);
             p.setRemplaceeLe(maintenant);
@@ -1351,7 +1352,7 @@ public class ModelePvService {
                 r.setIdSousType(s);
                 r.setNature(m.getNature());
                 r.setIdModele(m.getIdModele());
-                r.setRattacheLe(LocalDateTime.now());
+                r.setRattacheLe(LocalDateTime.now(HorlogeRecette.HORLOGE));
                 r.setRattachePar(CurrentUser.login().orElse(null));
                 rattachements.save(r);
             }
@@ -1394,7 +1395,7 @@ public class ModelePvService {
         sigles.deleteAll(parSigle);
         sigles.flush();
         m.setEtat(ModelePv.ARCHIVE);
-        m.setArchiveLe(LocalDateTime.now());
+        m.setArchiveLe(LocalDateTime.now(HorlogeRecette.HORLOGE));
         m.setMotifArchivage(motif == null || motif.isBlank() ? null : motif.trim());
         modeles.save(m);
         tracer(m, null, "ARCHIVE", (motif == null || motif.isBlank() ? "sans motif" : motif.trim())
@@ -1703,7 +1704,7 @@ public class ModelePvService {
             List<String> champsUtilises) {
         int b = (int) pts.stream().filter(p -> "BLOQUANT".equals(p.niveau())).count();
         int a = (int) pts.stream().filter(p -> "AVERTISSEMENT".equals(p.niveau())).count();
-        return new ModelePvDto.Rapport(b > 0, b, a, pts, variables, conditionsUtilisees, champsUtilises, LocalDateTime.now());
+        return new ModelePvDto.Rapport(b > 0, b, a, pts, variables, conditionsUtilisees, champsUtilises, LocalDateTime.now(HorlogeRecette.HORLOGE));
     }
 
     private static ModelePvDto.Point point(String niveau, String code, String message, String ou, String suggestion) {
@@ -1729,7 +1730,7 @@ public class ModelePvService {
         m.setLibelle(libelle.trim());
         m.setNature(nature);
         m.setEtat(ModelePv.ACTIF);
-        m.setCreeLe(LocalDateTime.now());
+        m.setCreeLe(LocalDateTime.now(HorlogeRecette.HORLOGE));
         m.setCreePar(CurrentUser.login().orElse(null));
         return modeles.save(m);
     }
@@ -1755,7 +1756,7 @@ public class ModelePvService {
         poserDocument(v, document);
         v.setEtat(VersionModelePv.BROUILLON);
         v.setBloquant(true);
-        v.setDeposeeLe(LocalDateTime.now());
+        v.setDeposeeLe(LocalDateTime.now(HorlogeRecette.HORLOGE));
         v.setDeposeePar(CurrentUser.login().orElse(null));
         return versions.saveAndFlush(v);
     }
@@ -1817,7 +1818,7 @@ public class ModelePvService {
         j.setAction(action);
         j.setDetail(detail == null || detail.length() <= 2000 ? detail : detail.substring(0, 2000));
         j.setPar(CurrentUser.login().orElse(null));
-        j.setLe(LocalDateTime.now());
+        j.setLe(LocalDateTime.now(HorlogeRecette.HORLOGE));
         journal.save(j);
     }
 
@@ -1878,7 +1879,7 @@ public class ModelePvService {
                 r.setCategorie(c);
                 r.setNature(m.getNature());
                 r.setIdModele(m.getIdModele());
-                r.setRattacheLe(LocalDateTime.now());
+                r.setRattacheLe(LocalDateTime.now(HorlogeRecette.HORLOGE));
                 r.setRattachePar(CurrentUser.login().orElse(null));
                 categories.save(r);
             }

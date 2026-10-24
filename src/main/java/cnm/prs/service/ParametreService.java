@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.entity.Parametre;
 import cnm.prs.repository.ParametreRepository;
 import cnm.prs.security.CurrentUser;
@@ -75,7 +76,7 @@ public class ParametreService {
         Parametre p = repository.findById(AGPM_SEUIL_MONTANT)
                 .orElseGet(() -> new Parametre(AGPM_SEUIL_MONTANT, null, null, null));
         p.setValeur(seuil.toPlainString());
-        p.setDateMaj(LocalDateTime.now());
+        p.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         repository.save(p);
         return seuil;
@@ -463,7 +464,7 @@ public class ParametreService {
     }
 
     private static boolean transitionSigmpTerminee(java.time.LocalDate fin) {
-        return fin != null && !java.time.LocalDate.now().isBefore(fin);
+        return fin != null && !java.time.LocalDate.now(HorlogeRecette.HORLOGE).isBefore(fin);
     }
 
     /**
@@ -537,7 +538,7 @@ public class ParametreService {
         }
         Parametre p = repository.findById(cle).orElseGet(() -> new Parametre(cle, null, null, null));
         p.setValeur(valeur.trim());
-        p.setDateMaj(LocalDateTime.now());
+        p.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         repository.save(p);
     }
@@ -555,7 +556,7 @@ public class ParametreService {
     private void ecrire(String cle, java.math.BigDecimal valeur) {
         Parametre p = repository.findById(cle).orElseGet(() -> new Parametre(cle, null, null, null));
         p.setValeur(valeur == null ? null : valeur.stripTrailingZeros().toPlainString());
-        p.setDateMaj(LocalDateTime.now());
+        p.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         repository.save(p);
     }
@@ -565,7 +566,7 @@ public class ParametreService {
         Parametre p = repository.findById(ACTUALITES_ACTIVES)
                 .orElseGet(() -> new Parametre(ACTUALITES_ACTIVES, null, null, null));
         p.setValeur(Boolean.toString(actif));
-        p.setDateMaj(LocalDateTime.now());
+        p.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         repository.save(p);
         return actif;

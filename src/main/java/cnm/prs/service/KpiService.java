@@ -8,6 +8,7 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.CompteursAdminDto;
 import cnm.prs.dto.CompteursAssistantDto;
 import cnm.prs.dto.CompteursDto;
@@ -318,10 +319,10 @@ public class KpiService {
      * </ul>
      */
     public CompteursAdminDto mesCompteursAdmin() {
-        java.time.LocalDate aujourdhui = java.time.LocalDate.now();
+        java.time.LocalDate aujourdhui = java.time.LocalDate.now(HorlogeRecette.HORLOGE);
         java.time.LocalDate premiereDeclaration =
                 prmpEntiteDemandeRepository.premiereDeclaration(StatutDemandeEntite.EN_ATTENTE.name());
-        java.time.LocalDateTime maintenant = java.time.LocalDateTime.now();
+        java.time.LocalDateTime maintenant = java.time.LocalDateTime.now(HorlogeRecette.HORLOGE);
         return new CompteursAdminDto(
                 compteAuthRepository.countByStatutAndTypeActeurIn(
                         StatutCompte.EN_ATTENTE.name(), TYPES_QUI_S_INSCRIVENT),

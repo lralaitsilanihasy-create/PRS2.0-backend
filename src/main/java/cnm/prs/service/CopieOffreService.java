@@ -10,6 +10,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.CopieOffreDto;
 import cnm.prs.entity.CopieOffre;
 import cnm.prs.entity.Offre;
@@ -99,7 +100,7 @@ public class CopieOffreService {
         c.setEnvKdf(EnveloppeChiffree.KDF);
         c.setEnvAlgorithme(EnveloppeChiffree.ALGORITHME);
         c.setVersion(corps.version());
-        c.setEnregistreeLe(LocalDateTime.now());
+        c.setEnregistreeLe(LocalDateTime.now(HorlogeRecette.HORLOGE));
         c.setEffaceeLe(null);
         copies.save(c);
         tracer(o, "COPIE_DEPOSEE", (remplacement ? "copie remplacée" : "copie déposée") + ", " + chiffre.length + " octets chiffrés");
@@ -134,7 +135,7 @@ public class CopieOffreService {
      * financières des prestations intellectuelles (séance financière) ; sinon toutes les autres (séance d'ouverture).
      */
     public void effacerALaCloture(Long idDmc, boolean financieres) {
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         Map<String, Offre> parId = new HashMap<>();
         offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).stream()
                 .filter(o -> financieres == Offre.FINANCIERE.equals(o.getEnveloppe())).forEach(o -> parId.put(o.getIdOffre(), o));
@@ -163,7 +164,7 @@ public class CopieOffreService {
                     .findFirst();
         }
         return seances.findById(o.getIdDmc()).filter(s -> Seance.CLOSE.equals(s.getEtat())).map(s -> s.getCloseLe() == null
-                ? LocalDateTime.now() : s.getCloseLe());
+                ? LocalDateTime.now(HorlogeRecette.HORLOGE) : s.getCloseLe());
     }
 
     private Offre sienne(String idCandidat, String idOffre) {
@@ -175,6 +176,6 @@ public class CopieOffreService {
     }
 
     private void tracer(Offre o, String action, String detail) {
-        journal.save(new OffreJournal(null, o.getIdOffre(), o.getIdDmc(), o.getIdCandidat(), LocalDateTime.now(), action, detail));
+        journal.save(new OffreJournal(null, o.getIdOffre(), o.getIdDmc(), o.getIdCandidat(), LocalDateTime.now(HorlogeRecette.HORLOGE), action, detail));
     }
 }

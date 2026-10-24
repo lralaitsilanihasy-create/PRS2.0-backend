@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.FicheMarcheDto;
 import cnm.prs.entity.DocumentFicheMarche;
 import cnm.prs.entity.FicheMarche;
@@ -114,7 +115,7 @@ public class DaoCompletService {
             Map<String, String> plan = plan(etat);
             DaoCompletWord.Resultat r = word.assembler(charte(etat, plan, fiche.getNumeroVersion(),
                     fiche.getDateValidation() != null ? fiche.getDateValidation() : etat.getDateValidation()), parties(etat, fiche.getIdFiche(), docs));
-            LocalDateTime maintenant = LocalDateTime.now();
+            LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
             Integer idDetail = etat.getIdDetailCourant() != null ? etat.getIdDetailCourant() : etat.getIdDetail();
             // ⚠️ 2026-10-17 (« identite-dao-importe », §B4) — la marque de l'application : la ligne, la fiche et la version, dans les
             // mots-clés des deux fichiers ; réimporté, le DAO est jugé d'emblée. Une marque impossible à poser n'empêche rien.

@@ -13,6 +13,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ObservationPvDto;
 import cnm.prs.dto.PassageObservationsRequest;
 import cnm.prs.entity.Dossier;
@@ -328,7 +329,7 @@ public class ObservationPvService {
 
         int iteration = suiviRepository.findParDossier(req.idDossier()).stream()
                 .mapToInt(SuiviObservation::getIteration).max().orElse(0) + 1;
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         List<String> rappel = new ArrayList<>();
         for (PassageObservationsRequest.ObservationDecision dec : req.decisions()) {
             SuiviObservation s = new SuiviObservation();
@@ -356,7 +357,7 @@ public class ObservationPvService {
         v.setIdReception(derniereReception(req.idDossier()));
         v.setIdPv(pv.getIdPv());
         v.setImCtrlVerif(im);
-        v.setDateVerif(LocalDate.now());
+        v.setDateVerif(LocalDate.now(HorlogeRecette.HORLOGE));
         v.setObservation(resume.length() > 500 ? resume.substring(0, 497) + "…" : resume);
         v.setObsLevees(toutesLevees);
         verificationService.enregistrerPassageAutomatique(v);

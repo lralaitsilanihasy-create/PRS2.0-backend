@@ -11,6 +11,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.AuditLogDto;
 import cnm.prs.entity.AuditLog;
 import cnm.prs.exception.BusinessRuleException;
@@ -173,7 +174,7 @@ public class AuditLogService {
             String typeAction, String champModifie, String nouvelleValeur, String ipAdresse) {
         AuditLog log = new AuditLog();
         log.setIdLog(repository.nextIdAuditLog());   // PK serveur (sequence)
-        log.setDateAction(LocalDateTime.now());
+        log.setDateAction(LocalDateTime.now(HorlogeRecette.HORLOGE));
         log.setImActeur(imActeur != null && imActeur.length() <= 10 ? imActeur : null);
         log.setNomTable(nomTable);
         log.setIdEnregistrement(idEnregistrement);

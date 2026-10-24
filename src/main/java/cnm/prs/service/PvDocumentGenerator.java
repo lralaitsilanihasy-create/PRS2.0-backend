@@ -24,6 +24,7 @@ import com.documents4j.api.DocumentType;
 import com.documents4j.api.IConverter;
 import com.documents4j.job.LocalConverter;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.exception.BusinessRuleException;
 import jakarta.annotation.PreDestroy;
 
@@ -228,7 +229,7 @@ public class PvDocumentGenerator {
         for (String graphie : CHEF_LIEU_GRAPHIES) {
             m.put(graphie, lieu);
         }
-        m.put(DATE_AUJOURDHUI, fmt(LocalDate.now()));
+        m.put(DATE_AUJOURDHUI, fmt(LocalDate.now(HorlogeRecette.HORLOGE)));
         return m;
     }
 

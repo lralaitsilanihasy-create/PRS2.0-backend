@@ -7,6 +7,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.TransmissionSigmpDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
@@ -150,7 +151,7 @@ public class TransmissionSigmpService {
         t.setIdPv(pv.getIdPv());
         t.setSens(sens);
         t.setLeveeObservations(levee);
-        t.setDateTransmission(LocalDateTime.now());
+        t.setDateTransmission(LocalDateTime.now(HorlogeRecette.HORLOGE));
         t.setImVerificateur(CurrentUser.ref().orElse(null));
         t.setStatutEnvoi(ENVOI_ENREGISTREE);
         TransmissionSigmp saved = repository.save(t);

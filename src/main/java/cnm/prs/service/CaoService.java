@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.CaoDto;
 import cnm.prs.dto.ProcedureEnLigneDto;
 import cnm.prs.entity.Cao;
@@ -218,7 +219,7 @@ public class CaoService {
         });
         cao.setDecisionReference(c.decision().reference().trim());
         cao.setDecisionDate(c.decision().date());
-        cao.setDateMaj(LocalDateTime.now());
+        cao.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         cao.setIdPrmpMaj(CurrentUser.ref().orElse(null));
         caoRepository.save(cao);
 
@@ -315,7 +316,7 @@ public class CaoService {
         cao.setDecisionFichier(octets);
         cao.setDecisionTaille((long) octets.length);
         cao.setDecisionNomFichier(fichier.getOriginalFilename() == null ? "decision.pdf" : fichier.getOriginalFilename());
-        cao.setDateMaj(LocalDateTime.now());
+        cao.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         cao.setIdPrmpMaj(CurrentUser.ref().orElse(null));
         caoRepository.save(cao);
         return dto(idDmc);

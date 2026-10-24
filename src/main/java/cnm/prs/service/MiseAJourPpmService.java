@@ -18,6 +18,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.DiffDossierDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.EditionPpmRequest;
@@ -274,7 +275,7 @@ public class MiseAJourPpmService {
         ppm.setNumMajPrec(numPrecedent);
         ppm.setDateMajPrec(source.getDateMaj());
         ppm.setNumMaj(numPrecedent + 1);
-        ppm.setDateMaj(LocalDate.now());
+        ppm.setDateMaj(LocalDate.now(HorlogeRecette.HORLOGE));
         ppm.setMotifMaj(motif);
         return ppmRepository.save(ppm);
     }
@@ -460,7 +461,7 @@ public class MiseAJourPpmService {
         p.setContenu(contenu);
         p.setFormat("pdf");
         p.setTaille((long) contenu.length);
-        p.setDateUpload(LocalDateTime.now());
+        p.setDateUpload(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setApresLettreRenvoi(Boolean.FALSE);
         p.setVersionCorrigee(Boolean.FALSE);
         pieceJointeDossierRepository.save(p);
@@ -843,7 +844,7 @@ public class MiseAJourPpmService {
         if (resultat.isEmpty() && !effectifs.isEmpty()) {
             // Le document ne porte aucune étape exploitable : on pose la PREMIÈRE du processus à la date
             // de l'exercice, faute de quoi la ligne serait refusée. La PRMP ajustera les dates au détail.
-            resultat.add(new ProcessusMarche(effectifs.get(0).getIdCapm(), LocalDate.now(), null));
+            resultat.add(new ProcessusMarche(effectifs.get(0).getIdCapm(), LocalDate.now(HorlogeRecette.HORLOGE), null));
         }
         return resultat;
     }

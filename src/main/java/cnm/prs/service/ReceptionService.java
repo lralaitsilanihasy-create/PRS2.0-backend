@@ -7,6 +7,7 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ReceptionDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
@@ -226,7 +227,7 @@ public class ReceptionService {
     private int exerciceDuDossier(Integer idDossier) {
         return ppmRepository.findByIdDossier(idDossier).stream()
                 .map(Ppm::getExercice).filter(Objects::nonNull)
-                .findFirst().orElse(LocalDate.now().getYear());
+                .findFirst().orElse(LocalDate.now(HorlogeRecette.HORLOGE).getYear());
     }
 
     /**

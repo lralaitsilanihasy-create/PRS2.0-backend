@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.entity.Anomalie;
 import cnm.prs.entity.AnomalieLigne;
 import cnm.prs.entity.Capm;
@@ -265,7 +266,7 @@ public class PreControlePpmService {
         if (ppm.getExercice() != null) {
             return LocalDate.of(ppm.getExercice(), 1, 1);
         }
-        return LocalDate.now();
+        return LocalDate.now(HorlogeRecette.HORLOGE);
     }
 
     // ------------------------------------------------------------------ 2. exécuter
@@ -322,7 +323,7 @@ public class PreControlePpmService {
                         LinkedHashMap::new));
         Map<String, Integer> idsRegles = new HashMap<>();
         Map<TypeSignalement.PointDeGrille, Integer> pointsDeGrille = pointsDeGrille();
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
 
         int nouveaux = 0;
         int retrouves = 0;

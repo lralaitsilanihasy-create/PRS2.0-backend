@@ -7,6 +7,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.AbrogerMandatRequest;
 import cnm.prs.dto.CreerMandatRequest;
 import cnm.prs.dto.MandatDto;
@@ -108,7 +109,7 @@ public class MandatService {
         if (cible == null) {
             return Optional.empty();
         }
-        return mandatActifDto(cible, LocalDate.now());
+        return mandatActifDto(cible, LocalDate.now(HorlogeRecette.HORLOGE));
     }
 
     /**
@@ -137,7 +138,7 @@ public class MandatService {
      * si la PRMP n'a pas de mandat déclaré (mandat implicite : pas de ligne à référencer).
      */
     public Integer idMandatCourant(String idPrmp) {
-        return mandatEnVigueur(idPrmp, LocalDate.now()).map(Mandat::getIdMandat).orElse(null);
+        return mandatEnVigueur(idPrmp, LocalDate.now(HorlogeRecette.HORLOGE)).map(Mandat::getIdMandat).orElse(null);
     }
 
     // ------------------------------------------------------------------ garde de vacance
@@ -152,7 +153,7 @@ public class MandatService {
         if (idPrmp == null || idPrmp.isBlank()) {
             return;   // acteur hors périmètre PRMP : la garde de vacance ne le concerne pas
         }
-        if (mandatActifDto(idPrmp, LocalDate.now()).isEmpty()) {
+        if (mandatActifDto(idPrmp, LocalDate.now(HorlogeRecette.HORLOGE)).isEmpty()) {
             throw new VacancePrmpException();
         }
     }
@@ -160,7 +161,7 @@ public class MandatService {
     /** Vrai si la PRMP est en fonction aujourd'hui (lecture non bloquante, pour exposer un état). */
     public boolean estEnFonction(String idPrmp) {
         return idPrmp != null && !idPrmp.isBlank()
-                && mandatActifDto(idPrmp, LocalDate.now()).isPresent();
+                && mandatActifDto(idPrmp, LocalDate.now(HorlogeRecette.HORLOGE)).isPresent();
     }
 
     // ------------------------------------------------------------------ écriture
@@ -217,7 +218,7 @@ public class MandatService {
         mandat.setDateFin(fin);
         mandat.setRefArrete(refArrete);
         mandat.setNumeroMandat(numero);
-        mandat.setStatut(statutEffectif(mandat, LocalDate.now()).name());
+        mandat.setStatut(statutEffectif(mandat, LocalDate.now(HorlogeRecette.HORLOGE)).name());
         Mandat enregistre = repository.save(mandat);
         reactiverComptesDeLaPrmp(prmp.getIdPrmp(), enregistre);
         return versDto(enregistre);
@@ -244,7 +245,7 @@ public class MandatService {
      * été expiré, la date de fin de mandat faisant autorité étant celle du dernier mandat déclaré.</p>
      */
     private void reactiverComptesDeLaPrmp(String idPrmp, Mandat mandat) {
-        if (statutEffectif(mandat, LocalDate.now()) != StatutMandat.ACTIF) {
+        if (statutEffectif(mandat, LocalDate.now(HorlogeRecette.HORLOGE)) != StatutMandat.ACTIF) {
             return;
         }
         for (CompteAuth compte : compteAuthRepository.findByRefActeurAndTypeActeur(
@@ -269,7 +270,7 @@ public class MandatService {
         if (mandat.getDateAbrogation() != null) {
             throw new BusinessRuleException("Mandat déjà abrogé le " + mandat.getDateAbrogation() + ".");
         }
-        LocalDate date = req.dateAbrogation() != null ? req.dateAbrogation() : LocalDate.now();
+        LocalDate date = req.dateAbrogation() != null ? req.dateAbrogation() : LocalDate.now(HorlogeRecette.HORLOGE);
         if (date.isBefore(mandat.getDateDebut()) || date.isAfter(mandat.getDateFin())) {
             throw new BusinessRuleException("Date d'abrogation hors de la période du mandat ("
                     + mandat.getDateDebut() + " → " + mandat.getDateFin() + ").");
@@ -327,7 +328,7 @@ public class MandatService {
                     virtuel.setDateFin(finParDefaut(p.getDateNomin()));
                     virtuel.setRefArrete(p.getArreteNomin());
                     virtuel.setNumeroMandat(1);
-                    MandatDto dto = MandatMapper.toDto(virtuel, statutEffectif(virtuel, LocalDate.now()).name());
+                    MandatDto dto = MandatMapper.toDto(virtuel, statutEffectif(virtuel, LocalDate.now(HorlogeRecette.HORLOGE)).name());
                     dto.setImplicite(true);
                     return dto;
                 });
@@ -394,7 +395,7 @@ public class MandatService {
     }
 
     private MandatDto versDto(Mandat mandat) {
-        return MandatMapper.toDto(mandat, statutEffectif(mandat, LocalDate.now()).name());
+        return MandatMapper.toDto(mandat, statutEffectif(mandat, LocalDate.now(HorlogeRecette.HORLOGE)).name());
     }
 
     private String nomComplet(Prmp prmp) {

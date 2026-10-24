@@ -9,6 +9,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.DocumentPublicDto;
 import cnm.prs.dto.VerificationIntegriteResult;
 import cnm.prs.entity.DocumentPublic;
@@ -80,7 +81,7 @@ public class DocumentPublicService {
         doc.setHashSha256(sha256Hex(contenu));
         doc.setTailleOctets((long) contenu.length);
         if (doc.getDateDepot() == null) {
-            doc.setDateDepot(LocalDateTime.now());
+            doc.setDateDepot(LocalDateTime.now(HorlogeRecette.HORLOGE));
         }
         return DocumentPublicMapper.toDto(repository.save(doc));
     }

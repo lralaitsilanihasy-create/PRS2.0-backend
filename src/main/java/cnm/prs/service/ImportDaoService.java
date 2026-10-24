@@ -30,6 +30,7 @@ import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.FicheMarcheDto;
 import cnm.prs.dto.ImportDaoResult;
 import cnm.prs.entity.ChampFicheMarche;
@@ -122,7 +123,7 @@ public class ImportDaoService {
         r.divergences().forEach(d -> divergences.add(d.code()));
         ImportDaoResult.Identite verdict = identite.juger(fiche, nomFichier, contenu, new IdentiteDao.Texte(origines, texte.pages()), divergences);
         identite.enregistrer(idDmc, r.empreinte(), verdict);
-        String perime = perime(r.propositions(), fiche.getValeursPpm(), java.time.LocalDateTime.now());
+        String perime = perime(r.propositions(), fiche.getValeursPpm(), java.time.LocalDateTime.now(HorlogeRecette.HORLOGE));
         if (perime != null) {
             avertissements.add(0, perime);
         }

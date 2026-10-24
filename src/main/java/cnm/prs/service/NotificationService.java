@@ -9,6 +9,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.NotificationDto;
 import cnm.prs.entity.Notification;
 import cnm.prs.entity.Prmp;
@@ -212,7 +213,7 @@ public class NotificationService {
         n.setTypeObjet(typeObjet);
         n.setTitre(titre);
         n.setCorps(corps);
-        n.setDateEnvoi(LocalDateTime.now());
+        n.setDateEnvoi(LocalDateTime.now(HorlogeRecette.HORLOGE));
         n.setLu(false);
         n.setCanal("SYSTEME");
         Notification saved = repository.save(n);
@@ -292,7 +293,7 @@ public class NotificationService {
             throw new AccessDeniedException("Cette notification ne vous appartient pas.");
         }
         n.setLu(true);
-        n.setDateLecture(LocalDateTime.now());
+        n.setDateLecture(LocalDateTime.now(HorlogeRecette.HORLOGE));
         NotificationDto dto = NotificationMapper.toDto(repository.save(n));
         pousserMajPourMoi(); // synchronisation entre onglets (badge recalculé partout)
         return dto;
@@ -319,7 +320,7 @@ public class NotificationService {
     public int marquerToutLu() {
         List<Notification> nonLues = mesNotifications().stream()
                 .filter(n -> !Boolean.TRUE.equals(n.getLu())).toList();
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         for (Notification n : nonLues) {
             n.setLu(true);
             n.setDateLecture(maintenant);

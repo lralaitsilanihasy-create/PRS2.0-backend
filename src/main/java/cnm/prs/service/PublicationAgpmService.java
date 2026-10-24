@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.PublicationAgpmDto;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.DossierMec;
@@ -142,7 +143,7 @@ public class PublicationAgpmService {
         } else {
             try {
                 d = LocalDate.parse(dateParution.trim());
-                if (d.isAfter(LocalDate.now())) {
+                if (d.isAfter(LocalDate.now(HorlogeRecette.HORLOGE))) {
                     erreurs.add(new ErrorResponse.FieldError("dateParution", "La date de parution n'est pas dans le futur."));
                 }
             } catch (DateTimeParseException e) {
@@ -152,7 +153,7 @@ public class PublicationAgpmService {
         if (!erreurs.isEmpty()) {
             throw new ChampsInvalidesException(erreurs);
         }
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         List<Long> fiches = avisAImprimer.getObject().dmcsDeLaPrmp(plan.getIdPrmp());
         java.util.Set<Long> avant = avisAImprimer.getObject().disponibles(fiches);
         publications.findFirstByIdDossierAndRemplaceeLeIsNull(idDossier).ifPresent(p -> {
@@ -268,7 +269,7 @@ public class PublicationAgpmService {
         piece.setContenu(p.getContenu());
         piece.setFormat("PDF");
         piece.setTaille(p.getTaille());
-        piece.setDateUpload(LocalDateTime.now());
+        piece.setDateUpload(LocalDateTime.now(HorlogeRecette.HORLOGE));
         piece.setApresLettreRenvoi(false);
         pieces.save(piece);
         journal.tracer(d.getIdDossier(), "PUBLICATION_AGPM_REPRISE", "Publication de l'AGPM reprise d'office du plan " + p.getIdDossier()

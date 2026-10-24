@@ -14,6 +14,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.CompteDesignableDto;
 import cnm.prs.dto.ParametresInternesDto;
 import cnm.prs.dto.ParametresInternesRequest;
@@ -346,7 +347,7 @@ public class ParametresInternesService {
         p.setDepositaireEmail(depositaire == null ? null : depositaire.email());
         p.setDepositaireTelephone(depositaire == null ? null : depositaire.telephone());
         p.setIdCompteDepositaire(compte == null ? null : compte.getIdCompte());
-        p.setDateMaj(LocalDateTime.now());
+        p.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setImMaj(CurrentUser.ref().orElse(null));
         internesRepository.save(p);
         if (compte != null && !compte.getIdCompte().equals(avantCompte)) {
@@ -536,7 +537,7 @@ public class ParametresInternesService {
         r.setImResponsable(m);
         r.setNomResponsable(ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont()));
         r.setDesignePar(CurrentUser.ref().orElse(null));
-        r.setDateDesignation(LocalDateTime.now());
+        r.setDateDesignation(LocalDateTime.now(HorlogeRecette.HORLOGE));
         responsableRepository.save(r);
         journaliser(idDmc, CHAMP_RESPONSABLE, null, m);
         return new ResponsableProcedureDto(r.getImResponsable(), r.getNomResponsable());
@@ -548,7 +549,7 @@ public class ParametresInternesService {
         ResponsableProcedure r = responsable(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("Aucun responsable de la procédure n'est désigné pour le DMC " + idDmc + "."));
         r.setRetirePar(CurrentUser.ref().orElse(null));
-        r.setDateRetrait(LocalDateTime.now());
+        r.setDateRetrait(LocalDateTime.now(HorlogeRecette.HORLOGE));
         responsableRepository.save(r);
         journaliser(idDmc, CHAMP_RESPONSABLE, r.getImResponsable(), null);
     }
@@ -735,7 +736,7 @@ public class ParametresInternesService {
         String login = CurrentUser.login().orElse(null);
         ParametreInterneJournal j = new ParametreInterneJournal();
         j.setIdDmc(idDmc);
-        j.setDate(LocalDateTime.now());
+        j.setDate(LocalDateTime.now(HorlogeRecette.HORLOGE));
         // ⚠️ Arbitrages du pilote (§B4.1) : le « ref » d'une UGPM est celui de sa PRMP de tutelle — l'acteur réel est nommé par son login.
         boolean ugpm = CurrentUser.profil().filter(p -> p == cnm.prs.enums.ProfilUtilisateur.UGPM).isPresent();
         j.setImActeur(!ugpm && acteur != null && acteur.length() <= 10 ? acteur : null);

@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ActualiteDto;
 import cnm.prs.dto.ActualiteImageDto;
 import cnm.prs.entity.Actualite;
@@ -93,7 +94,7 @@ public class ActualiteService {
         if (profil == null) {
             return List.of();
         }
-        List<Actualite> visibles = repository.visiblesPourProfil(profil.name(), LocalDate.now());
+        List<Actualite> visibles = repository.visiblesPourProfil(profil.name(), LocalDate.now(HorlogeRecette.HORLOGE));
         visibles.sort(Comparator
                 .comparing((Actualite a) -> a.getDatePublication() != null
                         ? a.getDatePublication() : a.getDateCreation().toLocalDate())
@@ -131,7 +132,7 @@ public class ActualiteService {
         entity.setStatut(StatutActualite.INACTIF.name());
         entity.setDatePublication(dto.getDatePublication());
         entity.setDateExpiration(dto.getDateExpiration());
-        entity.setDateCreation(LocalDateTime.now());
+        entity.setDateCreation(LocalDateTime.now(HorlogeRecette.HORLOGE));
         entity.setImAuteur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         Actualite saved = repository.save(entity);
         for (String p : profils) {
@@ -179,7 +180,7 @@ public class ActualiteService {
             throw new BusinessRuleException("Actualité déjà archivée.");
         }
         entity.setStatut(StatutActualite.ARCHIVE.name());
-        entity.setDateArchivage(LocalDateTime.now());
+        entity.setDateArchivage(LocalDateTime.now(HorlogeRecette.HORLOGE));
         entity.setImArchiveur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         repository.save(entity);
     }
@@ -225,7 +226,7 @@ public class ActualiteService {
         image.setTailleOctets((long) contenu.length);
         image.setSha256(sha256Hex(contenu));
         image.setOrdre(ordre);
-        image.setDateDepot(LocalDateTime.now());
+        image.setDateDepot(LocalDateTime.now(HorlogeRecette.HORLOGE));
         image.setContenu(contenu);
         ActualiteImage saved = imageRepository.save(image);
         return new ActualiteImageDto(saved.getIdImage(), saved.getNomFichier(), saved.getTailleOctets(), saved.getOrdre());
@@ -253,7 +254,7 @@ public class ActualiteService {
 
     /** Expiration = archivage automatique ({@code IM_ARCHIVEUR} null : système), au fil des lectures. */
     private void archiverExpirees() {
-        repository.archiverExpirees(LocalDate.now(), LocalDateTime.now());
+        repository.archiverExpirees(LocalDate.now(HorlogeRecette.HORLOGE), LocalDateTime.now(HorlogeRecette.HORLOGE));
     }
 
     /** Profils cibles : au moins un, tous connus ({@link ProfilUtilisateur}) — sinon 400. Dédoublonnés, ordre conservé. */

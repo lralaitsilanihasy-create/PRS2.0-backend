@@ -9,6 +9,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.DelaiParametreDto;
 import cnm.prs.entity.DelaiParametre;
 import cnm.prs.exception.ChampsInvalidesException;
@@ -66,7 +67,7 @@ public class DelaiParametreService {
         if (c.actif() != null) {
             p.setActif(c.actif());
         }
-        p.setDateMaj(LocalDateTime.now());
+        p.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         return dto(repository.save(p));
     }

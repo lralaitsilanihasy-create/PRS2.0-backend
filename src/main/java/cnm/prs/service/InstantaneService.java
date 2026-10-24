@@ -18,6 +18,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.InstantaneDto;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.DossierInstantane;
@@ -153,7 +154,7 @@ public class InstantaneService {
     public List<DossierInstantane> figer(Dossier dossier) {
         Integer precedent = repository.maxNumero(dossier.getIdDossier());
         int numero = (precedent == null ? 0 : precedent) + 1;
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         String par = CurrentUser.ref().or(CurrentUser::login).orElse(null);
         Long idDmc = idDmc(dossier);
         List<DossierInstantane> out = new ArrayList<>();

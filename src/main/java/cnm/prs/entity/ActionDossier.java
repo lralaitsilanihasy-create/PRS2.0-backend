@@ -1,7 +1,11 @@
 package cnm.prs.entity;
 
+import cnm.prs.config.HorlogeRecette;
+import cnm.prs.config.MentionHorlogeRecette;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -26,6 +30,7 @@ import lombok.Setter;
  * exactement ce que la reprise de traitement après changement de PRMP rend observable.</p>
  */
 @Entity
+@EntityListeners(MentionHorlogeRecette.class)
 @Table(name = "t_action_dossier", indexes = {
         @Index(name = "idx_action_dossier", columnList = "ID_DOSSIER"),
         @Index(name = "idx_action_dossier_date", columnList = "DATE_ACTION")
@@ -34,7 +39,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ActionDossier {
+public class ActionDossier implements MentionHorlogeRecette.Journal {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -76,4 +81,10 @@ public class ActionDossier {
 
     @Column(name = "ID_INTERIM")
     private Integer idInterim;
+
+    /** ⚠️ 2026-10-24 (« horloge-recette », R1) — sous horloge décalée, l'heure réelle au détail. */
+    @Override
+    public void mentionnerHeureReelle() {
+        detail = HorlogeRecette.mentionner(detail, 500);
+    }
 }

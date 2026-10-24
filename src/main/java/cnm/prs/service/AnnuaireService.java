@@ -16,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.AnnuaireFicheDto;
 import cnm.prs.dto.AnnuairePersonneDto;
 import cnm.prs.entity.CompteAuth;
@@ -383,7 +384,7 @@ public class AnnuaireService {
 
     /** Écritures portées au nom de la personne sur 30 jours glissants ({@code t_audit_log.IM_ACTEUR}). */
     private long actionsJournal30j(String ref) {
-        return auditLogRepository.compterActionsDepuis(ref, LocalDateTime.now().minusDays(JOURS_ACTIVITE));
+        return auditLogRepository.compterActionsDepuis(ref, LocalDateTime.now(HorlogeRecette.HORLOGE).minusDays(JOURS_ACTIVITE));
     }
 
     /**
@@ -401,7 +402,7 @@ public class AnnuaireService {
      * se lisent sur la même période.
      */
     private long echecs30j(String ref) {
-        return sessionRepository.compterEchecsDe(ref, LocalDateTime.now().minusDays(JOURS_ACTIVITE));
+        return sessionRepository.compterEchecsDe(ref, LocalDateTime.now(HorlogeRecette.HORLOGE).minusDays(JOURS_ACTIVITE));
     }
 
     // ------------------------------------------------------------------

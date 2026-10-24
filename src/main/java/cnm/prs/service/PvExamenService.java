@@ -13,6 +13,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.PvActionRequest;
 import cnm.prs.dto.PvExamenDto;
 import cnm.prs.dto.PvVisaRequest;
@@ -510,7 +511,7 @@ public class PvExamenService {
         requireStatut(pv, StatutPv.BROUILLON, StatutPv.EN_RECTIFICATION);
 
         if (pv.getDateSoumissionInitiale() == null) {
-            pv.setDateSoumissionInitiale(LocalDate.now());
+            pv.setDateSoumissionInitiale(LocalDate.now(HorlogeRecette.HORLOGE));
         }
         pv.setStatutPv(StatutPv.PROJET_SOUMIS.name());
         // ⚠️ Navette à deux niveaux (2026-09-04) — la soumission POSE l'étage. Sur un dossier passé du
@@ -1234,7 +1235,7 @@ public class PvExamenService {
 
         // ⑧ Part de signature du rôle — le verrou « une signature par rôle » reste posé ; par intérim, le
         // verrou « une part par PERSONNE » aussi (§B4.4-5) : l'intérimaire qui a déjà signé attend.
-        LocalDate aujourdhui = LocalDate.now();
+        LocalDate aujourdhui = LocalDate.now(HorlogeRecette.HORLOGE);
         if (profil == ProfilUtilisateur.PRESIDENT) {
             exigerPasEncoreSigne(pv.getDateSignaturePresident(), "Président");
             exigerPasEncoreSignataire(pv, acteur, suppleance, "Président");
@@ -1329,7 +1330,7 @@ public class PvExamenService {
         // Le signataire est l'utilisateur authentifié (jamais req.imActeur(), falsifiable).
         String signataire = CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("Signataire non identifié."));
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(HorlogeRecette.HORLOGE);
         Suppleance suppleance = null;   // posée par la part CC quand elle est signée par intérim
         switch (role) {
             case MEMBRE -> {
@@ -1458,7 +1459,7 @@ public class PvExamenService {
         }
         List<Long> fiche = avisAImprimer.getObject().dmcDuDossier(idDossier).stream().toList();   // ⚠️ « avis-a-imprimer »
         java.util.Set<Long> avant = avisAImprimer.getObject().disponibles(fiche);
-        pv.setDateArchivage(LocalDate.now());
+        pv.setDateArchivage(LocalDate.now(HorlogeRecette.HORLOGE));
         pv.setImArchiveur(CurrentUser.ref().orElse(null));
         PvExamen saved = repository.save(pv);
         dossier.setStatut(StatutDossier.CLOTURE.name());
@@ -1916,7 +1917,7 @@ public class PvExamenService {
         navette.setNumNavette(numNavette);
         navette.setSens(sens.name());
         navette.setImActeur(CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null));
-        navette.setDateAction(LocalDateTime.now());
+        navette.setDateAction(LocalDateTime.now(HorlogeRecette.HORLOGE));
         navette.setCommentaire(commentaire);
         navetteRepository.save(navette);
 

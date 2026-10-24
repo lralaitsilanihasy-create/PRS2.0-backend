@@ -2,6 +2,7 @@ package cnm.prs.entity;
 
 import java.time.LocalDateTime;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.enums.StatutCompte;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -106,7 +107,7 @@ public class CompteAuth {
     @PrePersist
     void horodaterLaDemande() {
         if (dateDemande == null) {
-            dateDemande = LocalDateTime.now();
+            dateDemande = LocalDateTime.now(HorlogeRecette.HORLOGE);
         }
     }
 }

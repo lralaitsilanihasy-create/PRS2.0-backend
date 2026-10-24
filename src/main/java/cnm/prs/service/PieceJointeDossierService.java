@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.PieceJointeDossierDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
@@ -261,7 +262,7 @@ public class PieceJointeDossierService {
         p.setContenu(contenu);
         p.setFormat(format);
         p.setTaille((long) contenu.length);
-        p.setDateUpload(LocalDateTime.now());
+        p.setDateUpload(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setApresLettreRenvoi(apresLettreRenvoi);
         p.setIdLettre(idLettre);
         return repository.save(p);

@@ -14,6 +14,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.SansSuiteDto;
 import cnm.prs.entity.Attribution;
 import cnm.prs.entity.CompteCandidat;
@@ -206,7 +207,7 @@ public class SansSuiteService {
         p.setContenu(contenu);
         p.setFormat("PDF");
         p.setTaille((long) contenu.length);
-        p.setDateUpload(LocalDateTime.now());
+        p.setDateUpload(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setApresLettreRenvoi(false);
         pieces.save(p);
     }

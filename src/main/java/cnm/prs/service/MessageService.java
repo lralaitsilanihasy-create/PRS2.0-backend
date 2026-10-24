@@ -7,6 +7,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.MessageDto;
 import cnm.prs.dto.MessageEnvoiRequest;
 import cnm.prs.entity.Message;
@@ -59,7 +60,7 @@ public class MessageService {
         // laissait un POST écraser le message d'un tiers.
         entity.setIdMessage(repository.nextIdMessage().intValue());
         entity.setExpediteurIm(expediteurCourant());
-        entity.setDateEnvoi(LocalDateTime.now());
+        entity.setDateEnvoi(LocalDateTime.now(HorlogeRecette.HORLOGE));
         entity.setLu(false);
         return MessageMapper.toDto(repository.save(entity));
     }
@@ -74,7 +75,7 @@ public class MessageService {
         m.setCorps(req.corps());
         m.setIdDossier(req.idDossier());
         m.setIdMessageParent(req.idMessageParent());
-        m.setDateEnvoi(LocalDateTime.now());
+        m.setDateEnvoi(LocalDateTime.now(HorlogeRecette.HORLOGE));
         m.setLu(false);
         Message saved = repository.save(m);
 

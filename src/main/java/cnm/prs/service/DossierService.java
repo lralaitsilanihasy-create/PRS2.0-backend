@@ -21,6 +21,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ActionDossierDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.EchangeDto;
@@ -749,7 +750,7 @@ public class DossierService {
         // étape et par dossier chargeait assez d'entités pour faire tomber le contrat de pagination.
         // ⚠️ M5b (manuel de contrôle, §B6) — les délais du sous-type de chaque dossier (surcharges comprises), lus une fois.
         DelaiStandardService.Referentiel delais = delaiStandardService.referentiel();
-        java.time.LocalDateTime maintenant = java.time.LocalDateTime.now();
+        java.time.LocalDateTime maintenant = java.time.LocalDateTime.now(HorlogeRecette.HORLOGE);
         for (DossierDto dto : dtos) {
             ChronometrageService.EtatPv pv = pvs.get(dto.getIdDossier());
             String statutPv = pv == null ? null : pv.statut();
@@ -1021,9 +1022,9 @@ public class DossierService {
         // ⚠️ 2026-09-06 (V20) — la date de soumission EST la date de dépôt du dossier (pilote) : posée ICI,
         // à l'acte de soumission, et non plus à la création du brouillon. Servie sur DossierDto et sur
         // ReceptionDto (Secrétaire) depuis la même colonne.
-        dossier.setDateSoumission(LocalDateTime.now());
+        dossier.setDateSoumission(LocalDateTime.now(HorlogeRecette.HORLOGE));
         if (dossier.getDateRef() == null) {
-            dossier.setDateRef(LocalDate.now());
+            dossier.setDateRef(LocalDate.now(HorlogeRecette.HORLOGE));
         }
         repository.save(dossier);
         log.info("[CIRCUIT] soumission dossier={} acteur={} localite={}",
@@ -1288,7 +1289,7 @@ public class DossierService {
     private void tracerEvenementDossier(Dossier dossier, String typeAction, String detail) {
         AuditLog log = new AuditLog();
         log.setIdLog(auditLogRepository.nextIdAuditLog());   // PK serveur (sequence)
-        log.setDateAction(LocalDateTime.now());
+        log.setDateAction(LocalDateTime.now(HorlogeRecette.HORLOGE));
         log.setImActeur(CurrentUser.ref().orElse(null));
         log.setNomTable("t_dossier");
         log.setIdEnregistrement(String.valueOf(dossier.getIdDossier()));
@@ -1381,7 +1382,7 @@ public class DossierService {
                 ? "PV à vérifier — dossier rectifié par la PRMP"
                 : "Dossier rectifié par la PRMP — à re-vérifier";
         String corps = "Dossier " + ref + " — la PRMP " + nomPrmp + " a rectifié le dossier le "
-                + LocalDate.now() + ". Motif : " + motif + ". Le dossier "
+                + LocalDate.now(HorlogeRecette.HORLOGE) + ". Motif : " + motif + ". Le dossier "
                 + (premierContact ? "entre en vérification." : "revient en vérification.");
         if (premierContact) {
             // Premier contact : ciblage par rattachement, repli sur les vérificateurs de la localité.
@@ -1411,7 +1412,7 @@ public class DossierService {
     private void tracerRectification(Dossier dossier, String idPrmp, String motif) {
         AuditLog log = new AuditLog();
         log.setIdLog(auditLogRepository.nextIdAuditLog());   // PK serveur (sequence)
-        log.setDateAction(LocalDateTime.now());
+        log.setDateAction(LocalDateTime.now(HorlogeRecette.HORLOGE));
         log.setImActeur(idPrmp);                          // <id PRMP>
         log.setNomTable("t_dossier");
         log.setIdEnregistrement(String.valueOf(dossier.getIdDossier()));

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.DemandeRetraitDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.DemandeRetrait;
@@ -96,7 +97,7 @@ public class DemandeRetraitService {
                 .map(DemandeRetraitMapper::toDto).toList());
         DemandeRetraitVue vue = vueRepository.findByIdPrmp(idPrmp)
                 .orElseGet(() -> new DemandeRetraitVue(null, idPrmp, null));
-        vue.setDateDerniereVue(LocalDateTime.now());
+        vue.setDateDerniereVue(LocalDateTime.now(HorlogeRecette.HORLOGE));
         vueRepository.save(vue);
         return demandes;
     }
@@ -180,7 +181,7 @@ public class DemandeRetraitService {
         entity.setIdPrmp(idPrmp);                          // identité = JWT, jamais le corps
         entity.setMotifRetrait(dto.getMotifRetrait());     // @NotBlank
         entity.setStatut(StatutRetrait.EN_ATTENTE.name());
-        entity.setDateDemande(LocalDateTime.now());        // date serveur
+        entity.setDateDemande(LocalDateTime.now(HorlogeRecette.HORLOGE));        // date serveur
         DemandeRetrait saved = repository.save(entity);    // ID auto-généré (IDENTITY)
         log.info("[CIRCUIT] demande de retrait dossier={} acteur={} demande={} statut={}",
                 idDossier, CurrentUser.login().orElse(null), saved.getIdDemandeRetrait(),
@@ -191,7 +192,7 @@ public class DemandeRetraitService {
         piece.setNomFichier(fichier.getOriginalFilename());
         piece.setFormat("application/pdf");
         piece.setTailleOctets((long) lettre.length);
-        piece.setDateDepot(LocalDateTime.now());
+        piece.setDateDepot(LocalDateTime.now(HorlogeRecette.HORLOGE));
         piece.setHashSha256(sha256Hex(lettre));
         piece.setContenu(lettre);
         pieceRepository.save(piece);
@@ -308,7 +309,7 @@ public class DemandeRetraitService {
         exigerDossierEncoreRetirable(demande);
         demande.setStatut(StatutRetrait.ACCEPTEE.name());
         demande.setImCtrlCc(decideurAuthentifie());      // décideur réel (CC ou Président), JWT
-        demande.setDateDecision(LocalDateTime.now());
+        demande.setDateDecision(LocalDateTime.now(HorlogeRecette.HORLOGE));
         DemandeRetrait saved = repository.save(demande);
         log.info("[CIRCUIT] retrait accepte dossier={} acteur={} demande={} statut={}",
                 saved.getIdDossier(), CurrentUser.login().orElse(null), saved.getIdDemandeRetrait(),
@@ -350,7 +351,7 @@ public class DemandeRetraitService {
         exigerDecideur(demande);
         demande.setStatut(StatutRetrait.REFUSEE.name());
         demande.setImCtrlCc(decideurAuthentifie());
-        demande.setDateDecision(LocalDateTime.now());
+        demande.setDateDecision(LocalDateTime.now(HorlogeRecette.HORLOGE));
         demande.setObsDecision(motif);
         DemandeRetrait saved = repository.save(demande);
         log.info("[CIRCUIT] retrait refuse dossier={} acteur={} demande={} statut={}",

@@ -17,6 +17,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.CanevasRapportDto;
 import cnm.prs.dto.CanevasRapportDto.Section;
 import cnm.prs.dto.CanevasRapportDto.Tableau;
@@ -80,7 +81,7 @@ public class CanevasRapportService {
     public byte[] pdf(Integer idDossier) {
         dossierService.getObject().controlerVisibilite(idDossier);
         CanevasRapportDto c = contenu(idDossier);
-        return generateur.generer(document(c, LocalDateTime.now())).stream().filter(x -> "pdf".equals(x.extension())).findFirst()
+        return generateur.generer(document(c, LocalDateTime.now(HorlogeRecette.HORLOGE))).stream().filter(x -> "pdf".equals(x.extension())).findFirst()
                 .orElseThrow(() -> new IllegalStateException("Le canevas n'a pas été rendu en pdf.")).contenu();
     }
 

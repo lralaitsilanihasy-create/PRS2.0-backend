@@ -14,6 +14,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.AvisDisponibiliteDto;
 import cnm.prs.dto.AvisSpecifiqueRequest;
 import cnm.prs.dto.DocumentFicheDto;
@@ -204,7 +205,7 @@ public class AvisSpecifiqueService {
         delaisPublicite.exigerAImpression(etat, etat.getIdDetail() == null ? null : valeursPpm.lire(etat.getIdDetail()),
                 LocalDate.parse(corps.datePublication().trim()));
         exigerDaoComplet(validee, etat, dispo.idDossierSoumis());
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         cnm.prs.entity.Marche ligne = ligne(etat);
         Integer origine = origine(ligne);
         boolean premiereImpression = premiereImpression(origine);

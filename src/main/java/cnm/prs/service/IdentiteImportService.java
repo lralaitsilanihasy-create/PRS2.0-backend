@@ -13,6 +13,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.FicheMarcheDto;
 import cnm.prs.dto.ImportDaoResult;
 import cnm.prs.entity.Dossier;
@@ -165,7 +166,7 @@ public class IdentiteImportService {
 
     @Transactional
     public void enregistrer(Long idDmc, String empreinte, ImportDaoResult.Identite identite) {
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         verdictRepository.purger(maintenant.minusDays(1));
         String utilisateur = utilisateur();
         ImportVerdict v = verdictRepository.findByIdDmcAndEmpreinteAndUtilisateur(idDmc, empreinte, utilisateur).orElseGet(ImportVerdict::new);
@@ -186,7 +187,7 @@ public class IdentiteImportService {
     public String exiger(Long idDmc, String empreinte, boolean attestation) {
         String utilisateur = utilisateur();
         ImportVerdict v = verdictRepository.findByIdDmcAndEmpreinteAndUtilisateur(idDmc, empreinte, utilisateur)
-                .filter(x -> x.getLuLe() != null && x.getLuLe().isAfter(LocalDateTime.now().minusHours(DUREE_HEURES))).orElse(null);
+                .filter(x -> x.getLuLe() != null && x.getLuLe().isAfter(LocalDateTime.now(HorlogeRecette.HORLOGE).minusHours(DUREE_HEURES))).orElse(null);
         if (v == null) {
             throw new BusinessRuleException("La lecture de ce fichier est introuvable ou date de plus de " + DUREE_HEURES
                     + " heures : importez de nouveau le DAO avant de l'appliquer.", "IMPORT_EXPIRE");

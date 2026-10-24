@@ -26,6 +26,7 @@ import com.lowagie.text.pdf.PdfPCell;
 import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.entity.Dossier;
 import cnm.prs.repository.DossierRepository;
 
@@ -66,7 +67,7 @@ public class ReportService {
                     : "Période : tous les dossiers";
             document.add(new Paragraph(periode));
             document.add(new Paragraph("Localité : " + (localite != null ? localite : "toutes")));
-            document.add(new Paragraph("Édité le : " + LocalDateTime.now()));
+            document.add(new Paragraph("Édité le : " + LocalDateTime.now(HorlogeRecette.HORLOGE)));
             document.add(new Paragraph("Nombre de dossiers : " + dossiers.size()));
             document.add(new Paragraph(" "));
 

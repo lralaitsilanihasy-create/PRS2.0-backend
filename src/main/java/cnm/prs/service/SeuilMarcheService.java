@@ -8,6 +8,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.entity.SeuilMarche;
 import cnm.prs.enums.BaremeSeuil;
 import cnm.prs.enums.CategorieSeuil;
@@ -43,7 +44,7 @@ public class SeuilMarcheService {
      */
     @Transactional(readOnly = true)
     public SeuilsEnVigueur chargerEnVigueurLe(LocalDate date) {
-        LocalDate effective = date == null ? LocalDate.now() : date;
+        LocalDate effective = date == null ? LocalDate.now(HorlogeRecette.HORLOGE) : date;
         return new SeuilsEnVigueur(effective, repository.findEnVigueurLe(effective));
     }
 
@@ -65,7 +66,7 @@ public class SeuilMarcheService {
     /** Les valeurs d'un barème en vigueur à une date (écran d'administration). */
     @Transactional(readOnly = true)
     public List<SeuilMarche> enVigueur(TypeSeuil type, BaremeSeuil bareme, LocalDate date) {
-        return repository.findEnVigueurPourBareme(type, bareme, date == null ? LocalDate.now() : date);
+        return repository.findEnVigueurPourBareme(type, bareme, date == null ? LocalDate.now(HorlogeRecette.HORLOGE) : date);
     }
 
     /**
@@ -114,7 +115,7 @@ public class SeuilMarcheService {
         neuf.setDelaiMinJours(delaiMinJours);
         neuf.setDateEffet(dateEffet);
         neuf.setBaseLegale(baseLegale);
-        neuf.setDateMaj(LocalDateTime.now());
+        neuf.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         neuf.setImActeur(acteurCourant());
         return repository.save(neuf);
     }

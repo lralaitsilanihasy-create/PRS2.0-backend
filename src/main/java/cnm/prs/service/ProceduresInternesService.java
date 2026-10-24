@@ -14,6 +14,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ProcedureEnLigneDto;
 import cnm.prs.dto.ProcedureInterneDto;
 import cnm.prs.dto.ResponsableProcedureDto;
@@ -85,7 +86,7 @@ public class ProceduresInternesService {
                 .collect(Collectors.toSet());
         Map<Long, List<FicheMarche>> parDmc = ficheRepository.findAll().stream().collect(Collectors.groupingBy(FicheMarche::getIdDmc));
         Integer conservation = parametres.offreConservationAnnees();
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         List<ProcedureInterneDto> out = new ArrayList<>();
         for (FicheMarche derniere : ficheRepository.findDernieresVersions()) {
             if (!RemiseElectronique.electronique(cadrage(derniere))) {
@@ -126,7 +127,7 @@ public class ProceduresInternesService {
         LocalDateTime heure = heureOuverture(idDmc);
         String etatSeance = s != null ? s.getEtat() : heure != null && !maintenant.isBefore(heure) ? Seance.A_VENIR : null;
         String etatCeremonie = ceremonies.etatPourFiche(idDmc, true);
-        boolean seanceDuJour = heure != null && heure.toLocalDate().equals(LocalDate.now()) && (s == null || SEANCE_EN_COURS.contains(s.getEtat()));
+        boolean seanceDuJour = heure != null && heure.toLocalDate().equals(LocalDate.now(HorlogeRecette.HORLOGE)) && (s == null || SEANCE_EN_COURS.contains(s.getEtat()));
         boolean aTraiter = responsable == null || !CeremonieCles.CLOSE.equals(etatCeremonie)
                 || s != null && SEANCE_EN_COURS.contains(s.getEtat()) || seanceDuJour;
         long nbOffres = offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).stream()

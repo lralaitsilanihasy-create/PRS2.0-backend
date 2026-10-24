@@ -4184,6 +4184,15 @@ s'efface plus comme un brouillon :
   **signé mais pas encore archivé reste supprimable** — c'est l'unique porte de sortie pour rattraper
   un PV signé par erreur (le dossier redescend à `EXAMINE`).
 
+- Horloge de recette [Écriture] ⚠️ **Ajouté (2026-10-24, ADR-0016)**
+  - En recette seulement (`app.recette.horloge.active=true` ; route absente ailleurs) : l'Administrateur pose l'heure du serveur sur
+    une date (`maintenant`) ou l'avance d'une durée (`avancer`), avec un motif ; `DELETE` la ramène à l'heure réelle. Toute la règle
+    du temps la suit, sans redémarrage. Le décalage survit au redémarrage (fichier relu).
+  - **Le journal garde la vérité** : sous horloge décalée, toute entrée de journal porte l'heure réelle
+    (`[recette — heure réelle : …]`) ; chaque réglage est lui-même tracé (`HORLOGE_RECETTE`).
+  - Gardent toujours l'heure réelle : les jetons de connexion (JWT), les sessions, l'horodatage des réponses d'erreur.
+  - Pas de régénération des actes déjà figés (R2 écarté, Q1) : une chaîne mal datée se rejoue sur une autre ligne du plan.
+
 **Restrictions / contraintes :**
 
 - Profil haut privilège — toutes actions tracées dans t_audit_log

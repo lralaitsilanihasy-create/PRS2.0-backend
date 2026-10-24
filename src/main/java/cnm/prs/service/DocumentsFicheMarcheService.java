@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.entity.ChampFicheMarche;
 
 import org.springframework.stereotype.Service;
@@ -643,7 +644,7 @@ public class DocumentsFicheMarcheService {
         boolean present = documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
                 .anyMatch(d -> TYPES_PROJET.contains(d.getType()));
         if (!present) {
-            enregistrer(validee.getIdFiche(), projetOuRien(etat, validee.getDateValidation()), LocalDateTime.now());
+            enregistrer(validee.getIdFiche(), projetOuRien(etat, validee.getDateValidation()), LocalDateTime.now(HorlogeRecette.HORLOGE));
         }
     }
 
@@ -867,7 +868,7 @@ public class DocumentsFicheMarcheService {
         Integer idLettre = !attentePieces ? null : lettreRenvoiRepository
                 .findFirstByIdDossierAndStatutOrderByIdLettreDesc(idDossier, cnm.prs.enums.StatutLettreRenvoi.SIGNE.name())
                 .map(cnm.prs.entity.LettreRenvoi::getIdLettre).orElse(null);
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         int jointes = 0;
         for (DocumentFicheMarche d : aJoindre) {
             if (dejaJoints.contains(d.getIdDocument())) {

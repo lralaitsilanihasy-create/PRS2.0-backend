@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.PublicationDto;
 import cnm.prs.entity.Publication;
 import cnm.prs.enums.StatutPublication;
@@ -77,7 +78,7 @@ public class PublicationService {
         Publication p = load(id);
         requireStatut(p, StatutPublication.EN_ATTENTE);
         p.setStatutPubli(StatutPublication.PUBLIE.name());
-        p.setDatePublication(LocalDateTime.now());
+        p.setDatePublication(LocalDateTime.now(HorlogeRecette.HORLOGE));
         CurrentUser.ref().filter(ref -> ref.length() <= 7).ifPresent(p::setImPubliePar);
         return PublicationMapper.toDto(repository.save(p));
     }
@@ -90,7 +91,7 @@ public class PublicationService {
             throw new BusinessRuleException("Le motif de retrait est obligatoire (§3.7).");
         }
         p.setStatutPubli(StatutPublication.RETIRE.name());
-        p.setDateRetrait(LocalDate.now());
+        p.setDateRetrait(LocalDate.now(HorlogeRecette.HORLOGE));
         p.setMotifRetrait(motif);
         return PublicationMapper.toDto(repository.save(p));
     }

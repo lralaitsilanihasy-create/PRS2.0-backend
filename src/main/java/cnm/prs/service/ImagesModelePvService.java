@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ModelePvDto;
 import cnm.prs.entity.ImageModelePv;
 import cnm.prs.exception.BadRequestException;
@@ -104,7 +105,7 @@ public class ImagesModelePvService {
         i.setHauteur(dimensions[1]);
         i.setTaille((long) contenu.length);
         i.setEmpreinte(sha256(contenu));
-        i.setDeposeeLe(LocalDateTime.now());
+        i.setDeposeeLe(LocalDateTime.now(HorlogeRecette.HORLOGE));
         i.setDeposeePar(CurrentUser.login().orElse(null));
         return images.saveAndFlush(i);
     }

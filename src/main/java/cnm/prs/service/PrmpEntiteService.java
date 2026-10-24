@@ -7,6 +7,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.PrmpEntiteDto;
 import cnm.prs.entity.PrmpEntite;
 import cnm.prs.exception.BadRequestException;
@@ -102,7 +103,7 @@ public class PrmpEntiteService {
         entity.setIdPrmpEntite(repository.nextIdPrmpEntite().intValue());   // PK serveur (sequence)
         entity.setIdPrmp(dto.getIdPrmp());
         entity.setIdEntiteContract(dto.getIdEntiteContract());
-        entity.setDateAffectation(dto.getDateAffectation() != null ? dto.getDateAffectation() : LocalDate.now());
+        entity.setDateAffectation(dto.getDateAffectation() != null ? dto.getDateAffectation() : LocalDate.now(HorlogeRecette.HORLOGE));
         entity.setActif(Boolean.TRUE);
         return PrmpEntiteMapper.toDto(repository.save(entity));
     }
@@ -137,7 +138,7 @@ public class PrmpEntiteService {
         lien.setIdPrmpEntite(repository.nextIdPrmpEntite().intValue());   // PK serveur (sequence)
         lien.setIdPrmp(idPrmp);
         lien.setIdEntiteContract(idEntiteContract);
-        lien.setDateAffectation(LocalDate.now());
+        lien.setDateAffectation(LocalDate.now(HorlogeRecette.HORLOGE));
         lien.setActif(Boolean.FALSE);   // EN ATTENTE d'approbation Administrateur
         repository.save(lien);
     }

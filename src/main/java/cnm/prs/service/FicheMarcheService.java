@@ -16,6 +16,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.BilanControlesDto;
 import cnm.prs.dto.DocumentFicheDto;
 import cnm.prs.dto.FicheMarcheDto;
@@ -190,7 +191,7 @@ public class FicheMarcheService {
         if (RemiseElectronique.electronique(d.getCadrage())) {
             java.time.LocalDateTime limite = etatValide(idDmc).map(ProceduresEnLigneService::dateLimite).orElse(null);
             d.setDepots(new cnm.prs.dto.OffreDto.Resume(offreRepository.countByIdDmcAndEtat(idDmc, cnm.prs.entity.Offre.DEPOSEE),
-                    limite != null && !java.time.LocalDateTime.now().isBefore(limite)));
+                    limite != null && !java.time.LocalDateTime.now(HorlogeRecette.HORLOGE).isBefore(limite)));
         }
         return d;
     }
@@ -690,7 +691,7 @@ public class FicheMarcheService {
         besoin.remplacer(fiche.getIdFiche(), lot == null, lot, recus, ctx.forme().name(),
                 CurrentUser.ref().or(CurrentUser::login).orElse(null),
                 CurrentUser.profil().map(Enum::name).orElse(null), travaux);
-        fiche.setDateMaj(LocalDateTime.now());
+        fiche.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         ficheRepository.save(fiche);
         if (importe) {
             journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_IMPORTEE, "besoin pré-rempli par import de " + importFichier.trim()
@@ -707,7 +708,7 @@ public class FicheMarcheService {
         if (!besoin.supprimer(fiche.getIdFiche(), idArticle)) {
             throw new ResourceNotFoundException("Article " + idArticle + " introuvable dans la fiche du DMC " + idDmc + ".");
         }
-        fiche.setDateMaj(LocalDateTime.now());
+        fiche.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         ficheRepository.save(fiche);
     }
 
@@ -750,7 +751,7 @@ public class FicheMarcheService {
         FicheMarche fiche = brouillonOuNouvelle(ctx);
         MoyensFiche.validerMateriel(recues);
         moyens.remplacerMateriel(fiche.getIdFiche(), recues);
-        fiche.setDateMaj(LocalDateTime.now());
+        fiche.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         ficheRepository.save(fiche);
         return moyens.materiel(fiche.getIdFiche());
     }
@@ -763,7 +764,7 @@ public class FicheMarcheService {
         FicheMarche fiche = brouillonOuNouvelle(ctx);
         MoyensFiche.validerPersonnel(recues);
         moyens.remplacerPersonnel(fiche.getIdFiche(), recues);
-        fiche.setDateMaj(LocalDateTime.now());
+        fiche.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         ficheRepository.save(fiche);
         return moyens.personnel(fiche.getIdFiche());
     }
@@ -790,7 +791,7 @@ public class FicheMarcheService {
         FicheMarche fiche = brouillonOuNouvelle(ctx);
         PiecesFiche.valider(recues);
         pieces.remplacer(fiche.getIdFiche(), recues);
-        fiche.setDateMaj(LocalDateTime.now());
+        fiche.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         ficheRepository.save(fiche);
         return pieces.pieces(fiche.getIdFiche());
     }
@@ -817,7 +818,7 @@ public class FicheMarcheService {
         FicheMarche fiche = brouillonOuNouvelle(ctx);
         SousCriteresFiche.valider(recues);
         sousCriteres.remplacer(fiche.getIdFiche(), recues);
-        fiche.setDateMaj(LocalDateTime.now());
+        fiche.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         ficheRepository.save(fiche);
         return sousCriteres.lister(fiche.getIdFiche());
     }
@@ -864,7 +865,7 @@ public class FicheMarcheService {
         // ⚠️ Lot 4 (2026-09-23, §B5) — reprendre le cadrage, c'est reprendre la fiche sous le type du plan : le type de
         // saisie suit, et typeChange s'éteint.
         fiche.setTypeMarche(ctx.forme().name());
-        fiche.setDateMaj(LocalDateTime.now());
+        fiche.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         fiche = ficheRepository.save(fiche);
         return toDto(ctx, fiche);
     }
@@ -969,7 +970,7 @@ public class FicheMarcheService {
             valeurRepository.save(new FicheMarcheValeur(null, fiche.getIdFiche(), e.getKey(), e.getValue(),
                     calculees.contains(e.getKey())));
         }
-        fiche.setDateMaj(LocalDateTime.now());
+        fiche.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         fiche = ficheRepository.save(fiche);
         return toDto(ctx, fiche);
     }
@@ -1172,7 +1173,7 @@ public class FicheMarcheService {
                 enBase.put(calc.getKey(), valeurRepository.save(v));
             }
         }
-        fiche.setDateMaj(LocalDateTime.now());
+        fiche.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         fiche = ficheRepository.save(fiche);
         journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_IMPORTEE, "fiche pré-remplie par import de "
                 + fichier.trim() + " (" + emp.substring(0, 12) + ") : " + aEcrire.size() + " valeurs, "
@@ -1206,7 +1207,7 @@ public class FicheMarcheService {
         }
         // ⚠️ Lot 2a (2026-09-23, §B1) — les documents de la version sont produits AVANT qu'elle ne soit figée : un échec
         // (GenerationDocumentsException, 500 nommé) laisse la fiche en brouillon et annule la transaction.
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         List<DocumentsFicheMarcheService.Produit> produits = new java.util.ArrayList<>(documents.produire(etat,
                 besoinApplicable(ctx) ? besoin.articles(fiche.getIdFiche()) : List.of(), maintenant,
                 // ⚠️ V60 (§B2) — les jetons {{MOYENS.materiel}} et {{MOYENS.personnel}} ; ⚠️ V61 — {{PIECES.*}}
@@ -1376,7 +1377,7 @@ public class FicheMarcheService {
         }
         suivante.setCadrage(source == derniere && (fige == null || fige.equals(modeRemise(lireJson(derniere.getCadrage()))))
                 ? derniere.getCadrage() : ecrireJson(cadrageSource));
-        suivante.setDateCreation(LocalDateTime.now());
+        suivante.setDateCreation(LocalDateTime.now(HorlogeRecette.HORLOGE));
         suivante.setCreePar(CurrentUser.ref().orElse(null));
         suivante = ficheRepository.save(suivante);
         // ⚠️ 2026-09-25 (arbitrage du pilote, formulaires du candidat §B2) — une version validée n'est jamais convertie ;
@@ -1585,7 +1586,7 @@ public class FicheMarcheService {
                 ? CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null)
                 : ctx.idDossier() == null ? null
                         : dossierRepository.findById(ctx.idDossier()).map(cnm.prs.entity.Dossier::getIdPrmp).orElse(null);
-        return mandats.mandatEnVigueur(idPrmp, LocalDate.now())
+        return mandats.mandatEnVigueur(idPrmp, LocalDate.now(HorlogeRecette.HORLOGE))
                 .map(m -> m.getRefArrete() + " du " + m.getDateDebut().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")))
                 .orElse(null);
     }
@@ -1596,7 +1597,7 @@ public class FicheMarcheService {
         f.setNumeroVersion(1);
         f.setStatut(StatutFicheMarche.BROUILLON.name());
         f.setTypeMarche(TypeMarcheDao.QUANTITE_FIXE.name());
-        f.setDateCreation(LocalDateTime.now());
+        f.setDateCreation(LocalDateTime.now(HorlogeRecette.HORLOGE));
         return f;
     }
 
@@ -2006,10 +2007,10 @@ public class FicheMarcheService {
         Map<String, Object> cadrage = new LinkedHashMap<>(lireJson(derniere.getCadrage()));
         cadrage.put(RemiseElectronique.CLE_CADRAGE, mode);
         derniere.setCadrage(ecrireJson(cadrage));
-        derniere.setModeMigreLe(LocalDateTime.now());
+        derniere.setModeMigreLe(LocalDateTime.now(HorlogeRecette.HORLOGE));
         derniere.setModeMigrePar(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         derniere.setModeMigreMotif(motif);
-        derniere.setDateMaj(LocalDateTime.now());
+        derniere.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         FicheMarche fiche = ficheRepository.save(derniere);
         String detail = "Mode de remise migré de " + RemiseElectronique.libelleMode(fige) + " vers " + RemiseElectronique.libelleMode(mode)
                 + " par l'Administrateur (fiche version " + fiche.getNumeroVersion() + ", à ressaisir puis valider) ; motif : " + motif;

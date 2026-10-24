@@ -13,6 +13,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.EvaluationDto;
 import cnm.prs.dto.FichePresentationDto;
 import cnm.prs.dto.FichePresentationDto.Ligne;
@@ -88,7 +89,7 @@ public class FichePresentationService {
     public byte[] pdf(Integer idDossier) {
         dossierService.getObject().controlerVisibilite(idDossier);
         FichePresentationDto f = contenu(idDossier);
-        return generateur.generer(document(f, LocalDateTime.now())).stream().filter(x -> "pdf".equals(x.extension())).findFirst()
+        return generateur.generer(document(f, LocalDateTime.now(HorlogeRecette.HORLOGE))).stream().filter(x -> "pdf".equals(x.extension())).findFirst()
                 .orElseThrow(() -> new IllegalStateException("La fiche de présentation n'a pas été rendue en pdf.")).contenu();
     }
 
@@ -345,7 +346,7 @@ public class FichePresentationService {
         if (publication != null) {
             realise.put(1, publication);
         }
-        if (dateLimite != null && !dateLimite.isAfter(LocalDate.now())) {
+        if (dateLimite != null && !dateLimite.isAfter(LocalDate.now(HorlogeRecette.HORLOGE))) {
             realise.put(2, dateLimite);
         }
         if (evd != null && evd.ouverteLe() != null) {

@@ -10,6 +10,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.EvaluationDto;
 import cnm.prs.dto.FichePresentationDto;
 import cnm.prs.entity.Attribution;
@@ -121,7 +122,7 @@ public class ContexteModelePvService {
         texte(v, "DOSSIER.EXERCICE", exercice == null ? null : String.valueOf(exercice));
         String avisRetenu = avis != null ? avis : pv == null ? null : pv.getIdAvis();
         texte(v, "PV.AVIS", avisRetenu == null ? null : AVIS.getOrDefault(avisRetenu, avisRetenu));
-        v.put("PV.DATE_DU_JOUR", ModelePvWord.Valeur.date(LocalDate.now()));
+        v.put("PV.DATE_DU_JOUR", ModelePvWord.Valeur.date(LocalDate.now(HorlogeRecette.HORLOGE)));
         List<Map<String, ModelePvWord.Valeur>> observations = new ArrayList<>();
         if (pc != null) {
             v.put("DOSSIER.DATE_RECEPTION", ModelePvWord.Valeur.date(pc.dateReception()));

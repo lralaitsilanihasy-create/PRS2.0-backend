@@ -15,6 +15,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.CapmDto;
 import cnm.prs.entity.Capm;
 import cnm.prs.entity.Dossier;
@@ -113,7 +114,7 @@ public class CalendrierAnnuelService {
     /** Le PDF, sous la garde de lecture du dossier demandé. */
     public byte[] pdf(Integer idDossier) {
         dossierService.getObject().controlerVisibilite(idDossier);
-        return generateur.generer(document(plan(idDossier), LocalDateTime.now())).stream().filter(f -> "pdf".equals(f.extension()))
+        return generateur.generer(document(plan(idDossier), LocalDateTime.now(HorlogeRecette.HORLOGE))).stream().filter(f -> "pdf".equals(f.extension()))
                 .findFirst().orElseThrow(() -> new IllegalStateException("Le calendrier n'a pas été rendu en pdf.")).contenu();
     }
 

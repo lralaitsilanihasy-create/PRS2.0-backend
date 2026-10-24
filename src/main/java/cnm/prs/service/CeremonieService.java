@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.CeremonieDto;
 import cnm.prs.entity.CeremonieCles;
 import cnm.prs.entity.CleDetenteur;
@@ -135,7 +136,7 @@ public class CeremonieService {
         CeremonieCles c = ceremonie(idDmc);
         if (!Boolean.TRUE.equals(c.getPremierDepot())) {
             c.setPremierDepot(true);
-            c.setDateMaj(LocalDateTime.now());
+            c.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
             ceremonieRepository.save(c);
         }
     }
@@ -188,7 +189,7 @@ public class CeremonieService {
         int remplacements = ancienne == null ? 0 : ancienne.getRemplacements() + 1;
         if (ancienne != null) {
             if (Boolean.TRUE.equals(ceremonie.getPremierDepot())) {
-                ancienne.setDateArchivage(LocalDateTime.now());
+                ancienne.setDateArchivage(LocalDateTime.now(HorlogeRecette.HORLOGE));
                 cleRepository.save(ancienne);
             } else {
                 cleRepository.delete(ancienne);
@@ -239,8 +240,8 @@ public class CeremonieService {
         }
         java.util.Set<Long> avant = avisAImprimer.getObject().disponibles(List.of(idDmc));   // ⚠️ « avis-a-imprimer »
         ceremonie.setEtat(CeremonieCles.CLOSE);
-        ceremonie.setDateCloture(LocalDateTime.now());
-        ceremonie.setDateMaj(LocalDateTime.now());
+        ceremonie.setDateCloture(LocalDateTime.now(HorlogeRecette.HORLOGE));
+        ceremonie.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         ceremonieRepository.save(ceremonie);
         avisAImprimer.getObject().notifierDevenues(List.of(idDmc), avant);
         internes.journaliser(idDmc, CEREMONIE_CLOSE, null, empreintes(actives));
@@ -275,7 +276,7 @@ public class CeremonieService {
         cleRepository.deleteAll(actives);
         ceremonie.setEtat(CeremonieCles.A_REFAIRE);
         ceremonie.setDateCloture(null);
-        ceremonie.setDateMaj(LocalDateTime.now());
+        ceremonie.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         ceremonieRepository.save(ceremonie);
         internes.journaliser(idDmc, CEREMONIE_ROUVERTE, avant, null);
         RemiseElectronique.Internes i = internes.internes(idDmc);
@@ -323,8 +324,8 @@ public class CeremonieService {
         defi.setIdCle(c.getIdCle());
         defi.setImAppelant(CurrentUser.ref().orElse(null));
         defi.setEmpreinteClair(ClesRsa.sha256Hex(d.clair()));
-        defi.setDateCreation(LocalDateTime.now());
-        defi.setExpire(LocalDateTime.now().plusMinutes(DEFI_MINUTES));
+        defi.setDateCreation(LocalDateTime.now(HorlogeRecette.HORLOGE));
+        defi.setExpire(LocalDateTime.now(HorlogeRecette.HORLOGE).plusMinutes(DEFI_MINUTES));
         defiRepository.save(defi);
         return new CeremonieDto.Defi(defi.getIdDefi(), d.chiffre(), defi.getExpire());
     }
@@ -343,7 +344,7 @@ public class CeremonieService {
         if (!Objects.equals(cible.im(), c.getIm())) {
             throw new AccessDeniedException("Ce défi ne porte pas sur votre clé.");
         }
-        if (Boolean.TRUE.equals(defi.getConsomme()) || LocalDateTime.now().isAfter(defi.getExpire())) {
+        if (Boolean.TRUE.equals(defi.getConsomme()) || LocalDateTime.now(HorlogeRecette.HORLOGE).isAfter(defi.getExpire())) {
             defi.setConsomme(true);
             defiRepository.save(defi);
             throw new BusinessRuleException("Le défi a expiré (" + DEFI_MINUTES + " minutes, usage unique) : ouvrez-en un autre.", "DEFI_EXPIRE");
@@ -357,7 +358,7 @@ public class CeremonieService {
                     + "la phrase secrète est erronée.", "DEFI_ECHOUE");
         }
         c.setEtatPart(CleDetenteur.VERIFIEE);
-        c.setDerniereVerification(LocalDateTime.now());
+        c.setDerniereVerification(LocalDateTime.now(HorlogeRecette.HORLOGE));
         cleRepository.save(c);
         internes.journaliser(idDmc, DEFI_REUSSI, null, cible.role() + " " + c.getEmpreinte());
         return detenteurDe(idDmc, cible, c);
@@ -390,7 +391,7 @@ public class CeremonieService {
     public int rappelerVerifications() {
         Integer jours = parametres.remiseElectronique().verificationPartJours();
         int j = jours == null ? 7 : jours;
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         int emis = 0;
         for (CeremonieCles ceremonie : ceremonieRepository.findByEtat(CeremonieCles.CLOSE)) {
             Long idDmc = ceremonie.getIdDmc();
@@ -488,7 +489,7 @@ public class CeremonieService {
     /** La ligne de la cérémonie, créée {@code A_VENIR} au premier geste. */
     private CeremonieCles ceremonie(Long idDmc) {
         return ceremonieRepository.findById(idDmc).orElseGet(() -> {
-            CeremonieCles c = new CeremonieCles(idDmc, CeremonieCles.A_VENIR, null, false, LocalDateTime.now(), null, null, null);
+            CeremonieCles c = new CeremonieCles(idDmc, CeremonieCles.A_VENIR, null, false, LocalDateTime.now(HorlogeRecette.HORLOGE), null, null, null);
             return ceremonieRepository.save(c);
         });
     }
@@ -522,7 +523,7 @@ public class CeremonieService {
         c.setEnvKdf(KDF);
         c.setEnvAlgorithme(ALGORITHME_ENVELOPPE);
         c.setEtatPart(CleDetenteur.PUBLIEE);
-        c.setDatePublication(LocalDateTime.now());
+        c.setDatePublication(LocalDateTime.now(HorlogeRecette.HORLOGE));
         c.setRemplacements(remplacements);
         if (CleDetenteur.SECOURS.equals(cible.role())) {   // ⚠️ V71 (§B2) : la clé naît chez le dépositaire
             c.setGenerePar(CleDetenteur.PAR_DEPOSITAIRE);

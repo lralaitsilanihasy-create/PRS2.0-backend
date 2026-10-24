@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.AnalyseIaDto;
 import cnm.prs.dto.EcartementRequest;
 import cnm.prs.dto.ResumePreControleDto;
@@ -166,7 +167,7 @@ public class SignalementPreControleService {
         signalement.setStatut(StatutSignalement.ECARTE.name());
         signalement.setTypeActeurTraitement(cote.name());
         signalement.setImTraitement(refActeur());
-        signalement.setDateTraitement(LocalDateTime.now());
+        signalement.setDateTraitement(LocalDateTime.now(HorlogeRecette.HORLOGE));
         signalement.setCommentaireTraitement(requete.motif().trim());
         anomalieRepository.save(signalement);
         return versDto(signalement, contexteDeLecture(ppm), vuePrmp());
@@ -334,7 +335,7 @@ public class SignalementPreControleService {
                 .filter(s -> StatutSignalement.ECARTE.name().equals(s.statut())).count();
         int leves = (int) signalements.stream()
                 .filter(s -> StatutSignalement.LEVE_MODIFICATION.name().equals(s.statut())).count();
-        return new ResumePreControleDto(ppm.getIdPpm(), ppm.getExercice(), LocalDateTime.now(),
+        return new ResumePreControleDto(ppm.getIdPpm(), ppm.getExercice(), LocalDateTime.now(HorlogeRecette.HORLOGE),
                 ouverts, prioritaires, ecartes, leves, signalements);
     }
 

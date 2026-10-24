@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.DocumentFicheDto;
 import cnm.prs.dto.ProcedureEnLigneDto;
 import cnm.prs.entity.ChampFicheMarche;
@@ -116,7 +117,7 @@ public class ProceduresEnLigneService {
     /** La liste publique : procédures à venir ou ouvertes, la date limite la plus proche d'abord. */
     @Transactional(readOnly = true)
     public List<ProcedureEnLigneDto> lister() {
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
         List<ProcedureEnLigneDto> out = new ArrayList<>();
         for (FicheMarche f : ficheRepository.findDernieresValidees()) {
             // tri grossier avant la lecture complète de la fiche : le cadrage enregistré doit dire « électronique »
@@ -233,7 +234,7 @@ public class ProceduresEnLigneService {
         }
         Integer idEntreprise = entrepriseRepository.findByIdCandidat(idCandidat).map(Entreprise::getIdEntreprise).orElse(null);
         retraitRepository.save(new RetraitDao(null, idDmc, idCandidat, idEntreprise, d.getNomFichier(),
-                l.fiche().getNumeroVersion(), LocalDateTime.now(), recu == null ? null : recu.getIdRecu()));
+                l.fiche().getNumeroVersion(), LocalDateTime.now(HorlogeRecette.HORLOGE), recu == null ? null : recu.getIdRecu()));
         return d;
     }
 
@@ -261,7 +262,7 @@ public class ProceduresEnLigneService {
     // ------------------------------------------------------------------ lecture
 
     Lue exiger(Long idDmc) {
-        return lire(idDmc, LocalDateTime.now())
+        return lire(idDmc, LocalDateTime.now(HorlogeRecette.HORLOGE))
                 .orElseThrow(() -> new ResourceNotFoundException("Procédure en ligne introuvable : " + idDmc + "."));
     }
 
@@ -307,7 +308,7 @@ public class ProceduresEnLigneService {
                 .orElseThrow(() -> new ResourceNotFoundException("La fiche de la procédure " + idDmc + " n'est pas encore enregistrée."));
         List<DocumentFicheDto> avis = documents.listerAvis(ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc)).stream()
                 .filter(d -> DocumentsFicheMarcheService.TYPE_AVIS.equals(d.type())).toList();
-        return construire(idDmc, etat, avis, LocalDateTime.now());
+        return construire(idDmc, etat, avis, LocalDateTime.now(HorlogeRecette.HORLOGE));
     }
 
     /**
@@ -442,7 +443,7 @@ public class ProceduresEnLigneService {
 
     /** La procédure si elle remplit les critères de la liste publique (close comprise), vide sinon. */
     Optional<Lue> trouver(Long idDmc) {
-        return lire(idDmc, LocalDateTime.now());
+        return lire(idDmc, LocalDateTime.now(HorlogeRecette.HORLOGE));
     }
 
     /**

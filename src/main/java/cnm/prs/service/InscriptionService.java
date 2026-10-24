@@ -11,6 +11,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.DeclarationEntiteDto;
 import cnm.prs.dto.InscriptionEnAttenteDto;
 import cnm.prs.dto.PieceJointeMetaDto;
@@ -144,7 +145,7 @@ public class InscriptionService {
         if (TypeActeur.UGPM.name().equals(compte.getTypeActeur())) {
             compte.setStatut(StatutCompte.ACTIF.name());
             compte.setActif(true);
-            compte.setDateDecision(LocalDateTime.now());
+            compte.setDateDecision(LocalDateTime.now(HorlogeRecette.HORLOGE));
             compte.setImValidateur(CurrentUser.ref().orElse(null));
             compteRepository.save(compte);
             // Unifie les pièces d'inscription (clé login) sur la clé id acteur (comme les pièces Admin).
@@ -208,7 +209,7 @@ public class InscriptionService {
         if (!validees.isEmpty()) {
             compte.setStatut(StatutCompte.ACTIF.name());
             compte.setActif(true);
-            compte.setDateDecision(LocalDateTime.now());
+            compte.setDateDecision(LocalDateTime.now(HorlogeRecette.HORLOGE));
             compte.setImValidateur(CurrentUser.ref().orElse(null));
             compteRepository.save(compte);
             // Unifie les pièces d'inscription (clé login) sur la clé idPrmp (comme les pièces Admin).
@@ -230,7 +231,7 @@ public class InscriptionService {
         compte.setStatut(StatutCompte.REFUSE.name());
         compte.setActif(false);
         compte.setMotifRefus(motif);
-        compte.setDateDecision(LocalDateTime.now());
+        compte.setDateDecision(LocalDateTime.now(HorlogeRecette.HORLOGE));
         compte.setImValidateur(CurrentUser.ref().orElse(null));
         compteRepository.save(compte);
 
@@ -267,7 +268,7 @@ public class InscriptionService {
                 prmpEntiteRepository::existsById, prmpEntiteRepository::nextIdPrmpEntite));
         aff.setIdPrmp(idPrmp);
         aff.setIdEntiteContract(idEntite);
-        aff.setDateAffectation(LocalDate.now());
+        aff.setDateAffectation(LocalDate.now(HorlogeRecette.HORLOGE));
         aff.setActif(Boolean.TRUE);
         prmpEntiteRepository.save(aff);
     }

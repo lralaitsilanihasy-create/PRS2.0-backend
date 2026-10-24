@@ -17,6 +17,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.ArticleBesoinDto;
 import cnm.prs.dto.BesoinEnLigneDto;
 import cnm.prs.dto.MaterielExigeDto;
@@ -448,7 +449,7 @@ public class FormulairesEnLigne {
         if (cap.isMissingNode() || cap.isNull() || q == null) {
             return;
         }
-        int annee = Year.now().getValue();
+        int annee = Year.now(HorlogeRecette.HORLOGE).getValue();
         BesoinEnLigneDto.ChiffreAffaires ca = q.chiffreAffaires();
         if (ca != null && ca.montant() != null && cap.has("chiffresAffaires")) {
             List<BigDecimal> valeurs = new ArrayList<>();
