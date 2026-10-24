@@ -473,10 +473,14 @@ public class ModelePvService {
             if (ecarts.isEmpty()) {
                 pts.add(point("OK", "CONFORME_ARMP", "Conforme au document type (" + sigle + ") : aucun écart", null, null));
             } else {
-                pts.add(point("INFO", "ECARTS_ARMP", ecarts.size() + " écart(s) avec le document type (" + sigle + ") : la mise en vigueur "
-                        + "demandera la validation du juriste", null, null));
+                // ⚠️ 2026-10-23 (« ecarts-de-forme », B3) — les deux nombres ; le juriste n'est demandé que pour le fond.
+                long fond = ecarts.stream().filter(e -> EcartsDao.FOND.equals(e.nature())).count();
+                long forme = ecarts.size() - fond;
+                pts.add(point("INFO", "ECARTS_ARMP", fond == 0 ? forme + " correction(s) de forme (" + sigle + ") : pas de validation du juriste"
+                        : ecarts.size() + " écart(s) au document type (" + sigle + ") : " + forme + " de forme, " + fond + " de fond — la mise en "
+                                + "vigueur demandera la validation du juriste", null, null));
                 for (ModelePvDto.Ecart e : ecarts) {
-                    pts.add(point("INFO", "ECART_ARMP", switch (e.type()) {
+                    pts.add(point("INFO", "ECART_ARMP", (EcartsDao.FOND.equals(e.nature()) ? "[fond] " : "[forme] ") + switch (e.type()) {
                         case "MODIFIE" -> "Modifié — avant : « " + e.avant() + " » ; après : « " + e.apres() + " »";
                         case "AJOUTE" -> "Ajouté : « " + e.apres() + " »";
                         default -> "Retiré : « " + e.avant() + " »";
@@ -1199,9 +1203,11 @@ public class ModelePvService {
     }
 
     /**
-     * ⚠️ 2026-10-22 (« modeles-dao », D-ARMP) — un document du DAO qui s'écarte de son document type (au moins un écart) ne se met en
-     * vigueur qu'avec la validation du juriste : nom, qualité et date (400 {@code VALIDATION_JURISTE_REQUISE}, détail
-     * {@code nbEcarts}) ; enregistrée avec la version et reprise au journal. Sans écart, elle n'est pas demandée.
+     * ⚠️ 2026-10-22 (« modeles-dao », D-ARMP) — un document du DAO qui s'écarte de son document type ne se met en vigueur qu'avec la
+     * validation du juriste : nom, qualité et date, enregistrée avec la version et reprise au journal. ⚠️ 2026-10-23 (« ecarts-de-forme »,
+     * B2, arbitrage du pilote) — seulement s'il y a au moins un écart de <strong>fond</strong> (400 {@code VALIDATION_JURISTE_REQUISE},
+     * détails {@code nbEcartsFond}, {@code nbEcartsForme}) ; des corrections de forme seules passent avec le motif, tracées au journal du
+     * modèle et au journal général.
      */
     public ModelePvDto.Fiche mettreEnVigueur(Long id, Integer numero, String motif, ModelePvDto.Juriste juriste) {
         ModelePv m = actif(id);
@@ -1221,19 +1227,28 @@ public class ModelePvService {
         }
         String validation = "";
         if ("DOCUMENT_DAO".equals(m.getNature())) {
-            int nbEcarts = ecartsDe(m, v).size();
-            if (nbEcarts > 0) {
+            List<ModelePvDto.Ecart> ecarts = ecartsDe(m, v);
+            long nbFond = ecarts.stream().filter(e -> EcartsDao.FOND.equals(e.nature())).count();
+            long nbForme = ecarts.size() - nbFond;
+            if (nbFond > 0) {
                 if (juriste == null || juriste.nom() == null || juriste.nom().isBlank() || juriste.qualite() == null
                         || juriste.qualite().isBlank() || juriste.date() == null) {
-                    throw new BadRequestException("La version " + numero + " s'écarte du document type de l'ARMP (" + nbEcarts + " écart(s)) : "
-                            + "sa mise en vigueur demande la validation du juriste (nom, qualité, date).", "VALIDATION_JURISTE_REQUISE",
-                            Map.of("nbEcarts", nbEcarts));
+                    throw new BadRequestException("La version " + numero + " s'écarte du document type de l'ARMP (" + nbFond + " écart(s) de "
+                            + "fond, " + nbForme + " de forme) : sa mise en vigueur demande la validation du juriste (nom, qualité, date).",
+                            "VALIDATION_JURISTE_REQUISE", Map.of("nbEcartsFond", nbFond, "nbEcartsForme", nbForme));
                 }
                 v.setJuristeNom(juriste.nom().trim());
                 v.setJuristeQualite(juriste.qualite().trim());
                 v.setJuristeDate(juriste.date());
-                validation = " ; " + nbEcarts + " écart(s) au document type validé(s) par " + v.getJuristeNom() + " (" + v.getJuristeQualite()
-                        + ") le " + juriste.date();
+                validation = " ; écarts au document type : " + nbForme + " de forme, " + nbFond + " de fond, validés par " + v.getJuristeNom()
+                        + " (" + v.getJuristeQualite() + ") le " + juriste.date();
+            } else if (nbForme > 0) {
+                validation = " ; " + nbForme + " correction(s) de forme au document type, sans validation juridique (arbitrage du pilote du "
+                        + "23/10)";
+            }
+            if (!ecarts.isEmpty()) {
+                audit.enregistrerDetail(CurrentUser.ref().orElse(null), "modeles-pv", String.valueOf(m.getIdModele()), "ECARTS_DOCUMENT_TYPE",
+                        sigleDe(m), m.getCode() + " v" + numero + validation.substring(3) + " ; par " + CurrentUser.login().orElse("?"), null);
             }
         }
         Set<String> avant = releves();

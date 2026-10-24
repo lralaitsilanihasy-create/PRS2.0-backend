@@ -52,8 +52,11 @@ public final class ModelePvDto {
     public record Juriste(@Size(max = 150) String nom, @Size(max = 150) String qualite, java.time.LocalDate date) {
     }
 
-    /** ⚠️ 2026-10-22 (D-ARMP) — un écart avec le document type : MODIFIE (avant / après), AJOUTE (après), RETIRE (avant). */
-    public record Ecart(String type, int rang, String avant, String apres) {
+    /**
+     * ⚠️ 2026-10-22 (D-ARMP) — un écart avec le document type : MODIFIE (avant / après), AJOUTE (après), RETIRE (avant). ⚠️ 2026-10-23
+     * (« ecarts-de-forme ») — {@code nature} : FORME (sans validation juridique) ou FOND.
+     */
+    public record Ecart(String type, int rang, String avant, String apres, String nature) {
     }
 
     /**

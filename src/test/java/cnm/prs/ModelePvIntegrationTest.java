@@ -1010,11 +1010,12 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
         String vigueur = BASE + "/" + id + "/versions/1/mettre-en-vigueur";
         mvc.perform(post(vigueur).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON).content("{\"motif\":\"titre\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_JURISTE_REQUISE"))
-                .andExpect(jsonPath("$.details.nbEcarts").value(1));
+                .andExpect(jsonPath("$.details.nbEcartsFond").value(1)).andExpect(jsonPath("$.details.nbEcartsForme").value(0));
         mvc.perform(post(vigueur).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON).content(
                 "{\"motif\":\"titre\",\"juriste\":{\"nom\":\"RAKOTO Lalao\",\"qualite\":\"Juriste de l'ARMP\",\"date\":\"2026-10-22\"}}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.versions[0].juriste.nom").value("RAKOTO Lalao"))
-                .andExpect(jsonPath("$.historique[0].detail").value(containsString("1 écart(s) au document type validé(s) par RAKOTO Lalao")));
+                .andExpect(jsonPath("$.historique[0].detail").value(containsString("écarts au document type : 0 de forme, 1 de fond, validés par "
+                        + "RAKOTO Lalao")));
 
         // La relève : AVIS-F produit par la page ; DPAO-F garde son fichier intégré.
         cnm.prs.service.FichierCommande.Modele effectif = documentsFiche.modeleEffectif("AVIS-F");
@@ -1049,5 +1050,31 @@ class ModelePvIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(documentsFiche.modeleEffectif("AVIS-F")).isSameAs(modelesDao.modele("AVIS-F"));
         assertThat(auditLogs.findAll()).filteredOn(a -> "RETOUR_MODELE_INTEGRE".equals(a.getTypeAction()))
                 .extracting(a -> a.getChampModifie()).containsExactly("AVIS-F");
+
+        // ⚠️ 2026-10-23 (« ecarts-de-forme ») — une correction de forme seule (casse) passe sans juriste, au journal général.
+        String t = mvc.perform(post(BASE).header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\":\"AVIS-T-FORME\",\"libelle\":\"x\",\"nature\":\"DOCUMENT_DAO\"}")).andReturn().getResponse()
+                .getContentAsString();
+        long idT = ((Number) JsonPath.read(t, "$.id")).longValue();
+        mvc.perform(put(BASE + "/" + idT + "/rattachements").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"sigles\":[\"AVIS-T\"]}")).andExpect(status().isOk());
+        String vt = mvc.perform(post(BASE + "/" + idT + "/versions/depart").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String docT = new tools.jackson.databind.ObjectMapper().readTree(vt).path("document").toString()
+                .replace("\"Avis d’Appel d’Offres Ouvert\"", "\"Avis d’appel d’offres ouvert\"");
+        String vt2 = mvc.perform(put(BASE + "/" + idT + "/versions/1/document").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"document\":" + docT + "}")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(vt2, "$.rapport.points[?(@.code=='ECARTS_ARMP')].message"))
+                .containsExactly("1 correction(s) de forme (AVIS-T) : pas de validation du juriste");
+        mvc.perform(get(BASE + "/" + idT + "/versions/1/ecarts").header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$[0].nature").value("FORME"));
+        mvc.perform(post(BASE + "/" + idT + "/versions/1/mettre-en-vigueur").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motif\":\"casse du titre\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.versions[0].juriste").doesNotExist())
+                .andExpect(jsonPath("$.historique[0].detail").value(containsString("1 correction(s) de forme au document type, sans "
+                        + "validation juridique (arbitrage du pilote du 23/10)")));
+        assertThat(auditLogs.findAll()).filteredOn(a -> "ECARTS_DOCUMENT_TYPE".equals(a.getTypeAction()))
+                .extracting(a -> a.getChampModifie()).containsExactlyInAnyOrder("AVIS-F", "AVIS-T");
     }
 }

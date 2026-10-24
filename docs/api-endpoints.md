@@ -8728,6 +8728,23 @@ concurrence.
   mise en concurrence est en `DAOO-CC`, passe en `MAOO-CC` (journal `SOUS_TYPE_REQUALIFIE`). Ces mêmes dossiers reçoivent le bordereau
   estimatif de la fiche. Les pièces déjà jointes d'office sont marquées partout. En recette : le 100383.
 
+⚠️ **2026-10-23 (demande front « ecarts-de-forme »)** — pas de juriste pour les corrections de forme. Pas de migration.
+- `GET …/versions/{n}/ecarts` : chaque écart porte **`nature`** : `FORME` ou `FOND` (`EcartsDao.nature`).
+  - **FORME** : un `MODIFIE` dont les mots recollés sont identiques (casse, accents, ponctuation, espaces, tirets, apostrophes
+    ignorés), ou de même nombre de mots dont chacun qui change diffère de 2 lettres au plus. Un changement de style seul (PARA →
+    CENTRE) est de la forme.
+  - **FOND** : `AJOUTE`, `RETIRE`, règle modifiée, mot ajouté ou retiré, mot remplacé ; et, garde-fous : jeton ou marqueur changé,
+    nombre dont les chiffres changent (« 30 » / « 60 » ; « 30ème » / « 30e » reste de la forme), mot de 3 lettres ou moins qui change de
+    plus d'une lettre (« ou » / « et », « des » / « du »).
+- **Mise en vigueur** : `juriste` exigé seulement s'il y a au moins un écart de fond (400 `VALIDATION_JURISTE_REQUISE`,
+  `details.nbEcartsFond`, `details.nbEcartsForme`). Sans fond : le motif suffit ; journal du modèle « n correction(s) de forme au
+  document type, sans validation juridique (arbitrage du pilote du 23/10) ». Avec fond : « écarts au document type : n de forme, m de
+  fond, validés par … ». Journal général `ECARTS_DOCUMENT_TYPE` (champ = sigle) dans les deux cas.
+- **Rapport** : `ECARTS_ARMP` (INFO) : « n écart(s) au document type (SIGLE) : x de forme, y de fond — la mise en vigueur demandera la
+  validation du juriste », ou « n correction(s) de forme (SIGLE) : pas de validation du juriste » ; chaque `ECART_ARMP` commence par
+  « [forme] » ou « [fond] ».
+- Une version déjà mise en vigueur garde sa validation (Q2).
+
 ⚠️ **2026-10-22 (demande front « modeles-dao », D0-D3 et D-ARMP)** — les documents du DAO comme modèles de document. Migration **V141**.
 - **Principe** : la page est une vue modifiable du fichier de commande (`ConversionDao`, sans perte : aller-retour vérifié sur les 15
   fichiers). La production garde le moteur du DAO (`FormulairesCandidat.rendreModele`, `GenerateurDocumentsFiche`) : un modèle en

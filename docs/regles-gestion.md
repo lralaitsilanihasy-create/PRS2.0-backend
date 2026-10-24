@@ -1591,6 +1591,10 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   n'est mis en vigueur sans lui. Deux écarts avec le PV intégré : une ligne de présence s'imprime même sans nom (pas de clé de
 >   condition sur la présence) et le viseur n'a ni qualité ni mention d'intérim. Les actes de gestion et la déclaration sans suite ne
 >   nomment que la référence du dossier : le catalogue n'a pas encore leurs variables propres.
+> - ⚠️ **2026-10-23 (« ecarts-de-forme », arbitrage du pilote)** — **une correction de forme** (orthographe, accord, ponctuation, mise en
+>   page) au document type de l'ARMP **ne demande pas de validation juridique** ; elle est tracée au journal. Tout autre écart (mot
+>   ajouté, retiré ou remplacé, nombre, jeton, règle) reste du **fond** et exige le juriste à la mise en vigueur, pour la version
+>   entière.
 > - ⚠️ **2026-10-22 (« modeles-dao », D0-D3, D-ARMP)** — **les documents du DAO se modifient comme des modèles**, un par sigle, à partir
 >   du fichier intégré, et sont produits par le même moteur. Un écart au document type de l'ARMP est permis mais tracé ; la mise en
 >   vigueur d'une version qui s'écarte exige la validation du juriste (nom, qualité, date), saisie par l'Administrateur et gardée avec
