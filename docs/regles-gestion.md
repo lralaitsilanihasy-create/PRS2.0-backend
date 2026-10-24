@@ -3555,6 +3555,11 @@ Subordonné direct du Chef de commission. Partage sa localité avec son CC. Réc
 
 ---
 
+- **Chronologie du circuit** ⚠️ **Ajouté (2026-10-24, demande front « heure-serveur », H2)** : une réception ne se date pas avant
+  la soumission du dossier, un dispatch pas avant la réception, un examen pas avant le dispatch (400 `DATE_ANTERIEURE`) ; aucune
+  date ne dépasse l'heure du serveur, à 5 minutes près (400 `DATE_FUTURE`). Le front propose par défaut l'heure du serveur
+  (`GET /api/horloge`), et non celle du poste : en recette, le serveur peut vivre à une autre date (ADR-0016).
+
 ### 3.5. Membre
 
 - **Rôle** : Instructeur de l'examen — subordonné du CC

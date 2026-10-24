@@ -334,6 +334,8 @@ public class ExamenService {
         Visibilite.exigerLocalite(dispatchRepository.findLocaliteById(dto.getIdDispatch()));
         exigerMembreAttributaire(dto.getIdDispatch());
         exigerDossierDispatche(dto.getIdDispatch());
+        // ⚠️ 2026-10-24 (« heure-serveur », H2) — l'examen suit le dispatch et ne dépasse pas le jour du serveur.
+        ChronologieCircuit.exiger("EXAMEN", dto.getDateExamen(), "DISPATCH", dateDispatch(dto.getIdDispatch()));
         Examen entity = ExamenMapper.toEntity(dto);
         // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
         entity.setIdExamen(ClePrimaire.reallouer(dto.getIdExamen(), repository::existsById, repository::nextIdExamen));
@@ -428,8 +430,16 @@ public class ExamenService {
         exigerMembreAttributaire(dto.getIdDispatch());
         exigerExamenModifiable(id);
         existing.setIdDispatch(dto.getIdDispatch());
+        // ⚠️ 2026-10-24 (« heure-serveur », H2) — gardée seulement quand la date change.
+        if (dto.getDateExamen() != null && !dto.getDateExamen().equals(existing.getDateExamen())) {
+            ChronologieCircuit.exiger("EXAMEN", dto.getDateExamen(), "DISPATCH", dateDispatch(dto.getIdDispatch()));
+        }
         existing.setDateExamen(dto.getDateExamen());
         return ExamenMapper.toDto(repository.save(existing));
+    }
+
+    private java.time.LocalDateTime dateDispatch(Integer idDispatch) {
+        return idDispatch == null ? null : dispatchRepository.findById(idDispatch).map(cnm.prs.entity.Dispatch::getDateDispatch).orElse(null);
     }
 
     public void delete(Integer id) {

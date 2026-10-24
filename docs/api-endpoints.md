@@ -7187,7 +7187,7 @@ le serveur ne déchiffre rien.
 
 | Méthode | URL | Corps | Réponse | Statuts | Accès |
 |---|---|---|---|---|---|
-| GET | /api/horloge | — | `{ maintenant: 'AAAA-MM-JJTHH:MM:SS', fuseau }` | 200 | public |
+| GET | /api/horloge | — | `{ maintenant: 'AAAA-MM-JJTHH:MM:SS', fuseau, decalee }` (⚠️ 2026-10-24, « heure-serveur » H1 : `decalee` = horloge de recette décalée, toujours `false` hors recette ; l'heure suit l'horloge de recette) | 200 | public |
 | GET | /api/procedures-en-ligne/{idDmc}/pieces | — | `PieceAttendueDto[]` | 200, 404 | public |
 | POST | /api/candidat/offres | `{ idDmc, lot, enTete, remplace?, groupementNifs? }` | `OffreDto` (`EN_COURS`) | 201, 400, 409 | CANDIDAT |
 | PUT | /api/candidat/offres/{idOffre}/morceaux/{rang} | octets (`application/octet-stream`), en-tête `X-Empreinte` | `{ rang, taille, recus }` | 200, 400, 403, 404, 409, 413 | CANDIDAT (le sien) |
@@ -13243,3 +13243,23 @@ journaux) : tout le serveur lit cette horloge. Le décalage est écrit dans `app
 champ `decalage` : ancien → nouveau, motif, auteur). Sous horloge décalée, **chaque entrée de journal** (journal général, journal du
 dossier, journaux de l'offre, du reçu, de la séance, de l'évaluation, des modèles) est datée à l'heure de recette et porte dans son
 détail `[recette — heure réelle : 24/10/2026 13:46]`.
+
+## Chronologie du circuit CNM (réception, dispatch, examen) ⚠️ 2026-10-24
+
+Demande front `demande-backend-2026-10-24-heure-serveur.md`, H2. La date saisie d'une étape suit l'étape précédente et ne dépasse
+pas l'heure du serveur (`ChronologieCircuit`) :
+
+| Route | Date gardée | Précédente |
+|---|---|---|
+| `POST /api/receptions`, `PUT /api/receptions/{id}` | `dateReception` | `t_dossier.DATE_SOUMISSION` du dossier |
+| `POST /api/dispatchs`, `PUT /api/dispatchs/{id}` | `dateDispatch` | `dateReception` de la réception |
+| `POST /api/examens`, `PUT /api/examens/{id}` | `dateExamen` (au jour) | `dateDispatch` du dispatch |
+
+- **400 `DATE_ANTERIEURE`** : `details { etape, date, etapePrecedente, datePrecedente }` (étapes `SOUMISSION`, `RECEPTION`,
+  `DISPATCH`, `EXAMEN` ; `datePrecedente` à la minute, `AAAA-MM-JJTHH:MM`).
+- **400 `DATE_FUTURE`** : `details { etape, date, maintenant }`. La date dépasse l'heure du serveur de plus de 5 minutes, ou le jour
+  du serveur pour l'examen.
+- Comparaison à la minute : une réception à 10:00 suit une soumission à 10:00:35. Une date seule (`AAAA-MM-JJ`), que le serveur
+  complète à l'heure courante, se compare au jour.
+- **Sur un `PUT`**, la garde ne joue que si la date change. Une étape précédente sans date (dossier ancien) ne garde que la date
+  future.

@@ -1,6 +1,7 @@
 package cnm.prs.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -156,6 +157,9 @@ public class ReceptionService {
         validatePassage(dto);
         interdireDoublonPassageInitial(dto);
         exigerControleCompletude(dto);
+        // ⚠️ 2026-10-24 (« heure-serveur », H2) — la réception suit la soumission et ne dépasse pas l'heure du serveur.
+        ChronologieCircuit.exiger("RECEPTION", ReceptionMapper.toLocalDateTime(dto.getDateReception()), "SOUMISSION",
+                dateSoumission(dto.getIdDossier()));
         // ⚠️ 2026-09-25 (signalement front) — le réceptionnaire est celui qui enregistre la réception quand le corps ne
         // le nomme pas : une réception sans réceptionnaire n'a pas de localité, et tout le circuit qui la lit (périmètres,
         // co-signataires du PV §3.3) la perd — le visa refusait alors tous les Membres de la localité.
@@ -301,13 +305,23 @@ public class ReceptionService {
         existing.setNumPassage(dto.getNumPassage());
         existing.setTypePassage(dto.getTypePassage());
         existing.setImCtrlRecept(dto.getImCtrlRecept());
-        existing.setDateReception(ReceptionMapper.toLocalDateTime(dto.getDateReception()));
+        LocalDateTime date = ReceptionMapper.toLocalDateTime(dto.getDateReception());
+        // ⚠️ 2026-10-24 (« heure-serveur », H2) — gardée seulement quand la date change : une réception ancienne se corrige
+        // sans buter sur une soumission ultérieure du même dossier.
+        if (ChronologieCircuit.changee(dto.getDateReception(), date, existing.getDateReception())) {
+            ChronologieCircuit.exiger("RECEPTION", date, "SOUMISSION", dateSoumission(dto.getIdDossier()));
+        }
+        existing.setDateReception(date);
         existing.setObservation(dto.getObservation());
         existing.setComplet(dto.getComplet());
         existing.setIdReceptionPrec(dto.getIdReceptionPrec());
         Reception saved = repository.save(existing);
         declencherPretDispatch(saved);
         return toDtoComplet(saved);
+    }
+
+    private LocalDateTime dateSoumission(Integer idDossier) {
+        return idDossier == null ? null : dossierRepository.findById(idDossier).map(Dossier::getDateSoumission).orElse(null);
     }
 
     public void delete(Integer id) {

@@ -16,6 +16,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.config.HorlogeRecette;
 import cnm.prs.dto.CeremonieDto;
 import cnm.prs.dto.OffreDto;
 import cnm.prs.dto.ProcedureEnLigneDto;
@@ -788,6 +789,6 @@ public class OffreService {
     /** {@code GET /api/horloge} : l'heure du serveur à la seconde ({@code AAAA-MM-JJTHH:MM:SS}) et le fuseau de la plateforme. */
     public OffreDto.Horloge horloge(String fuseau) {
         return new OffreDto.Horloge(maintenant().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")),
-                fuseau == null || fuseau.isBlank() ? "Indian/Antananarivo" : fuseau);
+                fuseau == null || fuseau.isBlank() ? "Indian/Antananarivo" : fuseau, HorlogeRecette.decalee());
     }
 }

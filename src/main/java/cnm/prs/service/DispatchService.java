@@ -132,6 +132,9 @@ public class DispatchService {
             dto.setInterimDispatch(Boolean.FALSE);
         }
         validerAttributaireMembre(dto);
+        // ⚠️ 2026-10-24 (« heure-serveur », H2) — le dispatch suit la réception et ne dépasse pas l'heure du serveur.
+        ChronologieCircuit.exiger("DISPATCH", DispatchMapper.toLocalDateTime(dto.getDateDispatch()), "RECEPTION",
+                dateReception(dto.getIdReception()));
         Dispatch entity = DispatchMapper.toEntity(dto);
         // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
         entity.setIdDispatch(ClePrimaire.reallouer(dto.getIdDispatch(), repository::existsById, repository::nextIdDispatch));
@@ -378,6 +381,10 @@ public class DispatchService {
      * ⚠️ depuis l'audit du 2026-09-14 (C1), <strong>seulement quand l'attributaire change</strong> : un PUT
      * qui garde l'attributaire garde aussi le dispatcheur.</p>
      */
+    private java.time.LocalDateTime dateReception(Integer idReception) {
+        return idReception == null ? null : receptionRepository.findById(idReception).map(Reception::getDateReception).orElse(null);
+    }
+
     public DispatchDto update(Integer id, DispatchDto dto) {
         Dispatch existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dispatch introuvable : " + id));
@@ -439,7 +446,12 @@ public class DispatchService {
         }
         existing.setImCtrlCc(dto.getImCtrlCc());
         existing.setImCtrlMembre(dto.getImCtrlMembre());
-        existing.setDateDispatch(DispatchMapper.toLocalDateTime(dto.getDateDispatch()));
+        java.time.LocalDateTime date = DispatchMapper.toLocalDateTime(dto.getDateDispatch());
+        // ⚠️ 2026-10-24 (« heure-serveur », H2) — gardée seulement quand la date change.
+        if (ChronologieCircuit.changee(dto.getDateDispatch(), date, existing.getDateDispatch())) {
+            ChronologieCircuit.exiger("DISPATCH", date, "RECEPTION", dateReception(dto.getIdReception()));
+        }
+        existing.setDateDispatch(date);
         existing.setDateCtrlAssigne(dto.getDateCtrlAssigne());
         existing.setInstructions(dto.getInstructions());
         existing.setInterimDispatch(dto.getInterimDispatch());

@@ -2,6 +2,7 @@ package cnm.prs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Clock;
@@ -27,5 +28,14 @@ class HorlogeRecetteInactiveIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(clock).isNotSameAs(HorlogeRecette.HORLOGE);
         assertThat(clock.getClass().getName()).doesNotContain("HorlogeRecette");
         mvc.perform(get("/api/admin/horloge-recette").header("Authorization", tokenAdmin)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("GET /api/horloge (« heure-serveur », H1) : sans connexion, l'heure du serveur, decalee=false")
+    void heureServeur() throws Exception {
+        mvc.perform(get("/api/horloge")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.maintenant").exists())
+                .andExpect(jsonPath("$.fuseau").exists())
+                .andExpect(jsonPath("$.decalee").value(false));
     }
 }

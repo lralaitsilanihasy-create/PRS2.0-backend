@@ -276,6 +276,35 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-10-24 (heure-serveur, H2) — réception avant la soumission : 400 DATE_ANTERIEURE ; après l'heure du serveur : "
+            + "400 DATE_FUTURE ; entre les deux : 201")
+    void reception_chronologie() throws Exception {
+        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
+        LocalDateTime soumission = LocalDateTime.now().minusDays(1).withHour(10).withMinute(0).withSecond(0).withNano(0);
+        Dossier d = dossier(301, "SOUMIS");
+        d.setIdLocalite("ANT");
+        d.setIdTypeDossier("DDP");
+        d.setDateSoumission(soumission);
+        dossierRepository.save(d);
+        java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+        String corps = "{\"idDossier\":301,\"numPassage\":1,\"typePassage\":\"INITIAL\",\"complet\":true,\"dateReception\":\"%s\"}";
+
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec).contentType(MediaType.APPLICATION_JSON)
+                .content(String.format(corps, soumission.minusMinutes(1).format(f))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DATE_ANTERIEURE"))
+                .andExpect(jsonPath("$.details.etapePrecedente").value("SOUMISSION"))
+                .andExpect(jsonPath("$.details.datePrecedente").value(soumission.toString()));
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec).contentType(MediaType.APPLICATION_JSON)
+                .content(String.format(corps, LocalDateTime.now().plusHours(2).format(f))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DATE_FUTURE"));
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec).contentType(MediaType.APPLICATION_JSON)
+                .content(String.format(corps, soumission.format(f))))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
     @DisplayName("Réception — reference persistée (snapshot immuable) : GET la renvoie et elle survit à la mutation de dossier.refeDossier")
     void reception_reference_persistee_immuable() throws Exception {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");

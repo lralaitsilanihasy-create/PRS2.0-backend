@@ -62,6 +62,11 @@ class HorlogeRecetteIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(LocalDateTime.now(clock)).isCloseTo(seance, within(1, ChronoUnit.MINUTES));
         assertThat(LocalDateTime.now(HorlogeRecette.HORLOGE)).isCloseTo(seance, within(1, ChronoUnit.MINUTES));
         assertThat(Duration.parse(Files.readString(FICHIER, StandardCharsets.UTF_8))).isEqualTo(HorlogeRecette.decalage());
+        // « heure-serveur » (H1) : tout le monde, sans connexion, lit cette heure-là.
+        String heure = mvc.perform(get("/api/horloge")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.decalee").value(true)).andReturn().getResponse().getContentAsString();
+        assertThat(LocalDateTime.parse(com.jayway.jsonpath.JsonPath.read(heure, "$.maintenant")))
+                .isCloseTo(seance, within(1, ChronoUnit.MINUTES));
 
         // Le journal garde la vérité : l'entrée est datée à l'heure de recette et porte l'heure réelle.
         var trace = jdbcTemplate.queryForMap("SELECT \"DATE_ACTION\", \"NOUVELLE_VALEUR\" FROM t_audit_log "

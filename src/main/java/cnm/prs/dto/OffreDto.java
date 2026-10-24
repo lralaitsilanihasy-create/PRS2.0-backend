@@ -45,8 +45,12 @@ public record OffreDto(String idOffre, Long idDmc, String reference, String obje
     public record Entreprise(String nif, String raisonSociale) {
     }
 
-    /** {@code GET /api/horloge} : l'heure du serveur, à la seconde, et son fuseau. */
-    public record Horloge(String maintenant, String fuseau) {
+    /**
+     * {@code GET /api/horloge} : l'heure du serveur, à la seconde, et son fuseau. ⚠️ 2026-10-24 (demande front « heure-serveur », H1)
+     * — {@code decalee} : {@code true} sous horloge de recette décalée (ADR-0016), toujours {@code false} ailleurs ; le front en
+     * déduit son bandeau (Q2).
+     */
+    public record Horloge(String maintenant, String fuseau, boolean decalee) {
     }
 
     /**
