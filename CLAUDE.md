@@ -8,6 +8,9 @@ du backend. À placer à la racine du projet Spring Boot, à côté de `pom.xml`
 - Framework : Spring Boot
 - Build : Maven via le wrapper `mvnw` / `mvnw.cmd` (toujours l'utiliser, ne pas exiger un Maven global)
 - Packaging : jar exécutable, Tomcat embarqué (depuis le 2026-08-26 — voir `docs/adr/ADR-0001-packaging-jar-java-21.md`)
+- Fuseau : `Indian/Antananarivo`, imposé à la JVM par `PrsApplication.main` (surcharge `-Dapp.fuseau` / `APP_FUSEAU`) depuis
+  le 2026-10-24. Toutes les heures sont des `LocalDateTime` de ce fuseau. Les tests ne passent pas par `main` : ils gardent le
+  fuseau du poste.
 - Base de données : PostgreSQL en local, administrée avec pgAdmin
 - Dépendances clés : Spring Web, Spring Data JPA, PostgreSQL Driver
 - IDE : Eclipse (plugin Spring Tools)
