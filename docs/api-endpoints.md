@@ -3418,7 +3418,7 @@ saisie s'étend, la commission cote ; pas de migration — tout tient dans la gr
   `satisfaite` contradictoires). La décision globale (`CONFORME` / `ECARTEE`) reste celle de la commission : la grille n'en décide pas.
 - **§B3.2 — spécifications techniques** (fournitures, formulaire en ligne) : `GET …/evaluation/offres/{idOffre}/specifications` →
   `[{ idArticle, article, marque, modele, idCaracteristique, caracteristique, exigee, proposee, declareeConforme, coteProposee, cote,
-  observation }]` (CAO et responsable ; 403 sinon ; vide pour une offre déposée par pièces) ; cote proposée = déclaration du candidat
+  observation }]` (CAO et responsable ; ⚠️ 2026-10-27 la Commission du dossier de marché, rapport signé ; 403 sinon ; vide pour une offre déposée par pièces) ; cote proposée = déclaration du candidat
   (conforme → C, non conforme → NC, sans déclaration : nulle). Saisie avec la conformité : `specifications[{ idArticle,
   idCaracteristique, cote, observation? }]`, cote **C, SC ou NC** (400 `COTE_INVALIDE`) ; 400 `SPECIFICATION_INCONNUE` hors du tableau de
   l'offre. Stockées dans la grille sous `SPEC:<idArticle>:<idCaracteristique>`.
@@ -9091,6 +9091,17 @@ comme avant.
   contrat-cadre à plusieurs titulaires. **Coût** : une requête repère les procédures évaluées ; chacune paie ensuite la lecture de
   son attribution. L'écran fait un seul appel.
 - `null` pour les deux sur une ligne sans fiche.
+
+⚠️ **2026-10-27 (demande front « lectures-cnm-dossier-marche »)** — deux lectures de plus pour la Commission qui contrôle le dossier
+de marché (même condition que ci-dessous, `ControleDuMarche`). Pas de migration.
+- **L1 (Q1 : par la séance)** — `GET /api/fiches-marche/{idDmc}/seance` sert `pv.tentativesRefusees` (même forme que dans
+  `…/depots` : `[{ horodatage, geste, motif, entreprise, nif, lot, enveloppe, idOffre, dateLimite }]`), pour tout lecteur de la
+  séance, Commission comprise ; nul tant que la séance n'est pas ouverte (elle ne s'ouvre qu'une fois les dépôts clos). `…/depots`
+  reste réservé à la PRMP, l'UGPM et le responsable (403 pour la Commission).
+- **L2** — `GET …/evaluation/offres/{idOffre}/specifications` : la Commission le lit **une fois le rapport d'évaluation signé**
+  (403 avant). Même tableau que pour la CAO : aucun champ n'y est réservé à la CAO ; c'est une lecture, la saisie reste à la CAO.
+- **Q2** — `GET …/seance/lecture` : `offres[].entreprise.stat`, le STAT déclaré par l'entreprise (nul s'il ne l'est pas), à côté du
+  NIF et de sa `verification`. Le STAT n'est pas vérifié : seul le NIF l'est.
 
 ⚠️ **2026-10-20 (demande front « dossier-marche-donnees »)** — la Commission lit la procédure du dossier de marché qu'elle contrôle.
 - **B1, en lecture seule** : les GET de la procédure d'une fiche admettent, en plus du responsable, de la CAO, de la PRMP et de l'UGPM,

@@ -733,7 +733,8 @@ public class SeanceService {
                 rabais = null;
             }
             lues.add(new SeanceDto.OffreLue(o.getNumero(), o.getIdOffre(), o.getLot(), o.getEtat(), o.getIntegrite(), o.getMotifLecture(),
-                    new SeanceDto.EntrepriseLue(o.getNif(), o.getRaisonSociale(), e == null ? null : e.verification(), e == null ? null : e.exclusion()),
+                    new SeanceDto.EntrepriseLue(o.getNif(), o.getRaisonSociale(), e == null ? null : e.verification(), e == null ? null : e.exclusion(),
+                            e == null ? null : e.stat()),
                     l.get("groupement"), ae, lue, piecesLues, manquantes, alertes, form != null, totaux, parties, frais, rabais));
         }
         return new SeanceDto.Lecture(lues, nonOuvertes);
@@ -1470,7 +1471,7 @@ public class SeanceService {
     /** ⚠️ §B2 : le PV, ses signatures posées et celles qui restent attendues. */
     private SeanceDto.Pv blocPv(Long idDmc, Seance s, List<SeanceDto.Membre> membres) {
         if (s == null) {
-            return new SeanceDto.Pv(false, false, false, List.of(), List.of(), null);
+            return new SeanceDto.Pv(false, false, false, List.of(), List.of(), null, null);
         }
         Map<String, SeanceDto.Membre> parIm = new LinkedHashMap<>();
         membres.forEach(m -> parIm.put(m.im(), m));
@@ -1488,7 +1489,8 @@ public class SeanceService {
         // ⚠️ R1 (§B2) — le quorum constaté sur les signataires non empêchés, dès que le PV est produit.
         cnm.prs.dto.QuorumDto quorum = s.getSignataires() == null ? null : quorumCao.evaluer(idDmc, QuorumCao.SEANCE,
                 faites.stream().filter(x -> !x.empechement()).map(SeanceDto.Signature::im).toList());
-        return new SeanceDto.Pv(s.getPv() != null, Boolean.TRUE.equals(s.getPvPublie()), s.getPvSigneLe() != null, faites, attendues, quorum);
+        return new SeanceDto.Pv(s.getPv() != null, Boolean.TRUE.equals(s.getPvPublie()), s.getPvSigneLe() != null, faites, attendues, quorum,
+                tentatives.lister(idDmc));
     }
 
     /** Les parts chiffrées d'un détenteur, retrouvées dans l'en-tête de chaque offre déposée par l'empreinte de l'une de ses clés. */

@@ -24,7 +24,7 @@ class EvaluationPropositionsTest {
     @DisplayName("Alertes de séance → vérifications non satisfaites, avec leur message ; sans objet → nul")
     void alertes() {
         SeanceDto.OffreLue o = new SeanceDto.OffreLue(1, "o1", null, "DEPOSEE", "LECTURE_IMPOSSIBLE", "conteneur illisible",
-                new SeanceDto.EntrepriseLue("111", "Alpha", null, new EntrepriseCandidatDto.Exclusion(1, "111", "Alpha", "Fraude", "ARMP-77", null, null, true, List.of())),
+                new SeanceDto.EntrepriseLue("111", "Alpha", null, new EntrepriseCandidatDto.Exclusion(1, "111", "Alpha", "Fraude", "ARMP-77", null, null, true, List.of()), null),
                 null, Map.of(), new SeanceDto.Garantie("G1", true, new BigDecimal("100"), "MGA", null), List.of(),
                 List.of("Pouvoir du signataire", "Quittance"), List.of(new SeanceDto.Alerte("GARANTIE_INSUFFISANTE", "Garantie de 100 pour 200."),
                         new SeanceDto.Alerte("NON_CONFORME", "Article 2 non conforme."), new SeanceDto.Alerte("EXCLUSION", "Exclusion en cours.")),
@@ -51,7 +51,7 @@ class EvaluationPropositionsTest {
     @DisplayName("⚠️ 2026-10-15 (« modeles-guide-cao », §B3.1) — les rubriques du guide : validité comparée au DAO, bordereau rempli en ligne, "
             + "visite des lieux sans objet hors exigence, cotes proposées (C, NC, SO, nulle à examiner)")
     void rubriquesDuGuide() {
-        SeanceDto.OffreLue o = new SeanceDto.OffreLue(1, "o1", null, "DEPOSEE", "INTACTE", null, new SeanceDto.EntrepriseLue("111", "Alpha", null, null),
+        SeanceDto.OffreLue o = new SeanceDto.OffreLue(1, "o1", null, "DEPOSEE", "INTACTE", null, new SeanceDto.EntrepriseLue("111", "Alpha", null, null, null),
                 null, Map.of("montantHt", "1000", "validiteJours", "60", "delai", "30", "delaiUnite", "jours"),
                 new SeanceDto.Garantie("G1", true, new BigDecimal("100"), "MGA", null), List.of(), List.of(), List.of(), true, null,
                 List.of(FormulairesEnLigne.BORDEREAU), null, null);

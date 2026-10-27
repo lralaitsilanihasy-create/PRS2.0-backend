@@ -82,6 +82,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private cnm.prs.repository.PieceJointeDossierRepository pieceJointeDossierRepository;
     @Autowired private cnm.prs.seed.PointsCtrlDossierMarcheSeeder pointsCtrlSeeder;
     @Autowired private cnm.prs.repository.AttributionRepository attributionRepository;
+    @Autowired private cnm.prs.repository.EvaluationRapportRepository rapportRepository;
+    @Autowired private cnm.prs.service.TentativesRefusees tentativesRefusees;
     @Autowired private cnm.prs.repository.PieceSousTypeRepository pieceSousTypeRepository;
     @Autowired private cnm.prs.repository.DocumentFicheMarcheRepository documentFicheMarcheRepository;
     @Autowired private cnm.prs.service.AttributionService attributionService;
@@ -752,6 +754,27 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         }
         mvc.perform(get(sea + "/lecture").header("Authorization", tokenSec))
                 .andExpect(res -> assertThat(res.getResponse().getStatus()).isNotEqualTo(403));
+        // ⚠️ 2026-10-27 (« lectures-cnm-dossier-marche ») — L1 : les tentatives refusées hors délai, au PV de la séance ; L2 : le tableau
+        // de conformité d'une offre, une fois le rapport signé ; Q2 : le STAT servi avec le NIF.
+        tentativesRefusees.creation(idDmc, "C900000051", null, 1, null, LocalDateTime.now().minusDays(1), LocalDateTime.now().minusDays(2));
+        mvc.perform(get(sea).header("Authorization", tokenSec)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.pv.tentativesRefusees[0].geste").value("CREATION"))
+                .andExpect(jsonPath("$.pv.tentativesRefusees[0].motif").value("DELAI_DEPASSE"));
+        mvc.perform(get(base.replace("/evaluation", "/depots")).header("Authorization", tokenSec)).andExpect(status().isForbidden());
+        String specs = base + "/offres/" + a + "/specifications";
+        mvc.perform(get(specs).header("Authorization", tokenSec)).andExpect(status().isOk()).andExpect(jsonPath("$").isArray());
+        cnm.prs.entity.EvaluationRapport rapport = rapportRepository.findById(idDmc).orElseThrow();
+        LocalDateTime signeLe = rapport.getSigneLe();
+        rapport.setSigneLe(null);
+        rapportRepository.save(rapport);
+        mvc.perform(get(specs).header("Authorization", tokenSec)).andExpect(status().isForbidden());
+        rapport.setSigneLe(signeLe);
+        rapportRepository.save(rapport);
+        cnm.prs.entity.Entreprise alpha = entrepriseRepository.findById(offreRepository.findById(a).orElseThrow().getIdEntreprise()).orElseThrow();
+        alpha.setStat("41101112026000123");
+        entrepriseRepository.save(alpha);
+        mvc.perform(get(sea + "/lecture").header("Authorization", tokenSec)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.offres[?(@.idOffre=='" + a + "')].entreprise.stat").value(hasItem("41101112026000123")));
         mvc.perform(get(sea + "/offres/" + a + "/pieces/offre.pdf").header("Authorization", tokenSec)).andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("PIECE_RESERVEE_CAO"));
         mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenSec).contentType(JSON).content("{}"))

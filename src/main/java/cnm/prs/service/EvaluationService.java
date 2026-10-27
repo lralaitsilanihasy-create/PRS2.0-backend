@@ -486,12 +486,19 @@ public class EvaluationService {
     /**
      * ⚠️ §B3.2 — le tableau de conformité technique d'une offre (fournitures, formulaire en ligne), avec les cotes retenues par la CAO à
      * son examen préliminaire : les membres de la CAO et le responsable ; vide pour une offre sans formulaire de conformité.
+     * ⚠️ 2026-10-27 (« lectures-cnm-dossier-marche », L2) — la Commission qui contrôle le dossier de marché ({@link ControleDuMarche}) le
+     * lit aussi, une fois le rapport d'évaluation signé : le même tableau, rien n'y est réservé à la CAO ; la lecture ne modifie rien.
      */
     @Transactional(readOnly = true)
     public List<EvaluationDto.Specification> specifications(Long idDmc, String idOffre) {
         exigerEvaluation(idDmc);
         if (membreAppelant(idDmc) == null && !internes.estTitulaire(idDmc)) {
-            throw new AccessDeniedException("Le tableau de conformité d'une offre se lit par la commission et le responsable de la procédure.");
+            if (!controleDuMarche.litLaProcedure(idDmc)) {
+                throw new AccessDeniedException("Le tableau de conformité d'une offre se lit par la commission et le responsable de la procédure.");
+            }
+            if (rapports.findById(idDmc).map(r -> r.getSigneLe() == null).orElse(true)) {
+                throw new AccessDeniedException("Le tableau de conformité d'une offre se lit par la Commission une fois le rapport d'évaluation signé.");
+            }
         }
         SeanceDto.OffreLue o = offreEvaluee(idDmc, idOffre);
         return specificationsCotees(idDmc, o.idOffre());

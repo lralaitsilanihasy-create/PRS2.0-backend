@@ -1572,6 +1572,9 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   périmètre (tous les contrôleurs de la localité, pas seulement ceux du circuit). Les pièces des offres restent réservées aux
 >   membres de la CAO (arbitrage du 04/10). Sans dossier de marché, la procédure reste à la CAO, au responsable, à la PRMP et à
 >   l'UGPM.
+>   ⚠️ **2026-10-27 (« lectures-cnm-dossier-marche »)** — elle lit aussi les **tentatives de dépôt refusées hors délai** (au PV de la
+>   séance ; le registre des dépôts lui reste fermé) et, **une fois le rapport d'évaluation signé**, le **tableau de conformité**
+>   d'une offre, sans pouvoir le modifier. Le STAT de l'entreprise est servi avec son NIF à la lecture des offres.
 > - ⚠️ **2026-10-20 (« fiche-presentation-marche »)** — **la fiche de présentation du dossier de marché** présente ce qui s'est
 >   passé, selon les points du manuel de contrôle (p. 50-52) : l'attribution (titulaires par rang, écart à l'estimation), la mise en
 >   concurrence (avis de la Commission, première publication, délai de remise effectif), la séance d'ouverture, l'évaluation (le

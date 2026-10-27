@@ -43,7 +43,10 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
      */
     public record Pv(boolean produit, boolean publie, boolean signe, List<Signature> signatures, List<Attendue> signaturesAttendues,
             /** ⚠️ R1 (manuel révisé, §B2) — le quorum constaté sur les signataires non empêchés ; nul tant que le PV n'est pas produit. */
-            QuorumDto quorum) {
+            QuorumDto quorum,
+            /** ⚠️ 2026-10-27 (« lectures-cnm-dossier-marche », L1 ; R9b) — les tentatives de dépôt refusées hors délai, portées au PV
+             * d'ouverture, pour tout lecteur de la séance (la Commission comprise) ; nul avant l'ouverture de la séance. */
+            List<OffreDto.Tentative> tentativesRefusees) {
     }
 
     /** Une signature électronique simple, ou un empêchement constaté ({@code empechement}, {@code motif}, {@code constatePar}). */
@@ -123,7 +126,9 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
     }
 
     public record EntrepriseLue(String nif, String raisonSociale, EntrepriseCandidatDto.Verification verification,
-            EntrepriseCandidatDto.Exclusion exclusion) {
+            EntrepriseCandidatDto.Exclusion exclusion,
+            /** ⚠️ 2026-10-27 (« lectures-cnm-dossier-marche », Q2) — le STAT déclaré par l'entreprise ; nul s'il n'est pas déclaré. */
+            String stat) {
     }
 
     /**

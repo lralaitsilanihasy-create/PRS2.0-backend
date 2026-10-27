@@ -88,7 +88,7 @@ class ControlesAutomatiquesTest {
     }
 
     private static SeanceDto seance(boolean pvSigne, QuorumDto q) {
-        SeanceDto.Pv pv = new SeanceDto.Pv(true, true, pvSigne, List.of(), List.of(), q);
+        SeanceDto.Pv pv = new SeanceDto.Pv(true, true, pvSigne, List.of(), List.of(), q, List.of());
         return new SeanceDto(7L, "CLOSE", null, null, null, null, List.of(), List.of(), false, List.of(), null, pv, null, null);
     }
 
