@@ -9114,6 +9114,9 @@ sa procédure. Migration V142 (`t_attribution.REMISE_PAPIER`).
   - Les actes de gestion n'exigent pas ce marché signé dans l'application (`MARCHE_NON_SIGNE` ne joue pas).
 - **P3** — `POST /api/saisies/dossier` (et la création brute de l'Administrateur) refusent `MAOO`, `MAOO-CC`, `MAOR`, `MAOOI`, `MAORI`,
   `MAOOPREQUAL`, `MPI` : **409 `DOSSIER_PAR_PROCEDURE`**.
+- **P4 (complément du 27/10)** — `DossierDto.procedure.remisePapier` (booléen, sur `GET /api/dossiers/{id}` et partout où `procedure`
+  est servi) : `true` pour un dossier de marché d'une procédure papier (ni séance, ni rapport d'évaluation, ni attribution dans
+  l'application), `false` pour un dossier né de l'attribution. `procedure` reste nul pour tout autre dossier.
 
 ⚠️ **2026-10-27 (demande front « lectures-cnm-dossier-marche »)** — deux lectures de plus pour la Commission qui contrôle le dossier
 de marché (même condition que ci-dessous, `ControleDuMarche`). Pas de migration.

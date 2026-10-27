@@ -734,6 +734,9 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.lots[0].dossierMarche.statut").value("BROUILLON")).andExpect(jsonPath("$.lots[0].projetDisponible").value(true))
                 .andReturn().getResponse().getContentAsString();
         int idDossier = JsonPath.read(cree, "$.lots[0].dossierMarche.idDossier");
+        // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P4) — un dossier né de l'attribution n'est pas papier.
+        mvc.perform(get("/api/dossiers/" + idDossier).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.procedure.idDmc").value(idDmc.intValue())).andExpect(jsonPath("$.procedure.remisePapier").value(false));
         mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DOSSIER_EXISTANT")).andExpect(jsonPath("$.idDossier").value(idDossier));
         assertThat(dossierRepository.findById(idDossier).orElseThrow().getIdTypeDossier()).isEqualTo("DDM");

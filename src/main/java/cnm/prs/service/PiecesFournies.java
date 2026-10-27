@@ -103,7 +103,8 @@ public class PiecesFournies {
             java.util.List<cnm.prs.entity.Lot> duPlan = idDetail == null ? java.util.List.of() : lots.findByIdDetail(idDetail);
             return new cnm.prs.dto.DossierDto.Procedure(a.getIdDmc(), a.getLot(), mec == null ? null : mec.getIdDossier(),
                     mec == null ? null : mec.getRefeDossier(), designation,
-                    duPlan.size() > 1 ? ProjetMarcheService.intituleLot(duPlan, a.getLot()) : null);
+                    duPlan.size() > 1 ? ProjetMarcheService.intituleLot(duPlan, a.getLot()) : null,
+                    a.isRemisePapier());   // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P4)
         }).orElse(null);
     }
 

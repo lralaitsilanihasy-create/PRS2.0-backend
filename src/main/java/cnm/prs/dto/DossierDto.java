@@ -236,9 +236,12 @@ public class DossierDto {
      * @param designationMarche            ⚠️ 2026-10-19 (« dossier-marche-lecture », §B3) — l'objet : la désignation de la fiche
      *                                     validée, à défaut celle de la ligne du plan
      * @param intituleLot                  « Lot n°01 : … » d'après les lots du plan, pour une ligne qui en a plusieurs ; nul sinon
+     * @param remisePapier                 ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P4) — vrai pour le dossier de marché d'une
+     *                                     procédure papier (attribution marquée {@code REMISE_PAPIER}, V142) : ni séance, ni rapport
+     *                                     d'évaluation, ni attribution dans l'application ; faux pour un dossier né de l'attribution
      */
     public record Procedure(Long idDmc, Integer lot, Integer idDossierMiseEnConcurrence, String refeDossierMiseEnConcurrence,
-            String designationMarche, String intituleLot) {
+            String designationMarche, String intituleLot, boolean remisePapier) {
     }
 
     /** ⚠️ Chronométrage (2026-09-01) — étape ouverte du circuit ; {@code null} si aucune tâche CNM ne court. */

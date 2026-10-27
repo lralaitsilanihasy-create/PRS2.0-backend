@@ -652,8 +652,11 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
         String cree = mvc.perform(post(creer).header("Authorization", tokenPrmp)).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idSousType").value("MAOO")).andExpect(jsonPath("$.statut").value("BROUILLON"))
                 .andExpect(jsonPath("$.procedure.idDmc").value(idDmc.intValue())).andExpect(jsonPath("$.procedure.lot").value(1))
+                .andExpect(jsonPath("$.procedure.remisePapier").value(true))   // ⚠️ P4
                 .andReturn().getResponse().getContentAsString();
         int marche = JsonPath.read(cree, "$.idDossier");
+        mvc.perform(get("/api/dossiers/" + marche).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.procedure.remisePapier").value(true));
         mvc.perform(post(creer).header("Authorization", tokenPrmp)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DOSSIER_EXISTANT")).andExpect(jsonPath("$.idDossier").value(marche));
         assertThat(attributionRepository.findById(new cnm.prs.entity.Attribution.Cle(idDmc, 1)).orElseThrow().isRemisePapier()).isTrue();
