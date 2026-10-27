@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -619,6 +620,57 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(documentsFicheMarcheService.rendrePublication(etat, "AVIS-F", false).elements().toString())
                 .doesNotContain("modèle de l’application").contains("Avis d’Appel d’Offres Ouvert");
     }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-27 (« dossier-marche-remise-papier ») — P1 : la procédure papier listée avec son mode, ses lots et l'ouverture "
+            + "de son dossier de marché (DOSSIER_NON_CLOTURE, AVIS_NON_PUBLIE, puis ouvert) ; P2 : création rattachée (403 Membre, 404 lot, "
+            + "409 tant que fermé, 201 MAOO en brouillon avec sa procédure, 409 DOSSIER_EXISTANT), fiche de présentation sans séance ni "
+            + "évaluation ; P3 : saisie libre d'un MAOO refusée (409 DOSSIER_PAR_PROCEDURE)")
+    void dossierMarcheRemisePapier() throws Exception {
+        typeDossierRepository.save(new cnm.prs.entity.TypeDossier("DDM", "Dossier de Marché"));
+        sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier("MAOO", "Marché sur Appel d'Offres Ouvert", "DDM"));
+        String creer = "/api/fiches-marche/" + idDmc + "/marche-papier/lots/1/dossier";
+        String ligne = "$[?(@.idDmc==" + idDmc + ")]";
+        int idDossier = creerDossier();
+
+        mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath(ligne + ".modeRemise").value(hasItem("PAPIER")))
+                .andExpect(jsonPath(ligne + ".lots[0].lot").value(hasItem(1)))
+                .andExpect(jsonPath(ligne + ".marchePapier.ouvert").value(hasItem(false)))
+                .andExpect(jsonPath(ligne + ".marchePapier.motif").value(hasItem("DOSSIER_NON_CLOTURE")));
+        mvc.perform(post(creer).header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DOSSIER_NON_CLOTURE"));
+        pvSigne(idDossier, "FAV", "CLOTURE");
+        mvc.perform(post(creer).header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AVIS_NON_PUBLIE"));
+        imprimer(idDmc).andExpect(status().isCreated());
+        mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath(ligne + ".marchePapier.ouvert").value(hasItem(true)));
+
+        mvc.perform(post(creer).header("Authorization", tokenMembre)).andExpect(status().isForbidden());
+        mvc.perform(post(creer.replace("/lots/1/", "/lots/2/")).header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        String cree = mvc.perform(post(creer).header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idSousType").value("MAOO")).andExpect(jsonPath("$.statut").value("BROUILLON"))
+                .andExpect(jsonPath("$.procedure.idDmc").value(idDmc.intValue())).andExpect(jsonPath("$.procedure.lot").value(1))
+                .andReturn().getResponse().getContentAsString();
+        int marche = JsonPath.read(cree, "$.idDossier");
+        mvc.perform(post(creer).header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DOSSIER_EXISTANT")).andExpect(jsonPath("$.idDossier").value(marche));
+        assertThat(attributionRepository.findById(new cnm.prs.entity.Attribution.Cle(idDmc, 1)).orElseThrow().isRemisePapier()).isTrue();
+        mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath(ligne + ".dossiersMarche[0].idDossier").value(hasItem(marche)));
+        String fiche = mvc.perform(get("/api/dossiers/" + marche + "/fiche-presentation").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.sections[*].code")).contains("ATTRIBUTION", "MISE_EN_CONCURRENCE")
+                .doesNotContain("SEANCE", "EVALUATION");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.sections[*].lignes[*].code")).contains("REMISE_PAPIER").doesNotContain("ATTRIBUTAIRE");
+
+        mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"idSousType\":\"MAOO\",\"idEntiteContract\":1}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DOSSIER_PAR_PROCEDURE"));
+    }
+
+    @Autowired private cnm.prs.repository.AttributionRepository attributionRepository;
 
     private void valider() throws Exception {
         besoinDeTest(idDmc);

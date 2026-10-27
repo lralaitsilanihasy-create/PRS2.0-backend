@@ -161,7 +161,8 @@ public class ActesGestionService {
      */
     private void exigerMarcheSigneSiEnLigne(Dossier marche) {
         Attribution a = attributions.findFirstByIdDossier(marche.getIdDossier()).orElse(null);
-        if (a != null && a.getSigneLe() == null) {
+        // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », V142) — le marché d'une procédure papier se signe hors de l'application.
+        if (a != null && !a.isRemisePapier() && a.getSigneLe() == null) {
             throw new BusinessRuleException("Le marché " + libelle(marche) + " est conduit en ligne mais n'y est pas encore signé : un acte de gestion "
                     + "ne le concerne qu'une fois signé.", "MARCHE_NON_SIGNE", marche.getIdDossier());
         }

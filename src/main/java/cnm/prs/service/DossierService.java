@@ -821,6 +821,7 @@ public class DossierService {
 
     public DossierDto create(DossierDto dto) {
         SousTypesDossier.exigerHorsFiche(dto.getIdSousType());   // ⚠️ 2026-10-15 (dossier-par-fiche, §B1, H2 : pas d'exception)
+        SousTypesDossier.exigerHorsProcedure(dto.getIdSousType());   // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P3)
         Dossier entity = DossierMapper.toEntity(dto);
         entity.setIdDossier(repository.nextIdDossier().intValue()); // ⚠️ PK serveur (séquence) ; id client ignoré
         return dto(repository.save(entity));

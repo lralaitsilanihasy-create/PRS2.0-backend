@@ -60,7 +60,28 @@ public record LigneEligibleDto(Integer idDetail, Integer idDossier, String refeD
          * ⚠️ §B2 — l'état de l'attribution, par lot, calculé par la règle de {@code GET /api/fiches-marche/{idDmc}/attribution} ; vide
          * tant que l'évaluation n'est pas ouverte, {@code null} sans fiche.
          */
-        java.util.List<AttributionLot> attributions) {
+        java.util.List<AttributionLot> attributions,
+        /**
+         * ⚠️ 2026-10-27 (demande front « dossier-marche-remise-papier », P1) — le mode de remise figé par la dernière version validée de
+         * la fiche ({@code PAPIER} ou {@code ELECTRONIQUE}) ; {@code null} sans fiche ou sans version validée.
+         */
+        String modeRemise,
+        /** ⚠️ P1 — les lots de la procédure (ceux de la ligne du plan ; un lot 1 pour une ligne sans lot) ; {@code null} sans fiche. */
+        java.util.List<LotProcedure> lots,
+        /**
+         * ⚠️ P1 — une procédure papier seulement : son dossier de marché peut-il naître ({@code ouvert}) ; sinon la première raison
+         * ({@code motif} : {@code FICHE_NON_VALIDEE}, {@code DOSSIER_NON_CLOTURE}, {@code AVIS_NON_FAVORABLE}, {@code AVIS_NON_PUBLIE}).
+         * {@code null} hors remise papier.
+         */
+        MarchePapier marchePapier) {
+
+    /** Un lot de la procédure : son numéro et son intitulé (« Lot n°02 : … », nul pour une ligne sans lot). */
+    public record LotProcedure(Integer lot, String intitule) {
+    }
+
+    /** P1 — l'ouverture du dossier de marché d'une procédure papier, et sa raison quand elle est fermée. */
+    public record MarchePapier(boolean ouvert, String motif) {
+    }
 
     /**
      * L'attribution d'un lot : son état ({@code EN_EVALUATION}, {@code PROPOSE}, {@code AU_CONTROLE}…), la signature du rapport

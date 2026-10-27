@@ -151,6 +151,8 @@ public class DmcService {
     private final cnm.prs.repository.FicheMarcheValeurRepository valeurRepository;
     private final cnm.prs.repository.EvaluationRepository evaluationRepository;
     private final org.springframework.beans.factory.ObjectProvider<AttributionService> attributionService;
+    /** ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P1) — mode de remise, lots et dossier de marché d'une procédure papier. */
+    private final org.springframework.beans.factory.ObjectProvider<MarchePapierService> marchePapier;
 
     public DmcService(DossierMecRepository repository, MarcheRepository marcheRepository,
             ModePassationRepository modeRepository, TypeDmcRepository typeDmcRepository,
@@ -162,7 +164,9 @@ public class DmcService {
             cnm.prs.repository.OffreRepository offreRepository, cnm.prs.repository.FicheMarcheRepository ficheRepository,
             cnm.prs.repository.AttributionRepository attributionRepository,
             cnm.prs.repository.FicheMarcheValeurRepository valeurRepository, cnm.prs.repository.EvaluationRepository evaluationRepository,
-            org.springframework.beans.factory.ObjectProvider<AttributionService> attributionService) {
+            org.springframework.beans.factory.ObjectProvider<AttributionService> attributionService,
+            org.springframework.beans.factory.ObjectProvider<MarchePapierService> marchePapier) {
+        this.marchePapier = marchePapier;
         this.valeurRepository = valeurRepository;
         this.evaluationRepository = evaluationRepository;
         this.attributionService = attributionService;
@@ -334,6 +338,8 @@ public class DmcService {
             if (filtre != null && !filtre.equals(sousTypeLigne)) {
                 continue;
             }
+            // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P1) — lus pour les seules lignes qui ont une fiche.
+            MarchePapierService.Etat remise = dmc == null ? null : marchePapier.getObject().etat(dmc.getIdDmc());
             out.add(new LigneEligibleDto(m.getIdDetail(), m.getIdDossier(), d == null ? null : d.getRefeDossier(),
                     m.getDesignationMarche(), m.getIdMode(), mode == null ? null : mode.getLibelle(), m.getMontEstim(),
                     dmc != null, dmc == null ? null : dmc.getIdDmc(),
@@ -346,7 +352,9 @@ public class DmcService {
                     dmc == null ? null : etatsDossier.get(dmc.getIdDmc()),
                     dmc == null ? null : dossiersMarche.getOrDefault(dmc.getIdDmc(), List.of()),
                     dmc == null ? null : numeros.getOrDefault(dmc.getIdDmc(), d == null ? null : d.getRefeDossier()),
-                    dmc == null ? null : evaluees.contains(dmc.getIdDmc()) ? attributionService.getObject().resume(dmc.getIdDmc()) : List.of()));
+                    dmc == null ? null : evaluees.contains(dmc.getIdDmc()) ? attributionService.getObject().resume(dmc.getIdDmc()) : List.of(),
+                    remise == null ? null : remise.modeRemise(), dmc == null ? null : marchePapier.getObject().lots(dmc.getIdDetail()),
+                    remise == null ? null : remise.marchePapier()));
         }
         return out;
     }

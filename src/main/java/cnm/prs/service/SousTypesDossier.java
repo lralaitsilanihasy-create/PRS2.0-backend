@@ -38,7 +38,25 @@ public final class SousTypesDossier {
     /** Les sous-types qu'une fiche marché produit (le dossier porte alors {@code ID_DMC}). */
     public static final Set<String> PRODUITS_PAR_FICHE = Set.of(DAOO, DAOO_CC, DAOR, DAOOI, DAORI, DAOOPREQUAL, DC);
 
+    /**
+     * ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P3) — les sous-types de marché qu'une procédure produit : l'attribution d'un lot
+     * (remise électronique) ou le lot d'une procédure papier.
+     */
+    public static final Set<String> PRODUITS_PAR_PROCEDURE = Set.of(MAOO, MAOO_CC, MAOR, MAOOI, MAORI, MAOOPREQUAL, MPI);
+
     private SousTypesDossier() {
+    }
+
+    /**
+     * ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P3 ; demande du pilote) — un dossier de marché qui procède d'une fiche naît de sa
+     * procédure, remise papier comprise : sa création directe est refusée, 409 {@code DOSSIER_PAR_PROCEDURE}, sans exception (Q1 : aucune
+     * procédure d'avant les fiches n'est en cours). Les dossiers déjà créés hors procédure restent tels quels.
+     */
+    public static void exigerHorsProcedure(String sousType) {
+        if (sousType != null && PRODUITS_PAR_PROCEDURE.contains(sousType.trim().toUpperCase(Locale.ROOT))) {
+            throw new cnm.prs.exception.BusinessRuleException("Un dossier de marché (" + sousType.trim() + ") naît de sa procédure : "
+                    + "choisissez la procédure, puis le lot, et créez-y le dossier de marché.", "DOSSIER_PAR_PROCEDURE");
+        }
     }
 
     /**

@@ -1116,7 +1116,7 @@ public class AttributionService {
      * ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B4) — le bordereau (ou DQE) estimatif de la dernière version validée de la fiche,
      * en devis estimatif ; 0 si la fiche n'en a pas produit (la PRMP le joint).
      */
-    private int joindreEstimatif(Dossier d, Long idDmc) {
+    int joindreEstimatif(Dossier d, Long idDmc) {
         FicheMarche validee = ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
                 .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((x, y) -> y).orElse(null);
         if (validee == null) {

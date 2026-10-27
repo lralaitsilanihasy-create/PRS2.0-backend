@@ -1575,6 +1575,15 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 >   ⚠️ **2026-10-27 (« lectures-cnm-dossier-marche »)** — elle lit aussi les **tentatives de dépôt refusées hors délai** (au PV de la
 >   séance ; le registre des dépôts lui reste fermé) et, **une fois le rapport d'évaluation signé**, le **tableau de conformité**
 >   d'une offre, sans pouvoir le modifier. Le STAT de l'entreprise est servi avec son NIF à la lecture des offres.
+> - ⚠️ **2026-10-27 (« dossier-marche-remise-papier », demande du pilote ; V142)** — **le dossier de marché d'une procédure à remise
+>   papier naît lui aussi de sa procédure**, lot par lot. La PRMP (ou son UGPM) le crée une fois la fiche validée, le dossier de mise
+>   en concurrence clôturé avec un PV favorable (ou favorable avec réserves levées), et l'avis spécifique publié (imprimé). Il est
+>   rattaché à sa procédure comme un dossier né de l'attribution. L'application fournit la fiche de présentation (sans séance ni
+>   évaluation), le PV de la Commission sur le DAO, le devis estimatif de la fiche et la publication de l'AGPM. La PRMP joint les
+>   pièces papier : journal de première publication, PV d'ouverture, rapport d'analyse, PV de validation de la CAO, projet de marché
+>   signé. Le marché se signe hors de l'application : un acte de gestion ne l'attend pas signé ici. **La saisie libre d'un dossier de
+>   marché qui procède d'une fiche est refusée** (`MAOO`, `MAOO-CC`, `MAOR`, `MAOOI`, `MAORI`, `MAOOPREQUAL`, `MPI`), sans exception :
+>   aucune procédure d'avant les fiches n'est en cours. Les dossiers déjà créés restent tels quels.
 > - ⚠️ **2026-10-20 (« fiche-presentation-marche »)** — **la fiche de présentation du dossier de marché** présente ce qui s'est
 >   passé, selon les points du manuel de contrôle (p. 50-52) : l'attribution (titulaires par rang, écart à l'estimation), la mise en
 >   concurrence (avis de la Commission, première publication, délai de remise effectif), la séance d'ouverture, l'évaluation (le

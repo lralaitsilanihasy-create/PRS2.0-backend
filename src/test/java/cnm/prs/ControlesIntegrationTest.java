@@ -57,10 +57,8 @@ class ControlesIntegrationTest extends CnmIntegrationTestSupport {
             + "hors ligne : soumis, deux résultats NON_APPLICABLE du SERVEUR ; contrôle B du Membre (403 PRMP, 400 sans observation, 201) ; "
             + "avis FAV refusé tant que la non-conformité n'est pas levée, admis après ; synthèse PDF ; soumission inconnue → vide")
     void controles() throws Exception {
-        String cree = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(JSON)
-                .content("{\"idSousType\":\"MAOO\",\"idEntiteContract\":1}")).andExpect(status().isCreated()).andReturn().getResponse()
-                .getContentAsString();
-        int marche = JsonPath.read(cree, "$.idDossier");
+        // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P3) : un dossier de marché ne se saisit plus librement ; saisi avant la règle.
+        int marche = dossierSaisiHorsFiche("DDM", "MAOO", tokenPrmp);
 
         // En ligne : le marché est attribué depuis une procédure dont la séance n'est pas ouverte.
         dossierRepository.save(dossierLoc(97600, "CLOTURE", "ANT", "PRMP001"));

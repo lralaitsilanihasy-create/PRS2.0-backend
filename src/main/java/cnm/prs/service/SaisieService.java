@@ -889,6 +889,7 @@ public class SaisieService {
                     + "(POST /api/dossiers/{idMarche}/actes-gestion).", "ACTE_DEPUIS_LE_MARCHE");
         }
         SousTypesDossier.exigerHorsFiche(sousType.getIdSousType());   // ⚠️ 2026-10-15 (dossier-par-fiche, §B1)
+        SousTypesDossier.exigerHorsProcedure(sousType.getIdSousType());   // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P3)
         String idPrmp = prmpCourante();
         String localite = dossierIntegrite.localiteDeLEntiteDeLaPrmp(req.idEntiteContract(), idPrmp);
         Dossier d = creerDossier(sousType.getIdTypeDossier(), sousType.getIdSousType(),

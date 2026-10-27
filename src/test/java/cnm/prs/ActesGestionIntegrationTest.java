@@ -54,10 +54,8 @@ class ActesGestionIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     private int nouveauMarche() throws Exception {
-        String cree = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idSousType\":\"MAOO\",\"idEntiteContract\":1}")).andExpect(status().isCreated()).andReturn().getResponse()
-                .getContentAsString();
-        int id = JsonPath.read(cree, "$.idDossier");
+        // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P3) : un dossier de marché ne se saisit plus librement ; saisi avant la règle.
+        int id = dossierSaisiHorsFiche("DDM", "MAOO", tokenPrmp);
         Dossier d = dossierRepository.findById(id).orElseThrow();
         d.setStatut("CLOTURE");
         dossierRepository.save(d);

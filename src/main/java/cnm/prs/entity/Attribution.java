@@ -168,6 +168,13 @@ public class Attribution {
     @Column(name = "AVIS_PUBLIE_PAR", length = 100)
     private String avisPubliePar;
 
+    /**
+     * ⚠️ V142 (2026-10-27, « dossier-marche-remise-papier », P2) — le dossier de marché d'une procédure à remise papier : séance,
+     * évaluation et signature hors de l'application ; pas d'offre proposée ni de geste d'attribution ici.
+     */
+    @Column(name = "REMISE_PAPIER", nullable = false)
+    private boolean remisePapier;
+
     @Basic(fetch = FetchType.LAZY)
     @Column(name = "AVIS_PDF")
     private byte[] avisPdf;

@@ -223,8 +223,12 @@ public class FichePresentationService {
                 ligne("DELAI_REMISE", "Délai de remise effectif", publication == null || dateLimite == null ? null
                         : ChronoUnit.DAYS.between(publication, dateLimite) + " jour(s), de la première publication à la date limite"))));
         out.add(section("PROCEDURE", "Procédure", procedure.stream().filter(l -> l == null || !"DATE_LIMITE".equals(l.code())).toList()));
-        out.add(section("SEANCE", "Séance d'ouverture des offres", seance(s, a.getLot())));
-        out.add(section("EVALUATION", "Évaluation des offres", evaluation(evd, lot)));
+        // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P2) — une procédure papier : séance et évaluation hors de l'application, leurs
+        // pièces sont jointes par la PRMP ; la fiche n'en présente rien.
+        if (!a.isRemisePapier()) {
+            out.add(section("SEANCE", "Séance d'ouverture des offres", seance(s, a.getLot())));
+            out.add(section("EVALUATION", "Évaluation des offres", evaluation(evd, lot)));
+        }
         out.add(section("PREVU_REALISE", "Calendrier : prévu et réalisé", prevuRealise(ev, a, evd, publication, dateLimite)));
         out.add(section("VALIDATION", "Validation", lignes(
                 // ⚠️ 2026-10-19 (§B4) — la création nominative du dossier de marché par la PRMP (ou son UGPM), datée et journalisée (Q2 :
@@ -244,6 +248,12 @@ public class FichePresentationService {
         List<EvaluationDto.Titulaire> titulaires = p == null || p.titulaires() == null ? List.of() : p.titulaires();
         List<Ligne> out = new ArrayList<>();
         out.add(ligne("LOT", "Lot", String.valueOf(a.getLot())));
+        if (a.isRemisePapier()) {
+            // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P2) — l'attributaire et le montant sont portés par les pièces papier.
+            out.add(ligne("REMISE_PAPIER", "Séance et évaluation", "Remise papier : séance d'ouverture et évaluation conduites hors de "
+                    + "l'application ; l'attributaire et le montant figurent au PV d'ouverture, au rapport d'analyse et au projet de marché joints"));
+            return out;
+        }
         BigDecimal retenu;
         if (titulaires.isEmpty()) {
             out.add(ligne("ATTRIBUTAIRE", "Attributaire proposé par la commission",

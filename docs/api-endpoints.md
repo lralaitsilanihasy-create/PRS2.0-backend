@@ -9092,6 +9092,29 @@ comme avant.
   son attribution. L'écran fait un seul appel.
 - `null` pour les deux sur une ligne sans fiche.
 
+⚠️ **2026-10-27 (demande front « dossier-marche-remise-papier »)** — le dossier de marché d'une procédure à remise papier, rattaché à
+sa procédure. Migration V142 (`t_attribution.REMISE_PAPIER`).
+- **P1** — `GET /api/dmcs/eligibles` sert trois champs de plus par ligne (nuls sans fiche) :
+  - `modeRemise` : `PAPIER` ou `ELECTRONIQUE`, le mode figé par la dernière version validée (nul sans version validée) ;
+  - `lots` : `[{ lot, intitule }]`, les lots de la ligne du plan (un lot `1` pour une ligne sans lot, `intitule` nul) ;
+  - `marchePapier` : `{ ouvert, motif }`, en remise papier seulement (nul sinon). `motif`, nul quand `ouvert`, est la première raison
+    qui retient le dossier : `FICHE_NON_VALIDEE`, `DOSSIER_NON_CLOTURE` (dossier de mise en concurrence pas encore `CLOTURE`),
+    `AVIS_NON_FAVORABLE` (PV signé ni `FAV` ni `FAVR`), `AVIS_NON_PUBLIE` (avis spécifique jamais imprimé).
+  - `dossiersMarche` sert aussi les dossiers de marché papier.
+- **P2** — `POST /api/fiches-marche/{idDmc}/marche-papier/lots/{lot}/dossier` (PRMP de la fiche ou son UGPM) → **201** `DossierDto`
+  du dossier `DDM` créé, en brouillon, `procedure` servi. Sous-type : règle de l'attribution (`DAOO-CC` → `MAOO-CC`, PI → `MPI`…).
+  - Joints d'office : le devis estimatif (bordereau ou DQE de la fiche, `PRODUITE_PAR` `ATTRIBUTION`) et la publication de l'AGPM du
+    plan. Fournis par les données (`fourniePar: APPLICATION`, inchangé) : la fiche de présentation (section `ATTRIBUTION` réduite au
+    lot et à la ligne `REMISE_PAPIER` ; ni `SEANCE` ni `EVALUATION`) et le PV de la Commission sur le DAO (`PV_CNM_DMC`, `idPv`).
+  - À joindre par la PRMP : le PV de validation de la CAO n'est pas fourni (aucun rapport produit par l'application), comme les
+    autres pièces papier.
+  - Erreurs : 403 ; 404 (procédure, lot) ; 409 `DOSSIER_EXISTANT` (avec `idDossier`), `PROCEDURE_ELECTRONIQUE`, `FICHE_NON_VALIDEE`,
+    `DOSSIER_NON_CLOTURE`, `AVIS_NON_FAVORABLE`, `AVIS_NON_PUBLIE`, `SANS_SUITE_DECLAREE`.
+  - Journal `DOSSIER_MARCHE_PAPIER` sur le dossier de marché et sur le dossier de mise en concurrence.
+  - Les actes de gestion n'exigent pas ce marché signé dans l'application (`MARCHE_NON_SIGNE` ne joue pas).
+- **P3** — `POST /api/saisies/dossier` (et la création brute de l'Administrateur) refusent `MAOO`, `MAOO-CC`, `MAOR`, `MAOOI`, `MAORI`,
+  `MAOOPREQUAL`, `MPI` : **409 `DOSSIER_PAR_PROCEDURE`**.
+
 ⚠️ **2026-10-27 (demande front « lectures-cnm-dossier-marche »)** — deux lectures de plus pour la Commission qui contrôle le dossier
 de marché (même condition que ci-dessous, `ControleDuMarche`). Pas de migration.
 - **L1 (Q1 : par la séance)** — `GET /api/fiches-marche/{idDmc}/seance` sert `pv.tentativesRefusees` (même forme que dans
