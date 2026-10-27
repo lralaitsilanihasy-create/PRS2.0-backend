@@ -27,24 +27,39 @@ class ReferenceGenerationIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Référence dossier — séquence globale unique (2 localités, même année → numéros distincts/consécutifs)")
     void reference_sequence_unique_globale() {
         // Segment affiché = sous-type (PPM) ; clé de compteur = famille (DDP).
-        String rAnt = referenceService.generer("PPM", "DDP", "ANT", false, 2099);
-        String rTms = referenceService.generer("PPM", "DDP", "TMS", false, 2099);
+        String rAnt = referenceService.generer("PPM", "ANT", false, 2099);
+        String rTms = referenceService.generer("PPM", "TMS", false, 2099);
         // Numéros distincts ET consécutifs malgré des localités différentes (plus de « 00001 » partagé).
         org.junit.jupiter.api.Assertions.assertEquals("00001/PPM/CRM-ANT/2099", rAnt);
         org.junit.jupiter.api.Assertions.assertEquals("00002/PPM/CRM-TMS/2099", rTms);
     }
 
     @Test
-    @DisplayName("Référence dossier — compteur indexé sur la FAMILLE : PPM et PPM-AGPM (même famille DDP) se suivent")
-    void reference_compteurFamille_sousTypesMeleés() {
-        // Deux sous-types de la même famille DDP → segment distinct mais numérotation CONTINUE (clé = DDP).
+    @DisplayName("⚠️ 2026-10-27 (« numero-dossier-unique », N1) — un seul compteur par exercice : PPM, PPM-AGPM et DAOO se suivent, "
+            + "segment de sous-type verbatim")
+    void reference_compteurUnique_famillesMeleees() {
         org.junit.jupiter.api.Assertions.assertEquals("00001/PPM/CRM-ANT/2097",
-                referenceService.generer("PPM", "DDP", "ANT", false, 2097));
+                referenceService.generer("PPM", "ANT", false, 2097));
         org.junit.jupiter.api.Assertions.assertEquals("00002/PPM-AGPM/CRM-ANT/2097",
-                referenceService.generer("PPM-AGPM", "DDP", "ANT", false, 2097));
-        // Une autre famille (DMC) a sa propre séquence, repartant à 1.
-        org.junit.jupiter.api.Assertions.assertEquals("00001/DAOO/CRM-ANT/2097",
-                referenceService.generer("DAOO", "DMC", "ANT", false, 2097));
+                referenceService.generer("PPM-AGPM", "ANT", false, 2097));
+        // Une autre famille (DMC) ne repart plus à 1 : même compteur.
+        org.junit.jupiter.api.Assertions.assertEquals("00003/DAOO/CRM-ANT/2097",
+                referenceService.generer("DAOO", "ANT", false, 2097));
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-27 (« numero-dossier-unique », N2 ; V143) — le compteur unique reprend après le plus grand numéro des "
+            + "compteurs par famille de l'exercice (DMC 4, DDP 1 → 00005) ; lettres et références PPM non comptées ; autre exercice "
+            + "repris à part")
+    void reference_compteurUnique_repriseV143() {
+        jdbcTemplate.update("insert into t_sequence_reference values (2095, 'DOSSIER', 'DDP', 1), (2095, 'DOSSIER', 'DMC', 4), "
+                + "(2095, 'DOSSIER', 'DDM', 1), (2095, 'LETTRE', 'LR', 9), (2095, 'MTP', 'PPM_REF', 12), (2094, 'DOSSIER', 'DDP', 2)");
+        executerMigrationFlyway("V143__compteur_dossiers_unique.sql");
+        org.junit.jupiter.api.Assertions.assertEquals("00005/MAOO-CC/CNM/2095", referenceService.generer("MAOO-CC", "ANT", true, 2095));
+        org.junit.jupiter.api.Assertions.assertEquals("00006/PPM/CNM/2095", referenceService.generer("PPM", "ANT", true, 2095));
+        org.junit.jupiter.api.Assertions.assertEquals("00003/DAOO/CNM/2094", referenceService.generer("DAOO", "ANT", true, 2094));
+        org.junit.jupiter.api.Assertions.assertEquals(4L, jdbcTemplate.queryForObject("select \"DERNIERE_VALEUR\" from t_sequence_reference "
+                + "where \"ANNEE_EXERCICE\" = 2095 and \"TYPE_DOSSIER\" = 'DMC'", Long.class));   // l'ancien compteur reste, figé
     }
 
     @Test
@@ -52,7 +67,7 @@ class ReferenceGenerationIntegrationTest extends CnmIntegrationTestSupport {
     void reference_sequence_increment_correct() {
         for (int i = 1; i <= 5; i++) {
             org.junit.jupiter.api.Assertions.assertEquals(String.format("%05d/PPM/CRM-ANT/2098", i),
-                    referenceService.generer("PPM", "DDP", "ANT", false, 2098));
+                    referenceService.generer("PPM", "ANT", false, 2098));
         }
     }
 

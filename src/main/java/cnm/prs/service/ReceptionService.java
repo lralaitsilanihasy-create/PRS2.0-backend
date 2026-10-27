@@ -221,7 +221,7 @@ public class ReceptionService {
         String localite = localiteDuDossier(reception.getIdDossier());
         boolean estCentrale = Localite.estCentrale(localite);
         int annee = exerciceDuDossier(reception.getIdDossier());
-        String reference = referenceService.generer(segment, famille, localite, estCentrale, annee);
+        String reference = referenceService.generer(segment, localite, estCentrale, annee);   // ⚠️ 2026-10-27 (N1) : compteur unique
         dossier.setRefeDossier(reference);
         dossierRepository.save(dossier);
         return reference;

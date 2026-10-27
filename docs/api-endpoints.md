@@ -12350,10 +12350,13 @@ au dépôt, **aucun archivage** — simple événement tracé).
 > le segment central est le **sous-type** du dossier (`t_dossier.ID_SOUS_TYPE` : PPM, PPM-AGPM, DAO, DAOR…),
 > **verbatim** (un sous-type dérivé comme PPM-AGPM apparaît tel quel — le `-` ne crée pas d'ambiguïté vis-à-vis
 > des `/`) ; **repli** sur la **famille** (`ID_TYPE_DOSSIER`) si le sous-type est absent (dossier historique).
-> `xxxxx` = compteur 5 chiffres incrémenté par la base, **indexé sur la FAMILLE** (`type_dossier`, `code_localite`
-> fixe `DOSSIER`, `annee_exercice`) — table `t_sequence_reference`, sans compteur applicatif : **la numérotation
-> reste continue au sein d'une famille** (un PPM puis un PPM-AGPM se suivent : `00013`, `00014`), seul le libellé
-> du segment change ;
+> `xxxxx` = compteur 5 chiffres incrémenté par la base — table `t_sequence_reference`, sans compteur applicatif.
+> ⚠️ **Règle modifiée (2026-10-27, demande front « numero-dossier-unique » ; V143)** : **un seul compteur par exercice, toutes
+> familles confondues** (clé `TOUS` / `DOSSIER` / `annee_exercice`), national, repartant à 1 chaque année. Un plan, un DAO et un
+> marché reçus à la suite se suivent (`00005/PPM/…`, `00006/DAOO-CC/…`, `00007/MAOO-CC/…`). Jusque-là le compteur était **par
+> famille** : les références déjà attribuées ne changent pas, et le compteur unique a repris après le plus grand numéro de
+> l'exercice (recette 2026 : 00005). Le PV garde le numéro de son dossier ; les lettres de renvoi (`LR` / `LETTRE`) et les
+> références PPM (`PPM_REF`) gardent leurs compteurs. Seule la réception numérote ;
 > `code_localite` = ⚠️ **règle CORRIGÉE (2026-08-04)** — dépend de la **localité DU DOSSIER**, jamais de
 > celle de l'agent qui enregistre : dossier de la localité **centrale** (`Localite.ID_CENTRALE` = `ANT`)
 > → **`CNM`** (ex. `00023/PPM/CNM/2026`) ; dossier **régional** → **`CRM-<localité>`** (ex.
