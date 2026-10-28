@@ -44,7 +44,16 @@ public enum ProfilUtilisateur {
      * hors coquille interne, seulement {@code /api/depositaire/**}, {@code /api/mon-compte/**} et, par identité, sa clé de secours
      * ({@code …/ceremonie/**}) et son apport en séance ({@code …/seance/mes-parts}, {@code …/seance/parts}). Ni offres, ni PV.
      */
-    DEPOSITAIRE;
+    DEPOSITAIRE,
+
+    /**
+     * ⚠️ 2026-10-28 (demande front « profil-responsable-procedure », arbitrage du pilote ; V145) — un compte interne
+     * (contrôleur, {@code tr_profile} « Responsable de procédure », localité facultative) dédié au rôle de responsable de
+     * procédure : hors coquille interne, il n'atteint que ses procédures en ligne, la lecture de leurs fiches (garde par la
+     * désignation), leurs paramètres internes, cérémonie, séance, dépôts et évaluation, ses notifications, son compte et les
+     * référentiels lus. Aucune route du circuit de contrôle (403).
+     */
+    RESPONSABLE_PROCEDURE;
 
     /** Autorité Spring Security correspondante (préfixe {@code ROLE_}). */
     public String authority() {
@@ -63,6 +72,10 @@ public enum ProfilUtilisateur {
         }
         String n = normalize(libelle);
         // Ordre important : tester les libellés les plus spécifiques d'abord.
+        // ⚠️ 2026-10-28 (V145) — « Responsable de procédure » : aucun autre libellé ne dit « responsable ».
+        if (n.contains("responsable")) {
+            return RESPONSABLE_PROCEDURE;
+        }
         if (n.contains("president")) {
             return PRESIDENT;
         }

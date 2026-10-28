@@ -308,6 +308,55 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/fiches-marche/" + autreDmc + "/ceremonie").header("Authorization", jeton)).andExpect(status().isForbidden());
     }
 
+    @Test
+    @DisplayName("⚠️ 2026-10-28 « profil-responsable-procedure » — le compte dédié (V145, sans localité) : connexion par le "
+            + "matricule (rôle RESPONSABLE_PROCEDURE), en tête des désignables, ses procédures, sa fiche et ses paramètres internes "
+            + "(pas ceux d'une autre fiche : 403), ses notifications et les référentiels ; 403 sur le circuit de contrôle et "
+            + "l'écriture de la fiche")
+    void responsableDedie() throws Exception {
+        assertThat(ProfilUtilisateur.resolve("Responsable de procédure")).isEqualTo(ProfilUtilisateur.RESPONSABLE_PROCEDURE);
+        profileRepository.save(profile(10, "Responsable de procédure"));
+        controleurRepository.save(controleur("RESP001", 10, null));
+        compteAuthRepository.save(new CompteAuth("RESP001", passwordEncoder.encode("Responsable2026"), "CONTROLEUR", "RESP001", true));
+        mvc.perform(post("/api/auth/login").contentType(JSON).content("{\"login\":\"RESP001\",\"motDePasse\":\"Responsable2026\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("RESPONSABLE_PROCEDURE"));
+
+        // §B3 — en tête des désignables ; les autres contrôleurs le restent (H2).
+        String candidats = mvc.perform(get("/api/fiches-marche/" + idDmc + "/responsable/candidats").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(candidats, "$[0].im")).isEqualTo("RESP001");
+        assertThat(JsonPath.<String>read(candidats, "$[0].profil")).isEqualTo("RESPONSABLE_PROCEDURE");
+        assertThat(JsonPath.<List<String>>read(candidats, "$[*].im")).contains("CTRVER");
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/fiches-marche/" + idDmc + "/responsable")
+                .header("Authorization", tokenAdmin)).andExpect(status().is2xxSuccessful());
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/responsable").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"im\":\"RESP001\"}")).andExpect(status().isCreated());
+
+        // §B2 — ce qu'il fait.
+        String jeton = bearer("RESP001", ProfilUtilisateur.RESPONSABLE_PROCEDURE, TypeActeur.CONTROLEUR, "RESP001", null);
+        String miennes = mvc.perform(get("/api/fiches-marche/en-ligne").header("Authorization", jeton)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(miennes, "$[*].idDmc")).containsExactly(idDmc.intValue());
+        mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", jeton)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.peutModifierParametresInternes").value(true));
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", jeton)).andExpect(status().isOk());
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", jeton)).andExpect(status().isOk());
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/ceremonie").header("Authorization", jeton)).andExpect(status().isOk());
+        mvc.perform(get("/api/notifications/mes").header("Authorization", jeton)).andExpect(status().isOk());
+        mvc.perform(get("/api/kpis/badges").header("Authorization", jeton)).andExpect(status().isOk());
+        mvc.perform(get("/api/localites").header("Authorization", jeton)).andExpect(status().isOk());
+        // … et rien d'autre : une autre fiche, l'écriture, le circuit de contrôle.
+        mvc.perform(get("/api/fiches-marche/" + autreDmc).header("Authorization", jeton)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/fiches-marche/" + autreDmc + "/parametres-internes").header("Authorization", jeton)).andExpect(status().isForbidden());
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/cadrage").header("Authorization", jeton).contentType(JSON).content("{\"cadrage\":{}}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/fiches-marche/rattachables").header("Authorization", jeton)).andExpect(status().isForbidden());
+        for (String route : List.of("/api/dossiers", "/api/receptions", "/api/dispatchs", "/api/examens", "/api/pv-examens",
+                "/api/observations-pv?dossier=9900", "/api/sigmp-transmissions", "/api/ppms", "/api/controleurs", "/api/a-faire")) {
+            mvc.perform(get(route).header("Authorization", jeton)).andExpect(status().isForbidden());
+        }
+    }
+
     // ------------------------------------------------------------------ outils
 
     @Test

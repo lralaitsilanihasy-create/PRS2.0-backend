@@ -387,6 +387,7 @@ public class AssistantIaService {
             case CANDIDAT -> "un candidat à la soumission en ligne";
             case MEMBRE_CAO -> "un membre d'une commission d'appel d'offres";   // ⚠️ lot 2a : route interne fermée, exhaustivité
             case DEPOSITAIRE -> "le dépositaire d'une part de secours";   // ⚠️ 2026-10-05 : route interne fermée, exhaustivité
+            case RESPONSABLE_PROCEDURE -> "un Responsable de procédure en ligne";   // ⚠️ 2026-10-28 : route interne fermée, exhaustivité
         };
     }
 

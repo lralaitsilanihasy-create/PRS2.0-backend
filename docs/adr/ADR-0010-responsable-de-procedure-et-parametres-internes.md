@@ -100,3 +100,16 @@ bilan, l'impression dans les documents. Trois besoins n'entrent pas dans ce que 
   les parts.
 - **Référence** : `docs/api-endpoints.md`, § *La commission d'appel d'offres (CAO), détentrice des parts de clé — V67*, et
   `frontend/docs/demande-backend-2026-10-04-commission-appel-offres.md`.
+
+## Amendement du 2026-10-28 — un profil dédié au rôle (arbitrage du pilote ; V145)
+
+- **Ce qui change.** L'alternative écartée « un profil de session » revient, mais **sans remplacer** la décision 1. Le profil
+  `RESPONSABLE_PROCEDURE` (référentiel `tr_profile`, V145) ne donne aucun droit par lui-même : il **retire** au compte tous les
+  droits d'un profil de contrôle (il est hors coquille interne, comme `MEMBRE_CAO`). Le droit sur une procédure reste celui de la
+  désignation nominative (décisions 1 et 3), y compris pour lire la fiche : pour ce profil, la garde de lecture est la
+  désignation, pas la localité. C'est la **séparation des rôles** voulue par le pilote : le compte qui garde le quorum et conduit
+  la séance ne réceptionne, n'examine ni ne vérifie aucun dossier.
+- **Ce qui reste.** Tout contrôleur reste désignable (transition douce) ; le profil dédié est proposé en tête. La garde par
+  identité, les journaux, l'état sur la fiche et le bilan sont inchangés. L'intérim (ADR-0008) ne couvre toujours pas ce rôle.
+- **Référence** : `docs/api-endpoints.md`, § *Rôle « Responsable de la procédure »*, et
+  `frontend/docs/demande-backend-2026-10-28-profil-responsable-procedure.md`.

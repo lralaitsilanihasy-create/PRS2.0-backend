@@ -564,7 +564,8 @@ public class ParametresInternesService {
 
     /**
      * Les comptes désignables comme responsable (Administrateur) : les contrôleurs de la localité de la fiche et ceux
-     * sans localité (compétents partout), hors membres détenteurs d'une part de clé de cette fiche.
+     * sans localité (compétents partout), hors membres détenteurs d'une part de clé de cette fiche. ⚠️ 2026-10-28 : les comptes
+     * {@code RESPONSABLE_PROCEDURE} d'abord.
      */
     @Transactional(readOnly = true)
     public List<CompteDesignableDto> candidatsResponsable(Long idDmc) {
@@ -580,7 +581,10 @@ public class ParametresInternesService {
                 out.add(designable(c, profils.get(c.getIdProfile())));
             }
         }
-        out.sort(java.util.Comparator.comparing(CompteDesignableDto::nom, String.CASE_INSENSITIVE_ORDER));
+        // ⚠️ 2026-10-28 (« profil-responsable-procedure », §B3, H2) — les comptes du profil dédié en tête ; les autres
+        // contrôleurs restent désignables (transition douce), après.
+        out.sort(java.util.Comparator.comparing((CompteDesignableDto d) -> !ProfilUtilisateur.RESPONSABLE_PROCEDURE.name().equals(d.profil()))
+                .thenComparing(CompteDesignableDto::nom, String.CASE_INSENSITIVE_ORDER));
         return out;
     }
 

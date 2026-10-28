@@ -1503,7 +1503,16 @@ public class FicheMarcheService {
                 .orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
         Integer idDossier = marcheRepository.findIdDossierByIdDetail(dmc.getIdDetail()).orElse(null);
         if (controlerPerimetre) {
-            perimetre.controler(idDossier);
+            // ⚠️ 2026-10-28 (« profil-responsable-procedure », §B2) — le compte dédié ne lit que les fiches dont il est le
+            // responsable désigné : la désignation, pas la localité, fait son périmètre.
+            if (CurrentUser.profil().orElse(null) == ProfilUtilisateur.RESPONSABLE_PROCEDURE) {
+                if (!internes.estTitulaire(idDmc)) {
+                    throw new AccessDeniedException("Cette fiche n'est pas l'une de vos procédures : le responsable de procédure ne "
+                            + "lit que les fiches dont il est le responsable désigné.");
+                }
+            } else {
+                perimetre.controler(idDossier);
+            }
         }
         TypeDmc type = typeDmcRepository.findById(dmc.getIdTypeDmc()).orElse(null);
         if (type == null || !"DAO".equalsIgnoreCase(type.getCode())) {

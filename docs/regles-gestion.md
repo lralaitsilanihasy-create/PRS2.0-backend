@@ -1044,6 +1044,18 @@ reste identique texte pour texte, à la seule ligne « Mode de remise des offres
   fois, jamais un membre détenteur d'une part (ni l'inverse) : ce n'est pas un profil, pas une délégation, pas un
   intérim — c'est un droit exclusif sur un objet (ADR-0010). La désignation et le retrait sont journalisés avec les
   paramètres internes.
+  ⚠️ **2026-10-28 (arbitrage du pilote ; V145)** — un **compte dédié** peut tenir ce rôle : le profil « Responsable de
+  procédure » (`RESPONSABLE_PROCEDURE`), compte interne à localité facultative, créé par l'Administrateur. Ce profil ne donne
+  **que** ce rôle :
+  - ses procédures en ligne ;
+  - la lecture des fiches dont il est le responsable désigné, et d'aucune autre ;
+  - leurs paramètres internes, cérémonie, séance et évaluation ;
+  - ses notifications.
+
+  Aucun geste du circuit de contrôle ne lui est ouvert. Il est proposé en tête des comptes désignables. Les autres contrôleurs
+  restent désignables, et les désignations déjà faites gardent leur titulaire. Le droit sur la procédure reste celui de la
+  désignation, pas celui du profil. Un responsable absent n'est pas suppléé par intérim : l'Administrateur le retire et en
+  désigne un autre.
 - **Le texte officiel ne se modifie jamais** : la clause de remise électronique des garanties C1 / C2 est une
   section conditionnelle balisée `[[CLAUSE À FOURNIR PAR LE JURISTE : …]]`, imprimée en mode électronique seulement.
   Les listes officielles des prestataires de certification et des garants habilités ne sont pas fournies : une option

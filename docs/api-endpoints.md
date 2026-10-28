@@ -6979,6 +6979,33 @@ global `t_audit_log` reçoit la route et l'acteur (`PARAMETRES-INTERNES`, `RESPO
 L'Administrateur ne lit ni ne modifie les paramètres internes (403), sauf s'il est lui-même titulaire. Journal dédié :
 champ `responsable`, ancienne → nouvelle valeur (matricules).
 
+> ⚠️ **2026-10-28 — le profil dédié `RESPONSABLE_PROCEDURE`** (demande front « profil-responsable-procedure », B1-B4 ; arbitrage du
+> pilote ; V145 ; ADR-0010, amendement du 2026-10-28).
+> - **Le compte (B1, H1).** C'est un compte interne, comme un contrôleur : une fiche `t_controleur` dont `ID_PROFILE` pointe le
+>   profil « Responsable de procédure » (V145 l'ajoute au référentiel `tr_profile`, id 10 sur une base complète). La localité est
+>   facultative : sans localité, il est compétent partout. Il se connecte par son matricule (`POST /api/auth/login`, `role` =
+>   `RESPONSABLE_PROCEDURE`, `typeActeur` = `CONTROLEUR`). Pas d'activation par courriel, aucun compte créé d'office. Routes de
+>   création inchangées (`POST /api/controleurs`, choix de l'`idProfile`).
+> - **Ses routes (B2)** — il est hors coquille interne, comme `MEMBRE_CAO`, et n'atteint que :
+>   - `GET /api/fiches-marche/en-ligne` (ses procédures) ;
+>   - **la lecture de ses fiches**, de leurs documents et de leur contenu (`GET …/{idDmc}`, `…/documents`,
+>     `…/documents/{id}/contenu`, `…/versions`, `…/versions/{n}`, `…/articles`, `…/materiel`, `…/personnel`, `…/sous-criteres`,
+>     `…/pieces`, `…/cao`, `…/depots`). La garde de lecture de la fiche est, pour ce profil, la désignation et non la localité :
+>     une fiche dont il n'est pas le responsable répond 403 ;
+>   - `…/parametres-internes/**`, `…/ceremonie/**`, `…/seance/**` et `…/evaluation/**`, ses gestes de titulaire, gardés comme
+>     avant par la désignation ;
+>   - `/api/notifications/**` (les siennes ; la liste globale reste à l'Administrateur), `/api/kpis/badges`, `/api/mon-compte/**`
+>     et la lecture des référentiels (`GET` des collections de paramétrage).
+>
+>   **Tout le reste répond 403** : dossiers, réceptions, dispatch, examens, PV, vérification, plans, « À faire », annuaire,
+>   attribution. L'écriture de la fiche reste à la PRMP, à l'UGPM et à l'Administrateur (403).
+> - **La désignation (B3, H2).** `…/responsable/candidats` sert d'abord les comptes `RESPONSABLE_PROCEDURE` de la localité ou sans
+>   localité (champ `profil`), puis, comme avant, les autres contrôleurs, qui **restent désignables** : c'est une transition
+>   douce, et la fiche n° 1 garde ADMIN01. La séparation des rôles demeure : 409 `MEMBRE_COMMISSION`.
+> - **L'intérim (H3) ne s'applique pas** : l'intérim désigné (ADR-0008) n'admet comme titulaires absents que le Président et le
+>   Chef de commission (contrainte `ck_interim_profil_titulaire`), et les gestes du responsable se gardent par l'identité
+>   exacte. Un responsable absent se remplace par retrait et nouvelle désignation (Administrateur).
+
 **`FicheMarcheDto` et `FicheMarcheResumeDto` gagnent** :
 
 | Champ | Sens |

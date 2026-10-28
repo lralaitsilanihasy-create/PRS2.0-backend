@@ -63,9 +63,33 @@ public class SecurityConfig {
                         && !(a instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)
                         // ⚠️ 2026-10-04 (lot 2a) — ni MEMBRE_CAO : lui aussi vit hors de la coquille interne ; ⚠️ 2026-10-05 ni DEPOSITAIRE.
                         && a.getAuthorities().stream().noneMatch(g -> "ROLE_CANDIDAT".equals(g.getAuthority())
-                                || "ROLE_MEMBRE_CAO".equals(g.getAuthority()) || "ROLE_DEPOSITAIRE".equals(g.getAuthority()));
+                                || "ROLE_MEMBRE_CAO".equals(g.getAuthority()) || "ROLE_DEPOSITAIRE".equals(g.getAuthority())
+                                // ⚠️ 2026-10-28 (« profil-responsable-procedure », §B2) — ni le responsable de procédure dédié :
+                                // il n'atteint que les routes de RESPONSABLE (ci-dessous), pas le circuit de contrôle.
+                                || "ROLE_RESPONSABLE_PROCEDURE".equals(g.getAuthority()));
                 return new org.springframework.security.authorization.AuthorizationDecision(interne);
             };
+
+    /**
+     * ⚠️ 2026-10-28 (demande front « profil-responsable-procedure », §B2) — les routes que le profil
+     * {@code RESPONSABLE_PROCEDURE} partage avec les comptes internes : la règle {@link #INTERNE}, ou ce profil. Ce qu'il y fait
+     * reste gardé dans les services par la désignation ({@code estTitulaire}) : la lecture d'une fiche, ses paramètres internes.
+     */
+    static final org.springframework.security.authorization.AuthorizationManager<
+            org.springframework.security.web.access.intercept.RequestAuthorizationContext> INTERNE_OU_RESPONSABLE = (authentification, contexte) ->
+                    new org.springframework.security.authorization.AuthorizationDecision(INTERNE.authorize(authentification, contexte).isGranted()
+                            || authentification.get() != null && authentification.get().getAuthorities().stream()
+                                    .anyMatch(g -> "ROLE_RESPONSABLE_PROCEDURE".equals(g.getAuthority())));
+
+    /**
+     * ⚠️ 2026-10-28 (« profil-responsable-procedure », §B2) — les lectures de fiche dont le responsable a besoin (« Mes procédures
+     * en ligne », « Ouvrir la fiche ») : chacune passe par la garde de lecture de la fiche, bornée pour ce profil à ses procédures.
+     */
+    static final String[] FICHE_LUE_PAR_LE_RESPONSABLE = { "/api/fiches-marche/en-ligne", "/api/fiches-marche/*",
+        "/api/fiches-marche/*/documents", "/api/fiches-marche/documents/*/contenu", "/api/fiches-marche/*/versions",
+        "/api/fiches-marche/*/versions/*", "/api/fiches-marche/*/articles", "/api/fiches-marche/*/materiel",
+        "/api/fiches-marche/*/personnel", "/api/fiches-marche/*/sous-criteres", "/api/fiches-marche/*/pieces",
+        "/api/fiches-marche/*/cao", "/api/fiches-marche/*/depots" };
 
 
     /**
@@ -187,6 +211,17 @@ public class SecurityConfig {
                     // clé (cérémonie) et son apport en séance, par identité dans les services.
                     auth.requestMatchers(HttpMethod.POST, "/api/depositaire/activation").permitAll();
                     auth.requestMatchers("/api/depositaire/**").hasRole("DEPOSITAIRE");
+                    // ⚠️ 2026-10-28 (« profil-responsable-procedure », §B2) — le responsable de procédure dédié : ses procédures,
+                    // la lecture de leurs fiches, leurs paramètres internes, ses notifications, les badges de l'en-tête et les
+                    // référentiels lus. Ces règles laissent les comptes internes comme avant (INTERNE). La cérémonie, la séance
+                    // et l'évaluation l'admettent plus bas ; tout le reste lui est fermé par la dernière règle.
+                    auth.requestMatchers(HttpMethod.GET, "/api/fiches-marche/rattachables").access(INTERNE);   // pas une fiche
+                    auth.requestMatchers(HttpMethod.GET, FICHE_LUE_PAR_LE_RESPONSABLE).access(INTERNE_OU_RESPONSABLE);
+                    auth.requestMatchers("/api/fiches-marche/*/parametres-internes", "/api/fiches-marche/*/parametres-internes/**")
+                            .access(INTERNE_OU_RESPONSABLE);
+                    auth.requestMatchers("/api/notifications/**").access(INTERNE_OU_RESPONSABLE);
+                    auth.requestMatchers(HttpMethod.GET, REFERENTIELS).access(INTERNE_OU_RESPONSABLE);
+                    auth.requestMatchers(HttpMethod.GET, REFERENTIELS_ID).access(INTERNE_OU_RESPONSABLE);
                     // ⚠️ 2026-10-04 (lot 4) — la séance d'ouverture : les membres de la CAO y apportent leurs parts (garde par
                     // identité dans le service) ; le PV publié se lit sans session.
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/pv").permitAll();
@@ -203,14 +238,19 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.GET, "/api/amis-en-ligne", "/api/amis-en-ligne/*", "/api/amis-en-ligne/*/avis").permitAll();
                     auth.requestMatchers("/api/fiches-marche/*/seance", "/api/fiches-marche/*/seance/**").hasAnyRole("MEMBRE_CAO", "DEPOSITAIRE", "PRMP",
                             "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
-                            "CHARGE_PUBLICATION", "ADMINISTRATEUR");
+                            "CHARGE_PUBLICATION", "ADMINISTRATEUR", "RESPONSABLE_PROCEDURE");
                     // ⚠️ 2026-10-07 (évaluation des offres, §B7) — les badges servent aussi le membre de la CAO (ses évaluations en
                     // cours, ses rapports à signer) ; la réponse ne porte que les compteurs du rôle appelant. Les autres comptes
-                    // internes y gardent leur accès (règle INTERNE).
+                    // internes y gardent leur accès (règle INTERNE). ⚠️ 2026-10-28 : et le responsable de procédure dédié.
                     auth.requestMatchers(HttpMethod.GET, "/api/kpis/badges").access((authentification, contexte) ->
                             new org.springframework.security.authorization.AuthorizationDecision(
-                                    INTERNE.authorize(authentification, contexte).isGranted() || authentification.get().getAuthorities().stream()
+                                    INTERNE_OU_RESPONSABLE.authorize(authentification, contexte).isGranted() || authentification.get().getAuthorities().stream()
                                             .anyMatch(g -> "ROLE_MEMBRE_CAO".equals(g.getAuthority()))));
+                    // ⚠️ 2026-10-28 (« profil-responsable-procedure », §B2) — l'évaluation, que le responsable ouvre et dont il produit
+                    // le rapport (garde par la désignation dans le service) ; séparée de l'attribution, qui ne lui est pas ouverte.
+                    auth.requestMatchers("/api/fiches-marche/*/evaluation", "/api/fiches-marche/*/evaluation/**").hasAnyRole("MEMBRE_CAO",
+                            "PRMP", "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
+                            "CHARGE_PUBLICATION", "ADMINISTRATEUR", "RESPONSABLE_PROCEDURE");
                     // ⚠️ 2026-10-07 (évaluation des offres, §B7) — l'évaluation : les membres de la CAO y décident (garde par
                     // identité dans le service : déclaration préalable, président), le responsable l'ouvre, la PRMP et l'UGPM lisent.
                     // ⚠️ 2026-10-07 (lot 2, §B7) — l'attribution aussi : les membres de la CAO y lisent l'état de leurs lots.
@@ -228,7 +268,7 @@ public class SecurityConfig {
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");
                     auth.requestMatchers("/api/fiches-marche/*/ceremonie/**").hasAnyRole("MEMBRE_CAO", "DEPOSITAIRE", "PRMP", "UGPM",
                             "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
-                            "CHARGE_PUBLICATION", "ADMINISTRATEUR");
+                            "CHARGE_PUBLICATION", "ADMINISTRATEUR", "RESPONSABLE_PROCEDURE");
                     // ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8) — les procédures ouvertes en ligne se lisent sans
                     // session ; leurs documents (le retrait du DAO, journalisé) se téléchargent par un CANDIDAT connecté.
                     // La règle des documents précède celle du détail (1er match gagne).
