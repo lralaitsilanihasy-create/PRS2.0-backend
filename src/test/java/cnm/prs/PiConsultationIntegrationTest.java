@@ -981,6 +981,7 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@pi.mg", "m2@pi.mg"))).andExpect(status().isOk());
+        CaoIntegrationTest.joindreDecision(mvc, idDmc, tokenPrmp);
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer).contentType(JSON)
                 .content("{\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"Rakoto Jean\","
                         + "\"email\":\"rakoto.depositaire@secours.mg\"}}"))

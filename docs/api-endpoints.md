@@ -7130,6 +7130,12 @@ secours).
     `….domaine`, `….president`, `….id`, et `membres` pour le nombre de membres et le président).
 - **Contrôles** : `reference` et `date` obligatoires ; le PDF est facultatif (anomalie `DECISION_SANS_FICHIER`, non bloquante —
   question 4) ; **au moins deux `MEMBRE`** et **exactement un président** parmi eux ; une adresse une seule fois dans la CAO.
+  - ⚠️ **2026-10-28** (demande front « decision-cao-obligatoire », B1-B4, H1-H2 ; arbitrage du pilote) — **le PDF signé de la
+    décision est obligatoire** : sans lui, la CAO n'est pas constituée. `etat` reste `INCOMPLETE` tant qu'il manque ;
+    `DECISION_SANS_FICHIER` (« La décision de nomination de la commission n'est pas jointe (PDF signé). ») compte parmi ce qui
+    manque, et la règle 13 `SE_CAO` bloque la validation de la fiche. Routes, `CaoCorps` et `CaoDto` inchangés : `PUT …/cao` reste
+    à 200 sans PDF, le fichier arrive par `POST …/cao/decision`. Pas de rétroactivité : seules les validations à venir sont
+    refusées ; une version déjà validée et le dossier qui en est né restent tels quels.
 - **Exclusions par construction** (409 `MEMBRE_EXCLU`, la raison dite, jamais le compte) : une adresse qui est celle d'un
   **contrôleur de la CNM**, de la **PRMP** ou d'une **UGPM** de la fiche, d'un **candidat** inscrit, ou d'un **compte interne**.
 - **`CaoDto`** = `{ idDmc, decision: { reference, date, fichier }, membres: MembreCaoDto[], etat, anomalies }` ; `etat` ∈ `ABSENTE` ·
@@ -7166,6 +7172,13 @@ secours).
   - **Règle 13 `SE_CAO`** (bloquante, mode électronique) : « La commission d'appel d'offres n'est pas constituée (décision, au moins
     deux membres, un président) : la fiche ne peut pas être validée en remise électronique. » Les comptes activés ne
     conditionnent pas la validation : ils conditionnent la clôture de la cérémonie.
+    - ⚠️ **2026-10-28** (§B2) — le message **nomme ce qui manque**, une phrase par manque, dans l'ordre : pas encore désignée ;
+      décision sans référence ; décision sans date ; « La décision de nomination de la commission n'est pas jointe (PDF signé). » ;
+      moins de deux membres ; aucun président / plusieurs présidents. Il finit par « Sans commission d'appel d'offres constituée,
+      la fiche ne peut pas être validée en remise électronique. » Les phrases sont celles de `CaoDto.anomalies` (hors
+      `COMPTES_NON_ACTIVES`).
+    - ⚠️ **2026-10-28** (§B4) — **seule la validation de la fiche** lit « constituée » : les paramètres internes et la cérémonie
+      des clés ne l'exigent pas, aujourd'hui comme avant, et restent possibles pendant que la décision se signe.
   - Règle 6 : le responsable ne détient pas de part — vrai par construction (populations disjointes), vérifié quand même.
   - Le journal dédié (Q7) reçoit `membresCommission` à chaque changement de la liste des détenteurs, acteur = la PRMP.
   - Une **cérémonie close fige la composition** : `PUT …/cao` qui change les membres détenteurs → 409 `CEREMONIE_CLOSE`.

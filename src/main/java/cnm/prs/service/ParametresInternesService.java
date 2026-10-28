@@ -41,6 +41,7 @@ import cnm.prs.repository.ParametreInterneJournalRepository;
 import cnm.prs.repository.ParametreInterneProcedureRepository;
 import cnm.prs.repository.ProfileRepository;
 import cnm.prs.repository.ResponsableProcedureRepository;
+import cnm.prs.dto.CaoDto;
 import cnm.prs.dto.CeremonieDto;
 import cnm.prs.entity.CaoMembre;
 import cnm.prs.entity.CeremonieCles;
@@ -230,7 +231,7 @@ public class ParametresInternesService {
         boolean electronique = RemiseElectronique.electronique(cadrage);
         return new ControlesFicheMarche.RemiseElectroniqueBilan(electronique,
                 electronique ? parametres.remiseElectronique() : null, electronique ? internes(idDmc) : null,
-                responsable(idDmc).isPresent(), !electronique || caoConstituee(idDmc));   // ⚠️ V67 : règle 13
+                responsable(idDmc).isPresent(), electronique ? caoManques(idDmc) : List.of());   // ⚠️ V67 : règle 13
     }
 
     /** L'état servi sur la fiche : {@code COMPLETS}, {@code INCOMPLETS} ou {@code ABSENTS}. */
@@ -380,7 +381,14 @@ public class ParametresInternesService {
     /** La CAO est-elle constituée (règle 13) ? */
     @Transactional(readOnly = true)
     public boolean caoConstituee(Long idDmc) {
-        return CaoRegles.constituee(caoRepository.findById(idDmc).orElse(null), caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc));
+        return caoManques(idDmc).isEmpty();
+    }
+
+    /** ⚠️ 2026-10-28 (§B2) — ce qui empêche la CAO d'être constituée, en clair ; vide = constituée. */
+    @Transactional(readOnly = true)
+    public List<String> caoManques(Long idDmc) {
+        return CaoRegles.manques(caoRepository.findById(idDmc).orElse(null), caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc))
+                .stream().map(CaoDto.Anomalie::message).toList();
     }
 
     /** L'état de la CAO servi sur la fiche : {@code null} en mode papier, sinon {@code ABSENTE} / {@code INCOMPLETE} / {@code COMPLETE}. */

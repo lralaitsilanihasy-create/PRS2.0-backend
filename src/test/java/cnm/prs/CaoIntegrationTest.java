@@ -132,7 +132,7 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(fiche, "$.cao")).isEqualTo("ABSENTE");
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle")).contains("SE_CAO");
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='SE_CAO')].message"))
-                .containsExactly(RemiseElectronique.MESSAGE_CAO);
+                .containsExactly("La commission d'appel d'offres n'est pas encore désignée. " + RemiseElectronique.MESSAGE_CAO);
 
         cao(tokenAdmin, corpsCao("m1@cao.mg", "m2@cao.mg")).andExpect(status().isForbidden());
         cao(tokenVer, corpsCao("m1@cao.mg", "m2@cao.mg")).andExpect(status().isForbidden());
@@ -163,7 +163,8 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
 
         // La désignation : comptes à activer, invitations, état sur la fiche.
         String cao = cao(tokenPrmp, corpsCao("m1@cao.mg", "m2@cao.mg")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<String>read(cao, "$.etat")).isEqualTo("COMPLETE");
+        // ⚠️ 2026-10-28 (demande front « decision-cao-obligatoire », §B1) — sans le PDF signé, la CAO n'est pas constituée.
+        assertThat(JsonPath.<String>read(cao, "$.etat")).isEqualTo("INCOMPLETE");
         assertThat(JsonPath.<String>read(cao, "$.decision.reference")).isEqualTo("DEC-001/2026");
         assertThat(JsonPath.<Boolean>read(cao, "$.decision.fichier")).isFalse();
         assertThat(JsonPath.<List<String>>read(cao, "$.membres[*].origine")).containsExactly("ENTITE_CONTRACTANTE", "EXPERT_OBJET");
@@ -176,9 +177,10 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         String k1 = JsonPath.read(cao, "$.membres[0].compte.idCompte");
         int idM2 = JsonPath.read(cao, "$.membres[1].id");
         fiche = fiche(tokenPrmp);
-        assertThat(JsonPath.<String>read(fiche, "$.cao")).isEqualTo("COMPLETE");
-        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle")).doesNotContain("SE_CAO");
-        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[*].regle")).contains("SE_CAO");
+        assertThat(JsonPath.<String>read(fiche, "$.cao")).isEqualTo("INCOMPLETE");
+        // §B2 : le message nomme ce qui manque.
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='SE_CAO')].message")).containsExactly(
+                "La décision de nomination de la commission n'est pas jointe (PDF signé). " + RemiseElectronique.MESSAGE_CAO);
         CompteAuth auth = compteAuthRepository.findByLogin("m1@cao.mg").orElseThrow();
         assertThat(auth.getTypeActeur()).isEqualTo("MEMBRE_CAO");
         assertThat(auth.getActif()).isFalse();
@@ -235,6 +237,11 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<Boolean>read(avecPdf, "$.decision.fichier")).isTrue();
         assertThat(JsonPath.<List<String>>read(avecPdf, "$.anomalies[*].regle")).doesNotContain("DECISION_SANS_FICHIER");
+        assertThat(JsonPath.<String>read(avecPdf, "$.etat")).isEqualTo("COMPLETE");
+        fiche = fiche(tokenPrmp);
+        assertThat(JsonPath.<String>read(fiche, "$.cao")).isEqualTo("COMPLETE");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle")).doesNotContain("SE_CAO");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[*].regle")).contains("SE_CAO");
     }
 
     @Test
@@ -244,6 +251,7 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
     void compte() throws Exception {
         String cao = cao(tokenPrmp, corpsCao("m1@cao.mg", "m2@cao.mg")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String k1 = JsonPath.read(cao, "$.membres[0].compte.idCompte");
+        joindreDecision(mvc, idDmc, tokenPrmp);
 
         mvc.perform(post("/api/auth/login").contentType(JSON).content("{\"login\":\"M1@cao.mg\",\"motDePasse\":\"n'importe quoi\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("COMPTE_A_ACTIVER"));
@@ -399,6 +407,12 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
      * Une CAO : deux membres, le premier président (agent de l'entité), le second l'expert de l'objet (un seul par commission,
      * précision du pilote du 2026-10-04 ; plus d'expert adjoint, plus de qualité).
      */
+    /** ⚠️ 2026-10-28 (demande front « decision-cao-obligatoire ») — le PDF signé de la décision, sans lequel la CAO n'est pas constituée. */
+    static void joindreDecision(org.springframework.test.web.servlet.MockMvc mvc, Object idDmc, String token) throws Exception {
+        mvc.perform(multipart("/api/fiches-marche/" + idDmc + "/cao/decision").file(new MockMultipartFile("fichier", "decision.pdf",
+                "application/pdf", "%PDF-1.4 decision".getBytes())).header("Authorization", token)).andExpect(status().isOk());
+    }
+
     static String corpsCao(String email1, String email2) {
         return "{\"decision\":{\"reference\":\"DEC-001/2026\",\"date\":\"2026-09-30\"},\"membres\":["
                 + "{\"nom\":\"Rabe\",\"prenom\":\"Paul\",\"email\":\"" + email1 + "\",\"telephone\":\"034 11 111 11\","

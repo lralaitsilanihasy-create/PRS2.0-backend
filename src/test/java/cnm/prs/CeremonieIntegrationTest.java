@@ -192,6 +192,7 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
         // ⚠️ V67 (lot 2a, Q11) — la PRMP désigne la CAO ; les comptes des membres sont activés ici directement.
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@cao.mg", "m2@cao.mg"))).andExpect(status().isOk());
+        CaoIntegrationTest.joindreDecision(mvc, idDmc, tokenPrmp);
         k1 = activer("m1@cao.mg");
         k2 = activer("m2@cao.mg");
         tokenM1 = bearer("m1@cao.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, k1, null);

@@ -235,9 +235,17 @@ public final class RemiseElectronique {
     /** ⚠️ V66 (lot 2, §B3, S1) — message de l'avertissement {@code SE_QUORUM_MARGE}, tel quel. */
     public static final String MESSAGE_QUORUM_MARGE = "Le quorum est égal au nombre de membres : la perte d'une seule part rendrait "
             + "les offres illisibles.";
-    /** ⚠️ V67 (lot 2a, §B3) — message de la règle 13 ({@code SE_CAO}), tel quel. */
-    public static final String MESSAGE_CAO = "La commission d'appel d'offres n'est pas constituée (décision, au moins deux membres, "
-            + "un président) : la fiche ne peut pas être validée en remise électronique.";
+    /**
+     * ⚠️ V67 (lot 2a, §B3) — fin du message de la règle 13 ({@code SE_CAO}). ⚠️ 2026-10-28 (demande front
+     * « decision-cao-obligatoire », §B2) : le message commence par ce qui manque ({@link #messageCao}).
+     */
+    public static final String MESSAGE_CAO = "Sans commission d'appel d'offres constituée, la fiche ne peut pas être validée en "
+            + "remise électronique.";
+
+    /** ⚠️ 2026-10-28 (§B2) — le message de la règle 13 : chaque manque en clair, puis {@link #MESSAGE_CAO}. */
+    public static String messageCao(java.util.List<String> manques) {
+        return String.join(" ", manques) + " " + MESSAGE_CAO;
+    }
     /** ⚠️ V67 (lot 2a, §B3) — le corps de {@code PUT …/parametres-internes} ne porte plus les membres. */
     public static final String MESSAGE_MEMBRES_CAO = "Les membres sont ceux de la commission d'appel d'offres, désignée par la PRMP.";
     /** ⚠️ V66 (lot 2, §B4) — message de l'avertissement {@code SE_MARGE_EPUISEE}, tel quel. */

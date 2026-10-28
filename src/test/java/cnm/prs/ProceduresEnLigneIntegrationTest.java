@@ -585,6 +585,7 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
                         + "{\"nom\":\"Rabe\",\"prenom\":\"Paul\",\"email\":\"m1@cao.mg\",\"qualite\":\"MEMBRE\",\"origine\":\"ENTITE_CONTRACTANTE\",\"service\":\"DAF\",\"president\":true},"
                         + "{\"nom\":\"Rasoa\",\"prenom\":\"Lova\",\"email\":\"m2@cao.mg\",\"qualite\":\"MEMBRE\",\"origine\":\"EXPERT_OBJET\",\"organisme\":\"Université\",\"domaine\":\"Informatique\"}]}"))
                 .andExpect(status().isOk());
+        CaoIntegrationTest.joindreDecision(mvc, dmc, tokenPrmp);
         mvc.perform(post("/api/fiches-marche/" + dmc + "/responsable").header("Authorization", tokenAdmin).contentType(JSON)
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/fiches-marche/" + dmc + "/parametres-internes").header("Authorization", tokenVer).contentType(JSON)

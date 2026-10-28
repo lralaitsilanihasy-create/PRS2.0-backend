@@ -224,7 +224,7 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].message")).containsExactlyInAnyOrder(
                 "Les paramètres internes de la procédure sont incomplets : à compléter par le responsable de la procédure.",
                 "Aucun responsable de la procédure n'est désigné : la fiche ne peut pas être validée en remise électronique.",
-                RemiseElectronique.MESSAGE_DEPOSITAIRE, RemiseElectronique.MESSAGE_CAO);
+                RemiseElectronique.MESSAGE_DEPOSITAIRE, RemiseElectronique.messageCao(List.of("La commission d'appel d'offres n'est pas encore désignée.")));
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].bloc")).containsOnly("B04");
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONTROLES_BLOQUANTS"));
@@ -465,6 +465,7 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
     private void cao(Long idDmc) throws Exception {
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@cao.mg", "m2@cao.mg"))).andExpect(status().isOk());
+        CaoIntegrationTest.joindreDecision(mvc, idDmc, tokenPrmp);
     }
 
     private String fiche(Long idDmc) throws Exception {

@@ -2269,6 +2269,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@eval.mg", "m2@eval.mg"))).andExpect(status().isOk());
+        CaoIntegrationTest.joindreDecision(mvc, idDmc, tokenPrmp);
         // ⚠️ R1 (manuel révisé, §B2) — la surcharge du quorum de la CAO par procédure : validée (400), puis réglée à 1 membre (une CAO
         // de deux membres ; la majorité vaudrait l'unanimité), le président restant requis.
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer).contentType(JSON)

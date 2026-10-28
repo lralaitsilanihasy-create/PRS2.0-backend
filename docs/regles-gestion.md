@@ -1069,6 +1069,11 @@ constituée — décision, deux membres, un président), et l'avertissement **S1
 membres). La **publication de l'avis** (et des lettres d'invitation) exige la **cérémonie des clés close** (409
 `CEREMONIE_NON_CLOSE`) ; la validation de la fiche, elle, ne l'exige pas. Contrat : `docs/api-endpoints.md`, §§ *La cérémonie des
 clés… — V66* et *La commission d'appel d'offres… — V67* ; décisions : ADR-0013 et ADR-0010 (amendement du 2026-10-04).
+- ⚠️ **2026-10-28** (arbitrage du pilote ; demande front « decision-cao-obligatoire ») — la décision de nomination de la CAO est
+  **obligatoire, PDF signé compris** : une commission sans sa décision jointe n'est pas constituée, et la règle 13 bloque la
+  validation (le message nomme ce qui manque). Pas de rétroactivité : la règle joue à la prochaine validation, nouvelle fiche ou
+  révision. Les paramètres internes et la cérémonie des clés ne lisent pas la règle et restent possibles sans le PDF. Mode
+  électronique seulement (la CAO n'est saisie que dans ce mode).
 
 ⚠️ **2026-10-04, soumission en ligne (lot 3, V68) — le dépôt d'une offre.** Le candidat scelle son offre dans son navigateur ; le
 serveur ne voit jamais le contenu ni un prix. On dépose si la procédure est en ligne et ses dépôts ouverts (à l'**horloge du

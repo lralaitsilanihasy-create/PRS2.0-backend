@@ -993,6 +993,7 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@seance.mg", "m2@seance.mg"))).andExpect(status().isOk());
+        CaoIntegrationTest.joindreDecision(mvc, idDmc, tokenPrmp);
         // ⚠️ R1 (manuel révisé, §B2) — une CAO de deux membres : la majorité vaudrait l'unanimité ; le décor règle le quorum à 1 membre
         // (président requis en plus), les tests du quorum le remontent explicitement.
         mvc.perform(put("/api/parametres/cao-quorum").header("Authorization", tokenAdmin).contentType(JSON).content("{\"regle\":\"1\"}"))

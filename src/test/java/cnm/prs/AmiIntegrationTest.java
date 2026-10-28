@@ -412,6 +412,7 @@ class AmiIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@ami.mg", "m2@ami.mg"))).andExpect(status().isOk());
+        CaoIntegrationTest.joindreDecision(mvc, idDmc, tokenPrmp);
         // ⚠️ R1 (manuel révisé, §B2) — une CAO de deux membres : le décor règle le quorum à 1 (président requis en plus).
         mvc.perform(put("/api/parametres/cao-quorum").header("Authorization", tokenAdmin).contentType(JSON).content("{\"regle\":\"1\"}"))
                 .andExpect(status().isOk());

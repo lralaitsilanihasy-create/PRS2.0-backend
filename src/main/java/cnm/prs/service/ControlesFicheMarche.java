@@ -188,13 +188,17 @@ public final class ControlesFicheMarche {
      */
     public record RemiseElectroniqueBilan(boolean electronique, RemiseElectronique.Parametres parametres,
             RemiseElectronique.Internes internes, boolean responsableDesigne,
-            /** ⚠️ V67 (lot 2a, §B3) — la commission d'appel d'offres est constituée (décision, deux membres, un président). */
-            boolean caoConstituee) {
+            /**
+             * ⚠️ V67 (lot 2a, §B3) — ce qui empêche la commission d'appel d'offres d'être constituée (décision avec son PDF signé,
+             * deux membres, un président) ; vide = constituée. ⚠️ 2026-10-28 (§B2) : une liste en clair plutôt qu'un booléen,
+             * pour que le message de la règle 13 nomme ce qui manque.
+             */
+            List<String> caoManques) {
 
         /** Sans la CAO (V50 ; les tests unitaires et les appels d'avant V67). */
         public RemiseElectroniqueBilan(boolean electronique, RemiseElectronique.Parametres parametres,
                 RemiseElectronique.Internes internes, boolean responsableDesigne) {
-            this(electronique, parametres, internes, responsableDesigne, true);
+            this(electronique, parametres, internes, responsableDesigne, List.of());
         }
     }
 
@@ -329,7 +333,7 @@ public final class ControlesFicheMarche {
             depositaire(se.internes(), bloquants, ok);
             quorumMarge(se.internes(), avertissements);
             // ⚠️ V67 (2026-10-04, soumission en ligne, lot 2a, §B3) — règle 13 : la CAO est constituée.
-            cao(se.caoConstituee(), bloquants, ok);
+            cao(se.caoManques(), bloquants, ok);
         }
 
         return new BilanControlesDto(bloquants, avertissements, ok, nbSaisis, nbAttendus);
@@ -575,12 +579,15 @@ public final class ControlesFicheMarche {
         }
     }
 
-    /** ⚠️ V67 — règle 13, {@code SE_CAO} : la commission d'appel d'offres est constituée (décision, deux membres au moins, un président). Bloquante. */
-    private static void cao(boolean constituee, List<Controle> bloquants, List<Controle> ok) {
-        if (constituee) {
+    /**
+     * ⚠️ V67 — règle 13, {@code SE_CAO} : la commission d'appel d'offres est constituée (décision avec son PDF signé depuis le
+     * 2026-10-28, deux membres au moins, un président). Bloquante ; le message nomme ce qui manque (§B2).
+     */
+    private static void cao(List<String> manques, List<Controle> bloquants, List<Controle> ok) {
+        if (manques == null || manques.isEmpty()) {
             ok.add(new Controle(SE_CAO, List.of(), BLOC_REMISE, "Commission d'appel d'offres constituée."));
         } else {
-            bloquants.add(new Controle(SE_CAO, List.of(), BLOC_REMISE, RemiseElectronique.MESSAGE_CAO));
+            bloquants.add(new Controle(SE_CAO, List.of(), BLOC_REMISE, RemiseElectronique.messageCao(manques)));
         }
     }
 
