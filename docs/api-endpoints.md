@@ -1264,8 +1264,8 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 | GET | /api/controleurs/par-profil/{idProfile} | — | `ControleurDto[]` | 200 | Authentifié |
 | GET | /api/controleurs/par-superieur/{imSuperieur} | — | `ControleurDto[]` | 200 | Authentifié |
 | GET | /api/controleurs/par-nom/{nom} | — | `ControleurDto[]` | 200 | Authentifié |
-| POST | /api/controleurs | `ControleurDto` (**JSON**) | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
-| POST | /api/controleurs | **`multipart/form-data`** : part `data` (JSON `ControleurDto`) + `photo` (opt.) | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
+| POST | /api/controleurs | `ControleurDto` (**JSON**) | `ControleurDto` | 201, 400, 403, 409 | ADMINISTRATEUR |
+| POST | /api/controleurs | **`multipart/form-data`** : part `data` (JSON `ControleurDto`) + `photo` (opt.) | `ControleurDto` | 201, 400, 403, 409 | ADMINISTRATEUR |
 | PUT | /api/controleurs/{id} | `ControleurDto` (**JSON**) | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | PUT | /api/controleurs/{id} | **`multipart/form-data`** : part `data` (JSON `ControleurDto`) + `photo` (opt.) | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | DELETE | /api/controleurs/{id} | — | — | 204, 403, 404, 409 | ADMINISTRATEUR |
@@ -1274,6 +1274,21 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 | GET | /api/controleurs/{id}/pieces/{type} | — ; `type` = `PHOTO` | fichier (binaire) | 200, 400, 403, 404 | Authentifié (⚠️ ouvert 2026-07-27 — affichage des photos hors admin ; dépôt/suppression restent ADMINISTRATEUR) |
 | DELETE | /api/controleurs/{id}/pieces/{type} | — ; `type` = `PHOTO` | — | 204, 400, 403, 404 | ADMINISTRATEUR |
 | GET | /api/controleurs/rattachements | — | `RattachementDto[]` | 200, 403 | ADMINISTRATEUR, PRESIDENT, CHEF_COMMISSION |
+
+> ⚠️ **2026-10-28 (demande front « compte-connexion-controleur », B1-B3, H1-H3 ; V146).**
+> - **B1 — le compte naît avec la fiche.** `POST /api/controleurs`, en JSON ou en multipart, ouvre le compte de connexion dans la
+>   même transaction : `login` = `refActeur` = `imControleur`, `typeActeur = CONTROLEUR`, `actif = true`, `statut = ACTIF`. Le
+>   mot de passe est un aléa chiffré jamais communiqué : le compte est **inutilisable** tant que l'Administrateur n'a pas fixé
+>   un mot de passe par `POST /api/comptes-auth/{login}/reinitialiser-mot-de-passe`. Aucun courriel n'est envoyé.
+> - **Login déjà pris.** Si le login existe déjà pour un autre compte (une PRMP, par exemple), la création répond **409
+>   `LOGIN_PRIS`** et la fiche n'est pas créée. Si le login existe déjà pour ce même contrôleur, son compte est gardé tel quel.
+> - **B2 — les contrôleurs d'avant.** V146 ouvre un compte, actif et sans mot de passe utilisable, pour chaque contrôleur qui n'en
+>   avait pas.
+> - **B3 — le matricule.** `imControleur` est limité à 7 caractères : au-delà, **400** avec `erreurs[{ champ: "imControleur",
+>   message: "7 caractères au plus." }]`, au lieu du 409 générique. Les autres champs du formulaire étaient déjà bornés
+>   (`@Size`).
+> - **PUT** ne touche pas au compte. **DELETE** le supprime, comme avant.
+> - Aucun changement de mot de passe n'est imposé à la première connexion : cette règle n'existe pour aucun compte aujourd'hui.
 | PUT | /api/controleurs/{im}/rattachement | `{imRattache}` (`null` = détacher) | `RattachementDto` | 200, 403, 404, 409 | ADMINISTRATEUR, PRESIDENT, CHEF_COMMISSION |
 
 > **DELETE** supprime le contrôleur **et son compte d'authentification**, en nettoyant ses données **dérivées**

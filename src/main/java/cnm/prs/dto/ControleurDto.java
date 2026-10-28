@@ -14,6 +14,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ControleurDto {
 
+    /** ⚠️ 2026-10-28 (« compte-connexion-controleur », §B3) — {@code varchar(7)} : 400 nominatif plutôt que 409 générique. */
+    @Size(max = 7, message = "7 caractères au plus.")
     private String imControleur;
 
     @Size(max = 100)

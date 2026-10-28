@@ -3,6 +3,7 @@ package cnm.prs.service;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -10,8 +11,10 @@ import org.springframework.web.multipart.MultipartFile;
 import cnm.prs.dto.ControleurDto;
 import cnm.prs.dto.PieceJointeMetaDto;
 import cnm.prs.dto.SuppressionLotControleurResult;
+import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.PieceJointe;
+import cnm.prs.enums.StatutCompte;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.enums.TypePieceJointe;
 import cnm.prs.exception.BadRequestException;
@@ -52,13 +55,17 @@ public class ControleurService {
     /** ⚠️ Intérim désigné (2026-09-21, §B5) — liens « suppléé par » / « supplée » sur les fiches. */
     private final InterimService interimService;
 
+    /** ⚠️ 2026-10-28 (« compte-connexion-controleur », §B1) — le mot de passe inutilisable du compte créé avec le contrôleur. */
+    private final PasswordEncoder passwordEncoder;
+
     public ControleurService(ControleurRepository repository, CompteAuthRepository compteRepository,
             ExamenRepository examenRepository, PvExamenRepository pvExamenRepository,
             VerificationRepository verificationRepository, DispatchRepository dispatchRepository,
             ReceptionRepository receptionRepository, DemandeRetraitRepository demandeRetraitRepository,
             LettreRenvoiRepository lettreRenvoiRepository, SessionUtilisateurRepository sessionRepository,
             IndicateurCtrlRepository indicateurCtrlRepository, PieceJointeService pieceJointeService,
-            InterimService interimService) {
+            InterimService interimService, PasswordEncoder passwordEncoder) {
+        this.passwordEncoder = passwordEncoder;
         this.interimService = interimService;
         this.repository = repository;
         this.compteRepository = compteRepository;
@@ -125,7 +132,34 @@ public class ControleurService {
         // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
         ClePrimaire.exigerLibre(dto.getImControleur(), repository::existsById, "contrôleur");
         Controleur entity = ControleurMapper.toEntity(dto);
-        return ControleurMapper.toDto(repository.save(entity));
+        ControleurDto cree = ControleurMapper.toDto(repository.save(entity));
+        ouvrirCompte(cree.getImControleur());
+        return cree;
+    }
+
+    /**
+     * ⚠️ 2026-10-28 (demande front « compte-connexion-controleur », §B1, H1, H2) — le compte de connexion naît avec le contrôleur,
+     * dans la même transaction : login = matricule, type {@code CONTROLEUR}, actif, mais <strong>sans mot de passe utilisable</strong>
+     * (un aléa de 32 octets chiffré, jamais communiqué) tant que l'Administrateur n'en a pas fixé un par « Réinitialiser le mot de
+     * passe ». Aucun courriel. Un login déjà pris par un autre compte refuse la création (409 {@code LOGIN_PRIS}) ; le sien, s'il
+     * existe déjà, est gardé tel quel.
+     */
+    private void ouvrirCompte(String im) {
+        java.util.Optional<CompteAuth> existant = compteRepository.findByLogin(im);
+        if (existant.isPresent()) {
+            CompteAuth c = existant.get();
+            if (TypeActeur.CONTROLEUR.name().equals(c.getTypeActeur()) && im.equals(c.getRefActeur())) {
+                return;
+            }
+            throw new BusinessRuleException("Le login « " + im + " » est déjà celui d'un autre compte (" + c.getTypeActeur()
+                    + ") : choisissez un autre matricule.", "LOGIN_PRIS");
+        }
+        byte[] alea = new byte[32];
+        new java.security.SecureRandom().nextBytes(alea);
+        CompteAuth compte = new CompteAuth(im, passwordEncoder.encode(java.util.Base64.getEncoder().encodeToString(alea)),
+                TypeActeur.CONTROLEUR.name(), im, true);
+        compte.setStatut(StatutCompte.ACTIF.name());
+        compteRepository.save(compte);
     }
 
     /**

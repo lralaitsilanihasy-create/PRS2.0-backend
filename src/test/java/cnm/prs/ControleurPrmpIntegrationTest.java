@@ -54,6 +54,69 @@ class ControleurPrmpIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-10-28 « compte-connexion-controleur » — POST /api/controleurs ouvre le compte de connexion (login = "
+            + "matricule, CONTROLEUR, actif) sans mot de passe utilisable ; l'Administrateur le fixe, la connexion passe ; "
+            + "matricule de 8 caractères → 400 sur imControleur ; login déjà pris par un autre compte → 409 LOGIN_PRIS")
+    void controleur_creationOuvreLeCompte() throws Exception {
+        mvc.perform(post("/api/controleurs").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imControleur\":\"RESP002\",\"idProfile\":6,\"transversal\":false,\"nomCont\":\"Rabe\"}"))
+                .andExpect(status().isCreated());
+        CompteAuth compte = compteAuthRepository.findByLogin("RESP002").orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("CONTROLEUR", compte.getTypeActeur());
+        org.junit.jupiter.api.Assertions.assertEquals("RESP002", compte.getRefActeur());
+        assertTrue(compte.getActif());
+        org.junit.jupiter.api.Assertions.assertEquals("ACTIF", compte.getStatut());
+        // Sans mot de passe fixé, aucune saisie n'ouvre la session.
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"RESP002\",\"motDePasse\":\"Test@1234\"}")).andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/comptes-auth/RESP002/reinitialiser-mot-de-passe").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"nouveauMotDePasse\":\"Provisoire2026\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"RESP002\",\"motDePasse\":\"Provisoire2026\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("VERIFICATEUR"));
+
+        // §B3 — le matricule borné à 7 caractères : 400 nominatif, rien n'est créé.
+        mvc.perform(post("/api/controleurs").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imControleur\":\"RESPPROC1\",\"idProfile\":6,\"transversal\":false}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='imControleur')].message", hasItem("7 caractères au plus.")));
+        assertFalse(controleurRepository.existsById("RESPPROC1"));
+        mvc.perform(multipart("/api/controleurs").header("Authorization", tokenAdmin).file(new MockMultipartFile("data", "",
+                "application/json", "{\"imControleur\":\"RESPPROC1\",\"idProfile\":6,\"transversal\":false}".getBytes(StandardCharsets.UTF_8))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='imControleur')].message", hasItem("7 caractères au plus.")));
+
+        // Login déjà celui d'un autre compte : 409, la fiche n'est pas créée.
+        compteAuthRepository.save(new CompteAuth("PRX0001", "x", TypeActeur.PRMP.name(), "PRX0001", true));
+        mvc.perform(post("/api/controleurs").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imControleur\":\"PRX0001\",\"idProfile\":6,\"transversal\":false}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LOGIN_PRIS"));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Test
+    @DisplayName("⚠️ 2026-10-28 « compte-connexion-controleur » §B2 — V146 rejouée : le contrôleur sans compte en reçoit un, actif, "
+            + "sans mot de passe utilisable ; un compte existant n'est pas touché ; idempotente")
+    void v146_rattrapeLesControleursSansCompte() throws Exception {
+        controleurRepository.saveAndFlush(controleur("SANSCPT", 6, "ANT"));
+        compteAuthRepository.saveAndFlush(new CompteAuth("CTRAVEC", "empreinte-gardee", TypeActeur.CONTROLEUR.name(), "CTRAVEC", true));
+        controleurRepository.saveAndFlush(controleur("CTRAVEC", 6, "ANT"));
+        String v146 = new String(new org.springframework.core.io.ClassPathResource(
+                "db/migration/V146__compte_connexion_controleurs.sql").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        jdbc.execute(v146);
+        jdbc.execute(v146);   // idempotente
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbc.queryForObject(
+                "select count(*) from t_compte_auth where \"LOGIN\" = 'SANSCPT' and \"TYPE_ACTEUR\" = 'CONTROLEUR' and \"ACTIF\"", Integer.class));
+        org.junit.jupiter.api.Assertions.assertEquals("empreinte-gardee", jdbc.queryForObject(
+                "select \"MOT_DE_PASSE\" from t_compte_auth where \"LOGIN\" = 'CTRAVEC'", String.class));
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"SANSCPT\",\"motDePasse\":\"!aucun-mot-de-passe-fixe\"}")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     @DisplayName("DELETE /api/controleurs/{id} : contrôleur sans activité → 204 (+ compte/sessions/indicateurs nettoyés) ; avec activité → 409 ; inconnu → 404")
     void controleur_delete_gardeEtNettoyage() throws Exception {
         // Contrôleur « propre » (aucune participation métier) + compte + une session + un indicateur.

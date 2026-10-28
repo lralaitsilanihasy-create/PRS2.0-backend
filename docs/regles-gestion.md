@@ -4113,6 +4113,14 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
 
 - Gestion des comptes contrôleurs & PRMP [Écriture]
   - Création, modification, désactivation — rattachement hiérarchique (ID_SUPERIEUR) et localité.
+  - ⚠️ **Règle ajoutée (2026-10-28, demande front « compte-connexion-controleur »)** — **le compte de connexion naît avec le
+    contrôleur**. Son login est le matricule. Il est actif, mais **sans mot de passe utilisable** tant que l'Administrateur ne
+    l'a pas fixé par « Réinitialiser le mot de passe ». Aucun courriel n'est envoyé. Avant, seul le jeu de données de
+    développement ouvrait ces comptes : un contrôleur créé à l'écran ne pouvait pas se connecter. Les contrôleurs créés avant
+    ont reçu le leur par la migration V146.
+
+    Le matricule fait **7 caractères au plus** (400 sous `imControleur`). Un matricule déjà utilisé comme login d'un autre
+    compte est refusé (409). Modifier un contrôleur ne touche pas à son compte ; le supprimer le supprime.
 - Gestion de la hiérarchie [Écriture]
   - Affectation des supérieurs (ID_SUPERIEUR) — construction de l'arbre via v_hierarchie_controleurs.
 - RBAC — contrôle d'accès par rôle [Auto]
