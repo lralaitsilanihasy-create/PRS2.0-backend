@@ -581,7 +581,8 @@ public class ChronometrageService {
     /**
      * Date prévisionnelle de fin de traitement, en jours <strong>ouvrés</strong> :
      * {@code aujourd'hui + reste(étape en cours) + Σ délais standards des étapes restantes} jusqu'à la
-     * transmission SIGMP incluse. {@code null} si le dossier n'est pas dans le circuit.
+     * transmission SIGMP incluse. {@code null} si le dossier n'est pas dans le circuit, ⚠️ et depuis le 2026-10-28 quand
+     * le compteur est arrêté (plus aucune étape du compteur à courir : décision transmise à SIGMP, clôture).
      *
      * <p>⚠️ <strong>Unité : l'HEURE ouvrée</strong> depuis le 2026-09-02. La somme se fait en heures,
      * puis se convertit en jours par tranche de 8 h, <strong>arrondie au supérieur</strong> : une journée
@@ -624,10 +625,12 @@ public class ChronometrageService {
             return null;
         }
         long totalHeures = 0L;
+        boolean resteUneEtape = false;
         for (EtapeCircuit etape : EtapeCircuit.etapesDuCompteur()) {
             if (etape.ordinal() < reference.ordinal()) {
                 continue;   // franchie : l'étape de référence fait foi, y compris après un retour en arrière
             }
+            resteUneEtape = true;
             if (etape == courant.etape() && courant.entree() != null) {
                 // Écoulé et délai standard dans la MÊME échelle (8 h par jour ouvré) : mesurer en heures
                 // d'horloge mettrait en dépassement une étape entamée la veille alors qu'un seul jour de
@@ -636,6 +639,12 @@ public class ChronometrageService {
             } else {
                 totalHeures += standard(delais, etape);
             }
+        }
+        // ⚠️ 2026-10-28 (demande front « fin-prevue-compteur-arrete », §B1) — aucune étape du compteur ne reste à courir (référence
+        // hors compteur après sa fin : ARCHIVAGE, une fois la décision transmise à SIGMP) : le traitement de la CNM est terminé, il
+        // n'y a plus de fin à prévoir. « Aujourd'hui » était faux, et triait le dossier comme une fin imminente.
+        if (!resteUneEtape) {
+            return null;
         }
         return JoursOuvres.ajouter(maintenant.toLocalDate(), HeuresOuvrees.enJoursArrondiSuperieur(totalHeures));
     }

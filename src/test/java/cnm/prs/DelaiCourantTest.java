@@ -1,6 +1,7 @@
 package cnm.prs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.time.Clock;
@@ -220,11 +221,33 @@ class DelaiCourantTest {
             String statut = statuts[hasard.nextInt(statuts.length)];
             String statutPv = statutsPv[hasard.nextInt(statutsPv.length)];
 
-            assertEquals(Oracle.datePrevisionnelleFin(service, statut, statutPv, taches, suspensions, depot,
-                            maintenant, delais),
+            // ⚠️ 2026-10-28 (« fin-prevue-compteur-arrete », §B1) — seul écart voulu : compteur arrêté (plus aucune étape du
+            // compteur à courir), la date est nulle là où l'oracle rendait « aujourd'hui ».
+            LocalDate attendu = compteurArrete(service, statut, statutPv) ? null
+                    : Oracle.datePrevisionnelleFin(service, statut, statutPv, taches, suspensions, depot, maintenant, delais);
+            assertEquals(attendu,
                     service.datePrevisionnelleFin(statut, statutPv, taches, suspensions, depot, maintenant, delais),
                     "tirage " + i + " : statut=" + statut + " pv=" + statutPv + " maintenant=" + maintenant);
         }
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-28 « fin-prevue-compteur-arrete » — décision transmise à SIGMP (référence ARCHIVAGE, hors compteur) : "
+            + "pas de fin prévue (null, plus « aujourd'hui ») ; clôturé, remplacé, retiré : null ; vérification : une date")
+    void finPrevue_compteurArrete() {
+        LocalDateTime maintenant = LUNDI.atTime(10, 0);
+        for (String statut : new String[] { "DECISION_TRANSMISE_SIGMP", "CLOTURE", "REMPLACE", "RETIRE" }) {
+            assertNull(service.datePrevisionnelleFin(statut, "SIGNE", List.of(), List.of(), null, maintenant, delais()), statut);
+        }
+        assertEquals(EtapeCircuit.ARCHIVAGE, service.etapeCourante("DECISION_TRANSMISE_SIGMP", "SIGNE"));
+        assertNotNull(service.datePrevisionnelleFin("EN_VERIFICATION", "SIGNE", List.of(), List.of(), null, maintenant, delais()));
+    }
+
+    /** Le compteur est-il arrêté pour ce statut, au sens de l'oracle : aucune étape du compteur à partir de sa référence ? */
+    private static boolean compteurArrete(ChronometrageService service, String statut, String statutPv) {
+        EtapeCircuit courante = service.etapeCourante(statut, statutPv);
+        EtapeCircuit reference = courante != null ? courante : Oracle.REPRISE_APRES_ATTENTE.get(statut);
+        return reference != null && EtapeCircuit.etapesDuCompteur().stream().noneMatch(e -> e.ordinal() >= reference.ordinal());
     }
 
     /**

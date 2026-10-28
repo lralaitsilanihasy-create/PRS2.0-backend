@@ -2440,6 +2440,8 @@ ni matricule de contrôleur, et seulement les dossiers dont la tutelle (`ref`) e
 **Tri de `taches`** (et de `delegations.taches`) : urgence dans l'ordre ci-dessus ; puis `restantHeures` croissant
 (urgences chronométrées), date la plus ancienne (`SANS_DELAI`, `HORS_DELAI`, `EN_PAUSE` : début de pause, entrée,
 dépôt, date de référence), `datePrevisionnelleFin` croissante (`SUIVI`) ; enfin `idDossier`, puis l'ordre des sections.
+Une clé nulle passe après les clés connues : par exemple, une `datePrevisionnelleFin` nulle, ⚠️ 2026-10-28, pour un dossier dont
+le compteur est arrêté.
 
 **Périmètre et statuts.** Dossiers visibles du connecté (mêmes prédicats que `PerimetreDossier` : Président sans
 localité, contrôleur de sa localité hors brouillons, PRMP/UGPM propriétaire), aux statuts actifs : **exclus**
@@ -13286,7 +13288,7 @@ un quatrième — c'est exactement `EN_ATTENTE_DECISION_PRMP`, pendant laquelle 
 
 | Champ | Type | Sens |
 |---|---|---|
-| `datePrevisionnelleFin` | string (date) \| null | date annoncée, en jours ouvrés ; `null` hors circuit (brouillon, clos, retiré, remplacé) |
+| `datePrevisionnelleFin` | string (date) \| null | date annoncée, en jours ouvrés ; `null` hors circuit (brouillon, clos, retiré, remplacé) ; ⚠️ **2026-10-28** (demande front « fin-prevue-compteur-arrete ») `null` aussi une fois le **compteur arrêté**. C'est le cas en `DECISION_TRANSMISE_SIGMP`, et plus généralement chaque fois qu'aucune étape du compteur ne reste à courir. Avant, elle valait la date du jour. La fin réelle est `finCompteur` du chronométrage |
 | `attentePrmp` | boolean | vrai quand la balle est **chez la PRMP** |
 | `etapeCourante` | string \| null | étape ouverte ; `null` si aucune tâche CNM ne court |
 | `dateEnregistrement` | string (date-heure) \| null | ⚠️ **2026-09-06** (demande pilote « Suivi des délais CNM ») — clôture de l'étape `RECEPTION`, **exactement** le `debutCompteur` du chronométrage ; `null` tant que le Secrétaire n'a pas enregistré. Sert la PRMP, pour qui `GET /api/receptions` est vide (portée inchangée) |
@@ -13307,6 +13309,10 @@ totalHeures = reste(étape en cours) + Σ délais standards des étapes restante
 reste       = max(0, délai standard − heures ouvrées écoulées depuis l'ENTRÉE dans l'étape)
 datePrevisionnelleFin = aujourd'hui + ⌈ totalHeures / 8 ⌉ jours ouvrés
 ```
+
+- ⚠️ **2026-10-28 — compteur arrêté : `null`.** Si plus aucune étape du compteur ne reste à courir, il n'y a pas de date. C'est
+  le cas quand l'étape de référence est hors compteur après sa fin, c'est-à-dire `ARCHIVAGE` une fois la décision transmise à
+  SIGMP. Avant, le calcul rendait « aujourd'hui + 0 jour ».
 
 - **Arrondi au jour SUPÉRIEUR** : une journée entamée compte pleine (9 h restantes tiennent sur 2 jours).
 - **Une étape en dépassement compte 0** : la date **glisse** au lieu de promettre un rattrapage qui

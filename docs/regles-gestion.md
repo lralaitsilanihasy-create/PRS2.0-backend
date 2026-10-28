@@ -3146,6 +3146,10 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     (`EN_ATTENTE_COMPLEMENTS_DEPOT`, `EN_ATTENTE_PIECES`, `EN_ATTENTE_DECISION_PRMP`), la date reste
     calculée mais **glisse tant que la PRMP n'a pas rendu la main** — c'est le net CNM qui juge la
     Commission, pas le temps que la PRMP prend à rectifier.
+  - ⚠️ **Règle précisée (2026-10-28, demande front « fin-prevue-compteur-arrete »)** — une fois le compteur de la CNM
+    **arrêté** (décision transmise à SIGMP, puis clôture), le dossier n'a **plus de fin prévue** : la date est nulle, et non plus
+    celle du jour. Le traitement est terminé, et sa date de fin réelle est la fin du compteur. Sur l'accueil, un dossier sans
+    date se range après ceux qui en ont une.
   - ⚠️ **Règle ajoutée (2026-09-06, demande pilote « Suivi des délais CNM »)** — `DossierDto` porte aussi
     la **date d'enregistrement** (`dateEnregistrement`, date-heure) : la clôture de l'étape `RECEPTION`,
     **exactement** le `debutCompteur` du chronométrage, résolue **en lot** sur les listes depuis les mêmes
