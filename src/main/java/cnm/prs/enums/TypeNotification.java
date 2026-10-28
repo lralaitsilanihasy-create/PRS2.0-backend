@@ -256,5 +256,12 @@ public enum TypeNotification {
      * ⚠️ 2026-10-18 (demande front « avis-a-imprimer », §B1) — l'avis spécifique (ou les lettres d'invitation, nommées dans le texte)
      * d'un dossier né d'une fiche devient imprimable : vers la PRMP du plan et ses UGPM, objet = le dossier.
      */
-    AVIS_A_IMPRIMER
+    AVIS_A_IMPRIMER,
+    /**
+     * ⚠️ 2026-10-28 (demande front « dao-complet-en-file », Q4 ; V144) — le DAO complet d'une version validée est assemblé : vers la
+     * PRMP du plan et ses UGPM, objet = la procédure (DMC), dossier = celui de la fiche s'il existe.
+     */
+    DAO_COMPLET_PRET,
+    /** ⚠️ 2026-10-28 (« dao-complet-en-file », Q4) — le DAO complet est abandonné après le dernier essai : vers les Administrateurs. */
+    DAO_COMPLET_ECHEC
 }

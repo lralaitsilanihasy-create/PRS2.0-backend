@@ -27,7 +27,14 @@ import cnm.prs.repository.ParametreRepository;
 class BloquantsR9aTest {
 
     private static AvisSpecifiqueService avis(DaoCompletService daoComplet) {
-        return new AvisSpecifiqueService(null, null, null, null, null, null, null, null, null, null, null, null, null, daoComplet, null, null);
+        return avis(daoComplet, mock(DaoCompletFileService.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static AvisSpecifiqueService avis(DaoCompletService daoComplet, DaoCompletFileService file) {
+        org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> p = mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(p.getObject()).thenReturn(file);
+        return new AvisSpecifiqueService(null, null, null, null, null, null, null, null, null, null, null, null, null, daoComplet, null, null, p);
     }
 
     private static FicheMarche version(int n) {
@@ -42,30 +49,39 @@ class BloquantsR9aTest {
     void daoCompletInactif() {
         DaoCompletService dao = mock(DaoCompletService.class);
         when(dao.actif()).thenReturn(false);
-        assertThatCode(() -> avis(dao).exigerDaoComplet(version(2), new FicheMarcheDto(), 10)).doesNotThrowAnyException();
-        verify(dao, never()).assurer(any(), any());
+        DaoCompletFileService file = mock(DaoCompletFileService.class);
+        assertThatCode(() -> avis(dao, file).exigerDaoComplet(version(2), new FicheMarcheDto(), 10)).doesNotThrowAnyException();
+        verify(file, never()).mettreEnTete(any());
     }
 
     @Test
-    @DisplayName("n° 2 — le DAO complet présent ou assemblé sur-le-champ laisse publier")
-    void daoCompletAssure() {
+    @DisplayName("n° 2 — le DAO complet présent laisse publier, sans toucher à la file")
+    void daoCompletPresent() {
         DaoCompletService dao = mock(DaoCompletService.class);
         when(dao.actif()).thenReturn(true);
-        when(dao.assurer(any(), any())).thenReturn(true);
-        assertThatCode(() -> avis(dao).exigerDaoComplet(version(2), new FicheMarcheDto(), 10)).doesNotThrowAnyException();
+        when(dao.existe(7)).thenReturn(true);
+        DaoCompletFileService file = mock(DaoCompletFileService.class);
+        assertThatCode(() -> avis(dao, file).exigerDaoComplet(version(2), new FicheMarcheDto(), 10)).doesNotThrowAnyException();
+        verify(file, never()).mettreEnTete(any());
     }
 
     @Test
-    @DisplayName("n° 2 — l'assemblage échoue : 409 DAO_COMPLET_ABSENT avec la version")
+    @DisplayName("n° 2 (⚠️ 28/10, « dao-complet-en-file », Q2) — absent : la version passe en tête de file, 409 DAO_COMPLET_ABSENT avec la version et le rang, sans assembler")
     void daoCompletAbsent() {
         DaoCompletService dao = mock(DaoCompletService.class);
         when(dao.actif()).thenReturn(true);
-        when(dao.assurer(any(), any())).thenReturn(false);
+        when(dao.existe(7)).thenReturn(false);
+        DaoCompletFileService file = mock(DaoCompletFileService.class);
+        FicheMarche v3 = version(3);
+        when(file.mettreEnTete(v3)).thenReturn(1);
         BusinessRuleException e = catchThrowableOfType(BusinessRuleException.class,
-                () -> avis(dao).exigerDaoComplet(version(3), new FicheMarcheDto(), 10));
+                () -> avis(dao, file).exigerDaoComplet(v3, new FicheMarcheDto(), 10));
         assertThat(e.getCode()).isEqualTo(AvisSpecifiqueService.DAO_COMPLET_ABSENT);
         assertThat(e.getIdDossier()).isEqualTo(10);
-        assertThat(e.getDetails()).containsEntry("version", 3);
+        assertThat(e.getDetails()).containsEntry("version", 3).containsEntry("rang", 1);
+        assertThat(e.getMessage()).contains("en préparation").contains("n° 1 dans la file");
+        verify(dao, never()).assurer(any(), any());
+        verify(dao, never()).assembler(any());
     }
 
     @Test
@@ -74,7 +90,7 @@ class BloquantsR9aTest {
         cnm.prs.repository.FicheMarcheRepository fiches = mock(cnm.prs.repository.FicheMarcheRepository.class);
         cnm.prs.repository.DocumentFicheMarcheRepository documents = mock(cnm.prs.repository.DocumentFicheMarcheRepository.class);
         DaoCompletService dao = mock(DaoCompletService.class);
-        AvisSpecifiqueService s = new AvisSpecifiqueService(null, fiches, null, null, null, null, null, null, null, documents, null, null, null, dao, null, null);
+        AvisSpecifiqueService s = new AvisSpecifiqueService(null, fiches, null, null, null, null, null, null, null, documents, null, null, null, dao, null, null, null);
         when(fiches.findByIdDmcOrderByNumeroVersionAsc(5L)).thenReturn(java.util.List.of());
         assertThat(s.etatDaoComplet(5L)).isNull();
         FicheMarche v = version(2);

@@ -109,6 +109,8 @@ public class AvisSpecifiqueService {
     private final DelaisPublicite delaisPublicite;
     /** ⚠️ R9a (manuel révisé, lot 2, §B4 n° 2, art. 31) — le DAO complet de la version, exigé avant toute publication. */
     private final DaoCompletService daoComplet;
+    /** ⚠️ 2026-10-28 (« dao-complet-en-file », Q2) — le DAO complet absent passe en tête de file, l'impression attend. */
+    private final org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> daoCompletFile;
 
     /** ⚠️ V118 (§B2, H1) — la publication de l'AGPM du plan : numéro et date du journal de l'avis général. */
     private final PublicationAgpmService publicationAgpm;
@@ -121,7 +123,8 @@ public class AvisSpecifiqueService {
             cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, CeremonieService ceremonie, ValeursPpmService valeursPpm,
             DelaisPublicite delaisPublicite, DaoCompletService daoComplet, PublicationAgpmService publicationAgpm,
-            ParametreService parametres) {
+            ParametreService parametres, org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> daoCompletFile) {
+        this.daoCompletFile = daoCompletFile;
         this.parametres = parametres;
         this.publicationAgpm = publicationAgpm;
         this.daoComplet = daoComplet;
@@ -312,18 +315,24 @@ public class AvisSpecifiqueService {
 
     /**
      * ⚠️ R9a (manuel révisé, lot 2, §B4 n° 2 ; art. 31 : le DAO est complet avant sa publication) — à l'impression de l'avis ou des
-     * lettres, le DAO complet de la version validée doit exister : s'il manque, il est assemblé sur-le-champ ({@link
-     * DaoCompletService#assurer}, synchrone, ~20 s) ; un échec rend 409 {@code DAO_COMPLET_ABSENT} {@code { version }}, le rattrapage
-     * périodique le reprendra. Sans assemblage actif sur ce serveur ({@code app.dao-complet.actif} faux ou hors Windows), le DAO
+     * lettres, le DAO complet de la version validée doit exister : s'il manque, ⚠️ 2026-10-28 (« dao-complet-en-file », Q2) la version
+     * passe en tête de la file d'assemblage ({@link DaoCompletFileService#mettreEnTete}) et l'impression rend 409
+     * {@code DAO_COMPLET_ABSENT} {@code { version, rang }} — jusque-là il était assemblé sur-le-champ, sous le verrou de Word. Sans assemblage actif sur ce serveur ({@code app.dao-complet.actif} faux ou hors Windows), le DAO
      * complet n'existe pour aucune fiche : la règle ne s'applique pas (les documents séparés font le DAO).
      */
     void exigerDaoComplet(FicheMarche validee, FicheMarcheDto etat, Integer idDossierSoumis) {
-        if (!daoComplet.actif() || daoComplet.assurer(validee, etat)) {
+        if (!daoComplet.actif() || daoComplet.existe(validee.getIdFiche())) {
             return;
         }
-        throw new BusinessRuleException("Le DAO complet de la version " + validee.getNumeroVersion() + " n'a pas pu être assemblé : il se "
-                + "publie complet (art. 31). Réessayez dans quelques minutes ; l'assemblage est repris automatiquement.", DAO_COMPLET_ABSENT,
-                idDossierSoumis, Map.of("version", validee.getNumeroVersion()));
+        // ⚠️ 2026-10-28 (« dao-complet-en-file », Q2) — plus d'assemblage sur-le-champ sous le verrou de Word : la version passe en tête
+        // de file (une version abandonnée repart pour une série d'essais) et l'impression attend.
+        Integer rang = daoCompletFile.getObject().mettreEnTete(validee);
+        Map<String, Object> details = new java.util.LinkedHashMap<>();
+        details.put("version", validee.getNumeroVersion());
+        details.put("rang", rang);
+        throw new BusinessRuleException("Le DAO complet de la version " + validee.getNumeroVersion() + " est en préparation"
+                + (rang != null ? " (n° " + rang + " dans la file)" : "") + " : il se publie complet (art. 31). Réessayez dans "
+                + "quelques minutes ; vous serez prévenu quand il sera prêt.", DAO_COMPLET_ABSENT, idDossierSoumis, details);
     }
 
     /** La ligne du DMC de la fiche ; {@code null} sans ligne. */

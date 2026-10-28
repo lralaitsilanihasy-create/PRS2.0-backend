@@ -466,6 +466,17 @@ en un seul document*.
 
 - **Quand** : à chaque validation d'une version, en `.docx` et en `.pdf`. Les versions déjà validées l'obtiennent par un
   rattrapage automatique, dans les dix minutes.
+- ⚠️ **Depuis le 28/10 (demande front « dao-complet-en-file »), la validation ne l'attend plus.** Elle fige la version et produit les
+  documents séparés, puis met la version **en file** ; le serveur assemble les DAO complets **un par un, dans l'ordre des validations**,
+  sans faire attendre personne. Contrat : `docs/api-endpoints.md`, § *Le DAO complet en un seul document*.
+  - La fiche dit où il en est : **en file** (avec son rang), **en cours**, **prêt**, **en échec**, ou **sans Word** sur ce serveur.
+  - Prêt, il rejoint le dossier de la fiche (brouillon ou rectification) ; la PRMP et ses UGPM sont **prévenues**.
+  - Un assemblage qui échoue est **repris dix minutes plus tard**, sans retenir les suivants ; après **trois** échecs, il est abandonné,
+    l'Administrateur est prévenu et les documents séparés restent servis.
+  - **Le dossier ne part pas à la Commission tant que son DAO complet est en préparation** (soumission, resoumission après rectification,
+    transmission des compléments) : la Commission examine le DAO tel que les candidats le recevront. Sans Word ou après un abandon, la
+    règle d'avant s'applique.
+  - L'avis spécifique (ou les lettres d'invitation) qui trouve le DAO complet absent le fait passer **en tête de file** et attend.
 - **La page de garde** (⚠️ revue après la recette du 06/10) : l'emblème de la République, le ministère, la PRMP et l'UGPM,
   l'intitulé qui porte le mode (« Dossier d'appel d'offres ouvert »), le numéro, l'objet, les lots, « Lancé le » à compléter,
   le financement, l'imputation administrative et le compte, tels que le plan de passation les porte.
@@ -1773,7 +1784,8 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > ⚠️ **2026-10-14 — trois bloquants de la loi (manuel révisé, lot 2, tranche R9a, V111 ; arbitrage Q13).** **DAO complet avant
 > publication (art. 31)** : l'avis spécifique et les lettres d'invitation ne s'impriment que si le DAO complet de la version validée
 > existe ; il est assemblé à ce moment s'il manque, et l'impression est refusée s'il ne peut l'être (là où l'assemblage n'est pas en
-> service, la règle est sans objet). **Recours suspensifs (titre VIII)** : les types de recours qui suspendent la signature du marché
+> service, la règle est sans objet). ⚠️ *Depuis le 28/10 (« dao-complet-en-file ») : s'il manque, il passe en tête de la file
+> d'assemblage et l'impression est refusée jusqu'à ce qu'il soit prêt.* **Recours suspensifs (titre VIII)** : les types de recours qui suspendent la signature du marché
 > sont un réglage de l'Administrateur — par défaut la révision par l'ARMP et le référé, le réexamen pouvant être ajouté ; le réglage
 > vaut pour les recours en cours. **Approbation (art. 54)** : après la signature, la PRMP enregistre l'approbation du marché par
 > l'autorité compétente (autorité, date, décision jointe) ; le marché ne se notifie qu'approuvé **et** enregistré, à une date qui

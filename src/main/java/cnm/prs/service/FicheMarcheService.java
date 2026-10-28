@@ -126,7 +126,8 @@ public class FicheMarcheService {
     private final PiecesFiche pieces;
     /** ⚠️ 2026-10-06 (DAO complet) — les spécifications techniques de la version, et l'assemblage du DAO complet. */
     private final cnm.prs.repository.SpecificationsFicheRepository specificationsRepository;
-    private final DaoCompletService daoComplet;
+    /** ⚠️ 2026-10-28 (« dao-complet-en-file », Q1) — la validation met le DAO complet en file au lieu de l'assembler. */
+    private final org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> daoCompletFile;
     /** ⚠️ V84 (2026-10-08, lot 3 PI, Q3) — les sous-critères techniques d'une fiche de prestations intellectuelles. */
     private final SousCriteresFiche sousCriteres;
     /** ⚠️ R6a (manuel révisé, lot 2, §B1) — le délai de publicité, bloquant à la validation. */
@@ -146,14 +147,14 @@ public class FicheMarcheService {
             BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes, MandatService mandats,
             MoyensFiche moyens, PiecesFiche pieces, cnm.prs.repository.CeremonieClesRepository ceremonieRepository,
             cnm.prs.repository.OffreRepository offreRepository, cnm.prs.repository.SpecificationsFicheRepository specificationsRepository,
-            DaoCompletService daoComplet, SousCriteresFiche sousCriteres, DelaisPublicite delaisPublicite,
+            org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> daoCompletFile, SousCriteresFiche sousCriteres, DelaisPublicite delaisPublicite,
             cnm.prs.repository.AttributionRepository attributionRepository, IdentiteImportService identiteImport) {
         this.identiteImport = identiteImport;
         this.attributionRepository = attributionRepository;
         this.delaisPublicite = delaisPublicite;
         this.sousCriteres = sousCriteres;
         this.specificationsRepository = specificationsRepository;
-        this.daoComplet = daoComplet;
+        this.daoCompletFile = daoCompletFile;
         this.offreRepository = offreRepository;
         this.ceremonieRepository = ceremonieRepository;
         this.pieces = pieces;
@@ -193,6 +194,8 @@ public class FicheMarcheService {
             d.setDepots(new cnm.prs.dto.OffreDto.Resume(offreRepository.countByIdDmcAndEtat(idDmc, cnm.prs.entity.Offre.DEPOSEE),
                     limite != null && !java.time.LocalDateTime.now(HorlogeRecette.HORLOGE).isBefore(limite)));
         }
+        // ⚠️ 2026-10-28 (« dao-complet-en-file », Q3) — où en est le DAO complet de la dernière version validée.
+        d.setDaoComplet(daoCompletFile.getObject().etat(idDmc));
         return d;
     }
 
@@ -1226,7 +1229,9 @@ public class FicheMarcheService {
         fiche = ficheRepository.save(fiche);
         documents.enregistrer(fiche.getIdFiche(), produits, maintenant);
         // ⚠️ 2026-10-06 — le DAO complet, assemblé par Word ; sans Word (ou en échec), les documents séparés restent servis.
-        daoComplet.assurer(fiche, etat);
+        // ⚠️ 2026-10-28 (« dao-complet-en-file », Q1) — il n'est plus attendu ici : la version entre en file (dans cette transaction,
+        // une validation annulée n'y entre pas) et l'ouvrier unique l'assemble après la validation de la transaction.
+        daoCompletFile.getObject().mettreEnFile(fiche);
         journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_MARCHE_VALIDEE,
                 "DAO, version " + fiche.getNumeroVersion() + ", " + bilan.nbSaisis() + " information(s)");
         // Le dossier soumis que porte déjà la fiche reçoit les documents de cette version (lot 2a, §B3/§B4).
@@ -1247,7 +1252,9 @@ public class FicheMarcheService {
                         + " validée, " + modifiees + " information(s) modifiée(s), " + remplacees + " pièce(s) remplacée(s)");
             }
         }
-        return toDto(ctx, fiche);
+        FicheMarcheDto valide = toDto(ctx, fiche);
+        valide.setDaoComplet(daoCompletFile.getObject().etat(idDmc));   // ⚠️ Q3 : « n° k dans la file » dès la réponse
+        return valide;
     }
 
     /**
@@ -1918,7 +1925,8 @@ public class FicheMarcheService {
                 internes.etatCao(idDmc, RemiseElectronique.electronique(cadrage)), null,   // ⚠️ V68 : depots, posé par lire()
                 // ⚠️ R8 (§B3 ; V110) — le mode figé et la migration portée par cette version.
                 fige.isPresent(), fige.orElse(null), fiche.getModeMigreLe(), fiche.getModeMigrePar(), fiche.getModeMigreMotif(),
-                estimations);   // ⚠️ V116 (Q11)
+                estimations,   // ⚠️ V116 (Q11)
+                null);   // ⚠️ 2026-10-28 (Q3) : daoComplet, posé par lire() et valider()
     }
 
     // ------------------------------------------------------------------ ⚠️ R8 (manuel révisé, lot 2, §B3 ; V110) — le mode figé

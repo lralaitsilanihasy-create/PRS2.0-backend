@@ -9952,7 +9952,9 @@ APPROUVE_LE / APPROUVE_PAR`, nature `APPROBATION` de `t_attribution_piece`, `t_p
 #### n° 2 — le DAO complet avant la publication (art. 31)
 
 `POST /api/fiches-marche/{idDmc}/avis-specifique` et `POST …/lettres-invitation` exigent le **DAO complet** (`DAO_COMPLET`) de la version
-validée : s'il manque, il est assemblé **sur-le-champ** (Word, ~20 s, la requête attend) ; un échec rend **409 `DAO_COMPLET_ABSENT`**
+validée : s'il manque, il est assemblé **sur-le-champ** (Word, ~20 s, la requête attend ; ⚠️ **depuis le 28/10**, « dao-complet-en-file »,
+la version passe en tête de la file d'assemblage et l'impression rend aussitôt 409 `DAO_COMPLET_ABSENT` `{ version, rang }` — voir § *Le
+DAO complet en un seul document*) ; un échec rend **409 `DAO_COMPLET_ABSENT`**
 `details { version }` — le rattrapage périodique le reprend, réessayer plus tard. Le contrôle vient après les autres (disponibilité,
 mandat, délai de publicité). ⚠️ Écart : sur un serveur **sans assemblage actif** (`app.dao-complet.actif` faux, ou hors Windows) aucune
 fiche n'a de DAO complet, et la règle ne s'applique pas (les documents séparés font le DAO).
@@ -10378,6 +10380,44 @@ dossier, le serveur assemble un **`DAO_COMPLET`** en `.docx` et en `.pdf` (deux 
   environ 30 s pour un DAO de 90 pages. `app.dao-complet.actif` (vrai par défaut ; **faux dans les tests**) et système Windows
   requis. **Un échec ne bloque pas la validation** : journal applicatif `[DAO_COMPLET]`, les documents séparés restent servis
   et joints ; le rattrapage réessaie.
+
+⚠️ **2026-10-28 (demande front « dao-complet-en-file », Q1-Q5, H1-H3 ; V144) — le DAO complet produit en file, hors de la validation.**
+Word mettait 20 s (fournitures) à 1 min 23 s (travaux, mesure du 28/10) par DAO, sous un verrou unique, pendant que la validation
+gardait sa transaction et sa connexion : dix validations simultanées prenaient les dix connexions du pool.
+- **Q1** — `POST /api/fiches-marche/{idDmc}/valider` fige la version et produit les documents séparés comme avant, puis **inscrit la
+  version en file** (table `t_dao_complet_file`, V144, dans la transaction de la validation : une validation refusée n'y entre pas) et
+  répond sans attendre Word. L'ouvrier est réveillé après la validation de la transaction.
+- **Q2** — **un ouvrier unique** (un fil, `DaoCompletFileService`) prend les versions dans l'ordre d'arrivée, une à la fois : lecture en
+  transaction courte, Word **hors transaction**, enregistrement en transaction courte. Aucune connexion n'est tenue pendant Word.
+  - Une version remplacée par une révision validée entre-temps sort de la file sans être assemblée.
+  - **Échec** (Word absent, délai dépassé, script en erreur) : la version reste `EN_FILE` avec son motif, reprise après
+    `app.dao-complet.reprise-ms` (10 min) ; les suivantes passent avant. Au `app.dao-complet.essais`<sup>e</sup> échec (3) : `ECHEC`.
+  - Un arrêt du serveur pendant un assemblage remet la version `EN_FILE` au démarrage. Le rattrapage (toutes les 10 min) inscrit les
+    dernières versions validées sans DAO complet ni place dans la file, et réveille l'ouvrier.
+  - **L'avis spécifique et les lettres d'invitation** (`POST …/avis-specifique`, `POST …/lettres-invitation`) n'assemblent plus
+    sur-le-champ : un DAO complet absent met la version **en tête de file** (une version en `ECHEC` repart pour trois essais) et l'impression
+    rend **409 `DAO_COMPLET_ABSENT`** `{ version, rang }` (« en préparation, n° k dans la file, réessayez dans quelques minutes »).
+  - Prêt, le DAO complet **rejoint le dossier** de la fiche s'il existe (en brouillon ou en rectification, comme à la validation).
+- **Q3** — `GET /api/fiches-marche/{idDmc}` et la réponse de `POST …/valider` servent **`daoComplet`**
+  `{ etat, rang, depuis, motif }` (DAO complet de la dernière version validée ; `null` sans version validée, ou pour une version validée
+  avant la production des documents) :
+  - `etat` ∈ `EN_FILE` · `EN_COURS` · `PRET` · `ECHEC` · `SANS_WORD` (serveur sans assemblage : documents séparés seuls) ;
+  - `rang` : position dans la file (1 = la prochaine), `null` hors `EN_FILE` ;
+  - `depuis` : l'entrée dans l'état courant (mise en file, début, fin, abandon) ; `null` en `SANS_WORD` ;
+  - `motif` : le dernier échec en clair, en `ECHEC`, et en `EN_FILE` pour une version qui attend d'être reprise.
+  - ⚠️ Écart : **pas sur `GET …/documents`**, qui reste une liste (le front lit l'état sur la fiche). La disponibilité de l'avis garde son
+    champ `daoComplet` (`PRODUIT` · `A_ASSEMBLER` · `SANS_ASSEMBLAGE`), inchangé.
+- **Q4** — notifications : **`DAO_COMPLET_PRET`** à la PRMP du plan et à ses UGPM (« Le DAO complet de ‹ objet › (version n) est prêt. »,
+  objet `PROCEDURE` = `idDmc`, `idDossier` = le dossier de la fiche s'il existe) ; **`DAO_COMPLET_ECHEC`** aux Administrateurs à l'abandon.
+  ⚠️ Écart : toutes les UGPM de la PRMP, comme pour l'avis à imprimer (la fiche ne retient pas l'UGPM rédactrice).
+- **Q5 (H1)** — `POST /api/dossiers/{id}/soumettre`, et aussi la **resoumission** (`…/resoumettre`) et la **transmission des
+  compléments** d'un dossier né d'une fiche, sont refusées tant que le DAO complet est `EN_FILE` ou `EN_COURS` : **409
+  `DAO_COMPLET_EN_PREPARATION`** `{ rang }` (`rang` nul en `EN_COURS`). En `SANS_WORD`, `ECHEC`, ou sans place dans la file : la règle
+  d'avant (documents séparés). La création du dossier depuis la fiche reste permise pendant la préparation.
+- **H2** — la file est en base (`t_dao_complet_file`, une ligne par version validée), elle survit aux redémarrages ; V144 y inscrit les
+  dernières versions validées qui n'avaient pas de DAO complet. **H3** — le pool de connexions reste au défaut (10).
+- Réglages : `app.dao-complet.essais` (3), `app.dao-complet.reprise-ms` (600000), `app.dao-complet.file-auto` (vrai ; faux en test,
+  l'ouvrier est alors appelé par le test). `pom.xml` inchangé.
 - **Rattrapage (§B3, versions déjà validées)** : une tâche planifiée (premier passage 2 min après le démarrage, puis toutes les
   10 min : `app.dao-complet.rattrapage-initial-ms`, `app.dao-complet.rattrapage-ms`) produit le DAO complet de toute **dernière
   version validée** qui a des documents mais pas encore de DAO complet. Il n'est pas « produit à la première demande » : la

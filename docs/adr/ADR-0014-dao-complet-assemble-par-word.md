@@ -47,6 +47,13 @@ Le projet emploie déjà Word par automation (documents4j) pour les PV ; ces tes
   - l'automation de Word côté serveur n'est pas un usage que Microsoft soutient : un délai et l'isolement par processus en
     limitent l'effet, sans l'annuler ;
   - environ 30 s par validation (90 pages), en série ;
+    - ⚠️ **Amendement du 2026-10-28** (demande front « dao-complet-en-file », V144) : 1 min 23 s mesurée pour un DAO de travaux,
+      et la validation qui attendait Word gardait sa connexion, de sorte que dix validations simultanées prenaient tout le pool.
+      L'assemblage **sort de la validation** : il passe par une **file en base** (`t_dao_complet_file`) que traite **un ouvrier
+      unique**, hors transaction pendant Word, avec reprise des échecs (3 essais, 10 min d'intervalle). La validation répond en
+      quelques secondes ; la soumission du dossier à la Commission attend le DAO complet en préparation (409
+      `DAO_COMPLET_EN_PREPARATION`). Le principe — Word sur le serveur, un seul Word à la fois — est inchangé ;
+
   - la CI (Linux) ne teste pas l'assemblage : son test (`DaoCompletWordTest`) est marqué `word`, exécuté en local seulement.
 - **Marche arrière** : `app.dao-complet.actif=false` revient au comportement d'avant (documents séparés). Un autre moteur
   (LibreOffice sans interface, docx4j) remplacerait `DaoCompletWord` seul : le plan (`DaoCompletService.parties`) et les points

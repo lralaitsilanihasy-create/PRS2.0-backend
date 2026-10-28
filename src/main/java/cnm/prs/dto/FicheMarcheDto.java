@@ -169,4 +169,11 @@ public class FicheMarcheDto {
      * travaux ; nul hors du besoin) : montant du plan, total estimé, écart, articles sans prix. Lue avec la fiche, jamais publiée.
      */
     private java.util.List<EstimationLotDto> estimations;
+
+    /**
+     * ⚠️ 2026-10-28 (demande front « dao-complet-en-file », Q3 ; V144) — l'état du DAO complet de la dernière version validée
+     * ({@code { etat, rang, depuis, motif }}), servi par la lecture de la fiche et la réponse de la validation ; {@code null} sans
+     * version validée.
+     */
+    private DaoCompletEtatDto daoComplet;
 }

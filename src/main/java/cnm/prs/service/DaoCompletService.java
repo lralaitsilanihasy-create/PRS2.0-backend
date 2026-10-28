@@ -104,49 +104,79 @@ public class DaoCompletService {
         if (fiche == null || fiche.getIdFiche() == null) {
             return false;
         }
-        List<DocumentFicheMarche> docs = documentRepository.findByIdFicheOrderByIdDocumentAsc(fiche.getIdFiche());
-        if (docs.stream().anyMatch(d -> TYPE.equals(d.getType()))) {
+        if (existe(fiche.getIdFiche())) {
             return true;
         }
         if (!word.actif()) {
             return false;
         }
         try {
-            Map<String, String> plan = plan(etat);
-            DaoCompletWord.Resultat r = word.assembler(charte(etat, plan, fiche.getNumeroVersion(),
-                    fiche.getDateValidation() != null ? fiche.getDateValidation() : etat.getDateValidation()), parties(etat, fiche.getIdFiche(), docs));
-            LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
-            Integer idDetail = etat.getIdDetailCourant() != null ? etat.getIdDetailCourant() : etat.getIdDetail();
-            // ⚠️ 2026-10-17 (« identite-dao-importe », §B4) — la marque de l'application : la ligne, la fiche et la version, dans les
-            // mots-clés des deux fichiers ; réimporté, le DAO est jugé d'emblée. Une marque impossible à poser n'empêche rien.
-            byte[] docx = r.docx();
-            byte[] pdf = r.pdf();
-            if (idDetail != null) {
-                try {
-                    MarqueDao.Marque marque = new MarqueDao.Marque(idDetail, fiche.getIdFiche(), fiche.getNumeroVersion());
-                    docx = MarqueDao.marquerDocx(docx, marque);
-                    pdf = MarqueDao.marquerPdf(pdf, marque);
-                } catch (java.io.IOException | RuntimeException e) {
-                    log.warn("[DAO_COMPLET] DMC {} version {} : marque non posée ({})", fiche.getIdDmc(), fiche.getNumeroVersion(), e.getMessage());
-                    docx = r.docx();
-                    pdf = r.pdf();
-                }
-            }
-            // ⚠️ C5 (recette du 06/10) — le nom porte le numéro du DAO (B02-OB-03), à défaut la référence du plan.
-            String refe = numero(etat);
-            documents.enregistrer(fiche.getIdFiche(), List.of(
-                    new DocumentsFicheMarcheService.Produit(TYPE, "docx",
-                            DocumentsFicheMarcheService.nomFichier(TYPE, refe, idDetail, fiche.getNumeroVersion(), "docx"), docx, null),
-                    new DocumentsFicheMarcheService.Produit(TYPE, "pdf",
-                            DocumentsFicheMarcheService.nomFichier(TYPE, refe, idDetail, fiche.getNumeroVersion(), "pdf"), pdf, null)),
-                    maintenant);
-            log.info("[DAO_COMPLET] DMC {} version {} : {} Ko (docx), {} Ko (pdf)", fiche.getIdDmc(), fiche.getNumeroVersion(),
-                    docx.length / 1024, pdf.length / 1024);
+            Preparation p = preparer(fiche, etat);
+            enregistrer(p, assembler(p));
             return true;
         } catch (RuntimeException e) {
             log.warn("[DAO_COMPLET] DMC {} version {} non assemblé : {}", fiche.getIdDmc(), fiche.getNumeroVersion(), e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * ⚠️ 2026-10-28 (« dao-complet-en-file », Q2) — ce que Word reçoit, lu en base d'un seul tenant : la file prépare dans une
+     * transaction courte, assemble hors transaction ({@link #assembler}), puis enregistre dans une autre ({@link #enregistrer}).
+     */
+    public record Preparation(FicheMarche fiche, FicheMarcheDto etat, DaoCompletWord.Charte charte, List<DaoCompletWord.Partie> parties) {
+    }
+
+    /** Le DAO complet de cette version est-il enregistré ? */
+    public boolean existe(Integer idFiche) {
+        return idFiche != null && documentRepository.findByIdFicheOrderByIdDocumentAsc(idFiche).stream()
+                .anyMatch(d -> TYPE.equals(d.getType()));
+    }
+
+    /** Lit tout ce que l'assemblage demande (documents de la version, plan de l'ARMP, page de garde). */
+    public Preparation preparer(FicheMarche fiche, FicheMarcheDto etat) {
+        List<DocumentFicheMarche> docs = documentRepository.findByIdFicheOrderByIdDocumentAsc(fiche.getIdFiche());
+        Map<String, String> plan = plan(etat);
+        return new Preparation(fiche, etat, charte(etat, plan, fiche.getNumeroVersion(),
+                fiche.getDateValidation() != null ? fiche.getDateValidation() : etat.getDateValidation()), parties(etat, fiche.getIdFiche(), docs));
+    }
+
+    /** L'assemblage par Word (un seul à la fois sur le serveur) : aucune lecture ni écriture en base. */
+    public DaoCompletWord.Resultat assembler(Preparation p) {
+        return word.assembler(p.charte(), p.parties());
+    }
+
+    /** Marque et enregistre les deux fichiers assemblés. */
+    public void enregistrer(Preparation p, DaoCompletWord.Resultat r) {
+        FicheMarche fiche = p.fiche();
+        FicheMarcheDto etat = p.etat();
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
+        Integer idDetail = etat.getIdDetailCourant() != null ? etat.getIdDetailCourant() : etat.getIdDetail();
+        // ⚠️ 2026-10-17 (« identite-dao-importe », §B4) — la marque de l'application : la ligne, la fiche et la version, dans les
+        // mots-clés des deux fichiers ; réimporté, le DAO est jugé d'emblée. Une marque impossible à poser n'empêche rien.
+        byte[] docx = r.docx();
+        byte[] pdf = r.pdf();
+        if (idDetail != null) {
+            try {
+                MarqueDao.Marque marque = new MarqueDao.Marque(idDetail, fiche.getIdFiche(), fiche.getNumeroVersion());
+                docx = MarqueDao.marquerDocx(docx, marque);
+                pdf = MarqueDao.marquerPdf(pdf, marque);
+            } catch (java.io.IOException | RuntimeException e) {
+                log.warn("[DAO_COMPLET] DMC {} version {} : marque non posée ({})", fiche.getIdDmc(), fiche.getNumeroVersion(), e.getMessage());
+                docx = r.docx();
+                pdf = r.pdf();
+            }
+        }
+        // ⚠️ C5 (recette du 06/10) — le nom porte le numéro du DAO (B02-OB-03), à défaut la référence du plan.
+        String refe = numero(etat);
+        documents.enregistrer(fiche.getIdFiche(), List.of(
+                new DocumentsFicheMarcheService.Produit(TYPE, "docx",
+                        DocumentsFicheMarcheService.nomFichier(TYPE, refe, idDetail, fiche.getNumeroVersion(), "docx"), docx, null),
+                new DocumentsFicheMarcheService.Produit(TYPE, "pdf",
+                        DocumentsFicheMarcheService.nomFichier(TYPE, refe, idDetail, fiche.getNumeroVersion(), "pdf"), pdf, null)),
+                maintenant);
+        log.info("[DAO_COMPLET] DMC {} version {} : {} Ko (docx), {} Ko (pdf)", fiche.getIdDmc(), fiche.getNumeroVersion(),
+                docx.length / 1024, pdf.length / 1024);
     }
 
     // ------------------------------------------------------------------ le plan de l'ARMP (C3)

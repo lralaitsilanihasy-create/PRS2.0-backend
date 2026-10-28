@@ -140,6 +140,8 @@ public class DossierService {
     private final org.springframework.beans.factory.ObjectProvider<PublicationAgpmService> publicationAgpm;
     /** ⚠️ 2026-10-17 (« pieces-dmc-par-les-donnees », §B3) — le plan de la ligne et son PV signé, pour un dossier né d'une fiche. */
     private final org.springframework.beans.factory.ObjectProvider<PiecesFournies> piecesFournies;
+    /** ⚠️ 2026-10-28 (« dao-complet-en-file », Q5) — la soumission attend le DAO complet en préparation. */
+    private final org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> daoCompletFile;
     /** ⚠️ M3 (manuel de contrôle) — la grille du dossier. */
     private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
     /** ⚠️ 2026-10-18 (« avis-a-imprimer », §B2) — l'avis ou les lettres à imprimer, sur la liste de la PRMP et de l'UGPM. */
@@ -203,7 +205,9 @@ public class DossierService {
             org.springframework.beans.factory.ObjectProvider<ControlesService> controles,
             org.springframework.beans.factory.ObjectProvider<CalendrierPlan> calendrierPlan,
             org.springframework.beans.factory.ObjectProvider<PublicationAgpmService> publicationAgpm,
-            org.springframework.beans.factory.ObjectProvider<PiecesFournies> piecesFournies) {
+            org.springframework.beans.factory.ObjectProvider<PiecesFournies> piecesFournies,
+            org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> daoCompletFile) {
+        this.daoCompletFile = daoCompletFile;
         this.piecesFournies = piecesFournies;
         this.calendrierPlan = calendrierPlan;
         this.publicationAgpm = publicationAgpm;
@@ -973,6 +977,7 @@ public class DossierService {
         }
         // Cohérence type↔contenu (DDP ⇒ a un PPM ; DMC/DDM ⇒ pas de PPM).
         dossierIntegrite.validerCoherenceAvantSoumission(dossier);
+        exigerDaoCompletPret(dossier);   // ⚠️ 2026-10-28 (« dao-complet-en-file », Q5)
         // Filet de sécurité : le sous-type d'un dossier DDP colle aux marchés au moment de la soumission.
         dossierIntegrite.recalculerSousTypeDdp(idDossier);
         // ⚠️ Recensement des trous (2026-09-07, T3) — justifications de la fiche exigées ICI, où tous les
@@ -1141,6 +1146,7 @@ public class DossierService {
         }
         // ⚠️ Lot C (2026-09-27, §B3) — un dossier DAO se rectifie par une révision VALIDÉE de sa fiche : sans elle, 409.
         Integer versionRevisee = exigerRevisionValidee(dossier);
+        exigerDaoCompletPret(dossier);   // ⚠️ 2026-10-28 (Q5) — la révision part avec son DAO complet
         if (versionRevisee != null) {
             dossier.setVersionFicheSoumise(versionRevisee);
         }
@@ -1173,6 +1179,17 @@ public class DossierService {
         controles.getObject().enregistrer(dossier, controlesEvalues);   // ⚠️ R5
         instantanes.getObject().figer(dossier);   // ⚠️ R4 — resoumission : soumission n° suivant
         return dto(dossier);
+    }
+
+    /**
+     * ⚠️ 2026-10-28 (demande front « dao-complet-en-file », Q5, H1) — un dossier né d'une fiche ne part pas à la Commission
+     * (soumission, resoumission, transmission des compléments) tant que le DAO complet de la version est en file ou en cours
+     * d'assemblage : 409 {@code DAO_COMPLET_EN_PREPARATION} {@code { rang }}. Sans Word, en échec, ou dossier sans fiche : rien.
+     */
+    private void exigerDaoCompletPret(Dossier dossier) {
+        if (dossier.getIdDmc() != null) {
+            daoCompletFile.getObject().exigerPret(dossier.getIdDmc(), dossier.getIdDossier());
+        }
     }
 
     /**
@@ -1329,6 +1346,7 @@ public class DossierService {
             // documents sont rattachés à la lettre par la validation) : la garde des pièces déposées est remplacée. La
             // version que la Commission a examinée est retenue : c'est la borne « avant » du réexamen (§B5).
             Integer versionRevisee = exigerRevisionValidee(dossier);
+            exigerDaoCompletPret(dossier);   // ⚠️ 2026-10-28 (Q5) — la révision part avec son DAO complet
             dossier.setVersionFicheExaminee(dossier.getVersionFicheSoumise());
             dossier.setVersionFicheSoumise(versionRevisee);
         } else if (idLettre == null || !pieceJointeDossierRepository
