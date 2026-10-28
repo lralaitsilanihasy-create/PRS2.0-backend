@@ -189,6 +189,54 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-10-28 « decision-sigmp-prmp » — transmission à SIGMP après la levée des réserves : DECISION_TRANSMISE_SIGMP "
+            + "à la PRMP et à son UGPM (objet le dossier), le sens, l'objet et « L'avis spécifique peut être imprimé. » ; pas "
+            + "d'AVIS_A_IMPRIMER en plus (H2)")
+    void decisionTransmiseAvisImprimable() throws Exception {
+        ugpmRepository.save(ugpm("UG9901", "PRMP001", "RABE", "Hery"));
+        int idDossier = creerDossier();
+        pvSigne(idDossier, "FAVR", "OBSERVATIONS_LEVEES");
+        statut(idDossier, "EN_VERIFICATION");   // avant : réserves non levées, l'avis n'est pas imprimable
+        statut(idDossier, "OBSERVATIONS_LEVEES");
+        long avant = notificationRepository.findAll().stream().filter(n -> "AVIS_A_IMPRIMER".equals(n.getTypeNotif())).count();
+        transmettreSigmp(idDossier);
+
+        List<cnm.prs.entity.Notification> notes = notificationRepository.findAll().stream()
+                .filter(n -> "DECISION_TRANSMISE_SIGMP".equals(n.getTypeNotif())).toList();
+        assertThat(notes).extracting(n -> n.getDestinataireType() + ":" + n.getDestinataireRef())
+                .containsExactlyInAnyOrder("PRMP:PRMP001", "UGPM:UG9901");
+        String refe = dossierRepository.findById(idDossier).orElseThrow().getRefeDossier();
+        String reference = refe != null ? refe : "n° " + idDossier;
+        assertThat(notes).allMatch(n -> "DOSSIER".equals(n.getTypeObjet()) && Integer.valueOf(idDossier).equals(n.getIdObjet())
+                && n.getTitre().equals("Décision transmise à SIGMP — " + reference));
+        assertThat(notes.get(0).getCorps()).startsWith("Le dossier " + reference + " (Fourniture de mobilier de bureau) est approuvé : vos "
+                + "corrections ont levé les réserves du PV ; la décision a été transmise à SIGMP le ")
+                .endsWith(". L'avis spécifique peut être imprimé.");
+        assertThat(notificationRepository.findAll().stream().filter(n -> "AVIS_A_IMPRIMER".equals(n.getTypeNotif())).count())
+                .isEqualTo(avant);
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-28 « decision-sigmp-prmp » — avis favorable, avis spécifique indisponible : la suite dit pourquoi "
+            + "(publication de l'AGPM absente)")
+    void decisionTransmiseAvisIndisponible() throws Exception {
+        int idDossier = creerDossier();
+        pvSigne(idDossier, "FAV", "EN_VERIFICATION");
+        publicationAgpmRepository.deleteAll();
+        transmettreSigmp(idDossier);
+        cnm.prs.entity.Notification note = notificationRepository.findAll().stream()
+                .filter(n -> "DECISION_TRANSMISE_SIGMP".equals(n.getTypeNotif())).findFirst().orElseThrow();
+        assertThat(note.getCorps()).contains(" est approuvé (avis favorable) : la décision a été transmise à SIGMP le ")
+                .contains("La publication de l'AGPM n'est pas déposée sur le plan de passation");
+    }
+
+    private void transmettreSigmp(int idDossier) throws Exception {
+        String tokenVer = bearer("CTRVER", cnm.prs.enums.ProfilUtilisateur.VERIFICATEUR, cnm.prs.enums.TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"idDossier\":" + idDossier + "}")).andExpect(status().isCreated());
+    }
+
+    @Test
     @DisplayName("« avis-a-imprimer » §B3 — accueil « À faire » : une ligne AVIS_A_IMPRIMER / IMPRIMER_AVIS (document, SANS_DELAI) sur "
             + "un dossier clôturé, comptée dans aFaire et la pastille, servie aussi par …/gestes ; l'UGPM la voit, le Président non ; "
             + "elle disparaît à la première impression")

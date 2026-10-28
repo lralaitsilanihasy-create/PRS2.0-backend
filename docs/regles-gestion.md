@@ -222,6 +222,10 @@ Flux complet d'un dossier, avec navette du projet de PV :
 >    n'est possible qu'après la boucle de vérification — observations toutes **levées**, statut
 >    `OBSERVATIONS_LEVEES`) → le dossier passe **`DECISION_TRANSMISE_SIGMP`**, notification
 >    `PV_A_ARCHIVER` aux Assistants contrôleurs de la localité.
+>    ⚠️ 2026-10-28 (demande front « decision-sigmp-prmp ») : la **PRMP du dossier et ses UGPM** sont prévenues
+>    (`DECISION_TRANSMISE_SIGMP`), pour tout dossier. Le texte donne le sens de la décision, la date de transmission et, pour
+>    un DAO né d'une fiche, la suite de l'avis spécifique : imprimable, ou pourquoi pas encore. Si l'avis devient imprimable
+>    à cette transmission, c'est la seule notification. Aucun rattrapage pour les dossiers déjà transmis.
 > 3. **L'Assistant contrôleur archive le PV** (`POST /api/pv-examens/{id}/archiver`, réservé à sa
 >    localité) : seul ce geste pose la **clôture** (`CLOTURE`) et déclenche `CLOTURE_ELIGIBLE`
 >    (Chargé de publication).
@@ -806,6 +810,9 @@ d'offres*.
     (⚠️ 18/10, « dao-electronique », Q4 : un dossier payant n'imprime rien tant que le compte n'est pas réglé). Une fois par passage : ni une réimpression
     ni un nouveau dépôt ne renotifient, mais un retour à l'indisponibilité (réexamen, nouvelle version) suivi d'une nouvelle
     disponibilité renotifie. Rien n'est envoyé pour les dossiers déjà imprimables à la mise en service (Q1) ;
+    ⚠️ 2026-10-28 (« decision-sigmp-prmp », H2) : quand c'est la transmission du dossier au SIGMP qui le rend imprimable,
+    la notification `DECISION_TRANSMISE_SIGMP` le dit (« L'avis spécifique peut être imprimé. ») et `AVIS_A_IMPRIMER` ne part
+    pas en double ;
   - le tableau de suivi de la PRMP et de l'UGPM porte, pour chaque dossier né d'une fiche, le document à imprimer, s'il l'est,
     et s'il l'a déjà été (`impressionAvis`) ;
   - ~~non retenu pour l'instant (Q2)~~ ⚠️ **18/10, §B3 (le pilote dit oui)** : l'avis imprimable et jamais imprimé est une tâche de

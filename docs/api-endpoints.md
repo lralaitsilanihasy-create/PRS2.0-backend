@@ -11204,6 +11204,10 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > n'est rejoué pour les notifications antérieures à la désignation ; une copie n'est jamais recopiée (non transitif).
 > Un seul point d'émission, les trente-huit appelants n'ont rien à savoir.
 
+> ⚠️ **2026-10-28 — nouveau type `DECISION_TRANSMISE_SIGMP`** (demande front « decision-sigmp-prmp ») : la décision du dossier
+> est transmise à SIGMP. Destinataires : la PRMP du dossier et ses UGPM. Objet `DOSSIER` (`idObjet = idDossier`). Le détail
+> (texte, suite de l'avis) est au § *Transmissions SIGMP (spec navette 2026-08-02)*.
+
 **Champs `NotificationDto`** *(⚠️ 2026-09-21 : + `interimDe` (string, max 10, `null` hors copie), `idInterim` (number))*
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
@@ -12887,6 +12891,28 @@ tiers inventé ; l'envoi réel sera branché plus tard.
 > avis ≠ FAVR) — `FAV` → `APPROUVE`, `DEF`/`NSP` → `NON_APPROUVE` ; **cas 2** (dossier `OBSERVATIONS_LEVEES`,
 > fin de boucle FAVR) — `APPROUVE` + `leveeObservations = true`. Autre statut/avis → **409**. Effets : dossier →
 > **`DECISION_TRANSMISE_SIGMP`** + notification **`PV_A_ARCHIVER`** aux Assistants contrôleurs de la localité.
+>
+> ⚠️ **2026-10-28 (demande front « decision-sigmp-prmp », B1-B3, H1-H3).** En plus, notification
+> **`DECISION_TRANSMISE_SIGMP`** :
+> - **Destinataires** : la PRMP du dossier et **toutes ses UGPM**. Si le dossier ne porte pas de PRMP, c'est la PRMP du PPM,
+>   comme pour `PV_SIGNE`.
+> - **Portée** : tous les dossiers (plan, mise en concurrence, marché).
+> - **Objet** : `typeObjet = DOSSIER`, `idObjet = idDossier`.
+> - **Titre** : « Décision transmise à SIGMP — ‹ référence › » (« n° id » sans référence).
+> - **Corps** : « Le dossier ‹ réf › (‹ objet ›) », suivi de l'un de ces trois textes :
+>   - « est approuvé (avis favorable) : la décision a été transmise à SIGMP le jj/mm/aaaa. » ;
+>   - « est approuvé : vos corrections ont levé les réserves du PV ; la décision… » ;
+>   - « n'est pas approuvé (avis défavorable | la Commission ne se prononce pas) : la décision… ».
+>
+>   L'objet entre parenthèses n'apparaît que pour un dossier né d'une fiche.
+> - **La suite**, pour un DAO né d'une fiche seulement :
+>   - le document est imprimable : « L'avis spécifique peut être imprimé. » (ou « Les lettres d'invitation peuvent être
+>     imprimées. ») ;
+>   - il ne l'est pas : la phrase de `…/disponibilite` pour sa raison (par exemple `CEREMONIE_NON_CLOSE`, `PUBLICATION_AGPM_ABSENTE`) ;
+>   - rien pour un avis non favorable.
+> - **Une seule notification (H2)** : quand l'avis de **ce** dossier devient imprimable à la transmission, `AVIS_A_IMPRIMER`
+>   ne part pas, `DECISION_TRANSMISE_SIGMP` le dit.
+> - **Pas de rattrapage** des dossiers déjà transmis (H3).
 
 > ⚠️ **Branchement post-signature MODIFIÉ (2026-08-02).** À la signature du PV, **TOUS les avis** passent par le
 > vérificateur : dossier → `EN_VERIFICATION` (plus de clôture directe pour FAV/DEF/NSP). Notifications : PRMP

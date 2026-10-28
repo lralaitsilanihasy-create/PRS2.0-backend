@@ -89,6 +89,15 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isCreated());
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("DECISION_TRANSMISE_SIGMP"));
+        // ⚠️ 2026-10-28 (demande front « decision-sigmp-prmp », §B1-B2) — la PRMP l'apprend : le sens, la levée des réserves.
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.typeNotif=='DECISION_TRANSMISE_SIGMP')]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.typeNotif=='DECISION_TRANSMISE_SIGMP')].titre",
+                        hasItem(org.hamcrest.Matchers.startsWith("Décision transmise à SIGMP — "))))
+                .andExpect(jsonPath("$[?(@.typeNotif=='DECISION_TRANSMISE_SIGMP')].corps", hasItem(org.hamcrest.Matchers.allOf(
+                        org.hamcrest.Matchers.containsString("est approuvé : vos corrections ont levé les réserves du PV ; la décision a été "
+                                + "transmise à SIGMP le "),
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("avis spécifique"))))));
 
         // L'Assistant archive le PV → dossier CLOTURE.
         mvc.perform(post("/api/pv-examens/1/archiver").header("Authorization", tokenAss))

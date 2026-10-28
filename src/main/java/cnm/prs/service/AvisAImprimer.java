@@ -127,12 +127,56 @@ public class AvisAImprimer {
 
     /** Notifie les fiches devenues imprimables depuis le relevé {@code avant}. */
     public void notifierDevenues(Collection<Long> idDmcs, Set<Long> avant) {
+        notifierDevenues(idDmcs, avant, null);
+    }
+
+    /**
+     * ⚠️ 2026-10-28 (demande front « decision-sigmp-prmp », H2) — idem, sauf pour la fiche dont le dossier soumis est
+     * {@code saufDossier} : la notification {@code DECISION_TRANSMISE_SIGMP} de ce dossier dit déjà que l'avis s'imprime.
+     */
+    public void notifierDevenues(Collection<Long> idDmcs, Set<Long> avant, Integer saufDossier) {
         for (Long id : idDmcs) {
             if (id == null || avant.contains(id)) {
                 continue;
             }
-            fiches.essentiel(id).ifPresent(f -> etat(id, f).filter(Etat::disponible).ifPresent(e -> notifier(f, e.document())));
+            fiches.essentiel(id).filter(f -> saufDossier == null || !saufDossier.equals(f.getIdDossierSoumis()))
+                    .ifPresent(f -> etat(id, f).filter(Etat::disponible).ifPresent(e -> notifier(f, e.document())));
         }
+    }
+
+    /**
+     * ⚠️ 2026-10-28 (« decision-sigmp-prmp », §B2) — la suite d'un dossier DAO né d'une fiche, en une phrase : le document
+     * (avis spécifique ou lettres d'invitation) peut être imprimé, ou pourquoi pas encore (la phrase de
+     * {@code …/disponibilite}). Vide pour un autre dossier, une fiche sans document, ou un avis non favorable (la décision le
+     * dit déjà).
+     */
+    public Optional<String> suite(Long idDmc, Integer idDossier) {
+        if (idDmc == null || idDossier == null) {
+            return Optional.empty();
+        }
+        return fiches.essentiel(idDmc).filter(f -> idDossier.equals(f.getIdDossierSoumis())).flatMap(f -> {
+            boolean lettre;
+            if (avis.sansModele(f, false) == null) {
+                lettre = false;
+            } else if (avis.sansModele(f, true) == null) {
+                lettre = true;
+            } else {
+                return Optional.empty();
+            }
+            cnm.prs.dto.AvisDisponibiliteDto d = avis.evaluer(idDmc, f, lettre);
+            if (d.disponible()) {
+                return Optional.of(lettre ? "Les lettres d'invitation peuvent être imprimées." : "L'avis spécifique peut être imprimé.");
+            }
+            return AvisSpecifiqueService.AVIS_NON_FAVORABLE.equals(d.raison()) ? Optional.empty()
+                    : Optional.of(AvisSpecifiqueService.message(d.raison(), lettre));
+        });
+    }
+
+    /** ⚠️ 2026-10-28 (« decision-sigmp-prmp », §B2) — l'objet de la fiche du dossier, s'il en est né une. */
+    public Optional<String> objet(Long idDmc, Integer idDossier) {
+        return idDmc == null || idDossier == null ? Optional.empty()
+                : fiches.essentiel(idDmc).filter(f -> idDossier.equals(f.getIdDossierSoumis()))
+                        .map(FicheMarcheDto::getDesignationMarche).filter(s -> !s.isBlank());
     }
 
     private void notifier(FicheMarcheDto f, String document) {

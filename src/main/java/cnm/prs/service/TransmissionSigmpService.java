@@ -17,6 +17,7 @@ import cnm.prs.enums.EtapeCircuit;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.TypeNotification;
+import cnm.prs.enums.TypeObjet;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.repository.DossierRepository;
@@ -36,6 +37,8 @@ import cnm.prs.security.Visibilite;
  * </ul>
  * Effets : dossier → {@code DECISION_TRANSMISE_SIGMP} et notification {@code PV_A_ARCHIVER} aux
  * Assistants contrôleurs de la localité (le PV leur est transmis pour archivage — l'archivage clôt).
+ * ⚠️ 2026-10-28 (demande front « decision-sigmp-prmp ») : et notification {@code DECISION_TRANSMISE_SIGMP} à la PRMP du dossier
+ * et à ses UGPM.
  */
 @Service
 @Transactional
@@ -61,13 +64,19 @@ public class TransmissionSigmpService {
 
     /** ⚠️ 2026-10-18 (« avis-a-imprimer », §B1) — la transmission au SIGMP rend imprimable l'avis d'un PV FAVR. */
     private final org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer;
+    /** ⚠️ 2026-10-28 (« decision-sigmp-prmp », §B1) — la PRMP du dossier et ses UGPM. */
+    private final cnm.prs.repository.PrmpRepository prmpRepository;
+    private final cnm.prs.repository.UgpmRepository ugpmRepository;
 
     public TransmissionSigmpService(TransmissionSigmpRepository repository, DossierRepository dossierRepository,
             PvExamenRepository pvExamenRepository, NotificationService notificationService,
             ControleurDirectory controleurDirectory, cnm.prs.security.PermissionService permissionService,
             RattachementService rattachementService, cnm.prs.repository.ControleurRepository controleurRepository,
             ChronometrageService chronometrageService,
-            org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer) {
+            org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer,
+            cnm.prs.repository.PrmpRepository prmpRepository, cnm.prs.repository.UgpmRepository ugpmRepository) {
+        this.prmpRepository = prmpRepository;
+        this.ugpmRepository = ugpmRepository;
         this.chronometrageService = chronometrageService;
         this.avisAImprimer = avisAImprimer;
         this.rattachementService = rattachementService;
@@ -166,12 +175,47 @@ public class TransmissionSigmpService {
         java.util.Set<Long> avant = avisAImprimer.getObject().disponibles(fiche);
         dossier.setStatut(StatutDossier.DECISION_TRANSMISE_SIGMP.name());
         dossierRepository.save(dossier);
-        avisAImprimer.getObject().notifierDevenues(fiche, avant);
+        // ⚠️ 2026-10-28 (« decision-sigmp-prmp », H2) — l'avis de CE dossier, devenu imprimable, est dit par DECISION_TRANSMISE_SIGMP.
+        avisAImprimer.getObject().notifierDevenues(fiche, avant, dossier.getIdDossier());
         // ⚠️ Chronométrage (2026-09-01) — la transmission à SIGMP clôt l'étape TRANSMISSION_SIGMP et
         // ARRÊTE le compteur global : c'est la « validation sur SIGMP » de la règle du pilote.
         chronometrageService.cloturer(dossier.getIdDossier(), EtapeCircuit.TRANSMISSION_SIGMP);
         notifierAssistantsPvAArchiver(dossier, pv, sens, levee);
+        notifierPrmp(dossier, pv, avis, sens, levee, saved.getDateTransmission());
         return toDto(saved);
+    }
+
+    /**
+     * ⚠️ 2026-10-28 (demande front « decision-sigmp-prmp », §B1, §B2) — la PRMP du dossier et toutes ses UGPM apprennent que la
+     * décision est transmise à SIGMP (elle arrête le compteur de la CNM), pour tout dossier : le sens, et, pour un DAO né d'une
+     * fiche, la suite de l'avis spécifique (ou des lettres d'invitation). Objet = le dossier.
+     */
+    private void notifierPrmp(Dossier dossier, PvExamen pv, String avis, String sens, boolean levee, LocalDateTime le) {
+        // La PRMP du dossier ; à défaut (plan sans PRMP portée), celle du PPM, comme PV_SIGNE.
+        List<String> prmps = dossier.getIdPrmp() != null ? List.of(dossier.getIdPrmp()) : pvExamenRepository.findIdPrmpByPv(pv.getIdPv());
+        for (String idPrmp : prmps) {
+            notifierPrmp(dossier, idPrmp, avis, sens, levee, le);
+        }
+    }
+
+    private void notifierPrmp(Dossier dossier, String idPrmp, String avis, String sens, boolean levee, LocalDateTime le) {
+        Integer idDossier = dossier.getIdDossier();
+        String reference = dossier.getRefeDossier() != null ? dossier.getRefeDossier() : "n° " + idDossier;
+        String objet = avisAImprimer.getObject().objet(dossier.getIdDmc(), idDossier).map(o -> " (" + o + ")").orElse("");
+        String transmise = "la décision a été transmise à SIGMP le " + le.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) + ".";
+        String corps = "Le dossier " + reference + objet + (SENS_NON_APPROUVE.equals(sens)
+                ? " n'est pas approuvé (" + ("NSP".equals(avis) ? "la Commission ne se prononce pas" : "avis défavorable") + ") : "
+                : levee ? " est approuvé : vos corrections ont levé les réserves du PV ; "
+                        : " est approuvé (avis favorable) : ") + transmise;
+        corps += avisAImprimer.getObject().suite(dossier.getIdDmc(), idDossier).map(s -> " " + s).orElse("");
+        String titre = "Décision transmise à SIGMP — " + reference;
+        notificationService.emettrePrmp(TypeNotification.DECISION_TRANSMISE_SIGMP, idPrmp,
+                prmpRepository.findById(idPrmp).map(cnm.prs.entity.Prmp::getEmailPrmp).orElse(null),
+                idDossier, TypeObjet.DOSSIER, idDossier, titre, corps);
+        for (cnm.prs.entity.Ugpm u : ugpmRepository.findByIdPrmpTutelle(idPrmp)) {
+            notificationService.emettreUgpm(TypeNotification.DECISION_TRANSMISE_SIGMP, u.getIdUgpm(), idPrmp, u.getEmailUgpm(),
+                    idDossier, TypeObjet.DOSSIER, idDossier, titre, corps);
+        }
     }
 
     /** Le PV est transmis aux Assistants contrôleurs de la localité pour ARCHIVAGE ({@code PV_A_ARCHIVER}). */

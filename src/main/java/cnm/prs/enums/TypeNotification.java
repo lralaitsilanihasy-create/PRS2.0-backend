@@ -263,5 +263,11 @@ public enum TypeNotification {
      */
     DAO_COMPLET_PRET,
     /** ⚠️ 2026-10-28 (« dao-complet-en-file », Q4) — le DAO complet est abandonné après le dernier essai : vers les Administrateurs. */
-    DAO_COMPLET_ECHEC
+    DAO_COMPLET_ECHEC,
+    /**
+     * ⚠️ 2026-10-28 (demande front « decision-sigmp-prmp », §B1-B3) — le Vérificateur a transmis la décision du dossier à SIGMP (le
+     * compteur de la CNM s'arrête) : vers la PRMP du dossier et toutes ses UGPM, objet = le dossier, tous types de dossiers. Le
+     * texte dit le sens et, pour un DAO né d'une fiche, la suite de l'avis spécifique.
+     */
+    DECISION_TRANSMISE_SIGMP
 }
