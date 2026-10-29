@@ -86,7 +86,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
             + "seulement ; aucune rubrique des travaux dans une fiche de fournitures, ni l'inverse")
     void chargement() throws Exception {
         assertThat(travaux.rejets()).isEmpty();
-        assertThat(travaux.crees()).hasSize(167);   // 17/10 (charte travaux, Q1) : + B02-OT-03 à 06 (localisation) ;   V59 (02/10, seuils calculés) : + B03-QT-15 à 20 ;   02/10 (recette du MEN, §B3.2) : + B05-GQ-04, B05-VR-02, B08-RE-04, B08-MR-05/06, B09-PE-03   // lot D4 : + 6 (B02-MW-04, B02-LT-06/07, B04-VL-02, B05-GE-05, B09-BT-01) ;
+        assertThat(travaux.crees()).hasSize(168);   // ⚠️ 29/10 (marche-a-commandes-champs, D4) : + B09-DL-06 ; 17/10 (charte travaux, Q1) : + B02-OT-03 à 06 (localisation) ;   V59 (02/10, seuils calculés) : + B03-QT-15 à 20 ;   02/10 (recette du MEN, §B3.2) : + B05-GQ-04, B05-VR-02, B08-RE-04, B08-MR-05/06, B09-PE-03   // lot D4 : + 6 (B02-MW-04, B02-LT-06/07, B04-VL-02, B05-GE-05, B09-BT-01) ;
         // 01/10 (DAO du MEN) : + B03-QT-12/13/14, + B02-AU-07 et B06-EO-07 venus du fichier des fournitures
         assertThat(travauxCc.rejets()).isEmpty();
         assertThat(travauxCc.crees()).hasSize(117);

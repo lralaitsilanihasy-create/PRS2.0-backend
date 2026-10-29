@@ -5,7 +5,7 @@ B02-OB-03;Numéro du dossier d'appel d'offres;TEXTE;SAISIE;DPAO;AE;QUANTITE_FIXE
 B02-AU-01;Description du projet global (marché non alloti);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = NON;oui;;;;;;oui
 B02-AU-02;Attribution des lots;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = OUI;oui;;;Lot par lot (attribution divisible),Totalité des lots à un seul attributaire;;;oui
 B02-AU-03;Quantités minimum et maximum;TEXTE_LONG;SAISIE;DPAO;;A_COMMANDE;;oui;;;;;;non
-B02-AU-04;Durée de validité du marché à commande (mois);NOMBRE;SAISIE;DPAO;AE;A_COMMANDE;;oui;;;;;;oui
+B02-AU-04;Durée de validité du marché à commande (mois);NOMBRE;SAISIE;DPAO;AE;A_COMMANDE;;oui;;;;;;oui;;FOURNITURES_SERVICES,TRAVAUX;
 B02-AU-05;Date d'effet du marché à commande;DATE;SAISIE;AE;;A_COMMANDE;;oui;;;;;;non
 B02-AU-06;Rythme de commande (bons de commande);TEXTE_LONG;SAISIE;AUCUN;;A_COMMANDE;;non;;;;;;non
 B03-ST-01;Sous-traitance autorisée;OUI_NON;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui

@@ -692,10 +692,14 @@ forme et rythme des marchés subséquents.
     par échéance). La remise elle-même, son objet et sa date limite restent décidés par la PRMP ou l'UGPM.
   - Un contrat entré en vigueur avant cette règle garde son calendrier en texte libre : aucune échéance n'en est déduite.
 - ⚠️ **2026-10-29 (demande front « marche-a-commandes-champs »)** — **ce qui régit le contrat se saisit dans la fiche, et se relit.**
-  - Quand la fiche d'un marché à commandes porte un minimum et un maximum annuels, **le minimum ne dépasse pas le maximum** ; un
-    maximum qui, sur la durée du marché, s'écarte nettement du montant du plan est signalé. Que le maximum devienne obligatoire et
-    que le minimum revienne dans la fiche (le pilote les avait rendus facultatif et retiré le 29/09, avant que le contrat ne les lise)
-    reste à décider par le pilote.
+  - ⚠️ **Décision du pilote du 29/10 : « suivre les textes en vigueur » (loi n° 2016-055, art. 30).** Le marché à commandes fixe son
+    **minimum et son maximum en quantité, pour toute sa durée** : chaque article du besoin a une quantité minimum (elle est due) et
+    une quantité maximum ; les bons ne dépassent pas la quantité maximum sur la durée du marché, et un minimum non atteint à l'approche
+    de la fin est signalé. Les montants annuels ne sont pas une exigence des textes : le minimum annuel reste hors de la fiche, le
+    maximum annuel facultatif, et son dépassement est seulement signalé. Quand les deux montants sont saisis, le minimum ne dépasse
+    pas le maximum.
+  - Le marché à commandes dure **trois ans au plus**, reconductions comprises ; il se reconduit par décision de la PRMP dans cette
+    limite. Il est admis en travaux comme en fournitures.
   - **Le contrat en vigueur garde ce que la fiche disait à la notification.** Une fiche révisée ensuite ne le change pas d'elle-même :
     la PRMP le **relit** depuis la dernière version validée. La date de fin suit la nouvelle période tant que le contrat n'a pas été
     reconduit ; ce qui a déjà été commandé ou reçu reste acquis.

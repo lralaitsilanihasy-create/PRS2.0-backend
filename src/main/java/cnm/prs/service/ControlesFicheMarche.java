@@ -86,13 +86,12 @@ public final class ControlesFicheMarche {
      */
     public static final String CALENDRIER_REMISES = "CALENDRIER_REMISES";
     /**
-     * ⚠️ 2026-10-29 (demande front « marche-a-commandes-champs », §B2) — les montants annuels du marché à commandes ({@code B05-TP-02},
-     * {@code B05-TP-03}, par lot) : le minimum ne dépasse pas le maximum (bloquant) ; le maximum annuel × la durée ({@code B02-AU-04})
-     * s'écarte de plus de {@value #ECART_PLAN_POURCENT} % du montant du lot au plan (avertissement).
+     * ⚠️ 2026-10-29 (demande front « marche-a-commandes-champs », §B2, D3) — les montants annuels du marché à commandes
+     * ({@code B05-TP-02}, {@code B05-TP-03}, par lot), quand les deux sont saisis : le minimum ne dépasse pas le maximum (bloquant).
      */
     public static final String MARCHE_A_COMMANDES_MONTANTS = "MARCHE_A_COMMANDES_MONTANTS";
-    /** ⚠️ Hypothèse (à confirmer) : le seuil de l'avertissement d'écart au plan. */
-    static final int ECART_PLAN_POURCENT = 10;
+    /** ⚠️ 2026-10-29 (D4) — la durée du marché à commandes ({@code B02-AU-04}) : trois ans au plus (loi, art. 30-I). */
+    public static final String DUREE_MARCHE_A_COMMANDES_MAX = "DUREE_MARCHE_A_COMMANDES_MAX";
     /**
      * ⚠️ 2026-10-02 (demande front « référentiel des travaux routiers », §B2) — l'assurance décennale, exigée pour des
      * travaux de bâtiment seulement : le CCAP-T ne l'imprime que sous {@code BATIMENT}.
@@ -112,6 +111,8 @@ public final class ControlesFicheMarche {
     /** ⚠️ V45 (2026-09-25) — le besoin et les garanties générées. */
     public static final String BESOIN_INCOMPLET = "BESOIN_INCOMPLET";
     public static final String QUANTITES_ORDRE = "QUANTITES_ORDRE";
+    /** ⚠️ 2026-10-29 (« marche-a-commandes-champs », D2) — marché à commandes : la quantité minimum de chaque article, positive. */
+    public static final String QUANTITE_MIN_EXIGEE = "QUANTITE_MIN_EXIGEE";
     public static final String GARANTIE_MANQUANTE = "GARANTIE_MANQUANTE";
     public static final String GARANTIE_TAUX = "GARANTIE_TAUX";
     private static final String BLOC_BESOIN = "B12";
@@ -943,6 +944,12 @@ public final class ControlesFicheMarche {
                     bloquants.add(new Controle(BESOIN_INCOMPLET, List.of(), BLOC_BESOIN,
                             nom + " n'a aucune caractéristique exigée."));
                 }
+                // ⚠️ 2026-10-29 (demande front « marche-a-commandes-champs », D2 ; loi n° 2016-055, art. 30-I et II) — le minimum en
+                // quantité est dû : chaque article d'un marché à commandes le fixe, positif.
+                if (besoin.aCommande() && (a.quantiteMin() == null || a.quantiteMin().signum() <= 0)) {
+                    bloquants.add(new Controle(QUANTITE_MIN_EXIGEE, List.of(), BLOC_BESOIN, nom + " n'a pas de quantité minimum positive : "
+                            + "le marché à commandes fixe le minimum et le maximum en quantité, et le minimum est dû (loi n° 2016-055, art. 30)."));
+                }
                 if (besoin.aCommande() && a.quantiteMin() != null && a.quantiteMax() != null
                         && a.quantiteMin().compareTo(a.quantiteMax()) > 0) {
                     bloquants.add(new Controle(QUANTITES_ORDRE, List.of(), BLOC_BESOIN, nom + " : la quantité minimum ("
@@ -1279,12 +1286,21 @@ public final class ControlesFicheMarche {
     }
 
     /**
-     * ⚠️ 2026-10-29 (« marche-a-commandes-champs », §B2) — pour chaque lot ({@code CODE#n}, à défaut {@code CODE}) : minimum annuel ≤
-     * maximum annuel, bloquant ({@code ok} quand les deux sont saisis et cohérents) ; puis, si le maximum, la durée et le montant du lot
-     * au plan sont connus, maximum × durée / 12 comparé au plan : avertissement au-delà de {@value #ECART_PLAN_POURCENT} % d'écart.
-     * Appelé pour un marché à commandes seulement.
+     * ⚠️ 2026-10-29 (« marche-a-commandes-champs », §B2, puis D3-D4 du pilote) — pour chaque lot ({@code CODE#n}, à défaut
+     * {@code CODE}) : quand les deux montants sont saisis, minimum ≤ maximum, bloquant ({@code ok} sinon) ; la durée {@code B02-AU-04}
+     * au plus {@value ContratVigueurService#MOIS_MAX_A_COMMANDE} mois (loi n° 2016-055, art. 30-I), bloquant
+     * ({@code DUREE_MARCHE_A_COMMANDES_MAX}). L'avertissement d'écart au plan (maximum annuel × durée) est retiré (D3 : les montants
+     * annuels ne sont pas une exigence des textes). Appelé pour un marché à commandes seulement.
      */
-    public static void montantsACommandes(Map<String, String> valeurs, Map<Integer, BigDecimal> montantsPlan, int nbLots, BilanControlesDto bilan) {
+    public static void montantsACommandes(Map<String, String> valeurs, int nbLots, BilanControlesDto bilan) {
+        BigDecimal dureeSaisie = nombre(valeurs.get("B02-AU-04"));
+        if (dureeSaisie != null && dureeSaisie.compareTo(BigDecimal.valueOf(ContratVigueurService.MOIS_MAX_A_COMMANDE)) > 0) {
+            bilan.bloquants().add(new Controle(DUREE_MARCHE_A_COMMANDES_MAX, List.of("B02-AU-04"), "B02", "Durée du marché à commandes de "
+                    + dureeSaisie.stripTrailingZeros().toPlainString() + " mois : trois ans au plus, reconductions comprises (loi n° 2016-055, "
+                    + "art. 30-I)."));
+        } else if (dureeSaisie != null) {
+            bilan.ok().add(new Controle(DUREE_MARCHE_A_COMMANDES_MAX, List.of("B02-AU-04"), "B02", "Durée du marché à commandes ≤ 36 mois."));
+        }
         List<Integer> lots = new ArrayList<>();
         if (LotsFiche.alloti(nbLots)) {
             for (int n = 1; n <= nbLots; n++) {
@@ -1293,7 +1309,6 @@ public final class ControlesFicheMarche {
         } else {
             lots.add(null);
         }
-        BigDecimal duree = nombre(valeurs.get("B02-AU-04"));
         for (Integer lot : lots) {
             String suffixe = lot == null ? "" : String.valueOf(LotsFiche.SEPARATEUR) + lot;
             String nomLot = lot == null ? "" : " (lot " + lot + ")";
@@ -1307,18 +1322,6 @@ public final class ControlesFicheMarche {
                     continue;
                 }
                 bilan.ok().add(new Controle(MARCHE_A_COMMANDES_MONTANTS, champs, "B05", "Minimum annuel ≤ maximum annuel" + nomLot + "."));
-            }
-            BigDecimal plan = montantsPlan == null ? null : montantsPlan.get(lot);
-            if (max == null || duree == null || duree.signum() <= 0 || plan == null || plan.signum() <= 0) {
-                continue;
-            }
-            BigDecimal total = max.multiply(duree).divide(BigDecimal.valueOf(12), 0, RoundingMode.HALF_UP);
-            BigDecimal ecart = total.subtract(plan).abs().multiply(BigDecimal.valueOf(100)).divide(plan, 1, RoundingMode.HALF_UP);
-            if (ecart.compareTo(BigDecimal.valueOf(ECART_PLAN_POURCENT)) > 0) {
-                bilan.avertissements().add(new Controle(MARCHE_A_COMMANDES_MONTANTS, List.of("B05-TP-03" + suffixe, "B02-AU-04"), "B05",
-                        "Le maximum annuel" + nomLot + " sur la durée du marché (" + ValeursPpmService.montant(total) + " Ar pour "
-                                + duree.stripTrailingZeros().toPlainString() + " mois) s'écarte de " + ecart.stripTrailingZeros().toPlainString()
-                                + " % du montant au plan (" + ValeursPpmService.montant(plan) + " Ar)."));
             }
         }
     }

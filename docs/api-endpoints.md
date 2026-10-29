@@ -5371,13 +5371,20 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
     est au pilote (Q3 de la demande). D'ici là, le plafond annuel ne joue que si `B05-TP-03` est saisi.
   - `B02-AU-03` (quantités : le besoin les porte) et `B02-AU-05` (date d'effet : la notification) restent inactifs, comme le CSV
     le dit déjà (colonne `actif = non`).
-  - Règle **`MARCHE_A_COMMANDES_MONTANTS`** (bloc `B05`, marché à commandes seulement), lot par lot :
-    - minimum annuel > maximum annuel : **bloquant** ; les deux saisis et cohérents : `ok` ;
-    - maximum annuel × `B02-AU-04` / 12 s'écarte de plus de **10 %** (⚠️ seuil supposé, à confirmer) du montant du lot au plan :
-      **avertissement**. Non évalué sans maximum, durée ou montant au plan.
-  - **Travaux** (en attente du pilote, Q1 : le marché à commandes est-il admis en travaux ?) : rien n'est servi pour l'instant.
-    La réception lit déjà, pour un marché à commandes de travaux, le délai de garantie des travaux **`B09-GT-01`** (au lieu de
-    `B09-DG-01`, absent de ce référentiel).
+  - Règle **`MARCHE_A_COMMANDES_MONTANTS`** (bloc `B05`, marché à commandes seulement), lot par lot : minimum annuel > maximum
+    annuel, **bloquant**, seulement si les deux sont saisis (`ok` sinon). ⚠️ L'avertissement d'écart au plan (maximum × durée) livré
+    le même jour est **retiré** (décision D3 du pilote : les montants annuels ne sont pas une exigence des textes).
+  - ⚠️ **Décision du pilote du 29/10 « suivre les textes en vigueur »** (D2-D4 ; `docs/referentiel/2026-10-29-marche-a-commandes-travaux.sql`) :
+    - **D2** — le minimum en quantité est dû (loi art. 30-I et II). La saisie du besoin le refusait déjà absent ou nul (`PUT
+      …/articles`, 400 `articles[i].quantiteMin`) ; la règle de bilan **`QUANTITE_MIN_EXIGEE`** (bloc `B12`, bloquante) couvre en plus
+      les articles saisis avant que la fiche ne passe à la forme « à commandes ».
+    - **D3** — `B05-TP-02` reste inactif, `B05-TP-03` facultatif (Q3 : non).
+    - **D4** — le marché à commandes est admis en **travaux** : `B02-AU-04` (durée) est aussi servi aux travaux ; champ nouveau des
+      travaux **`B09-DL-06`** « Modalités et période de passation des commandes (marché à commandes) » (facultatif, rubrique
+      `B09-DL` ; `B09-DX-03` des fournitures n'y est pas servi, sa rubrique « Délai d'exécution » des fournitures n'étant pas ouverte
+      aux travaux), lu par le contrat en vigueur comme `rythme`. Règle **`DUREE_MARCHE_A_COMMANDES_MAX`** (bloc `B02`, bloquante) :
+      `B02-AU-04` au plus 36 mois. La réception lit le délai de garantie des travaux **`B09-GT-01`** (au lieu de `B09-DG-01`, absent
+      de ce référentiel).
 - ⚠️ **2026-10-29 — le calendrier structuré des remises en concurrence** (demande front « contrat-cadre-4a », §B3 ;
   `docs/referentiel/2026-10-29-calendrier-remises-contrat-cadre.sql`). Deux champs nouveaux de la rubrique `B02-PC`, contrat-cadre,
   fournitures et services et travaux, facultatifs au référentiel, imprimés par aucun document (document maître `AUCUN`) :
@@ -8456,7 +8463,11 @@ n° 2016-055, art. 30). Tables **`t_contrat_vigueur`** (un contrat par lot notif
     - montant estimé `B05-MT-01` (HT), minimum `B05-MT-03` (facultatif, art. 34) ;
     - forme `B07-FS-01`, rythme `B02-PC-02`, calendrier `B02-PC-03` ;
   - **marché à commandes** :
-    - période `B02-AU-04`, plafonnée à **36 mois** (art. 30), sans reconduction ;
+    - période `B02-AU-04`, plafonnée à **36 mois** (art. 30), sans reconduction ; ⚠️ **2026-10-29 (« marche-a-commandes-champs »,
+      D5)** : **reconductible** par décision de la PRMP (`…/reconduction`) tant que la durée totale ne dépasse pas 36 mois
+      (`dureeMaxMois` = 36, `reconductionsMax` nul, pas de préavis ni d'alerte `RECONDUCTION_A_DECIDER`) ; au-delà, 409
+      `DUREE_MAX_ATTEINTE`. Les notifications `CONTRAT_RECONDUIT` / `CONTRAT_NON_RECONDUIT` disent « marché à commandes ». Un contrat
+      créé avant se met à jour par `…/relecture` ;
     - minimum `B05-TP-02` et maximum `B05-TP-03` annuels ;
     - modalités des commandes `B09-DX-03`.
 
@@ -8662,6 +8673,17 @@ Tables **`t_bon_commande`** (numérotée par contrat, unique sur `(ID_CONTRAT, N
   livrés le 2026-10-29, ci-dessous ; la réception des livraisons : lot MS-4, ci-dessous.
 
 > ⚠️ **2026-10-29 — quantités, TTC** (demande front « bons-reception », §B1, §B2 ; propositions Q1, Q2, Q5 du front retenues ; **V148**).
+> - ⚠️ **Corrigé le même jour (« marche-a-commandes-champs », décision du pilote D1-D3, loi art. 30)** :
+>   - **D1** — `QUANTITE_MAX_DEPASSEE` cumule les bons émis **depuis la prise d'effet du contrat** (plus l'année contractuelle) ;
+>     `Consommation.articles[].commandeAnnee` devient **`commandeDuree`**, `resteQuantite` = `quantiteMax` − commandé sur la durée.
+>   - **D2** — `QUANTITE_MIN_NON_ATTEINTE` : un article sous sa `quantiteMin` sur la durée, à 30 jours au plus de la **fin du contrat**
+>     (période en cours).
+>   - **D3** — **409 `MAXIMUM_DEPASSE` retiré** : le maximum en montant (`B05-TP-03`) n'est plus un plafond. Le cumul des bons de la
+>     **durée** au-delà de la valeur maximale estimée est signalé par l'alerte **`MAXIMUM_ESTIME_DEPASSE`** (consommation et
+>     `ContratVigueurDto.alertes`, jamais bloquante, loi art. 30-III). `Consommation.resteMaximum` = maximum − cumul de la **durée**
+>     (négatif au-delà). `cumulAnnee` et `MINIMUM_NON_ATTEINT` (montant annuel, quand il existe) sont inchangés.
+>
+>   Le texte qui suit décrit la livraison du matin.
 > - **Plafond en quantité (§B1, marché à commandes).** Pour une ligne qui porte un `idArticle` : le cumul des quantités de l'article sur
 >   les bons **émis** (annulés exclus) de l'**année contractuelle**, plus la demande du bon (plusieurs lignes du même article
 >   s'additionnent), ne dépasse pas sa `quantiteMax` (besoin de la fiche) : 409 **`QUANTITE_MAX_DEPASSEE`**, `details` =

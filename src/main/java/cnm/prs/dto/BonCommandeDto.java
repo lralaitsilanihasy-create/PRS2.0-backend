@@ -49,11 +49,13 @@ public record BonCommandeDto(Long id, Long idContrat, Long idDmc, Integer lot, S
      * @param cumulHt      les bons émis (non annulés) du contrat, toute sa durée
      * @param anneeDebut   marché à commandes : l'année contractuelle en cours (le minimum et le maximum sont annuels, {@code B05-TP-02/03})
      * @param cumulAnnee   marché à commandes : les bons émis de l'année contractuelle en cours
-     * @param resteMaximum marché à commandes : ce qui reste à commander sous le maximum de l'année ; nul sans maximum
+     * @param resteMaximum marché à commandes : ce qui reste sous le maximum ; ⚠️ 2026-10-29 (D3) sur la <strong>durée</strong> du marché
+     *                     (valeur maximale estimée, loi art. 30-III), plus sur l'année ; négatif au-delà ; nul sans maximum
      * @param alertes      {@code MINIMUM_NON_ATTEINT} (marché à commandes, fin d'année contractuelle à 30 jours au plus, loi art. 30-II),
      *                     {@code MONTANT_ESTIME_DEPASSE} (contrat-cadre : le cumul dépasse la valeur maximale estimée, décret art. 8) ;
-     *                     ⚠️ 2026-10-29 {@code QUANTITE_MIN_NON_ATTEINTE} (marché à commandes : un article sous sa quantité minimale à
-     *                     30 jours au plus de la fin de l'année contractuelle ; signalée, jamais bloquante)
+     *                     ⚠️ 2026-10-29 {@code QUANTITE_MIN_NON_ATTEINTE} (marché à commandes : un article sous sa quantité minimale, sur
+     *                     la durée, à 30 jours au plus de la fin du contrat ; signalée, jamais bloquante) ; {@code MAXIMUM_ESTIME_DEPASSE}
+     *                     (marché à commandes : le cumul de la durée dépasse la valeur maximale estimée ; aussi dans le contrat en vigueur)
      * @param cumulTtc     ⚠️ 2026-10-29 (§B2) — le TTC des bons émis qui en portent un (les bons émis avant V148 n'en ont pas)
      * @param articles     ⚠️ 2026-10-29 (§B1) — marché à commandes : par article du besoin, commandé dans l'année contractuelle et reste
      *                     sous la quantité maximale ; vide pour un contrat-cadre
@@ -64,12 +66,12 @@ public record BonCommandeDto(Long id, Long idContrat, Long idDmc, Integer lot, S
     }
 
     /**
-     * ⚠️ 2026-10-29 (« bons-reception », §B1) — un article du besoin d'un marché à commandes : {@code commandeAnnee} = les quantités
-     * des bons émis (annulés exclus) de l'année contractuelle en cours ; {@code resteQuantite} = {@code quantiteMax} − commandé, nul
-     * sans quantité maximale.
+     * ⚠️ 2026-10-29 (« bons-reception », §B1 ; « marche-a-commandes-champs », D1) — un article du besoin d'un marché à commandes :
+     * {@code commandeDuree} = les quantités des bons émis (annulés exclus) depuis la prise d'effet du contrat (le minimum et le maximum
+     * valent pour la durée du marché, loi art. 30-I) ; {@code resteQuantite} = {@code quantiteMax} − commandé, nul sans quantité maximale.
      */
     public record ArticleConsomme(Integer idArticle, String designation, String unite, BigDecimal quantiteMin, BigDecimal quantiteMax,
-            BigDecimal commandeAnnee, BigDecimal resteQuantite) {
+            BigDecimal commandeDuree, BigDecimal resteQuantite) {
     }
 
     /** Contrat-cadre : un marché subséquent attribué, son montant et ce que ses bons en ont commandé. */

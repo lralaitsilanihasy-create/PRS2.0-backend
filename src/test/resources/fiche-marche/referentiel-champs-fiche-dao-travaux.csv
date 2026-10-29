@@ -112,6 +112,7 @@ B09-DL-02;Période de préparation (jours);NOMBRE;SAISIE;AE;;QUANTITE_FIXE,A_COM
 B09-DL-03;Calendrier prévisionnel de réalisation;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B09-DL-04;Date de réception de l'ouvrage;DATE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
 B09-DL-05;Délais non cumulables en cas d'allotissement;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = OUI;non;;;;;;oui
+B09-DL-06;Modalités et période de passation des commandes (marché à commandes);TEXTE_LONG;SAISIE;AUCUN;;A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
 B09-MD-01;Durée cumulée maximale de prolongation ou de report sans avenant (ex. « soixante (60) jours »);TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui;;
 B09-MD-02;Nombre de journées d'intempéries prévisibles;NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-NE-01;Modalités de notification à l'entrepreneur;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui

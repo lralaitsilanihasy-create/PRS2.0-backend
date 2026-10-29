@@ -1692,8 +1692,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 // ⚠️ 29/10 (« bons-reception », §B2) — la TVA de l'offre retenue, figée à l'émission.
                 .andExpect(jsonPath("$.tauxTva").value(20)).andExpect(jsonPath("$.montantTva").value(1200000))
                 .andExpect(jsonPath("$.montantTtc").value(7200000));
-        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(String.format(bon, 250))).andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("MAXIMUM_DEPASSE")).andExpect(jsonPath("$.details.maximum").value(10000000));
+        // ⚠️ 29/10 (« marche-a-commandes-champs », D3) — le maximum en montant n'est plus un plafond : le bon passe, le dépassement est signalé.
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(String.format(bon, 250))).andExpect(status().isCreated());
         // ⚠️ 29/10 (§B1) — le plafond en quantité d'un article du besoin (min 7, max 8) ; une ligne libre n'est pas bornée.
         List<Integer> articles = JsonPath.read(mvc.perform(get("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp))
                 .andReturn().getResponse().getContentAsString(), "$[*].idArticle");
@@ -1712,13 +1712,23 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("QUANTITE_MAX_DEPASSEE")).andExpect(jsonPath("$.details.rang").value(1))
                 .andExpect(jsonPath("$.details.quantiteMax").value(8)).andExpect(jsonPath("$.details.dejaCommande").value(6))
                 .andExpect(jsonPath("$.details.demande").value(3));
-        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.cumulAnnee").value(6006000))
-                .andExpect(jsonPath("$.resteMaximum").value(3994000)).andExpect(jsonPath("$.anneeFin").value(aujourdhui.plusDays(19).toString()))
-                .andExpect(jsonPath("$.alertes[0]").value("MINIMUM_NON_ATTEINT"))
-                .andExpect(jsonPath("$.alertes").value(org.hamcrest.Matchers.hasItem("QUANTITE_MIN_NON_ATTEINTE")))
-                .andExpect(jsonPath("$.cumulTtc").value(7207200)).andExpect(jsonPath("$.articles[0].commandeAnnee").value(6))
+        // ⚠️ 29/10 (D1-D3) — quantités et maximum sur la durée ; le contrat finit dans 19 jours : la quantité minimale (7) non atteinte.
+        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.cumulAnnee").value(11006000))
+                .andExpect(jsonPath("$.resteMaximum").value(-1006000)).andExpect(jsonPath("$.anneeFin").value(aujourdhui.plusDays(19).toString()))
+                .andExpect(jsonPath("$.alertes").value(org.hamcrest.Matchers.contains("MAXIMUM_ESTIME_DEPASSE", "QUANTITE_MIN_NON_ATTEINTE")))
+                .andExpect(jsonPath("$.cumulTtc").value(13207200)).andExpect(jsonPath("$.articles[0].commandeDuree").value(6))
                 .andExpect(jsonPath("$.articles[0].resteQuantite").value(2)).andExpect(jsonPath("$.articles[1].resteQuantite").value(org.hamcrest.Matchers.nullValue()));
+        mvc.perform(get("/api/contrats-en-vigueur/" + idContrat).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.alertes").value(org.hamcrest.Matchers.hasItem("MAXIMUM_ESTIME_DEPASSE")));
+        // ⚠️ 29/10 (D5) — reconductible tant que la durée totale ne dépasse pas trois ans (12 mois + 12 mois ≤ 36).
         cnm.prs.entity.ContratVigueur c = contratRepository.findById(idContrat).orElseThrow();
+        c.setReconductible(true);
+        c.setDureeMaxMois(36);
+        contratRepository.save(c);
+        mvc.perform(post("/api/contrats-en-vigueur/" + idContrat + "/reconduction").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"decision\":\"RECONDUIRE\",\"reference\":\"DEC-AC-01\",\"dateDecision\":\"" + aujourdhui + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.dateFin").value(aujourdhui.plusDays(19).plusYears(1).toString()));
+        c = contratRepository.findById(idContrat).orElseThrow();
         c.setDateFin(aujourdhui.minusDays(1));
         contratRepository.save(c);
         mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(String.format(bon, 1))).andExpect(status().isConflict())

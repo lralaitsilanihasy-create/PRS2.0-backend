@@ -205,28 +205,27 @@ class ModelesDaoTest {
     }
 
     @Test
-    @DisplayName("⚠️ 2026-10-29 (marche-a-commandes-champs, §B2) — minimum ≤ maximum annuels (bloquant, par lot) ; maximum × durée à plus "
-            + "de 10 % du plan : avertissement ; rien sans montants")
+    @DisplayName("⚠️ 2026-10-29 (marche-a-commandes-champs, §B2, D3-D4) — minimum ≤ maximum annuels s'ils sont saisis (bloquant) ; durée "
+            + "au plus 36 mois (bloquant) ; plus d'avertissement d'écart au plan ; rien sans valeurs")
     void montantsACommandes() {
-        java.util.function.BiFunction<Map<String, String>, Map<Integer, java.math.BigDecimal>, cnm.prs.dto.BilanControlesDto> bilan = (v, plan) -> {
+        java.util.function.Function<Map<String, String>, cnm.prs.dto.BilanControlesDto> bilan = v -> {
             cnm.prs.dto.BilanControlesDto b = new cnm.prs.dto.BilanControlesDto(new java.util.ArrayList<>(), new java.util.ArrayList<>(),
                     new java.util.ArrayList<>(), 0, 0);
-            ControlesFicheMarche.montantsACommandes(v, plan, 0, b);
+            ControlesFicheMarche.montantsACommandes(v, 0, b);
             return b;
         };
         String regle = ControlesFicheMarche.MARCHE_A_COMMANDES_MONTANTS;
-        Map<Integer, java.math.BigDecimal> plan = new HashMap<>();
-        plan.put(null, new java.math.BigDecimal("20000000"));
-        assertThat(bilan.apply(v("B05-TP-02", "12000000", "B05-TP-03", "10000000"), plan).bloquants()).singleElement()
+        assertThat(bilan.apply(v("B05-TP-02", "12000000", "B05-TP-03", "10000000")).bloquants()).singleElement()
                 .satisfies(c -> assertThat(c.regle()).isEqualTo(regle)).satisfies(c -> assertThat(c.message()).contains("dépasse le maximum"));
-        cnm.prs.dto.BilanControlesDto juste = bilan.apply(v("B05-TP-02", "2000000", "B05-TP-03", "10000000", "B02-AU-04", "24"), plan);
-        assertThat(juste.ok()).extracting(c -> c.regle()).contains(regle);
-        assertThat(juste.avertissements()).isEmpty();   // 10 M × 2 ans = 20 M = le plan
-        assertThat(bilan.apply(v("B05-TP-03", "10000000", "B02-AU-04", "36"), plan).avertissements()).singleElement()
-                .satisfies(c -> assertThat(c.message()).contains("30 000 000", "50 %"));
-        cnm.prs.dto.BilanControlesDto vide = bilan.apply(Map.of(), plan);
+        cnm.prs.dto.BilanControlesDto juste = bilan.apply(v("B05-TP-02", "2000000", "B05-TP-03", "10000000", "B02-AU-04", "36"));
+        assertThat(juste.ok()).extracting(c -> c.regle()).contains(regle, ControlesFicheMarche.DUREE_MARCHE_A_COMMANDES_MAX);
+        assertThat(juste.avertissements()).isEmpty();
+        assertThat(bilan.apply(v("B05-TP-03", "10000000", "B02-AU-04", "48")).bloquants()).singleElement()
+                .satisfies(c -> assertThat(c.regle()).isEqualTo(ControlesFicheMarche.DUREE_MARCHE_A_COMMANDES_MAX))
+                .satisfies(c -> assertThat(c.message()).contains("48 mois", "trois ans"));
+        cnm.prs.dto.BilanControlesDto vide = bilan.apply(Map.of());
         assertThat(vide.bloquants()).isEmpty();
-        assertThat(vide.avertissements()).isEmpty();
+        assertThat(vide.ok()).isEmpty();
     }
 
     @Test

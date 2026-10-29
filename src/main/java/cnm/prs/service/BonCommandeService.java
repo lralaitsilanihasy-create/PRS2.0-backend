@@ -70,6 +70,8 @@ public class BonCommandeService {
     public static final String MONTANT_ESTIME_DEPASSE = "MONTANT_ESTIME_DEPASSE";
     /** ⚠️ 2026-10-29 (« bons-reception », §B1) — servie dans la consommation seulement. */
     public static final String QUANTITE_MIN_NON_ATTEINTE = "QUANTITE_MIN_NON_ATTEINTE";
+    /** ⚠️ 2026-10-29 (« marche-a-commandes-champs », D3) — marché à commandes : le cumul dépasse la valeur maximale estimée (durée). */
+    public static final String MAXIMUM_ESTIME_DEPASSE = "MAXIMUM_ESTIME_DEPASSE";
     private static final Set<ProfilUtilisateur> EXTERNES = Set.of(ProfilUtilisateur.CANDIDAT, ProfilUtilisateur.DEPOSITAIRE,
             ProfilUtilisateur.MEMBRE_CAO);
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -188,16 +190,9 @@ public class BonCommandeService {
         if (!cadre) {
             controlerQuantites(c, ls, duContrat);   // ⚠️ 2026-10-29 (« bons-reception », §B1)
         }
-        if (remise == null && c.getMontantMaximum() != null) {
-            LocalDate[] annee = anneeContractuelle(c, aujourdhui());
-            BigDecimal deja = cumul(duAnnee(duContrat, annee));
-            if (deja.add(total).compareTo(c.getMontantMaximum()) > 0) {
-                throw new BusinessRuleException("Les bons de l'année contractuelle ne dépassent pas le maximum du marché à commandes ("
-                        + FormulairesEnLigne.lisible(c.getMontantMaximum()) + " Ariary HT ; déjà commandé : " + FormulairesEnLigne.lisible(deja)
-                        + ", loi n° 2016-055, art. 30).", "MAXIMUM_DEPASSE", null, Map.<String, Object>of("maximum", c.getMontantMaximum(), "dejaCommande", deja,
-                                "montant", total));
-            }
-        }
+        // ⚠️ 2026-10-29 (« marche-a-commandes-champs », D3) — le maximum en montant n'est plus un plafond (409 MAXIMUM_DEPASSE retiré) :
+        // la loi fixe le minimum et le maximum en quantité (art. 30-I) ; le cumul au-delà de la valeur maximale estimée est signalé
+        // (MAXIMUM_ESTIME_DEPASSE).
         BonCommande b = new BonCommande();
         b.setIdContrat(idContrat);
         b.setNumero(bons.findFirstByIdContratOrderByNumeroDesc(idContrat).map(BonCommande::getNumero).orElse(0) + 1);
@@ -303,7 +298,8 @@ public class BonCommandeService {
 
     /**
      * ⚠️ 2026-10-29 (demande front « bons-reception », §B1) — marché à commandes : le cumul des quantités d'un article du besoin, sur
-     * les bons émis (annulés exclus) de l'année contractuelle, ne dépasse pas sa {@code quantiteMax} (409 {@code QUANTITE_MAX_DEPASSEE},
+     * les bons émis (annulés exclus) ⚠️ <strong>depuis la prise d'effet du contrat</strong> (« marche-a-commandes-champs », D1 : la loi
+     * fixe le maximum sur la durée du marché, art. 30-I ; plus par année contractuelle), ne dépasse pas sa {@code quantiteMax} (409 {@code QUANTITE_MAX_DEPASSEE},
      * {@code details} = {@code rang} (la première ligne de l'article), {@code idArticle}, {@code quantiteMax}, {@code dejaCommande},
      * {@code demande}). Une ligne sans {@code idArticle} n'est pas bornée en quantité : le montant reste son seul contrôle.
      */
@@ -320,13 +316,13 @@ public class BonCommandeService {
         if (demande.isEmpty()) {
             return;
         }
-        Map<Integer, BigDecimal> deja = quantitesAnnee(duAnnee(duContrat, anneeContractuelle(c, aujourdhui())));
+        Map<Integer, BigDecimal> deja = quantitesAnnee(duContrat);
         for (Map.Entry<Integer, BigDecimal> e : demande.entrySet()) {
             BesoinEnLigneDto.Article a = besoin.get(e.getKey());
             BigDecimal max = a == null ? null : a.quantiteMax();
             BigDecimal commande = deja.getOrDefault(e.getKey(), BigDecimal.ZERO);
             if (max != null && commande.add(e.getValue()).compareTo(max) > 0) {
-                throw new BusinessRuleException("« " + a.designation() + " » : la quantité commandée dans l'année contractuelle dépasserait sa "
+                throw new BusinessRuleException("« " + a.designation() + " » : la quantité commandée sur la durée du marché dépasserait sa "
                         + "quantité maximale (" + FormulairesEnLigne.lisible(max) + " ; déjà commandé : " + FormulairesEnLigne.lisible(commande)
                         + " ; demandé : " + FormulairesEnLigne.lisible(e.getValue()) + ").", "QUANTITE_MAX_DEPASSEE", null,
                         Map.<String, Object>of("rang", premierRang.get(e.getKey()), "idArticle", e.getKey(), "quantiteMax", max,
@@ -392,16 +388,16 @@ public class BonCommandeService {
     }
 
     /**
-     * ⚠️ 2026-10-29 (« bons-reception », §B1) — {@code QUANTITE_MIN_NON_ATTEINTE} : marché à commandes, à trente jours au plus de la fin
-     * de l'année contractuelle, un article du besoin n'a pas atteint sa {@code quantiteMin}. Signalée, jamais bloquante.
+     * ⚠️ 2026-10-29 (« bons-reception », §B1 ; puis « marche-a-commandes-champs », D2) — {@code QUANTITE_MIN_NON_ATTEINTE} : marché à
+     * commandes, à trente jours au plus de la <strong>fin du contrat</strong> (période en cours), un article du besoin n'a pas atteint
+     * sa {@code quantiteMin} sur la durée. Signalée, jamais bloquante (la PRMP y est tenue, loi art. 30-II).
      */
     static boolean quantiteMinNonAtteinte(ContratVigueur c, List<BonCommandeDto.ArticleConsomme> articles, LocalDate aujourdhui) {
         if (!ContratVigueur.A_COMMANDE.equals(c.getTypeMarche()) || aujourdhui.isAfter(c.getDateFin())) {
             return false;
         }
-        LocalDate[] annee = anneeContractuelle(c, aujourdhui);
-        return ChronoUnit.DAYS.between(aujourdhui, annee[1]) <= ContratVigueurService.JOURS_ECHEANCE_PROCHE && articles.stream()
-                .anyMatch(a -> a.quantiteMin() != null && a.commandeAnnee().compareTo(a.quantiteMin()) < 0);
+        return ChronoUnit.DAYS.between(aujourdhui, c.getDateFin()) <= ContratVigueurService.JOURS_ECHEANCE_PROCHE && articles.stream()
+                .anyMatch(a -> a.quantiteMin() != null && a.commandeDuree().compareTo(a.quantiteMin()) < 0);
     }
 
     /** La PRMP annule un bon (motif obligatoire, 400 {@code MOTIF_OBLIGATOIRE}) ; 409 {@code DEJA_ANNULE}. Le titulaire en est notifié. */
@@ -457,7 +453,7 @@ public class BonCommandeService {
         // ⚠️ 2026-10-29 (« bons-reception », §B1) — marché à commandes : les quantités par article du besoin.
         List<BonCommandeDto.ArticleConsomme> articles = new ArrayList<>();
         if (!cadre) {
-            Map<Integer, BigDecimal> q = quantitesAnnee(duAnnee(duContrat, annee));
+            Map<Integer, BigDecimal> q = quantitesAnnee(duContrat);   // ⚠️ D1 : sur la durée du contrat
             for (BesoinEnLigneDto.Article a : besoin(c).values()) {
                 BigDecimal commande = q.getOrDefault(a.idArticle(), BigDecimal.ZERO);
                 articles.add(new BonCommandeDto.ArticleConsomme(a.idArticle(), a.designation(), a.unite(), a.quantiteMin(), a.quantiteMax(),
@@ -472,7 +468,7 @@ public class BonCommandeService {
                 .map(BonCommande::getMontantTtc).reduce(BigDecimal.ZERO, BigDecimal::add);
         return new BonCommandeDto.Consommation(idContrat, c.getTypeMarche(), cumul(duContrat), annee == null ? null : annee[0],
                 annee == null ? null : annee[1], cumulAnnee, cadre ? null : c.getMontantMinimum(), cadre ? null : c.getMontantMaximum(),
-                cadre || c.getMontantMaximum() == null ? null : c.getMontantMaximum().subtract(cumulAnnee), c.getMontantEstime(), subsequents,
+                cadre || c.getMontantMaximum() == null ? null : c.getMontantMaximum().subtract(cumul(duContrat)), c.getMontantEstime(), subsequents,
                 alertes, duContrat.stream().map(b -> dto(b, c)).toList(), cumulTtc, articles);
     }
 
@@ -548,11 +544,18 @@ public class BonCommandeService {
             if (c.getMontantEstime() != null && cumul(duContrat).compareTo(c.getMontantEstime()) > 0) {
                 al.add(MONTANT_ESTIME_DEPASSE);
             }
-        } else if (c.getMontantMinimum() != null) {
-            LocalDate[] annee = anneeContractuelle(c, aujourdhui);
-            if (ChronoUnit.DAYS.between(aujourdhui, annee[1]) <= ContratVigueurService.JOURS_ECHEANCE_PROCHE
-                    && cumul(duAnnee(duContrat, annee)).compareTo(c.getMontantMinimum()) < 0) {
-                al.add(MINIMUM_NON_ATTEINT);
+        } else {
+            if (c.getMontantMinimum() != null) {
+                LocalDate[] annee = anneeContractuelle(c, aujourdhui);
+                if (ChronoUnit.DAYS.between(aujourdhui, annee[1]) <= ContratVigueurService.JOURS_ECHEANCE_PROCHE
+                        && cumul(duAnnee(duContrat, annee)).compareTo(c.getMontantMinimum()) < 0) {
+                    al.add(MINIMUM_NON_ATTEINT);
+                }
+            }
+            // ⚠️ 2026-10-29 (« marche-a-commandes-champs », D3 ; loi art. 30-III) — la valeur maximale estimée vaut pour la durée du
+            // marché : son dépassement est signalé, plus refusé.
+            if (c.getMontantMaximum() != null && cumul(duContrat).compareTo(c.getMontantMaximum()) > 0) {
+                al.add(MAXIMUM_ESTIME_DEPASSE);
             }
         }
         return al;

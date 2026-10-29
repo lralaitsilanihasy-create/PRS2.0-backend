@@ -66,18 +66,30 @@ class BonCommandeServiceTest {
     }
 
     @Test
-    @DisplayName("⚠️ 2026-10-29 (bons-reception, §B1) — quantité minimale non atteinte : marché à commandes, à 30 jours de la fin d'année")
+    @DisplayName("⚠️ 2026-10-29 (bons-reception, §B1 ; marche-a-commandes-champs, D2) — quantité minimale non atteinte sur la durée : "
+            + "marché à commandes, à 30 jours de la fin du contrat (plus de l'année)")
     void quantiteMinNonAtteinte() {
-        ContratVigueur c = contrat(ContratVigueur.A_COMMANDE, LocalDate.of(2025, 11, 1), 24);
+        ContratVigueur c = contrat(ContratVigueur.A_COMMANDE, LocalDate.of(2025, 11, 1), 24);   // fin le 31/10/2027
         List<cnm.prs.dto.BonCommandeDto.ArticleConsomme> sous = List.of(new cnm.prs.dto.BonCommandeDto.ArticleConsomme(1, "Ramette", "u",
                 new BigDecimal("100"), new BigDecimal("500"), new BigDecimal("40"), new BigDecimal("460")));
         List<cnm.prs.dto.BonCommandeDto.ArticleConsomme> atteint = List.of(new cnm.prs.dto.BonCommandeDto.ArticleConsomme(1, "Ramette", "u",
                 new BigDecimal("100"), new BigDecimal("500"), new BigDecimal("100"), new BigDecimal("400")));
-        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, sous, LocalDate.of(2026, 9, 1))).isFalse();
-        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, sous, LocalDate.of(2026, 10, 2))).isTrue();
-        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, atteint, LocalDate.of(2026, 10, 2))).isFalse();
+        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, sous, LocalDate.of(2026, 10, 2))).isFalse();   // fin d'année, pas du contrat
+        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, sous, LocalDate.of(2027, 10, 5))).isTrue();
+        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, atteint, LocalDate.of(2027, 10, 5))).isFalse();
         c.setTypeMarche(ContratVigueur.CONTRAT_CADRE);
-        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, sous, LocalDate.of(2026, 10, 2))).isFalse();
+        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, sous, LocalDate.of(2027, 10, 5))).isFalse();
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-29 (marche-a-commandes-champs, D3) — marché à commandes : le cumul de la durée au-delà de la valeur maximale "
+            + "estimée est signalé (MAXIMUM_ESTIME_DEPASSE), jamais refusé")
+    void maximumEstimeDepasse() {
+        ContratVigueur c = contrat(ContratVigueur.A_COMMANDE, LocalDate.of(2025, 1, 1), 36);
+        c.setMontantMaximum(new BigDecimal("1000"));
+        List<BonCommande> bs = List.of(bon(BonCommande.EMIS, "600", LocalDate.of(2025, 3, 1)), bon(BonCommande.EMIS, "500", LocalDate.of(2026, 3, 1)));
+        assertThat(BonCommandeService.alertes(c, bs, LocalDate.of(2026, 4, 1))).containsExactly(BonCommandeService.MAXIMUM_ESTIME_DEPASSE);
+        assertThat(BonCommandeService.alertes(c, bs.subList(0, 1), LocalDate.of(2026, 4, 1))).isEmpty();
     }
 
     @Test

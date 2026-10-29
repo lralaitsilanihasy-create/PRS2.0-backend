@@ -167,6 +167,11 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
                         "L'article 1 du lot 2 (« Kit ») n'a aucune caractéristique exigée.");
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='QUANTITES_ORDRE')].message"))
                 .containsExactly("L'article 1 du lot 1 (« Ordinateur ») : la quantité minimum (30) dépasse la quantité maximum (15).");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='QUANTITE_MIN_EXIGEE')]")).isEmpty();
+        // ⚠️ 2026-10-29 (« marche-a-commandes-champs », D2 ; loi art. 30) — le minimum en quantité est dû : la saisie le refuse déjà
+        // absent (400) ; la règle QUANTITE_MIN_EXIGEE du bilan couvre les articles saisis avant le passage à la forme « à commandes ».
+        articles(idDmc, 2, "{\"designation\":\"Kit\",\"unite\":\"U\",\"quantiteMax\":2}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("articles[0].quantiteMin"));
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='GARANTIE_MANQUANTE')].champs[0]"))
                 .containsExactly("B04-CD-02");
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[?(@.regle=='GARANTIE_TAUX')].message"))

@@ -208,13 +208,18 @@ public class ContratVigueurService {
         } else {
             Integer periode = entier(v, "B02-AU-04", lot);
             c.setPeriodeMois(periode == null ? null : Math.min(periode, MOIS_MAX_A_COMMANDE));   // loi, art. 30 : trois ans au plus
-            c.setDureeMaxMois(periode == null ? MOIS_MAX_A_COMMANDE : Math.min(periode, MOIS_MAX_A_COMMANDE));
-            c.setReconductible(false);
-            c.setReconductionsMax(0);
+            // ⚠️ 2026-10-29 (« marche-a-commandes-champs », D5) — reconductible par décision de la PRMP tant que la durée totale ne dépasse
+            // pas trois ans (loi, art. 30-I, qui n'interdit pas la reconduction) : pas de nombre, pas de préavis, la durée maximale borne.
+            c.setDureeMaxMois(MOIS_MAX_A_COMMANDE);
+            c.setReconductible(true);
+            c.setReconductionsMax(null);
+            c.setPreavisMois(null);
             c.setMontantMinimum(nombre(v, "B05-TP-02", lot));
             c.setMontantMaximum(nombre(v, "B05-TP-03", lot));
             c.setMontantEstime(c.getMontantMaximum());
-            c.setRythme(valeur(v, "B09-DX-03", lot));
+            // ⚠️ 2026-10-29 (« marche-a-commandes-champs », D4) — en travaux, les modalités des commandes sont B09-DL-06.
+            String rythme = valeur(v, "B09-DX-03", lot);
+            c.setRythme(rythme != null ? rythme : valeur(v, "B09-DL-06", lot));
         }
     }
 
@@ -351,13 +356,15 @@ public class ContratVigueurService {
                 + ", décision " + reference + " du " + r.dateDecision().format(JOUR) + (x.isHorsPreavis() ? " (hors préavis)" : ""));
         // ⚠️ 2026-10-29 (« contrat-cadre-4a », §B2) — chaque titulaire non retiré apprend la décision, et la date de fin qui en résulte.
         String quoi = designation(c);
+        String forme = forme(c);
+        String formeTitre = Character.toUpperCase(forme.charAt(0)) + forme.substring(1);
         if (nouvelleFin != null) {
-            notifierTitulaires(c, cnm.prs.enums.TypeNotification.CONTRAT_RECONDUIT, "Contrat-cadre reconduit — " + quoi,
-                    "Le contrat-cadre " + quoi + " est reconduit jusqu'au " + nouvelleFin.format(JOUR) + " (décision " + reference + " du "
+            notifierTitulaires(c, cnm.prs.enums.TypeNotification.CONTRAT_RECONDUIT, formeTitre + " reconduit — " + quoi,
+                    "Le " + forme + " " + quoi + " est reconduit jusqu'au " + nouvelleFin.format(JOUR) + " (décision " + reference + " du "
                             + r.dateDecision().format(JOUR) + ").");
         } else {
-            notifierTitulaires(c, cnm.prs.enums.TypeNotification.CONTRAT_NON_RECONDUIT, "Contrat-cadre non reconduit — " + quoi,
-                    "Le contrat-cadre " + quoi + " n'est pas reconduit (décision " + reference + " du " + r.dateDecision().format(JOUR)
+            notifierTitulaires(c, cnm.prs.enums.TypeNotification.CONTRAT_NON_RECONDUIT, formeTitre + " non reconduit — " + quoi,
+                    "Le " + forme + " " + quoi + " n'est pas reconduit (décision " + reference + " du " + r.dateDecision().format(JOUR)
                             + ") : il prend fin le " + c.getDateFin().format(JOUR) + ".");
         }
         return dto(c);

@@ -91,7 +91,8 @@ class ContratVigueurServiceTest {
     }
 
     @Test
-    @DisplayName("Marché à commandes : minimum et maximum annuels, sans reconduction, trois ans au plus (loi art. 30) ; autre forme : rien")
+    @DisplayName("Marché à commandes : minimum et maximum annuels ; ⚠️ 29/10 (D5) reconductible dans la limite de trois ans au total (loi art. 30) ; "
+            + "autre forme : rien")
     void creationACommandeEtAutresFormes() {
         when(fiches.etatValide(7L)).thenReturn(Optional.of(etat("A_COMMANDE", Map.of("B02-AU-04", "48", "B05-TP-02", "10000000",
                 "B05-TP-03", "40000000"))));
@@ -101,7 +102,10 @@ class ContratVigueurServiceTest {
         verify(contrats).save(c.capture());
         assertThat(c.getValue().getPeriodeMois()).isEqualTo(36);
         assertThat(c.getValue().getDateFin()).isEqualTo(LocalDate.of(2028, 12, 31));
-        assertThat(c.getValue().isReconductible()).isFalse();
+        assertThat(c.getValue().isReconductible()).isTrue();
+        assertThat(c.getValue().getDureeMaxMois()).isEqualTo(36);
+        assertThat(c.getValue().getReconductionsMax()).isNull();
+        assertThat(ContratVigueurService.reconductionPossible(c.getValue())).isFalse();   // 36 mois d'emblée : plus de place
         assertThat(c.getValue().getMontantMinimum()).isEqualByComparingTo("10000000");
         assertThat(c.getValue().getMontantMaximum()).isEqualByComparingTo("40000000");
 
