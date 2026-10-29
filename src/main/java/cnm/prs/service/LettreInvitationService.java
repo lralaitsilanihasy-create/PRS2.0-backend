@@ -175,6 +175,9 @@ public class LettreInvitationService {
                             + " » ; la lettre d'invitation (envoi du " + saisie.date() + ") et la demande de propositions sont disponibles sur la plateforme.");
         }));
         avis.lancerLigne(ligne, origine, premiereImpression, n + " lettre(s) d'invitation imprimée(s) (envoi du " + saisie.date() + ")");
+        if (premiereImpression) {   // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4)
+            avis.notifierLancement(idDmc, etat, "les lettres d'invitation sont envoyées à la liste restreinte (envoi du " + saisie.date() + ")");
+        }
         journal.tracer(dispo.idDossierSoumis(), JOURNAL_LETTRES_IMPRIMEES, n + " lettre(s) d'invitation imprimée(s) pour la "
                 + "liste restreinte (fiche marché version " + validee.getNumeroVersion() + ", envoi du " + saisie.date() + ")");
         List<DocumentFicheDto> produits = new ArrayList<>(documents.listerAvis(List.of(validee)).stream()

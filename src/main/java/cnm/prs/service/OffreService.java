@@ -488,6 +488,11 @@ public class OffreService {
                     + limite.format(HORODATAGE) + ") : " + nombre + " offre(s) déposée(s). Le registre des dépôts est consultable.";
             ceremonies.notifierPrmp(c.getIdDmc(), TypeNotification.DEPOTS_CLOS, titre, corps);
             ceremonies.notifierResponsable(c.getIdDmc(), TypeNotification.DEPOTS_CLOS, titre, corps);
+            // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — les membres de la CAO aussi : le NOMBRE seulement, jamais les
+            // soumissionnaires avant l'ouverture (le registre leur reste fermé).
+            ceremonies.notifierCommission(c.getIdDmc(), TypeNotification.DEPOTS_CLOS, titre, "La date limite de remise des offres de la "
+                    + "procédure " + c.getIdDmc() + " est passée (" + limite.format(HORODATAGE) + ") : " + nombre + " offre(s) déposée(s). "
+                    + "Elles s'ouvriront en séance.", false);
             c.setDateDepotsClos(maintenant);
             ceremonieRepository.save(c);
             clotures++;

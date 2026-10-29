@@ -406,6 +406,19 @@ public class AttributionExecutionService {
                 + dateReception.format(JOUR) + (suspensif(t) ? " — la signature est suspendue jusqu'à la décision, au plus tard le "
                         + dateReception.plusDays(JOURS_SUSPENSION).format(JOUR) : " — réponse due au plus tard le "
                                 + dateReception.plusDays(JOURS_REEXAMEN).format(JOUR)));
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — la CAO apprend le recours (type et date ; pas le requérant).
+        ceremonies.notifierCommission(idDmc, TypeNotification.RECOURS, "Recours déposé", "Un recours (" + libelleRecours(t) + ") est déposé "
+                + "contre l'attribution du lot " + lot + " de la procédure " + idDmc + ", reçu le " + dateReception.format(JOUR)
+                + (suspensif(t) ? " : la signature du marché est suspendue jusqu'à la décision." : "."), false);
+    }
+
+    private static String libelleRecours(String type) {
+        return switch (type) {
+            case "REEXAMEN" -> "demande de réexamen";
+            case "REVISION_ARMP" -> "révision devant l'ARMP";
+            case "REFERE" -> "référé";
+            default -> type.toLowerCase(Locale.FRENCH);
+        };
     }
 
     /**
@@ -441,6 +454,9 @@ public class AttributionExecutionService {
         enregistrerFichier(a, AttributionPiece.DECISION_RECOURS, r.getId(), f);
         evaluation.tracerAttribution(idDmc, "DECISION_RECOURS", "Lot " + r.getLot() + " : recours " + r.getType() + " de " + r.getRequerant()
                 + " — décision du " + date.format(JOUR) + " : " + i.toLowerCase(Locale.FRENCH) + " (" + r.getMotifDecision() + ")");
+        ceremonies.notifierCommission(idDmc, TypeNotification.RECOURS, "Recours tranché", "Le recours (" + libelleRecours(r.getType())
+                + ") contre l'attribution du lot " + r.getLot() + " de la procédure " + idDmc + " est tranché le " + date.format(JOUR) + " : "
+                + switch (i) { case "REJETE" -> "rejeté"; case "ACCUEILLI" -> "accueilli"; default -> "autre issue"; } + ".", false);
     }
 
     /**
@@ -931,6 +947,9 @@ public class AttributionExecutionService {
         evaluation.tracerAttribution(idDmc, "NOTIFICATION", "Lot " + lot + " : marché notifié le " + date.format(JOUR)
                 + (reception == null ? "" : ", reçu le " + reception.format(JOUR) + " (réception déclarée)") + " ; avis d'attribution à publier "
                 + "au plus tard le " + echeanceAvis(a).format(JOUR));
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — l'attribution définitive : le marché notifié, à la CAO.
+        ceremonies.notifierCommission(idDmc, TypeNotification.MARCHE_NOTIFIE, "Attribution définitive", "Le marché du lot " + lot
+                + " de la procédure " + idDmc + " est notifié à son titulaire le " + date.format(JOUR) + " : l'attribution est définitive.", false);
         // ⚠️ 2026-10-16 (tranche MT-b2 ; décret n° 2019-1064, art. 15) — le contrat-cadre est notifié à chacun de ses titulaires.
         List<cnm.prs.entity.AttributionTitulaire> tit = actifs(titulairesDe(a));
         if (!tit.isEmpty()) {

@@ -25,6 +25,7 @@ import cnm.prs.entity.PvExamen;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutFicheMarche;
+import cnm.prs.enums.TypeNotification;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
 import cnm.prs.exception.ErrorResponse;
@@ -111,6 +112,8 @@ public class AvisSpecifiqueService {
     private final DaoCompletService daoComplet;
     /** ⚠️ 2026-10-28 (« dao-complet-en-file », Q2) — le DAO complet absent passe en tête de file, l'impression attend. */
     private final org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> daoCompletFile;
+    /** ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — la CAO prévenue du lancement de la procédure. */
+    private final org.springframework.beans.factory.ObjectProvider<ParametresInternesService> internes;
 
     /** ⚠️ V118 (§B2, H1) — la publication de l'AGPM du plan : numéro et date du journal de l'avis général. */
     private final PublicationAgpmService publicationAgpm;
@@ -123,7 +126,9 @@ public class AvisSpecifiqueService {
             cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, CeremonieService ceremonie, ValeursPpmService valeursPpm,
             DelaisPublicite delaisPublicite, DaoCompletService daoComplet, PublicationAgpmService publicationAgpm,
-            ParametreService parametres, org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> daoCompletFile) {
+            ParametreService parametres, org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> daoCompletFile,
+            org.springframework.beans.factory.ObjectProvider<ParametresInternesService> internes) {
+        this.internes = internes;
         this.daoCompletFile = daoCompletFile;
         this.parametres = parametres;
         this.publicationAgpm = publicationAgpm;
@@ -225,6 +230,9 @@ public class AvisSpecifiqueService {
                 DocumentsFicheMarcheService.publicationJson(trace));
         lancerLigne(ligne, origine, premiereImpression, "avis spécifique imprimé (publication du "
                 + publication.get("date-publication") + ")");
+        if (premiereImpression) {
+            notifierLancement(idDmc, etat, "l'avis spécifique est imprimé pour une publication le " + publication.get("date-publication"));
+        }
         journal.tracer(dispo.idDossierSoumis(), JOURNAL_AVIS_IMPRIME, "Avis spécifique d'appel d'offres imprimé (fiche "
                 + "marché version " + validee.getNumeroVersion() + ", publication du " + publication.get("date-publication") + ")");
         List<DocumentFicheDto> produits = new ArrayList<>(documents.listerAvis(List.of(validee)).stream()
@@ -351,6 +359,29 @@ public class AvisSpecifiqueService {
      */
     boolean premiereImpression(Integer origine) {
         return origine == null || documentRepository.premierAvisDeLaFiliation(origine) == null;
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (demande front « notifications-espaces-externes », §B4) — à la première publication (avis ou lettres), les membres
+     * de la CAO apprennent que la procédure est lancée, et jusqu'à quand les offres se déposent ({@code PROCEDURE_LANCEE}).
+     * Sans CAO (remise papier), personne n'est notifié.
+     */
+    void notifierLancement(Long idDmc, FicheMarcheDto etat, String quoi) {
+        ParametresInternesService i = internes == null ? null : internes.getIfAvailable();
+        if (i == null) {
+            return;
+        }
+        LocalDateTime limite = null;
+        try {
+            limite = fiches.etatValide(idDmc).map(ProceduresEnLigneService::dateLimite).orElse(null);
+        } catch (RuntimeException e) {
+            // sans date lisible, la notification part sans elle
+        }
+        String objet = etat.getDesignationMarche() == null ? "procédure " + idDmc : etat.getDesignationMarche();
+        i.notifierCommission(idDmc, TypeNotification.PROCEDURE_LANCEE, "Procédure lancée",
+                "La procédure « " + objet + " » est lancée : " + quoi + "."
+                        + (limite == null ? "" : " Date limite de remise des offres : "
+                                + limite.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy 'à' HH:mm")) + "."), false);
     }
 
     /** @param quoi ce que dit le journal de la ligne : « avis spécifique imprimé (publication du …) », « lettres… ». */

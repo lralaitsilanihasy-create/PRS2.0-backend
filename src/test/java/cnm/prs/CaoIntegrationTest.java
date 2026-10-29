@@ -301,7 +301,9 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         // Aucune route interne.
         mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", jeton)).andExpect(status().isForbidden());
         mvc.perform(get("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", jeton)).andExpect(status().isForbidden());
-        mvc.perform(get("/api/notifications/mes").header("Authorization", jeton)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/notifications").header("Authorization", jeton)).andExpect(status().isForbidden());
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B1) — ses notifications à lui, oui.
+        mvc.perform(get("/api/notifications/mes").header("Authorization", jeton)).andExpect(status().isOk());
         // Mais sa cérémonie, oui (lot 2b, garde par identité).
         mvc.perform(get("/api/fiches-marche/" + idDmc + "/ceremonie").header("Authorization", jeton)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.detenteurs[0].im").value(k1)).andExpect(jsonPath("$.detenteurs[0].nom").value("RABE Paul"));

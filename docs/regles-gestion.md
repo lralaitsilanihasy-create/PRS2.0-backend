@@ -1093,6 +1093,21 @@ clés… — V66* et *La commission d'appel d'offres… — V67* ; décisions : 
   validation (le message nomme ce qui manque). Pas de rétroactivité : la règle joue à la prochaine validation, nouvelle fiche ou
   révision. Les paramètres internes et la cérémonie des clés ne lisent pas la règle et restent possibles sans le PDF. Mode
   électronique seulement (la CAO n'est saisie que dans ce mode).
+- ⚠️ **2026-10-29** (arbitrage du pilote ; demande front « notifications-espaces-externes ») — **un membre de la CAO est
+  notifié de toute information sur la procédure dont il est membre**, pas seulement des gestes qu'il doit poser :
+  - sa désignation et son retrait ;
+  - la cérémonie (à refaire, clés publiées) ;
+  - le lancement de la procédure et les réponses aux questions des candidats, qui ne nomment pas le candidat ;
+  - la clôture des dépôts, avec le nombre d'offres seulement ;
+  - la séance (à venir, ouverte, PV signé) ;
+  - les étapes de l'évaluation qui attendent ses décisions, et le rapport signé ;
+  - l'attribution provisoire, les recours (sans nommer le requérant) et l'attribution définitive ;
+  - l'infructuosité ou le sans-suite ;
+  - un report de la date limite par une révision.
+
+  Le **dépositaire** reçoit ce qui le concerne : la cérémonie, la séance (à venir, part de secours demandée, PV) et la fin de la
+  procédure (infructueuse, sans suite). Ces notifications sont informatives ; le courriel part aussi. Membres, dépositaires et
+  candidats **lisent leurs notifications dans l'application**, et non plus seulement par courriel.
 
 ⚠️ **2026-10-04, soumission en ligne (lot 3, V68) — le dépôt d'une offre.** Le candidat scelle son offre dans son navigateur ; le
 serveur ne voit jamais le contenu ni un prix. On dépose si la procédure est en ligne et ses dépôts ouverts (à l'**horloge du

@@ -336,6 +336,10 @@ class OffreIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(offreService.entretenir()).containsExactly(0, 0);
         assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("DEPOTS_CLOS");
         assertThat(notificationRepository.findPourControleur("CTRVER")).extracting(Notification::getTypeNotif).contains("DEPOTS_CLOS");
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — les membres de la CAO aussi : le nombre, jamais les soumissionnaires.
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "DEPOTS_CLOS".equals(n.getTypeNotif()) && "MEMBRE_CAO".equals(n.getDestinataireType()))
+                .hasSize(2).allMatch(n -> n.getCorps().contains("1 offre(s) déposée(s)") && !n.getCorps().contains("1111222333")
+                        && Integer.valueOf(idDmc.intValue()).equals(n.getIdObjet()));
     }
 
     // ------------------------------------------------------------------ le contenu chiffré (simulé)

@@ -7202,7 +7202,8 @@ secours).
 - **`MEMBRE_CAO` n'atteint aucune route interne** (garde `INTERNE` de `SecurityConfig`, comme `CANDIDAT`) : lui restent `/api/cao/**`,
   `/api/mon-compte/**`, les routes publiques, et **la cérémonie de ses procédures** (`/api/fiches-marche/{idDmc}/ceremonie/**`,
   lot 2b) par identité : il est membre de qualité `MEMBRE` de la CAO de l'`idDmc`. Ses notifications (`GET /api/notifications/mes`)
-  restent internes : il les reçoit **par courriel**.
+  restent internes : il les reçoit **par courriel**. ⚠️ **Corrigé le 2026-10-29** (« notifications-espaces-externes ») : il lit
+  désormais ses notifications par les routes « à soi » de `/api/notifications` (§ *Notifications*), en plus du courriel.
 - **`MaProcedure`** = `{ idDmc, reference, objet, autoriteContractante, president, dateLimite, etatCeremonie, etatPart }` ; la vue
   d'une procédure reprend `ProcedureEnLigneDto` (lot 1c), lue sur la **version courante** de la fiche, validée ou non, sans les
   critères de la liste publique (`datePublication` et `etat` nuls tant que rien ne les fonde).
@@ -11247,6 +11248,45 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > **`idInterim`** ; même objet cible, même type. La ligne du titulaire ne porte rien (il garde son historique). Rien
 > n'est rejoué pour les notifications antérieures à la désignation ; une copie n'est jamais recopiée (non transitif).
 > Un seul point d'émission, les trente-huit appelants n'ont rien à savoir.
+
+> ⚠️ **2026-10-29 — les espaces externes lisent leurs notifications** (demande front « notifications-espaces-externes », B1-B4,
+> H1-H3 ; arbitrage du pilote).
+> - **B1, H1 — les routes « à soi ».** Elles sont ouvertes aussi aux comptes `MEMBRE_CAO`, `DEPOSITAIRE` et `CANDIDAT` :
+>   - `GET /mes` et `GET /mes/non-lues/count` ;
+>   - `POST /{id}/lu`, `POST /{id}/non-lu` et `POST /lire-tout`, avec 403 sur la notification d'un autre ;
+>   - `GET /stream` (SSE).
+>
+>   La supervision (`GET /api/notifications`, `GET/PUT/DELETE /{id}`, `POST`) reste réservée à l'Administrateur : 403 pour ces
+>   comptes.
+> - **B2 — le destinataire.** Il est retrouvé par la clé de la session (`K…`, `D…`, `C…`) et le type du compte, la même clé que celle
+>   que pose l'émission. Le flux SSE est indexé par cette même clé.
+> - **B3 — le clic.** `typeObjet = PROCEDURE`, `idObjet = idDmc`.
+> - **B4 — la CAO est notifiée de toute information sur sa procédure** (`ParametresInternesService.notifierCommission` : tous les
+>   membres, et le dépositaire selon l'événement). Le courriel part aussi.
+>
+> | Événement | Type | Membres | Dépositaire |
+> |---|---|---|---|
+> | Désignation dans la CAO | `CLE_A_PUBLIER` (existant : « vous êtes désigné membre ») | ✔ | — |
+> | Retrait de la CAO | **`CAO_RETRAIT`** (nouveau) | le retiré | — |
+> | Cérémonie à refaire | `CLE_A_PUBLIER` (existant : « à refaire ») | ✔ | ✔ |
+> | Clés publiées | `CLES_PUBLIEES` | ✔ | ✔ (nouveau) |
+> | Procédure lancée (1re impression de l'avis ou des lettres) | **`PROCEDURE_LANCEE`** (nouveau) | ✔ | — |
+> | Réponse publiée aux questions | `QUESTION_REPONDUE` (le texte ne nomme pas le candidat) | ✔ (nouveau) | — |
+> | Dépôts clos | `DEPOTS_CLOS` (le **nombre** seulement) | ✔ (nouveau) | — |
+> | Séance à venir | `SEANCE_A_VENIR` | ✔ | ✔ (nouveau) |
+> | Séance ouverte | `PARTS_ATTENDUES` (existant) | ✔ | `SECOURS_DEMANDE` si besoin |
+> | PV d'ouverture, de carence ou de constat d'illisibilité signé (publié) | `PV_OUVERTURE` | ✔ | ✔ (nouveau) |
+> | Étape de l'évaluation qui attend les décisions | **`EVALUATION_ETAPE`** (nouveau) | ✔ | — |
+> | Rapport d'évaluation signé | `RAPPORT_EVALUATION` (existant) | ✔ | — |
+> | Attribution provisoire notifiée | `ATTRIBUTION` | ✔ (nouveau) | — |
+> | Recours déposé, puis tranché | **`RECOURS`** (nouveau ; le requérant n'est pas nommé) | ✔ | — |
+> | Attribution définitive (marché notifié) | `MARCHE_NOTIFIE` | ✔ (nouveau) | — |
+> | Procédure infructueuse | `PROCEDURE_INFRUCTUEUSE` | ✔ (nouveau) | ✔ (nouveau) |
+> | Procédure sans suite | `PROCEDURE_SANS_SUITE` | ✔ (nouveau) | ✔ (nouveau) |
+> | Date limite modifiée par une révision validée | **`PROCEDURE_DATES`** (nouveau) | ✔ | — |
+>
+> Sans objet, faute d'événement dans le code : le report d'une séance et l'annulation d'une procédure. Rien n'est rejoué pour les
+> événements passés (H2).
 
 > ⚠️ **2026-10-28 — nouveau type `DECISION_TRANSMISE_SIGMP`** (demande front « decision-sigmp-prmp ») : la décision du dossier
 > est transmise à SIGMP. Destinataires : la PRMP du dossier et ses UGPM. Objet `DOSSIER` (`idObjet = idDossier`). Le détail

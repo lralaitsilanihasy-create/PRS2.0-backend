@@ -34,7 +34,7 @@ class BloquantsR9aTest {
     private static AvisSpecifiqueService avis(DaoCompletService daoComplet, DaoCompletFileService file) {
         org.springframework.beans.factory.ObjectProvider<DaoCompletFileService> p = mock(org.springframework.beans.factory.ObjectProvider.class);
         when(p.getObject()).thenReturn(file);
-        return new AvisSpecifiqueService(null, null, null, null, null, null, null, null, null, null, null, null, null, daoComplet, null, null, p);
+        return new AvisSpecifiqueService(null, null, null, null, null, null, null, null, null, null, null, null, null, daoComplet, null, null, p, null);
     }
 
     private static FicheMarche version(int n) {
@@ -90,7 +90,7 @@ class BloquantsR9aTest {
         cnm.prs.repository.FicheMarcheRepository fiches = mock(cnm.prs.repository.FicheMarcheRepository.class);
         cnm.prs.repository.DocumentFicheMarcheRepository documents = mock(cnm.prs.repository.DocumentFicheMarcheRepository.class);
         DaoCompletService dao = mock(DaoCompletService.class);
-        AvisSpecifiqueService s = new AvisSpecifiqueService(null, fiches, null, null, null, null, null, null, null, documents, null, null, null, dao, null, null, null);
+        AvisSpecifiqueService s = new AvisSpecifiqueService(null, fiches, null, null, null, null, null, null, null, documents, null, null, null, dao, null, null, null, null);
         when(fiches.findByIdDmcOrderByNumeroVersionAsc(5L)).thenReturn(java.util.List.of());
         assertThat(s.etatDaoComplet(5L)).isNull();
         FicheMarche v = version(2);

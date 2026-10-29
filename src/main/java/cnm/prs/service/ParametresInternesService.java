@@ -507,6 +507,24 @@ public class ParametresInternesService {
         return s == null || s.isBlank() ? null : s.trim();
     }
 
+    /**
+     * ⚠️ 2026-10-29 (demande front « notifications-espaces-externes », §B4 ; arbitrage du pilote) — une information sur la
+     * procédure à <strong>tous les membres</strong> de sa CAO (qualité {@code MEMBRE}, comptes {@code K…}) et, si
+     * {@code avecDepositaire}, à son dépositaire. Objet {@code PROCEDURE} = le DMC ; le courriel part aussi, comme pour
+     * {@link #notifierMembre}. Informatif : aucun geste attendu.
+     */
+    public void notifierCommission(Long idDmc, TypeNotification type, String titre, String corps, boolean avecDepositaire) {
+        if (idDmc == null) {
+            return;
+        }
+        for (String k : membresCao(idDmc)) {
+            notifierMembre(idDmc, k, type, titre, corps);
+        }
+        if (avecDepositaire) {
+            notifierDepositaire(idDmc, type, titre, corps);
+        }
+    }
+
     /** ⚠️ V66 (lot 2, §B6) — une notification vers un membre (contrôleur), objet {@code PROCEDURE} = le DMC. */
     void notifierMembre(Long idDmc, String im, TypeNotification type, String titre, String corps) {
         // ⚠️ V67 (lot 2a, §B4) — un membre de CAO : notification de son type, et le courriel part aussi (une personne

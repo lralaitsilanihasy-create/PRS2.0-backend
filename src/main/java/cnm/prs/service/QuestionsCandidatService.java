@@ -271,6 +271,11 @@ public class QuestionsCandidatService {
             notifications.emettreCandidat(TypeNotification.QUESTION_REPONDUE, idCandidat, c == null ? null : c.getEmail(), q.getIdDmc().intValue(),
                     TypeObjet.PROCEDURE, titre, corps);
         }
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — les membres de la CAO aussi, le même texte : il ne nomme pas le
+        // candidat qui a posé la question.
+        ceremonies.notifierCommission(q.getIdDmc(), TypeNotification.QUESTION_REPONDUE, titre, "La PRMP a répondu à une question posée "
+                + "sur la procédure " + q.getIdDmc() + " (question n° " + q.getId() + ") ; la réponse est publiée sur la page de la "
+                + "procédure.", false);
     }
 
     private QuestionCandidatDto.Questions liste(Fenetre f, List<QuestionCandidat> liste, boolean interne, String idCandidat) {

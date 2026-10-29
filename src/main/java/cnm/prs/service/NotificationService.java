@@ -348,9 +348,8 @@ public class NotificationService {
             // ⚠️ 2026-10-18 (« avis-a-imprimer ») — l'UGPM lit ce qui lui est adressé, sous son identifiant (son « ref » est la tutelle).
             return idUgpmCourant().map(id -> repository.findPourRefEtType(id, TypeActeur.UGPM.name())).orElse(List.of());
         }
-        String typeExterne = CurrentUser.acteurType().filter(t -> TypeActeur.MEMBRE_CAO.name().equals(t) || TypeActeur.DEPOSITAIRE.name().equals(t))
-                .orElse(null);
-        if (typeExterne != null) {   // ⚠️ V67 (lot 2a) ; ⚠️ 2026-10-05 : le dépositaire aussi
+        String typeExterne = typeExterne();
+        if (typeExterne != null) {   // ⚠️ V67 (lot 2a) ; ⚠️ 2026-10-05 : le dépositaire aussi ; ⚠️ 2026-10-29 : le candidat aussi
             return repository.findPourRefEtType(ref, typeExterne);
         }
         return repository.findPourControleur(ref);
@@ -371,12 +370,20 @@ public class NotificationService {
             return TypeActeur.UGPM.name().equals(n.getDestinataireType())
                     && idUgpmCourant().map(id -> id.equals(n.getDestinataireRef())).orElse(false);
         }
-        String typeExterne = CurrentUser.acteurType().filter(t -> TypeActeur.MEMBRE_CAO.name().equals(t) || TypeActeur.DEPOSITAIRE.name().equals(t))
-                .orElse(null);
-        if (typeExterne != null) {   // ⚠️ V67 (lot 2a) ; ⚠️ 2026-10-05 : le dépositaire aussi
+        String typeExterne = typeExterne();
+        if (typeExterne != null) {   // ⚠️ V67 (lot 2a) ; ⚠️ 2026-10-05 : le dépositaire aussi ; ⚠️ 2026-10-29 : le candidat aussi
             return ref.equals(n.getDestinataireRef()) && typeExterne.equals(n.getDestinataireType());
         }
         return ref.equals(n.getDestinataireRef())
                 && TypeActeur.CONTROLEUR.name().equals(n.getDestinataireType());
+    }
+
+    /**
+     * Le type d'un compte d'espace externe ({@code MEMBRE_CAO}, {@code DEPOSITAIRE}, ⚠️ 2026-10-29 « notifications-espaces-externes »,
+     * H1 : {@code CANDIDAT}), dont les notifications se lisent par la clé et le type ; {@code null} pour un compte interne.
+     */
+    private static String typeExterne() {
+        return CurrentUser.acteurType().filter(t -> TypeActeur.MEMBRE_CAO.name().equals(t) || TypeActeur.DEPOSITAIRE.name().equals(t)
+                || TypeActeur.CANDIDAT.name().equals(t)).orElse(null);
     }
 }

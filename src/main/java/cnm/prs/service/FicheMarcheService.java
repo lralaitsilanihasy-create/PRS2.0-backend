@@ -37,6 +37,7 @@ import cnm.prs.enums.SourceChampFiche;
 import cnm.prs.enums.StatutFicheMarche;
 import cnm.prs.enums.TypeChampFiche;
 import cnm.prs.enums.TypeMarcheDao;
+import cnm.prs.enums.TypeNotification;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
@@ -1223,11 +1224,22 @@ public class FicheMarcheService {
         if (besoinApplicable(ctx)) {
             produits.addAll(documents.produireEstimatifs(etat, besoin.articles(fiche.getIdFiche()), maintenant));
         }
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — la date limite de la version validée précédente, pour dire à la
+        // CAO qu'elle change.
+        LocalDateTime limiteAvant = etatValide(idDmc).map(ProceduresEnLigneService::dateLimite).orElse(null);
         fiche.setStatut(StatutFicheMarche.VALIDEE.name());
         fiche.setDateValidation(maintenant);
         fiche.setValidePar(CurrentUser.ref().orElse(null));
         fiche = ficheRepository.save(fiche);
         documents.enregistrer(fiche.getIdFiche(), produits, maintenant);
+        LocalDateTime limiteApres = ProceduresEnLigneService.dateLimite(etatVersion(ctx, fiche));
+        if (limiteAvant != null && limiteApres != null && !limiteAvant.equals(limiteApres)) {
+            java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy 'à' HH:mm");
+            internes.notifierCommission(idDmc, TypeNotification.PROCEDURE_DATES, "Dates de la procédure modifiées", "La version "
+                    + fiche.getNumeroVersion() + " de la fiche de la procédure " + idDmc + " est validée : la date limite de remise des offres "
+                    + (limiteApres.isAfter(limiteAvant) ? "est reportée" : "est avancée") + " du " + limiteAvant.format(f) + " au "
+                    + limiteApres.format(f) + ".", false);
+        }
         // ⚠️ 2026-10-06 — le DAO complet, assemblé par Word ; sans Word (ou en échec), les documents séparés restent servis.
         // ⚠️ 2026-10-28 (« dao-complet-en-file », Q1) — il n'est plus attendu ici : la version entre en file (dans cette transaction,
         // une validation annulée n'y entre pas) et l'ouvrier unique l'assemble après la validation de la transaction.

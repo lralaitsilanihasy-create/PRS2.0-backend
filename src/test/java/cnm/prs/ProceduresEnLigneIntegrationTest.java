@@ -442,8 +442,12 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.reponseNom").value("precision.pdf")).andExpect(jsonPath("$.publieeLe").isNotEmpty());
         mvc.perform(multipart(interne + "/" + id + "/reponse").param("texte", "Encore.").header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_REPONDUE"));
-        assertThat(notificationRepository.findAll()).filteredOn(n -> "QUESTION_REPONDUE".equals(n.getTypeNotif()))
-                .extracting(Notification::getDestinataireRef).containsExactly("C900000011");
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "QUESTION_REPONDUE".equals(n.getTypeNotif())
+                && "CANDIDAT".equals(n.getDestinataireType())).extracting(Notification::getDestinataireRef).containsExactly("C900000011");
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — les deux membres de la CAO aussi, sans l'identité du candidat.
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "QUESTION_REPONDUE".equals(n.getTypeNotif())
+                && "MEMBRE_CAO".equals(n.getDestinataireType())).hasSize(2)
+                .allMatch(n -> "PROCEDURE".equals(n.getTypeObjet()) && !n.getCorps().contains("C900000011"));
 
         mvc.perform(get(url)).andExpect(status().isOk()).andExpect(jsonPath("$.questions.length()").value(1))
                 .andExpect(jsonPath("$.questions[0].etat").value("REPONDUE")).andExpect(jsonPath("$.questions[0].auteur").isEmpty())

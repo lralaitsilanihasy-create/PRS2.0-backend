@@ -463,6 +463,10 @@ public class AttributionService {
                                     + "des explications par écrit. Le marché ne sera pas signé avant le " + delai.signableLe().format(JOUR) + ".");
             n++;
         }
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — l'attribution provisoire, à la CAO qui a évalué.
+        ceremonies.notifierCommission(idDmc, TypeNotification.ATTRIBUTION, "Attribution provisoire", "L'attribution provisoire"
+                + entete.surLot() + " de la procédure « " + entete.objet() + " » est notifiée aux candidats : offre n° " + attributaire.getNumero()
+                + " retenue. Le marché ne sera pas signé avant le " + delai.signableLe().format(JOUR) + " (délai d'attente des recours).", false);
         evaluation.tracerAttribution(idDmc, "INFORMATION", "Lot " + lot + " : " + n + " candidat(s) informé(s), lettres signées électroniquement "
                 + "par " + a.getSignataire() + " le " + maintenant.format(HORODATAGE) + " ; affichage au siège le " + affichage.format(JOUR)
                 + " ; signature possible à partir du " + delai.signableLe().format(JOUR));
@@ -637,6 +641,11 @@ public class AttributionService {
                             + entete.surLot() + " est déclarée infructueuse par décision n° " + reference + " du " + r.decision().date().format(JOUR)
                             + " : " + motif + (suite == null ? "" : " Suite annoncée : " + suite.toLowerCase(Locale.FRENCH) + ".") );
         }
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — la CAO et le dépositaire : le lot (ou la procédure) s'arrête.
+        ceremonies.notifierCommission(idDmc, TypeNotification.PROCEDURE_INFRUCTUEUSE, "Procédure déclarée infructueuse", "La procédure « "
+                + entete.objet() + " »" + entete.surLot() + " est déclarée infructueuse par décision n° " + reference + " du "
+                + r.decision().date().format(JOUR) + " : " + motif + (suite == null ? "" : " Suite annoncée : "
+                + suite.toLowerCase(Locale.FRENCH) + "."), true);
         evaluation.tracerAttribution(idDmc, "INFRUCTUEUX", "Lot " + lot + " déclaré infructueux (décision n° " + reference + " du "
                 + r.decision().date().format(JOUR) + ", " + (defavorable ? "après l'avis défavorable de la Commission" : "proposé par le rapport")
                 + ") : " + motif + " ; " + avertis.size() + " candidat(s) notifié(s)");

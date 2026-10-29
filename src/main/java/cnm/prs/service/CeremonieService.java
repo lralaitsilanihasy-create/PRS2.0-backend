@@ -251,6 +251,8 @@ public class CeremonieService {
         for (String im : i.membres()) {
             internes.notifierMembre(idDmc, im, TypeNotification.CLES_PUBLIEES, titre, corps);
         }
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — le dépositaire aussi, sa clé de secours comprise dans la liste.
+        internes.notifierDepositaire(idDmc, TypeNotification.CLES_PUBLIEES, titre, corps);
         notifierPrmp(idDmc, TypeNotification.CLES_PUBLIEES, titre, "La cérémonie des clés de la procédure " + idDmc
                 + " est close : l'avis spécifique peut être publié.");
         CeremonieDto dto = dto(idDmc);
@@ -628,6 +630,15 @@ public class CeremonieService {
     }
 
     // ------------------------------------------------------------------ notifications
+
+    /**
+     * ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — une information sur la procédure à tous les membres de sa CAO (et à
+     * son dépositaire si demandé) : le point d'entrée des services qui ont la cérémonie sous la main (attribution, sans suite,
+     * questions des candidats). Voir {@link ParametresInternesService#notifierCommission}.
+     */
+    void notifierCommission(Long idDmc, TypeNotification type, String titre, String corps, boolean avecDepositaire) {
+        internes.notifierCommission(idDmc, type, titre, corps, avecDepositaire);
+    }
 
     void notifierResponsable(Long idDmc, TypeNotification type, String titre, String corps) {
         internes.responsable(idDmc).ifPresent(r -> internes.notifierMembre(idDmc, r.getImResponsable(), type, titre, corps));

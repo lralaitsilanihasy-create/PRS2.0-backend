@@ -297,7 +297,24 @@ public class EvaluationService {
         String observation = a == null ? null : nettoyer(a.observation());
         etapes.save(new EvaluationEtape(null, idDmc, lot, et, maintenant(), k, observation, null, null, null));
         tracer(idDmc, "ARRET", "Lot " + lot + ", étape " + et + " arrêtée" + (observation == null ? "" : " : " + observation));
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — l'étape suivante attend les décisions des membres.
+        if (rang + 1 < EvaluationEtape.ORDRE.size()) {
+            String suivante = libelleEtape(EvaluationEtape.ORDRE.get(rang + 1));
+            internes.notifierCommission(idDmc, TypeNotification.EVALUATION_ETAPE, "Évaluation : " + suivante,
+                    "Évaluation des offres de la procédure " + idDmc + ", lot " + lot + " : l'étape « " + libelleEtape(et) + " » est arrêtée ; "
+                            + "l'étape « " + suivante + " » attend vos décisions.", false);
+        }
         return dto(idDmc, e);
+    }
+
+    /** Le nom d'une étape de l'évaluation, pour les notifications. */
+    private static String libelleEtape(String etape) {
+        return switch (etape) {
+            case EvaluationEtape.CONFORMITE -> "examen préliminaire de conformité";
+            case EvaluationEtape.EVALUATION -> "évaluation et comparaison des offres";
+            case EvaluationEtape.ANORMALES -> "offres anormalement basses ou élevées";
+            default -> "post-qualification";
+        };
     }
 
     /** Rouvre une étape arrêtée et les suivantes du lot : président, motif obligatoire ; 409 {@code RAPPORT_SIGNE}, {@code ETAPE_NON_ARRETEE}. */

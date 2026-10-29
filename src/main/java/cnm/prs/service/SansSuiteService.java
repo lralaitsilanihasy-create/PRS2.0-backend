@@ -258,6 +258,10 @@ public class SansSuiteService {
                             + "suite par décision n° " + reference + " du " + r.decision().date().format(JOUR) + ", pour un motif d'intérêt "
                             + "général : " + s.getMotifs() + " Aucune indemnité n'est due (art. 55).");
         }
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — la CAO et le dépositaire : la procédure s'arrête.
+        ceremonies.notifierCommission(idDmc, TypeNotification.PROCEDURE_SANS_SUITE, "Procédure déclarée sans suite", "La procédure « "
+                + objet + " » est déclarée sans suite par décision n° " + reference + " du " + r.decision().date().format(JOUR) + " : "
+                + s.getMotifs(), true);
         evaluation.tracerAttribution(idDmc, "SANS_SUITE", "Procédure déclarée sans suite (décision n° " + reference + " du "
                 + r.decision().date().format(JOUR) + ") ; " + avertis.size() + " candidat(s) notifié(s)");
         return dto(idDmc);

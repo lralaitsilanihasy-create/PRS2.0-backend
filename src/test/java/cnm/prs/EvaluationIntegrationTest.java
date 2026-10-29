@@ -265,6 +265,10 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.lots[0].etape").value("EVALUATION"))
                 .andExpect(jsonPath("$.lots[0].etapesArretees[0].etape").value("CONFORMITE"))
                 .andExpect(jsonPath("$.lots[0].etapesArretees[0].observation").value("Deux offres écartées"));
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — l'étape suivante attend les décisions : chaque membre le sait.
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "EVALUATION_ETAPE".equals(n.getTypeNotif()))
+                .hasSize(2).allMatch(n -> "MEMBRE_CAO".equals(n.getDestinataireType()) && n.getCorps().contains("lot 1")
+                        && n.getCorps().contains("« évaluation et comparaison des offres » attend vos décisions"));
         conformite(jetonM1, a, "{\"decision\":\"ECARTEE\",\"qualification\":\"IRRECEVABLE\",\"motif\":\"x\",\"clause\":\"y\"}")
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_ARRETEE"));
         mvc.perform(post(base + "/lots/1/etapes/CONFORMITE/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))

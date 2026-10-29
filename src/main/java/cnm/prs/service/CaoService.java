@@ -289,6 +289,14 @@ public class CaoService {
                     "Vous êtes désigné membre de la commission d'appel d'offres de la procédure « " + procedure[0] + " » (" + procedure[1]
                             + "), détenteur d'une part de clé. Générez votre clé dans votre navigateur et publiez-la avant la cérémonie.");
         }
+        // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — le membre retiré de la CAO l'apprend (son compte reste).
+        for (String retire : avantRefs) {
+            if (!apresRefs.contains(retire)) {
+                internes.notifierMembre(idDmc, retire, TypeNotification.CAO_RETRAIT, "Commission d'appel d'offres : vous n'êtes plus membre",
+                        "Vous n'êtes plus membre de la commission d'appel d'offres de la procédure « " + procedure[0] + " » (" + procedure[1]
+                                + "). Vous n'avez plus de part de clé à y apporter.");
+            }
+        }
         return dto(idDmc);
     }
 

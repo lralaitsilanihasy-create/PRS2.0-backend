@@ -269,5 +269,19 @@ public enum TypeNotification {
      * compteur de la CNM s'arrête) : vers la PRMP du dossier et toutes ses UGPM, objet = le dossier, tous types de dossiers. Le
      * texte dit le sens et, pour un DAO né d'une fiche, la suite de l'avis spécifique.
      */
-    DECISION_TRANSMISE_SIGMP
+    DECISION_TRANSMISE_SIGMP,
+    /**
+     * ⚠️ 2026-10-29 (demande front « notifications-espaces-externes », §B4 ; arbitrage du pilote : la CAO est notifiée de toute
+     * information sur sa procédure) — vers les membres de la CAO (et, selon le cas, le dépositaire), objet {@code PROCEDURE} =
+     * {@code idDmc}. Informatifs. Le membre retiré de la CAO.
+     */
+    CAO_RETRAIT,
+    /** ⚠️ 2026-10-29 (§B4) — première publication (avis spécifique ou lettres d'invitation) : la procédure est lancée. */
+    PROCEDURE_LANCEE,
+    /** ⚠️ 2026-10-29 (§B4) — une étape de l'évaluation est arrêtée : la suivante attend les décisions des membres. */
+    EVALUATION_ETAPE,
+    /** ⚠️ 2026-10-29 (§B4) — un recours contre l'attribution est déposé, ou tranché. */
+    RECOURS,
+    /** ⚠️ 2026-10-29 (§B4) — une révision validée change la date limite de remise des offres. */
+    PROCEDURE_DATES
 }

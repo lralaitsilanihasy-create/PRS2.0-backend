@@ -82,6 +82,17 @@ public class SecurityConfig {
                                     .anyMatch(g -> "ROLE_RESPONSABLE_PROCEDURE".equals(g.getAuthority())));
 
     /**
+     * ⚠️ 2026-10-29 (« notifications-espaces-externes », §B1, H1) — {@link #INTERNE_OU_RESPONSABLE}, ou un compte d'espace externe
+     * ({@code MEMBRE_CAO}, {@code DEPOSITAIRE}, {@code CANDIDAT}) : pour les seules routes « à soi » des notifications.
+     */
+    static final org.springframework.security.authorization.AuthorizationManager<
+            org.springframework.security.web.access.intercept.RequestAuthorizationContext> INTERNE_OU_EXTERNE = (authentification, contexte) ->
+                    new org.springframework.security.authorization.AuthorizationDecision(INTERNE_OU_RESPONSABLE.authorize(authentification, contexte)
+                            .isGranted() || authentification.get() != null && authentification.get().isAuthenticated()
+                                    && authentification.get().getAuthorities().stream().anyMatch(g -> "ROLE_MEMBRE_CAO".equals(g.getAuthority())
+                                            || "ROLE_DEPOSITAIRE".equals(g.getAuthority()) || "ROLE_CANDIDAT".equals(g.getAuthority())));
+
+    /**
      * ⚠️ 2026-10-28 (« profil-responsable-procedure », §B2) — les lectures de fiche dont le responsable a besoin (« Mes procédures
      * en ligne », « Ouvrir la fiche ») : chacune passe par la garde de lecture de la fiche, bornée pour ce profil à ses procédures.
      */
@@ -219,6 +230,13 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.GET, FICHE_LUE_PAR_LE_RESPONSABLE).access(INTERNE_OU_RESPONSABLE);
                     auth.requestMatchers("/api/fiches-marche/*/parametres-internes", "/api/fiches-marche/*/parametres-internes/**")
                             .access(INTERNE_OU_RESPONSABLE);
+                    // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B1, H1) — les routes « à soi » des notifications, aussi aux
+                    // comptes des espaces externes (membre de CAO, dépositaire, candidat) : elles sont bornées au destinataire courant
+                    // dans le service. La supervision (liste globale, CRUD) reste à l'Administrateur (@PreAuthorize) et leur est fermée.
+                    auth.requestMatchers(HttpMethod.GET, "/api/notifications/mes", "/api/notifications/mes/non-lues/count",
+                            "/api/notifications/stream").access(INTERNE_OU_EXTERNE);
+                    auth.requestMatchers(HttpMethod.POST, "/api/notifications/*/lu", "/api/notifications/*/non-lu",
+                            "/api/notifications/lire-tout").access(INTERNE_OU_EXTERNE);
                     auth.requestMatchers("/api/notifications/**").access(INTERNE_OU_RESPONSABLE);
                     auth.requestMatchers(HttpMethod.GET, REFERENTIELS).access(INTERNE_OU_RESPONSABLE);
                     auth.requestMatchers(HttpMethod.GET, REFERENTIELS_ID).access(INTERNE_OU_RESPONSABLE);

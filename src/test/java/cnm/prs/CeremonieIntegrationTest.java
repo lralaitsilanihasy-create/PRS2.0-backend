@@ -637,6 +637,53 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
         return nom.toLowerCase(java.util.Locale.ROOT).replace(' ', '.') + "@secours.mg";
     }
 
+    @Test
+    @org.junit.jupiter.api.DisplayName("⚠️ 2026-10-29 « notifications-espaces-externes » — membre de CAO, dépositaire et candidat lisent LEURS "
+            + "notifications (mes, compteur, lu, non-lu, lire-tout ; objet PROCEDURE = idDmc) ; celle d'un autre : 403 ; la supervision "
+            + "leur reste fermée ; le membre retiré de la CAO reçoit CAO_RETRAIT")
+    void notificationsDesEspacesExternes() throws Exception {
+        // Membre de CAO : CLE_A_PUBLIER de sa désignation, lisible.
+        String mes = mvc.perform(get("/api/notifications/mes").header("Authorization", tokenM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(mes, "$[*].typeNotif")).contains("CLE_A_PUBLIER");
+        assertThat(JsonPath.<List<String>>read(mes, "$[*].typeObjet")).containsOnly("PROCEDURE");
+        assertThat(JsonPath.<List<Integer>>read(mes, "$[*].idObjet")).containsOnly(idDmc.intValue());
+        mvc.perform(get("/api/notifications/mes/non-lues/count").header("Authorization", tokenM1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.nonLues").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
+        int miennes = JsonPath.read(mes, "$[0].idNotification");
+        mvc.perform(post("/api/notifications/" + miennes + "/lu").header("Authorization", tokenM1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lu").value(true));
+        mvc.perform(post("/api/notifications/" + miennes + "/non-lu").header("Authorization", tokenM1)).andExpect(status().isOk());
+        mvc.perform(post("/api/notifications/lire-tout").header("Authorization", tokenM1)).andExpect(status().isOk());
+        Integer deM2 = notificationRepository.findPourRefEtType(k2, "MEMBRE_CAO").get(0).getIdNotification();
+        mvc.perform(post("/api/notifications/" + deM2 + "/lu").header("Authorization", tokenM1)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/notifications").header("Authorization", tokenM1)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/notifications/" + miennes).header("Authorization", tokenM1)).andExpect(status().isForbidden());
+
+        // Dépositaire : CLE_A_PUBLIER de sa désignation, lisible.
+        internes(tokenVer, corpsInternes(2, "Rakoto Jean")).andExpect(status().isOk());
+        String tokenD = jetonDepositaire();
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenD)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].typeNotif", org.hamcrest.Matchers.hasItem("CLE_A_PUBLIER")));
+        mvc.perform(get("/api/notifications").header("Authorization", tokenD)).andExpect(status().isForbidden());
+
+        // Candidat (H1) : les siennes seulement.
+        notificationService.emettreCandidat(cnm.prs.enums.TypeNotification.OFFRES_ILLISIBLES, "C900000077", "c77@entreprise.mg",
+                idDmc.intValue(), cnm.prs.enums.TypeObjet.PROCEDURE, "Offres illisibles", "corps");
+        String tokenC = bearer("c77@entreprise.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000077", null);
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenC)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].typeNotif").value(org.hamcrest.Matchers.contains("OFFRES_ILLISIBLES")));
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenM1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].typeNotif", org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("OFFRES_ILLISIBLES"))));
+
+        // §B4 — m2 retiré de la CAO (cérémonie non close) : CAO_RETRAIT, sur la procédure.
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(CaoIntegrationTest.corpsCao("m1@cao.mg", "m3@cao.mg"))).andExpect(status().isOk());
+        assertThat(notificationRepository.findPourRefEtType(k2, "MEMBRE_CAO")).filteredOn(n -> "CAO_RETRAIT".equals(n.getTypeNotif()))
+                .hasSize(1).allMatch(n -> Integer.valueOf(idDmc.intValue()).equals(n.getIdObjet()));
+        assertThat(notificationRepository.findPourRefEtType(k1, "MEMBRE_CAO")).extracting(Notification::getTypeNotif).doesNotContain("CAO_RETRAIT");
+    }
+
     /** ⚠️ V71 — un jeton pour le dépositaire désigné (son compte lu dans les paramètres internes). */
     private String jetonDepositaire() throws Exception {
         String internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))

@@ -1380,6 +1380,7 @@ public class SeanceService {
         for (String k : internes.membresCao(idDmc)) {
             internes.notifierMembre(idDmc, k, type, titre, corps);
         }
+        internes.notifierDepositaire(idDmc, type, titre, corps);   // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4)
         if (publie) {
             for (Offre o : deposeesOuOuvertes(idDmc)) {
                 candidats.findById(o.getIdCandidat()).ifPresent(cc -> notifications.emettreCandidat(type, o.getIdCandidat(), cc.getEmail(),
@@ -1413,6 +1414,10 @@ public class SeanceService {
             for (String k : internes.membresCao(idDmc)) {
                 internes.notifierMembre(idDmc, k, TypeNotification.SEANCE_A_VENIR, "Séance d'ouverture des plis", corps);
             }
+            // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4) — le dépositaire aussi : sa part de secours peut être demandée.
+            internes.notifierDepositaire(idDmc, TypeNotification.SEANCE_A_VENIR, "Séance d'ouverture des plis", "La séance d'ouverture "
+                    + "des plis de la procédure " + idDmc + " a lieu le " + heure.format(HORODATAGE) + " (heure du serveur). Votre part "
+                    + "de secours ne sera demandée que si le quorum des membres n'est pas atteint.");
             ceremonieService.notifierResponsable(idDmc, TypeNotification.SEANCE_A_VENIR, "Séance d'ouverture des plis", corps);
             if (uneHeure) {
                 c.setRappelHeure(maintenant);
