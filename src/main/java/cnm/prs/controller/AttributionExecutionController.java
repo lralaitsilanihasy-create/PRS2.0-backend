@@ -115,6 +115,23 @@ public class AttributionExecutionController {
     }
 
     /**
+     * ⚠️ 2026-10-29 (« chaine-attribution », §B1) — le visa du contrôleur financier : multipart {@code dateVisa}, {@code reference}
+     * facultative + {@code fichier} (le marché visé) ; ou {@code dispense=true} + {@code motif} (exception CHED), sans fichier. 400
+     * {@code DATE_INVALIDE}, {@code FICHIER_OBLIGATOIRE}, {@code MOTIF_OBLIGATOIRE}, {@code CHAMP_TROP_LONG} ; 409 {@code NON_SIGNE},
+     * {@code DEJA_VISE}, {@code DEJA_APPROUVE}.
+     */
+    @PostMapping(value = "/lots/{lot}/visa", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public AttributionDto viser(@PathVariable Long idDmc, @PathVariable Integer lot,
+            @RequestParam(value = "dateVisa", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(value = "reference", required = false) String reference,
+            @RequestParam(value = "dispense", required = false) Boolean dispense,
+            @RequestParam(value = "motif", required = false) String motif,
+            @RequestPart(value = "fichier", required = false) MultipartFile fichier) {
+        execution.viser(idDmc, lot, date, reference, Boolean.TRUE.equals(dispense), motif, fichier);
+        return attribution.lire(idDmc);
+    }
+
+    /**
      * ⚠️ R9a (§B4 n° 14) — multipart {@code autorite}, {@code dateApprobation} + {@code fichier} (la décision d'approbation) ; 400
      * {@code CHAMP_OBLIGATOIRE}, {@code DATE_INVALIDE}, {@code FICHIER_OBLIGATOIRE} ; 409 {@code NON_SIGNE}, {@code DEJA_APPROUVE}.
      */

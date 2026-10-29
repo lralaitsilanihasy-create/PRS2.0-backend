@@ -200,6 +200,37 @@ public class Attribution {
     @Column(name = "PROJET_DOCX")
     private byte[] projetDocx;
 
+    /**
+     * ⚠️ V149 (2026-10-29, demande front « chaine-attribution », §B1 ; circulaire 2024, § XV) — le visa du contrôleur financier, entre la
+     * signature et l'approbation : sa date et sa référence, ou la dispense (exception de contrôle préalable, CHED) et son motif.
+     */
+    @Column(name = "VISA_DATE")
+    private java.time.LocalDate visaDate;
+
+    @Column(name = "VISA_REFERENCE", length = 100)
+    private String visaReference;
+
+    @Column(name = "VISA_DISPENSE", nullable = false)
+    private boolean visaDispense;
+
+    @Column(name = "VISA_MOTIF")
+    private String visaMotif;
+
+    @Column(name = "VISE_LE")
+    private java.time.LocalDateTime viseLe;
+
+    @Column(name = "VISE_PAR", length = 100)
+    private String visePar;
+
+    /** ⚠️ V149 (§B2) — la décision d'attribution provisoire, produite au geste « Attribuer » (PDF et Word). */
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "DECISION_PDF")
+    private byte[] decisionPdf;
+
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "DECISION_DOCX")
+    private byte[] decisionDocx;
+
     // ⚠️ V91 (tranche 2d-1, §B6) — la déclaration d'infructuosité du lot, par décision de la PRMP ; la suite déclarée.
     @Column(name = "INFRUCTUEUX_LE")
     private LocalDateTime infructueuxLe;

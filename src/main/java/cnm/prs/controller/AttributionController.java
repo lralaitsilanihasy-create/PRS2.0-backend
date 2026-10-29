@@ -87,6 +87,17 @@ public class AttributionController {
         return service.regenererProjet(idDmc, lot);
     }
 
+    /** ⚠️ 2026-10-29 (« chaine-attribution », §B2) — la décision d'attribution du lot, PDF ou Word ({@code ?format=docx}) ; 404 avant l'attribution. */
+    @GetMapping("/lots/{lot}/decision")
+    public ResponseEntity<byte[]> decision(@PathVariable Long idDmc, @PathVariable Integer lot, @RequestParam(required = false) String format) {
+        boolean docx = "docx".equalsIgnoreCase(format);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition("decision-attribution-" + idDmc + "-lot" + lot + (docx ? ".docx" : ".pdf")))
+                .contentType(docx ? MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                        : MediaType.APPLICATION_PDF)
+                .body(service.decision(idDmc, lot, docx));
+    }
+
     /** Le projet de marché du lot, en PDF ou en Word ({@code ?format=docx}). */
     @GetMapping("/lots/{lot}/projet")
     public ResponseEntity<byte[]> projet(@PathVariable Long idDmc, @PathVariable Integer lot, @RequestParam(required = false) String format) {

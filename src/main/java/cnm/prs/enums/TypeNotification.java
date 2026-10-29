@@ -296,5 +296,10 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-29 (§B2) — le contrat est échu : vers la PRMP, ses UGPM et les titulaires, une fois. */
     CONTRAT_ECHU,
     /** ⚠️ 2026-10-29 (§B3) — une échéance du calendrier des remises en concurrence approche (15 jours) : vers la PRMP et ses UGPM, une fois par échéance. */
-    REMISE_A_LANCER
+    REMISE_A_LANCER,
+    /**
+     * ⚠️ 2026-10-29 (demande front « chaine-attribution », §B3 ; loi art. 52-I) — le lot vient d'être attribué : informer les candidats,
+     * vers la PRMP de la fiche ; le compteur {@code candidatsAInformer} la suit jusqu'à l'information.
+     */
+    CANDIDATS_A_INFORMER
 }

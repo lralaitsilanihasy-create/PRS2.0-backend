@@ -713,7 +713,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         for (String[] t : List.of(new String[] { "Projet de marché signé", "PROJET_MARCHE" }, new String[] { "Cahier des charges", "CAHIER_CHARGES" },
                 new String[] { "Devis estimatif détaillé", "DEVIS_ESTIMATIF" }, new String[] { "Procès-verbal d'ouverture des offres", "PV_OUVERTURE" },
                 new String[] { "Rapport d'analyse des offres", "RAPPORT_ANALYSE" },
-                new String[] { "Questions et réponses des candidats", "QUESTIONS_REPONSES" })) {   // ⚠️ R7 (V109) : la famille DDM n'est pas au référentiel de test
+                new String[] { "Questions et réponses des candidats", "QUESTIONS_REPONSES" },   // ⚠️ R7 (V109) : la famille DDM n'est pas au référentiel de test
+                new String[] { "Décision d'attribution", "DECISION_ATTRIBUTION" })) {   // ⚠️ 2026-10-29 (chaine-attribution, V149)
             cnm.prs.entity.TypePieceJointe tp = typePieceJointeRepository.findById(seedTypePiece(t[0], true, "DDM", 1)).orElseThrow();
             tp.setCode(t[1]);
             typePieceJointeRepository.save(tp);
@@ -852,6 +853,19 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.lots[0].attributaire.montant").value(12500000));
         mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_ATTRIBUE"));
+        // ⚠️ 2026-10-29 (« chaine-attribution », §B2, §B3) — la décision d'attribution produite, jointe au dossier de marché ; le rappel
+        // « Informer les candidats » (notification, compteur) jusqu'à l'information.
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].decisionDisponible").value(true))
+                .andExpect(jsonPath("$.lots[0].candidatsAInformer").value(true));
+        String decisionPdf = texteDuPdf(mvc.perform(get(att + "/lots/1/decision").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(decisionPdf).contains("DÉCISION D'ATTRIBUTION PROVISOIRE", "BTP Alpha", "12 500 000", "est attribué provisoirement",
+                "signé électroniquement sur la plateforme");
+        mvc.perform(get(att + "/lots/1/decision").param("format", "docx").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(get(att + "/lots/1/decision").header("Authorization", jetonA)).andExpect(status().isForbidden());
+        assertThat(pieceJointeDossierRepository.findAll().stream().map(p -> p.getNomFichier())).anyMatch(n -> n.startsWith("decision-attribution_"));
+        assertThat(notificationRepository.findAll()).extracting(Notification::getTypeNotif).contains("CANDIDATS_A_INFORMER");
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.compteurs.candidatsAInformer").value(1));
         mvc.perform(get("/api/dossiers/" + idDossier + "/actes-gestion").header("Authorization", tokenPrmp)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.montantInitialHt").value(12500000)).andExpect(jsonPath("$.sourceMontantInitial").value("ATTRIBUTION"));
         mvc.perform(get("/api/candidat/offres/" + b + "/resultat").header("Authorization", jetonB)).andExpect(status().isNotFound());
@@ -865,6 +879,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post(att + "/lots/1/informer").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"dateAffichage\":\"" + aujourdhui + "\"}")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.lots[0].etat").value("INFORME")).andExpect(jsonPath("$.lots[0].information.lettres.length()").value(3))
+                .andExpect(jsonPath("$.lots[0].candidatsAInformer").value(false))
                 // ⚠️ R6c (règle 6, QB1 ; V108) — réception présumée : l'information + 3 jours (paramètre RECEPTION_LETTRE semé).
                 .andExpect(jsonPath("$.lots[0].delaiAttente.receptionLe").value(aujourdhui.plusDays(3).toString()))
                 .andExpect(jsonPath("$.lots[0].delaiAttente.joursReception").value(3))
@@ -1076,6 +1091,22 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post(att + "/lots/1/notification").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"dateNotification\":\"" + aujourdhui + "\"}")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("MARCHE_NON_APPROUVE"));
+        // ⚠️ 2026-10-29 (« chaine-attribution », §B1, §B4) — signature → visa → approbation → enregistrement → notification.
+        mvc.perform(multipart(att + "/lots/1/enregistrement").file(piece).param("dateEnregistrement", aujourdhui.toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MARCHE_NON_APPROUVE"));
+        mvc.perform(multipart(att + "/lots/1/approbation").file(piece).param("autorite", "Le Ministre").param("dateApprobation", aujourdhui.toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NON_VISE"));
+        mvc.perform(multipart(att + "/lots/1/visa").param("dateVisa", aujourdhui.toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FICHIER_OBLIGATOIRE"));
+        mvc.perform(multipart(att + "/lots/1/visa").param("dispense", "true").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        mvc.perform(multipart(att + "/lots/1/visa").file(piece).param("dateVisa", aujourdhui.plusDays(1).toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DATE_INVALIDE"));
+        mvc.perform(multipart(att + "/lots/1/visa").file(piece).param("dateVisa", aujourdhui.toString()).param("reference", "CF-2026-118")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].visa.reference").value("CF-2026-118"))
+                .andExpect(jsonPath("$.lots[0].visa.dispense").value(false)).andExpect(jsonPath("$.lots[0].visa.fichier").isNotEmpty());
+        mvc.perform(multipart(att + "/lots/1/visa").file(piece).param("dateVisa", aujourdhui.toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_VISE"));
         mvc.perform(multipart(att + "/lots/1/approbation").file(piece).param("dateApprobation", aujourdhui.toString())
                 .header("Authorization", tokenPrmp)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CHAMP_OBLIGATOIRE"));
         mvc.perform(multipart(att + "/lots/1/approbation").file(piece).param("autorite", "Le Ministre").param("dateApprobation",
@@ -2129,6 +2160,9 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         // La signature par la PRMP et le titulaire restant, l'approbation, l'enregistrement, la notification et l'avis.
         mvc.perform(multipart(att + "/lots/1/signature").file(piece).param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etat").value("SIGNE"));
+        // ⚠️ 2026-10-29 (« chaine-attribution », §B1) — la dispense de visa (exception CHED), motivée, sans fichier.
+        mvc.perform(multipart(att + "/lots/1/visa").param("dispense", "true").param("motif", "Exception de contrôle préalable (CHED)")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].visa.dispense").value(true));
         mvc.perform(multipart(att + "/lots/1/approbation").file(piece).param("autorite", "Le Ministre").param("dateApprobation", aujourdhui.toString())
                 .header("Authorization", tokenPrmp)).andExpect(status().isOk());
         mvc.perform(multipart(att + "/lots/1/enregistrement").file(piece).param("dateEnregistrement", aujourdhui.toString())

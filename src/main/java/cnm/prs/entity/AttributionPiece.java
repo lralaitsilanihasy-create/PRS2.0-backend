@@ -38,6 +38,8 @@ public class AttributionPiece {
     public static final String APPROBATION = "APPROBATION";
     /** ⚠️ R10 (V113, §B5, H2) — l'original signé de l'acte d'engagement de l'attributaire ; {@code dateDelivrance} = sa date de remise. */
     public static final String ACTE_ENGAGEMENT_ORIGINAL = "ACTE_ENGAGEMENT_ORIGINAL";
+    /** ⚠️ V149 (« chaine-attribution », §B1) — le marché visé par le contrôleur financier. */
+    public static final String VISA_CF = "VISA_CF";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -36,7 +36,23 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
              */
             List<EvaluationDto.Titulaire> titulaires,
             /** ⚠️ 2026-10-16 (tranche MT-b2, V123) — le suivi de chaque titulaire retenu (pièces, réception, retrait) ; vide hors multi-attributaire. */
-            List<SuiviTitulaire> suiviTitulaires) {
+            List<SuiviTitulaire> suiviTitulaires,
+            /** ⚠️ 2026-10-29 (« chaine-attribution », §B1 ; V149) — le visa du contrôleur financier (ou sa dispense), nul avant son geste. */
+            Visa visa,
+            /** ⚠️ 2026-10-29 (§B2) — la décision d'attribution, produite au geste « Attribuer », se télécharge (…/lots/{lot}/decision). */
+            boolean decisionDisponible,
+            /**
+             * ⚠️ 2026-10-29 (§B3 ; loi art. 52-I : « dès qu'elle a fait son choix ») — le lot est attribué et les candidats ne sont pas encore
+             * informés : le rappel « Informer les candidats » de la PRMP.
+             */
+            boolean candidatsAInformer) {
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (« chaine-attribution », §B1 ; circulaire 2024, § XV) — le visa du contrôleur financier : sa date et sa référence, et
+     * le marché visé ; ou {@code dispense} (exception de contrôle préalable, CHED) avec son motif, sans fichier.
+     */
+    public record Visa(LocalDate date, String reference, boolean dispense, String motif, LocalDateTime le, String par, Fichier fichier) {
     }
 
     /** Le dossier de marché du lot : {@code avis} ∈ {@code FAV} · {@code FAVR} · {@code DEF}, nul tant que le PV n'est pas signé. */

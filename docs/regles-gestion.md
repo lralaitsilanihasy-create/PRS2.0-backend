@@ -1873,6 +1873,16 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > l'autorité compétente (autorité, date, décision jointe) ; le marché ne se notifie qu'approuvé **et** enregistré, à une date qui
 > n'est antérieure ni à l'un ni à l'autre.
 >
+> ⚠️ **2026-10-29 — la chaîne d'attribution suit les textes (décision du pilote ; circulaire de régulation 2024, loi art. 52-I et 54).**
+> - **La décision d'attribution est un acte formel de la PRMP** : au moment où elle attribue, la plateforme produit la décision
+>   d'attribution provisoire, signée électroniquement par elle et horodatée, et la joint au dossier de marché. Elle n'est pas publiée.
+>   Le texte est provisoire tant qu'aucun modèle officiel n'est fourni.
+> - **Les candidats s'informent dès le choix fait** : la PRMP est prévenue et le rappel « Informer les candidats » reste affiché tant
+>   qu'elle ne l'a pas fait. Aucun délai n'est fixé par les textes ; le délai d'attente de dix jours francs court de l'information.
+> - **Le marché est visé par le contrôleur financier**, sauf exception de contrôle préalable (CHED), déclarée et motivée.
+> - **L'ordre est imposé** : signature, visa (ou dispense), approbation, enregistrement, notification ; aucune étape avant la
+>   précédente. Un marché déjà approuvé ou enregistré avant cette règle garde ses gestes.
+>
 > ⚠️ **2026-10-14 — trois autres bloquants (manuel révisé, lot 2, tranche R9b, V112 ; arbitrages QB2 et QB3).** **Dépôt hors délai
 > (art. 44)** : toute tentative de déposer une offre après la date et l'heure limites est refusée, et ce refus est horodaté par le serveur
 > et conservé ; le registre des dépôts et le PV d'ouverture les énumèrent. **Montant évalué (art. 46-47)** : le montant résulte du calcul

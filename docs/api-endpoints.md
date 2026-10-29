@@ -7966,7 +7966,7 @@ la fiche** (403 pour l'UGPM) et répondent l'`AttributionDto` à jour.
 | POST | …/lots/{lot}/pieces/{id}/verifier | `{ conforme, motif? }` | 400 `CONFORME_OBLIGATOIRE`, `MOTIF_OBLIGATOIRE` ; 404 ; 409 `DEJA_VERIFIEE` |
 | POST | …/lots/{lot}/retirer | `{ motif }` | 400 `MOTIF_OBLIGATOIRE` ; 409 `NON_INFORME`, `LOT_RETIRE`, `DEJA_SIGNE`, `PIECES_CONFORMES`, `DELAI_EN_COURS` |
 | POST | …/lots/{lot}/signature | multipart `dateSignature`, `fichier` (le marché signé) | 400 `DATE_INVALIDE`, `FICHIER_OBLIGATOIRE` ; 409 `NON_INFORME`, `LOT_RETIRE`, `DEJA_SIGNE`, `DELAI_ATTENTE`, `RECOURS_EN_COURS`, `PIECES_NON_CONFORMES` |
-| POST | …/lots/{lot}/enregistrement | multipart `dateEnregistrement`, `reference?`, `fichier` (le justificatif) | 400 `DATE_INVALIDE`, `FICHIER_OBLIGATOIRE` ; 409 `NON_SIGNE`, `DEJA_ENREGISTRE` |
+| POST | …/lots/{lot}/enregistrement | multipart `dateEnregistrement`, `reference?`, `fichier` (le justificatif) | 400 `DATE_INVALIDE`, `FICHIER_OBLIGATOIRE` ; 409 `NON_SIGNE`, `DEJA_ENREGISTRE` ; ⚠️ 2026-10-29 `MARCHE_NON_APPROUVE` (après l'approbation, § « visa du contrôleur financier… ») |
 | POST | …/lots/{lot}/notification | `{ dateNotification, dateReception? }` | 400 `DATE_INVALIDE` ; 409 `NON_SIGNE`, `NON_ENREGISTRE`, `DEJA_NOTIFIE` |
 | POST | …/lots/{lot}/avis | `{ datePublication }` | 400 `DATE_INVALIDE` ; 409 `NON_NOTIFIE`, `DEJA_PUBLIE` |
 | GET | …/lots/{lot}/avis?format=docx | l'avis d'attribution, PDF (ou Word) | 404 avant la publication ; lecteurs de l'attribution |
@@ -10212,6 +10212,44 @@ ne s'applique pas) · `null` (aucune version validée). Indicatif : `disponible`
   date d'approbation.
 - ⚠️ Un lot déjà notifié avant V111 n'a pas d'approbation : il reste notifié, son avis d'attribution omet la mention.
 
+#### ⚠️ 2026-10-29 — visa du contrôleur financier, décision d'attribution, information des candidats, ordre de fin de chaîne (V149)
+
+Demande front `frontend/docs/demande-backend-2026-10-29-chaine-attribution.md`, **décision du pilote du 29/10 « suivre les textes en
+vigueur »** (circulaire de régulation des marchés publics 2024, § XV, p. 31 et documents de l'attribution c° ; loi n° 2016-055, art. 52-I
+et 54). Migration **V149** (`t_attribution` : visa et décision ; nature de pièce `VISA_CF` ; type de pièce `DECISION_ATTRIBUTION`).
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| POST | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/visa | multipart `dateVisa`, `reference?`, `fichier` (le marché visé) ; ou `dispense=true`, `motif`, `dateVisa?` (sans fichier) | 200 → `AttributionDto` ; 400 `DATE_INVALIDE`, `FICHIER_OBLIGATOIRE`, `MOTIF_OBLIGATOIRE`, `CHAMP_TROP_LONG` ; 403 ; 409 `NON_SIGNE`, `DEJA_VISE`, `DEJA_APPROUVE` | PRMP de la fiche |
+| GET | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/decision[?format=docx] | la décision d'attribution, PDF (ou Word) | 200, 403, 404 (lot non attribué) | lecteurs du projet de marché |
+
+- **B1 — le visa** (circulaire 2024, § XV : les contrats « nécessitent un visa du Contrôle Financier, sauf ceux bénéficiant d'une
+  exception de contrôle préalable dans le cadre du CHED »). Visé : `dateVisa` entre la signature et aujourd'hui, `reference` facultative
+  (100 caractères), le marché visé (pièce `VISA_CF`). Dispensé : `dispense = true` et son `motif`, sans fichier, `dateVisa` facultative.
+  Journal `VISA`. **`LotAttribution.visa`** = `{ date, reference, dispense, motif, le, par, fichier }`, nul avant le geste.
+- **B4 — l'ordre imposé** : signature → **visa** (ou dispense) → **approbation** → **enregistrement** → notification.
+  - `…/approbation` : 409 **`NON_VISE`** sans visa ; `dateApprobation` au plus tôt le visa (à défaut la signature).
+  - `…/enregistrement` : 409 **`MARCHE_NON_APPROUVE`** sans approbation ; `dateEnregistrement` au plus tôt l'approbation (au lieu de la
+    signature). L'approbation et l'enregistrement ne sont donc plus indépendants.
+  - `…/notification` : inchangé (409 `MARCHE_NON_APPROUVE`, `NON_ENREGISTRE`).
+  - ⚠️ Un lot déjà approuvé ou enregistré avant V149 garde ses gestes ; un lot signé non approuvé doit désormais passer par le visa.
+- **B2 — la décision d'attribution provisoire** (circulaire 2024, c° : « acte réglementaire formel […] pris par la PRMP […] après validation
+  du procès-verbal d'évaluation de la CAO » ; « ne fait pas nécessairement l'objet de publicité »). Produite au geste
+  **`…/attribuer`** (mono-attributaire et contrat-cadre multi-attributaire), PDF et Word, **texte provisoire du serveur** (aucun modèle
+  officiel, Q4) : visas (loi, rapport d'évaluation, avis de la Commission sur le dossier de marché et sa référence), « DÉCIDE »,
+  l'attributaire (raison sociale, NIF, offre, montant HT et TTC, délai) ou les titulaires et leurs offres indicatives, le motif s'il est
+  saisi, l'information des candidats et le délai d'attente de dix jours francs, la non-publicité ; « Fait le … » et la signature
+  électronique simple de la PRMP horodatée (heure du geste). Jointe d'office au **dossier de marché** (type `DECISION_ATTRIBUTION`,
+  `decision-attribution_{idDmc}_lot{lot}.pdf`, `PRODUITE_PAR = ATTRIBUTION`). **`LotAttribution.decisionDisponible`**. Un lot attribué
+  avant V149 n'a pas de décision (404).
+- **B3 — informer les candidats** (loi art. 52-I : « dès qu'elle a fait son choix » ; aucun délai chiffré, pas de paramètre) : au geste
+  `…/attribuer`, notification **`CANDIDATS_A_INFORMER`** à la PRMP ; **`LotAttribution.candidatsAInformer`** (attribué, non informé, ni
+  retiré ni infructueux) ; compteur **`candidatsAInformer`** des badges de la PRMP (`GET /api/kpis/badges`, `compteurs`, dernier champ
+  de `CompteursPrmpDto`). Le geste `…/informer` n'est jamais bloqué.
+- **B5 — titulaires non retenus d'un marché subséquent** (décret n° 2019-1064, art. 30) : **déjà fait** depuis MS-2 (16/10) — la décision
+  d'une remise (`POST /api/remises/{id}/decision`) notifie `REMISE_RESULTAT` à **chaque titulaire consulté** (retenu ; non retenu avec
+  son motif ; infructueuse), testé (`EvaluationIntegrationTest.remiseEnConcurrence`).
+
 ### Le manuel révisé pour l'application, lot 2, tranche R9b : tentatives refusées, corrections, offres anormales — V112 ⚠️ 2026-10-14
 
 Demande front `demande-backend-2026-10-10-manuel-revise-lot2.md` (§B4, bloquants de la loi n° 4, 9 et 10). Arbitrages du 14/10 : **QB2**
@@ -11459,6 +11497,10 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > ⚠️ **2026-10-29 — types nouveaux du contrat en vigueur** (demande front « contrat-cadre-4a », §B2, §B3) :
 > `RECONDUCTION_A_DECIDER`, `REMISE_A_LANCER` (PRMP et ses UGPM), `CONTRAT_RECONDUIT`, `CONTRAT_NON_RECONDUIT` (titulaires) et
 > `CONTRAT_ECHU` (PRMP, UGPM et titulaires). Objet `PROCEDURE`. Le détail est au § *Le contrat en vigueur — lot MS-1*.
+
+> ⚠️ **2026-10-29 — type nouveau `CANDIDATS_A_INFORMER`** (demande front « chaine-attribution », §B3) : le lot vient d'être attribué,
+> informer les candidats. Destinataire : la PRMP de la fiche. Objet `PROCEDURE`. Le détail est au § *visa du contrôleur financier,
+> décision d'attribution, information des candidats*.
 
 > ⚠️ **2026-10-28 — nouveau type `DECISION_TRANSMISE_SIGMP`** (demande front « decision-sigmp-prmp ») : la décision du dossier
 > est transmise à SIGMP. Destinataires : la PRMP du dossier et ses UGPM. Objet `DOSSIER` (`idObjet = idDossier`). Le détail

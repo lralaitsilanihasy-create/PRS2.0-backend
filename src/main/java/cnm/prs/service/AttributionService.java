@@ -215,7 +215,7 @@ public class AttributionService {
             Attribution engage = attributions.findById(new Attribution.Cle(idDmc, l.lot())).filter(x -> x.getAttribueLe() != null).orElse(null);
             if (!Evaluation.CLOSE.equals(ev.etat()) && engage == null) {
                 lots.add(new AttributionDto.LotAttribution(l.lot(), EN_EVALUATION, null, null, false, null, null, null, List.of(), null, List.of(),
-                        null, null, null, null, null, null, null, reprises(idDmc, l.lot()), null, List.of(), List.of()));
+                        null, null, null, null, null, null, null, reprises(idDmc, l.lot()), null, List.of(), List.of(), null, false, false));
                 continue;
             }
             Attribution a = attributions.findById(new Attribution.Cle(idDmc, l.lot())).orElse(null);
@@ -235,7 +235,8 @@ public class AttributionService {
                     s.recours(), s.signature(), s.enregistrement(), s.notification(), s.avis(), s.pieces(), s.retrait(),
                     a == null || a.getInfructueuxLe() == null ? null : new AttributionDto.Infructuosite(a.getInfructueuxLe(), a.getInfructueuxPar(),
                             a.getMotifInfructuosite(), a.getDecisionReference(), a.getDecisionDate(), a.getSuite()),
-                    reprises(idDmc, l.lot()), s.approbation(), titulairesDto(idDmc, l.lot()), execution.suiviTitulaires(a)));
+                    reprises(idDmc, l.lot()), s.approbation(), titulairesDto(idDmc, l.lot()), execution.suiviTitulaires(a),
+                    a == null ? null : execution.visa(a), a != null && a.getDecisionPdf() != null, a != null && candidatsAInformer(a)));
         }
         return new AttributionDto(idDmc, lots);
     }
@@ -311,7 +312,118 @@ public class AttributionService {
         evaluation.tracerAttribution(idDmc, "ATTRIBUTION", "Lot " + lot + " : attribué à l'offre n° " + offre.getNumero() + " ("
                 + offre.getRaisonSociale() + ")" + (a.getMontant() == null ? "" : ", " + FormulairesEnLigne.lisible(a.getMontant()) + " Ariary HT")
                 + ", avis " + dm.avis() + " de la Commission" + (a.getMotifAttribution() == null ? "" : " — " + a.getMotifAttribution()));
+        apresAttribution(a, dm);
         return lire(idDmc);
+    }
+
+    /** ⚠️ 2026-10-29 (« chaine-attribution », §B3) — attribué, les candidats pas encore informés (ni retiré, ni infructueux). */
+    static boolean candidatsAInformer(Attribution a) {
+        return a.getAttribueLe() != null && a.getInformeLe() == null && a.getRetireLe() == null && a.getInfructueuxLe() == null;
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (demande front « chaine-attribution », décision du pilote « suivre les textes en vigueur ») — ce qui suit le geste
+     * « Attribuer » :
+     * <ul>
+     *   <li>§B2 : la <strong>décision d'attribution provisoire</strong> (circulaire 2024, documents de l'attribution, c° : « acte
+     *       réglementaire formel pris par la PRMP […] après validation du procès-verbal d'évaluation ») : PDF et Word, texte provisoire
+     *       (aucun modèle officiel, Q4), signée électroniquement par la PRMP et horodatée ; jointe d'office au dossier de marché
+     *       ({@code DECISION_ATTRIBUTION}) ; non publiée ;</li>
+     *   <li>§B3 : le rappel « Informer les candidats » à la PRMP (loi art. 52-I : « dès qu'elle a fait son choix ») — la notification
+     *       {@code CANDIDATS_A_INFORMER}, puis le compteur {@code candidatsAInformer} tant que l'information n'est pas faite.</li>
+     * </ul>
+     */
+    private void apresAttribution(Attribution a, AttributionDto.DossierMarche dm) {
+        Long idDmc = a.getIdDmc();
+        Integer lot = a.getLot();
+        EvaluationDto ev = evaluation.vueSansGarde(idDmc).orElse(null);
+        boolean allotie = ev != null && ev.lots().size() > 1;
+        Entete en = entete(idDmc, fiches.etatValide(idDmc).orElse(null), lot, allotie);
+        Dossier d = a.getIdDossier() == null ? null : dossierRepository.findById(a.getIdDossier()).orElse(null);
+        for (GenerateurDocumentsFiche.Fichier f : generateur.generer(decision(en, a, dm, d))) {
+            if ("pdf".equals(f.extension())) {
+                a.setDecisionPdf(f.contenu());
+            } else if ("docx".equals(f.extension())) {
+                a.setDecisionDocx(f.contenu());
+            }
+        }
+        attributions.save(a);
+        if (d != null) {
+            joindre(d, PIECE_DECISION, "decision-attribution_" + idDmc + "_lot" + lot + ".pdf", a.getDecisionPdf());
+        }
+        ceremonies.notifierPrmp(idDmc, TypeNotification.CANDIDATS_A_INFORMER, "Informer les candidats", "Le marché" + en.surLot()
+                + " de la procédure « " + en.objet() + " » est attribué : la décision d'attribution est produite. Informez dès maintenant "
+                + "les candidats du résultat (lettres et affichage, loi n° 2016-055, art. 52-I) : le délai d'attente de " + JOURS_FRANCS
+                + " jours francs avant la signature court de cette information.");
+    }
+
+    /** ⚠️ V149 (§B2) — le type de pièce de la décision d'attribution, jointe au dossier de marché. */
+    static final String PIECE_DECISION = "DECISION_ATTRIBUTION";
+
+    /**
+     * ⚠️ 2026-10-29 (« chaine-attribution », §B2, Q4) — la décision d'attribution provisoire, <strong>texte provisoire</strong> du serveur
+     * tant qu'aucun modèle officiel n'est fourni : visas (loi, rapport d'évaluation, avis de la Commission sur le dossier de marché),
+     * l'attributaire (ou les titulaires d'un contrat-cadre), le montant et le délai, l'information des candidats et le délai d'attente ;
+     * la signature électronique simple de la PRMP, horodatée.
+     */
+    private DocumentLibre decision(Entete en, Attribution a, AttributionDto.DossierMarche dm, Dossier d) {
+        List<DocumentLibre.Element> el = new ArrayList<>();
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, en.ministere() == null ? en.autorite() : en.ministere() + " — " + en.autorite()));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "La Personne responsable des marchés publics"));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "DÉCISION D'ATTRIBUTION PROVISOIRE"));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, en.objet() + (en.allotie() ? " — lot " + en.lot() : "")));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        String signataire = nomPrmp();
+        para(el, "La Personne responsable des marchés publics, " + signataire + ",");
+        para(el, "Vu la loi n° 2016-055 du 25 janvier 2017 portant Code des marchés publics, notamment ses articles 35-VII, 52 et 78 ;");
+        para(el, "Vu l'appel d'offres" + (en.numero() == null ? "" : " n° " + en.numero()) + " et le rapport d'évaluation des offres signé par la "
+                + "commission d'appel d'offres ;");
+        String avis = dm == null || dm.avis() == null ? "……" : "FAVR".equals(dm.avis()) ? "favorable avec réserves" : "favorable";
+        para(el, "Vu l'avis " + avis + " de la Commission des marchés sur le dossier de marché" + (d == null ? ""
+                : " n° " + Objects.toString(d.getRefeDossier(), String.valueOf(d.getIdDossier()))) + " ;");
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "DÉCIDE"));
+        List<cnm.prs.entity.AttributionTitulaire> tit = titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(a.getIdDmc(), a.getLot());
+        if (!tit.isEmpty()) {
+            para(el, "Article premier — Le contrat-cadre" + en.surLot() + " est attribué provisoirement aux " + tit.size() + " titulaire(s) suivant(s) :");
+            for (cnm.prs.entity.AttributionTitulaire t : tit) {
+                Offre o = offres.findById(t.getIdOffre()).orElse(null);
+                para(el, "– " + (o == null ? t.getIdOffre() : o.getRaisonSociale() + ", NIF " + o.getNif() + ", offre n° " + o.getNumero())
+                        + ", offre indicative de " + (t.getMontant() == null ? "……" : FormulairesEnLigne.lisible(t.getMontant()) + " Ariary hors taxes")
+                        + (t.getDelai() == null ? "" : ", délai : " + t.getDelai()) + " ;");
+            }
+        } else {
+            Offre o = offres.findById(a.getIdOffreAttribuee()).orElse(null);
+            para(el, "Article premier — Le marché" + en.surLot() + " est attribué provisoirement à " + (o == null ? a.getIdOffreAttribuee()
+                    : o.getRaisonSociale() + ", NIF " + o.getNif() + " (offre n° " + o.getNumero() + ")") + ", pour un montant de "
+                    + (a.getMontant() == null ? "……" : FormulairesEnLigne.lisible(a.getMontant()) + " Ariary hors taxes")
+                    + (a.getMontantTtc() == null ? "" : " (" + FormulairesEnLigne.lisible(a.getMontantTtc()) + " Ariary toutes taxes comprises)")
+                    + (a.getDelai() == null ? "" : ", délai d'exécution : " + a.getDelai()) + ".");
+        }
+        if (a.getMotifAttribution() != null) {
+            para(el, "Motif : " + a.getMotifAttribution() + ".");
+        }
+        para(el, "Article 2 — Les candidats sont informés du résultat par lettre et par affichage (art. 52-I). Le marché ne peut être signé "
+                + "qu'à l'expiration du délai d'attente de " + JOURS_FRANCS + " jours francs qui suit cette information (art. 78).");
+        para(el, "Article 3 — La présente décision est jointe au dossier de marché ; elle ne fait pas l'objet de publicité.");
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        para(el, "Fait le " + a.getAttribueLe().format(JOUR) + ".");
+        para(el, "La Personne responsable des marchés publics, " + signataire + " — signé électroniquement sur la plateforme le "
+                + a.getAttribueLe().format(HORODATAGE) + ".");
+        return new DocumentLibre("DECISION_ATTRIBUTION", en.allotie() ? en.lot() : null, el, "Procédure " + a.getIdDmc() + " — décision d'attribution"
+                + (en.allotie() ? ", lot " + en.lot() : ""));
+    }
+
+    /** ⚠️ 2026-10-29 (§B2) — la décision d'attribution du lot (PDF, ou Word) : lecteurs du projet de marché ; 404 tant que le lot n'est pas attribué. */
+    @Transactional(readOnly = true)
+    public byte[] decision(Long idDmc, Integer lot, boolean docx) {
+        evaluation.controlerLecture(idDmc);
+        Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot))
+                .orElseThrow(() -> new ResourceNotFoundException("La décision d'attribution de ce lot n'est pas produite."));
+        byte[] b = docx ? a.getDecisionDocx() : a.getDecisionPdf();
+        if (b == null) {
+            throw new ResourceNotFoundException("La décision d'attribution de ce lot n'est pas produite.");
+        }
+        return b;
     }
 
     /**
@@ -372,6 +484,7 @@ public class AttributionService {
                 + retenus.stream().map(t -> "offre n° " + t.numero() + " (" + t.candidat() + ")").collect(Collectors.joining(", "))
                 + (retenus.size() < proposes.size() ? ", sur " + proposes.size() + " qualifié(s) proposé(s)" : "") + ", avis " + dm.avis()
                 + " de la Commission" + (motif == null ? "" : " — " + motif));
+        apresAttribution(a, dm);
         return lire(idDmc);
     }
 
@@ -835,6 +948,7 @@ public class AttributionService {
         long avis = 0;
         long avisEnRetard = 0;
         long explicationsOuvertes = 0;
+        long aInformer = 0;   // ⚠️ 2026-10-29 (« chaine-attribution », §B3)
         LocalDate aujourdhui = LocalDate.now(horloge);
         if (idPrmp != null && !idPrmp.isBlank()) {
             for (Attribution a : attributions.pourPrmp(idPrmp)) {
@@ -847,6 +961,7 @@ public class AttributionService {
                         aAttribuer++;
                     }
                 }
+                aInformer += candidatsAInformer(a) ? 1 : 0;
                 AttributionDto.DelaiAttente d = delaiAttente(a);
                 if (a.getSigneLe() == null && d != null && d.ecoule()) {
                     signables++;
@@ -862,7 +977,7 @@ public class AttributionService {
             }
         }
         return Map.of("lotsAAttribuer", aAttribuer, "lotsSignables", signables, "avisAPublier", avis, "avisEnRetard", avisEnRetard,
-                "explicationsSansReponse", explicationsOuvertes);
+                "explicationsSansReponse", explicationsOuvertes, "candidatsAInformer", aInformer);
     }
 
     /**

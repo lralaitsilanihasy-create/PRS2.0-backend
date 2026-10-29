@@ -848,6 +848,63 @@ public class AttributionExecutionService {
     }
 
     /**
+     * ⚠️ 2026-10-29 (demande front « chaine-attribution », §B1, décision du pilote « suivre les textes en vigueur » ; circulaire 2024,
+     * § XV : les contrats « nécessitent un visa du Contrôle Financier, sauf ceux bénéficiant d'une exception de contrôle préalable dans
+     * le cadre du CHED ») — le visa du marché par le contrôleur financier, entre la signature et l'approbation (PRMP de la fiche) :
+     * <ul>
+     *   <li>visé : {@code dateVisa} entre la signature et aujourd'hui (400 {@code DATE_INVALIDE}), {@code reference} facultative (100
+     *       caractères, 400 {@code CHAMP_TROP_LONG}), le marché visé (400 {@code FICHIER_OBLIGATOIRE}, pièce {@code VISA_CF}) ;</li>
+     *   <li>dispensé : {@code dispense = true} et son {@code motif} (400 {@code MOTIF_OBLIGATOIRE}), sans fichier ; {@code dateVisa}
+     *       facultative.</li>
+     * </ul>
+     * 409 {@code NON_SIGNE}, {@code DEJA_VISE}, {@code DEJA_APPROUVE} (le visa précède l'approbation). Journal {@code VISA}.
+     */
+    public void viser(Long idDmc, Integer lot, LocalDate date, String reference, boolean dispense, String motif, MultipartFile fichier) {
+        exigerPrmp(idDmc);
+        Attribution a = exigerSigne(idDmc, lot);
+        if (a.getViseLe() != null) {
+            throw new BusinessRuleException("Le visa du contrôleur financier de ce lot est déjà enregistré.", "DEJA_VISE");
+        }
+        if (a.getApprouveLe() != null) {
+            throw new BusinessRuleException("Le marché de ce lot est déjà approuvé : le visa le précède.", "DEJA_APPROUVE");
+        }
+        if (date != null && (date.isBefore(a.getDateSignature()) || date.isAfter(aujourdhui())) || !dispense && date == null) {
+            throw new BadRequestException("La date du visa se situe entre la signature et aujourd'hui.", "DATE_INVALIDE");
+        }
+        String ref = nettoyer(reference);
+        if (ref != null && ref.length() > 100) {
+            throw new BadRequestException("La référence du visa tient en 100 caractères.", "CHAMP_TROP_LONG");
+        }
+        String pourquoi = nettoyer(motif);
+        if (dispense && pourquoi == null) {
+            throw new BadRequestException("La dispense de visa (exception de contrôle préalable, CHED) se motive.", "MOTIF_OBLIGATOIRE");
+        }
+        Televerse f = dispense ? null : lire(fichier, true);
+        a.setVisaDate(date);
+        a.setVisaReference(ref);
+        a.setVisaDispense(dispense);
+        a.setVisaMotif(dispense ? pourquoi : null);
+        a.setViseLe(maintenant());
+        a.setVisePar(acteur());
+        attributions.save(a);
+        if (f != null) {
+            enregistrerFichier(a, AttributionPiece.VISA_CF, null, f);
+        }
+        evaluation.tracerAttribution(idDmc, "VISA", "Lot " + lot + " : " + (dispense ? "visa du contrôleur financier non requis (exception de "
+                + "contrôle préalable, CHED) — " + pourquoi : "marché visé par le contrôleur financier le " + date.format(JOUR)
+                        + (ref == null ? "" : " (" + ref + ")")));
+    }
+
+    /** ⚠️ 2026-10-29 (§B1) — le visa du lot pour la vue, nul avant son geste ; le marché visé en fichier. */
+    AttributionDto.Visa visa(Attribution a) {
+        if (a.getViseLe() == null) {
+            return null;
+        }
+        return new AttributionDto.Visa(a.getVisaDate(), a.getVisaReference(), a.isVisaDispense(), a.getVisaMotif(), a.getViseLe(), a.getVisePar(),
+                derniere(piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()), AttributionPiece.VISA_CF));
+    }
+
+    /**
      * L'enregistrement du marché (Q6) : la date (entre la signature et aujourd'hui, 400 {@code DATE_INVALIDE}), la référence facultative,
      * le justificatif obligatoire (400 {@code FICHIER_OBLIGATOIRE}) ; 409 {@code NON_SIGNE}, {@code DEJA_ENREGISTRE}.
      */
@@ -857,8 +914,14 @@ public class AttributionExecutionService {
         if (a.getEnregistreLe() != null) {
             throw new BusinessRuleException("Le marché de ce lot est déjà enregistré.", "DEJA_ENREGISTRE");
         }
-        if (date == null || date.isBefore(a.getDateSignature()) || date.isAfter(aujourdhui())) {
-            throw new BadRequestException("La date d'enregistrement se situe entre la signature et aujourd'hui.", "DATE_INVALIDE");
+        // ⚠️ 2026-10-29 (« chaine-attribution », §B4 ; circulaire 2024, p. 31 : sont enregistrés les marchés « signés par les deux
+        // parties, visés par le contrôle financier et approuvés ») — l'enregistrement suit l'approbation.
+        if (a.getApprouveLe() == null) {
+            throw new BusinessRuleException("Le marché s'enregistre après son approbation (signature → visa → approbation → enregistrement → "
+                    + "notification).", "MARCHE_NON_APPROUVE");
+        }
+        if (date == null || date.isBefore(a.getApprobationDate()) || date.isAfter(aujourdhui())) {
+            throw new BadRequestException("La date d'enregistrement se situe entre l'approbation et aujourd'hui.", "DATE_INVALIDE");
         }
         Televerse f = lire(fichier, true);
         a.setDateEnregistrement(date);
@@ -885,6 +948,11 @@ public class AttributionExecutionService {
         if (a.getNotifieLe() != null) {
             throw new BusinessRuleException("Le marché de ce lot est déjà notifié.", "DEJA_NOTIFIE");
         }
+        // ⚠️ 2026-10-29 (« chaine-attribution », §B1, §B4) — l'approbation suit le visa du contrôleur financier, ou sa dispense (CHED).
+        if (a.getViseLe() == null) {
+            throw new BusinessRuleException("Le marché s'approuve après le visa du contrôleur financier, ou la déclaration de sa dispense "
+                    + "(exception de contrôle préalable, CHED).", "NON_VISE");
+        }
         String qui = nettoyer(autorite);
         if (qui == null) {
             throw new BadRequestException("L'approbation nomme l'autorité qui approuve le marché.", "CHAMP_OBLIGATOIRE");
@@ -892,8 +960,9 @@ public class AttributionExecutionService {
         if (qui.length() > 200) {
             throw new BadRequestException("L'autorité tient en 200 caractères.", "CHAMP_TROP_LONG");
         }
-        if (date == null || date.isBefore(a.getDateSignature()) || date.isAfter(aujourdhui())) {
-            throw new BadRequestException("La date d'approbation se situe entre la signature et aujourd'hui.", "DATE_INVALIDE");
+        LocalDate plancher = a.getVisaDate() != null ? a.getVisaDate() : a.getDateSignature();
+        if (date == null || date.isBefore(plancher) || date.isAfter(aujourdhui())) {
+            throw new BadRequestException("La date d'approbation se situe entre le visa (à défaut la signature) et aujourd'hui.", "DATE_INVALIDE");
         }
         Televerse f = lire(fichier, true);
         a.setApprobationAutorite(qui);
