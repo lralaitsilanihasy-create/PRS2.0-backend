@@ -787,8 +787,19 @@ public class ReceptionCommandeService {
     }
 
     private Integer garantieMois(ContratVigueur c) {
-        String code = ContratVigueur.CONTRAT_CADRE.equals(c.getTypeMarche()) ? "B09-GP-03" : "B09-DG-01";
-        BigDecimal n = ControlesFicheMarche.nombre(ContratVigueurService.valeur(fiches.etatValide(c.getIdDmc()).orElse(null), code, c.getLot()));
+        FicheMarcheService.EtatVersion v = fiches.etatValide(c.getIdDmc()).orElse(null);
+        return garantieMois(c, v);
+    }
+
+    /**
+     * Le délai de garantie, en mois : {@code B09-GP-03} (contrat-cadre), {@code B09-DG-01} (marché à commandes de fournitures).
+     * ⚠️ 2026-10-29 (demande front « marche-a-commandes-champs ») — un marché à commandes de <strong>travaux</strong> lit
+     * {@code B09-GT-01}, le délai de garantie du référentiel des travaux ({@code B09-DG-01} n'y existe pas).
+     */
+    static Integer garantieMois(ContratVigueur c, FicheMarcheService.EtatVersion v) {
+        String code = ContratVigueur.CONTRAT_CADRE.equals(c.getTypeMarche()) ? "B09-GP-03"
+                : v != null && cnm.prs.enums.CategorieDao.TRAVAUX.name().equals(v.categorie()) ? "B09-GT-01" : "B09-DG-01";
+        BigDecimal n = ControlesFicheMarche.nombre(ContratVigueurService.valeur(v, code, c.getLot()));
         return n == null || n.signum() <= 0 ? null : n.intValue();
     }
 

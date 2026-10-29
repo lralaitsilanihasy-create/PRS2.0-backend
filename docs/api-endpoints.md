@@ -5364,6 +5364,20 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
   La plus longue des durées saisies au-delà de **24 mois** est bloquante tant que la justification est vide. Justifiée,
   elle passe en `ok` (« justifiée »). Les `champs` du contrôle nomment les durées saisies et `B02-DC-05`. Sans aucune durée
   saisie, la règle n'est pas évaluée. Cette règle tranche le « plafond de durée » qui attendait le juriste (28/09).
+- ⚠️ **2026-10-29 — les montants annuels du marché à commandes** (demande front « marche-a-commandes-champs », §B1, §B2).
+  - **Référentiel inchangé, en attente du pilote.** `B05-TP-02` (minimum) est retiré et `B05-TP-03` (maximum) facultatif par
+    arbitrage du pilote du **29/09** (`demande-backend-2026-09-29-champs-non-imprimes-fournitures.md`, décision 1 et §B6), pris
+    **avant** que le contrat en vigueur ne lise ces montants (16/10 : minimum annuel, plafond `MAXIMUM_DEPASSE`). Revenir dessus
+    est au pilote (Q3 de la demande). D'ici là, le plafond annuel ne joue que si `B05-TP-03` est saisi.
+  - `B02-AU-03` (quantités : le besoin les porte) et `B02-AU-05` (date d'effet : la notification) restent inactifs, comme le CSV
+    le dit déjà (colonne `actif = non`).
+  - Règle **`MARCHE_A_COMMANDES_MONTANTS`** (bloc `B05`, marché à commandes seulement), lot par lot :
+    - minimum annuel > maximum annuel : **bloquant** ; les deux saisis et cohérents : `ok` ;
+    - maximum annuel × `B02-AU-04` / 12 s'écarte de plus de **10 %** (⚠️ seuil supposé, à confirmer) du montant du lot au plan :
+      **avertissement**. Non évalué sans maximum, durée ou montant au plan.
+  - **Travaux** (en attente du pilote, Q1 : le marché à commandes est-il admis en travaux ?) : rien n'est servi pour l'instant.
+    La réception lit déjà, pour un marché à commandes de travaux, le délai de garantie des travaux **`B09-GT-01`** (au lieu de
+    `B09-DG-01`, absent de ce référentiel).
 - ⚠️ **2026-10-29 — le calendrier structuré des remises en concurrence** (demande front « contrat-cadre-4a », §B3 ;
   `docs/referentiel/2026-10-29-calendrier-remises-contrat-cadre.sql`). Deux champs nouveaux de la rubrique `B02-PC`, contrat-cadre,
   fournitures et services et travaux, facultatifs au référentiel, imprimés par aucun document (document maître `AUCUN`) :
@@ -8428,6 +8442,7 @@ n° 2016-055, art. 30). Tables **`t_contrat_vigueur`** (un contrat par lot notif
 |---|---|---|---|---|
 | GET | /api/contrats-en-vigueur | — | 200, 403 | PRMP et UGPM (leurs procédures) ; Commission et Administrateur (tous) ; 403 candidat, membre de CAO, dépositaire |
 | GET | /api/contrats-en-vigueur/{id} | — | 200, 403, 404 | idem ; PRMP et UGPM au périmètre de la fiche |
+| POST | /api/contrats-en-vigueur/{id}/relecture ⚠️ 2026-10-29 | — | 200 ; 403 ; 404 ; 409 `CONTRAT_ECHU`, `FICHE_NON_VALIDEE`, `FORME_CHANGEE` | PRMP de la fiche |
 | POST | /api/contrats-en-vigueur/{id}/reconduction | `{ decision, reference, dateDecision }` | 200 ; 400 `DECISION_INVALIDE`, `DECISION_OBLIGATOIRE`, `DATE_INVALIDE` ; 403 ; 409 `CONTRAT_ECHU`, `NON_RECONDUCTIBLE`, `RECONDUCTIONS_EPUISEES`, `DUREE_MAX_ATTEINTE` (`details.finMaximale`), `DEJA_DECIDE` | PRMP de la fiche |
 
 - **Création** : à la **notification** du lot (`POST …/attribution/lots/{lot}/notification`), quand la fiche validée est un
@@ -8470,6 +8485,15 @@ n° 2016-055, art. 30). Tables **`t_contrat_vigueur`** (un contrat par lot notif
 - **Après l'échéance**, plus aucune remise en concurrence ni commande : le contrôle `ContratVigueurService.exigerEnVigueur` (409
   **`CONTRAT_ECHU`**) servira MS-2 et MS-3. Pas de minimum pour le contrat-cadre (art. 34) : l'alerte « minimum non atteint »
   viendra avec les bons de commande du **marché à commandes** (MS-3).
+
+> ⚠️ **2026-10-29 — relire le contrat depuis la fiche** (demande front « marche-a-commandes-champs », §B3). Le contrat fige ses
+> valeurs à la notification : une révision de la fiche ne le change pas. **`POST …/{id}/relecture`** (PRMP de la fiche) relit la
+> **dernière version validée** avec la même lecture que la notification (période, durée maximale, minimum et maximum annuels,
+> rythme ; contrat-cadre : termes, montants, forme, calendrier). `dateFin` est recalculée de `dateEffet` tant qu'aucune reconduction
+> n'a eu lieu (elle peut alors passer au passé : le contrat devient échu) ; reconduit, elle est gardée. Les bons, remises et
+> réceptions déjà faits ne sont pas touchés. 409 `CONTRAT_ECHU`, `FICHE_NON_VALIDEE`, `FORME_CHANGEE` (la fiche validée n'est plus
+> de la forme du contrat). Journal **`CONTRAT_RELU`** (avant / après). Usage : la procédure 5 de la recette, après révision de sa
+> fiche.
 
 > ⚠️ **2026-10-29 — reconduction notifiée, remises au calendrier** (demande front « contrat-cadre-4a », §B2, §B3 ; **V147**).
 > - **Calendrier structuré (§B3).** Quand le rythme `B02-PC-02` vaut « Selon le calendrier fixé ci-après », la notification fige
@@ -8712,7 +8736,7 @@ fournitures, art. 22 ; réponse Q1 du pilote). Tables **`t_commission_reception`
 - **L'état de réception du bon** (`DuBon.etatReception`) : `A_LIVRER`, `EN_RECEPTION`, `AJOURNE` et `REJETE` (une nouvelle livraison
   est attendue), `RECU_PROVISOIRE` (la garantie court), `EN_RECEPTION_DEFINITIVE`, `RECU_DEFINITIF`, `ANNULE`.
   - Délai de garantie : `B09-GP-03` (contrat-cadre) ou `B09-DG-01` (marché à commandes), en mois, depuis la réception provisoire
-    prononcée (`garantieJusquau`). **Sans délai de garantie, la réception provisoire vaut définitive** (`RECU_DEFINITIF`).
+    prononcée (`garantieJusquau`). ⚠️ 2026-10-29 : un marché à commandes de **travaux** lit `B09-GT-01`. **Sans délai de garantie, la réception provisoire vaut définitive** (`RECU_DEFINITIF`).
   - Garantie écoulée : alerte **`RECEPTION_DEFINITIVE_A_PRONONCER`** ; le président ouvre alors la réception définitive
     (`…/definitive`), qui suit le même circuit (PV, signatures). Une définitive ajournée laisse le bon `RECU_PROVISOIRE`.
 - **`ReceptionCommandeDto`** : `{ id, idBon, numeroBon, idContrat, idDmc, lot, type, etat, dateLivraison, livraisonObservations,

@@ -145,6 +145,29 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         assertThat(texte(idDmc, "AE")).contains("ACTE D'ENGAGEMENT (A.E)", "Le délai d'exécution est fixé dans le bon de commande");
         assertThat(JsonPath.<List<String>>read(documents(idDmc), "$[?(@.type=='CCAP')].libelle"))
                 .containsOnly("Cahier des prescriptions spéciales");
+
+        // ⚠️ 2026-10-29 (« marche-a-commandes-champs », §B3) — un contrat en vigueur créé sans les montants se relit depuis la fiche
+        // validée (PRMP seule) ; la date de fin se recalcule de l'effet.
+        cnm.prs.entity.ContratVigueur c = new cnm.prs.entity.ContratVigueur();
+        c.setIdDmc(idDmc);
+        c.setLot(1);
+        c.setTypeMarche("A_COMMANDE");
+        c.setDateEffet(java.time.LocalDate.now().minusMonths(1));
+        c.setDateFin(java.time.LocalDate.now().plusMonths(1));
+        c.setDureeMaxMois(36);
+        c.setCreeLe(java.time.LocalDateTime.now());
+        long idContrat = contratRepository.save(c).getId();
+        String relecture = "/api/contrats-en-vigueur/" + idContrat + "/relecture";
+        mvc.perform(post(relecture).header("Authorization", tokenUgpm())).andExpect(status().isForbidden());
+        mvc.perform(post(relecture).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.montantMaximum").value(50000000)).andExpect(jsonPath("$.periodeMois").isNumber())
+                .andExpect(jsonPath("$.dateFin").value(org.hamcrest.Matchers.not(java.time.LocalDate.now().plusMonths(1).toString())));
+    }
+
+    @Autowired private cnm.prs.repository.ContratVigueurRepository contratRepository;
+
+    private String tokenUgpm() {
+        return bearer("ugpm.test", cnm.prs.enums.ProfilUtilisateur.UGPM, cnm.prs.enums.TypeActeur.UGPM, "PRMP001", "ANT");
     }
 
     // ------------------------------------------------------------------ 4. contrat-cadre (lot 4)

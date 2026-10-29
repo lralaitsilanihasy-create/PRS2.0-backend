@@ -205,6 +205,31 @@ class ModelesDaoTest {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-10-29 (marche-a-commandes-champs, §B2) — minimum ≤ maximum annuels (bloquant, par lot) ; maximum × durée à plus "
+            + "de 10 % du plan : avertissement ; rien sans montants")
+    void montantsACommandes() {
+        java.util.function.BiFunction<Map<String, String>, Map<Integer, java.math.BigDecimal>, cnm.prs.dto.BilanControlesDto> bilan = (v, plan) -> {
+            cnm.prs.dto.BilanControlesDto b = new cnm.prs.dto.BilanControlesDto(new java.util.ArrayList<>(), new java.util.ArrayList<>(),
+                    new java.util.ArrayList<>(), 0, 0);
+            ControlesFicheMarche.montantsACommandes(v, plan, 0, b);
+            return b;
+        };
+        String regle = ControlesFicheMarche.MARCHE_A_COMMANDES_MONTANTS;
+        Map<Integer, java.math.BigDecimal> plan = new HashMap<>();
+        plan.put(null, new java.math.BigDecimal("20000000"));
+        assertThat(bilan.apply(v("B05-TP-02", "12000000", "B05-TP-03", "10000000"), plan).bloquants()).singleElement()
+                .satisfies(c -> assertThat(c.regle()).isEqualTo(regle)).satisfies(c -> assertThat(c.message()).contains("dépasse le maximum"));
+        cnm.prs.dto.BilanControlesDto juste = bilan.apply(v("B05-TP-02", "2000000", "B05-TP-03", "10000000", "B02-AU-04", "24"), plan);
+        assertThat(juste.ok()).extracting(c -> c.regle()).contains(regle);
+        assertThat(juste.avertissements()).isEmpty();   // 10 M × 2 ans = 20 M = le plan
+        assertThat(bilan.apply(v("B05-TP-03", "10000000", "B02-AU-04", "36"), plan).avertissements()).singleElement()
+                .satisfies(c -> assertThat(c.message()).contains("30 000 000", "50 %"));
+        cnm.prs.dto.BilanControlesDto vide = bilan.apply(Map.of(), plan);
+        assertThat(vide.bloquants()).isEmpty();
+        assertThat(vide.avertissements()).isEmpty();
+    }
+
+    @Test
     @DisplayName("⚠️ 2026-10-29 (contrat-cadre-4a, §B3) — rythme « selon le calendrier » : périodicité entière et première remise exigées ; "
             + "autre rythme ou rythme vide : la règle n'est pas évaluée")
     void calendrierRemises() {

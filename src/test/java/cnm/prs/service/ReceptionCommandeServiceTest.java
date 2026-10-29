@@ -114,6 +114,24 @@ class ReceptionCommandeServiceTest {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-10-29 (marche-a-commandes-champs) — le délai de garantie : B09-GT-01 pour un marché à commandes de travaux, "
+            + "B09-DG-01 en fournitures, B09-GP-03 pour un contrat-cadre")
+    void garantieParCategorie() {
+        cnm.prs.dto.FicheMarcheDto d = new cnm.prs.dto.FicheMarcheDto();
+        d.setValeurs(new java.util.HashMap<>(java.util.Map.of("B09-GT-01", "12", "B09-DG-01", "6", "B09-GP-03", "3")));
+        cnm.prs.entity.ContratVigueur c = new cnm.prs.entity.ContratVigueur();
+        c.setTypeMarche(cnm.prs.entity.ContratVigueur.A_COMMANDE);
+        c.setLot(1);
+        assertThat(ReceptionCommandeService.garantieMois(c, new FicheMarcheService.EtatVersion(1, d, java.util.Map.of(), "A_COMMANDE", "TRAVAUX")))
+                .isEqualTo(12);
+        assertThat(ReceptionCommandeService.garantieMois(c, new FicheMarcheService.EtatVersion(1, d, java.util.Map.of(), "A_COMMANDE",
+                "FOURNITURES_SERVICES"))).isEqualTo(6);
+        c.setTypeMarche(cnm.prs.entity.ContratVigueur.CONTRAT_CADRE);
+        assertThat(ReceptionCommandeService.garantieMois(c, new FicheMarcheService.EtatVersion(1, d, java.util.Map.of(), "CONTRAT_CADRE",
+                "TRAVAUX"))).isEqualTo(3);
+    }
+
+    @Test
     @DisplayName("L'échéance de livraison : la notification + le délai lu en jours, semaines ou mois ; illisible, nulle")
     void echeanceLivraison() {
         assertThat(ReceptionCommandeService.echeanceLivraison(bon("10 jours"))).isEqualTo(LocalDate.of(2026, 1, 20));

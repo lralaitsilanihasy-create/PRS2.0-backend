@@ -41,4 +41,14 @@ public class ContratVigueurController {
     public ContratVigueurDto reconduire(@PathVariable Long id, @RequestBody(required = false) ContratVigueurDto.ReconductionRequest r) {
         return service.reconduire(id, r);
     }
+
+    /**
+     * ⚠️ 2026-10-29 (demande front « marche-a-commandes-champs », §B3) — relit ce qui régit le contrat depuis la dernière version
+     * validée de la fiche (après une révision) : PRMP de la fiche ; 409 {@code CONTRAT_ECHU}, {@code FICHE_NON_VALIDEE},
+     * {@code FORME_CHANGEE}.
+     */
+    @PostMapping("/{id}/relecture")
+    public ContratVigueurDto relire(@PathVariable Long id) {
+        return service.relireDepuisFiche(id);
+    }
 }

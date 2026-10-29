@@ -1884,6 +1884,10 @@ public class FicheMarcheService {
         if (estimations != null) {
             EstimationFiche.auBilan(estimations, bilan);
         }
+        // ⚠️ 2026-10-29 (« marche-a-commandes-champs », §B2) — minimum ≤ maximum annuels, maximum × durée face au plan.
+        if (TypeMarcheDao.A_COMMANDE.name().equals(typeOuverture)) {
+            ControlesFicheMarche.montantsACommandes(valeurs, valeursPpm.montantsParLot(ctx.idDetail()), nbLots, bilan);
+        }
         // ⚠️ V60 (2026-10-03, §B3) — une fiche de travaux dit son matériel : la liste, ou le texte B03-QT-09.
         if (CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
             ControlesFicheMarche.materielExige(ouverts, valeurs, moyens.materiel(fiche.getIdFiche()).size(), bilan);

@@ -1,6 +1,7 @@
 package cnm.prs.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -84,6 +85,14 @@ public final class ControlesFicheMarche {
      * n'admet ni code de champ ni valeur à espaces : l'exigence vit ici, les deux champs restent facultatifs au référentiel.
      */
     public static final String CALENDRIER_REMISES = "CALENDRIER_REMISES";
+    /**
+     * ⚠️ 2026-10-29 (demande front « marche-a-commandes-champs », §B2) — les montants annuels du marché à commandes ({@code B05-TP-02},
+     * {@code B05-TP-03}, par lot) : le minimum ne dépasse pas le maximum (bloquant) ; le maximum annuel × la durée ({@code B02-AU-04})
+     * s'écarte de plus de {@value #ECART_PLAN_POURCENT} % du montant du lot au plan (avertissement).
+     */
+    public static final String MARCHE_A_COMMANDES_MONTANTS = "MARCHE_A_COMMANDES_MONTANTS";
+    /** ⚠️ Hypothèse (à confirmer) : le seuil de l'avertissement d'écart au plan. */
+    static final int ECART_PLAN_POURCENT = 10;
     /**
      * ⚠️ 2026-10-02 (demande front « référentiel des travaux routiers », §B2) — l'assurance décennale, exigée pour des
      * travaux de bâtiment seulement : le CCAP-T ne l'imprime que sous {@code BATIMENT}.
@@ -1266,6 +1275,51 @@ public final class ControlesFicheMarche {
         } else {
             ok.add(new Controle(DELAI_QUESTIONS, List.of(delai.getCode()), delai.codeBloc(),
                     "Délai des questions ≥ " + legal + " jours avant la date limite."));
+        }
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (« marche-a-commandes-champs », §B2) — pour chaque lot ({@code CODE#n}, à défaut {@code CODE}) : minimum annuel ≤
+     * maximum annuel, bloquant ({@code ok} quand les deux sont saisis et cohérents) ; puis, si le maximum, la durée et le montant du lot
+     * au plan sont connus, maximum × durée / 12 comparé au plan : avertissement au-delà de {@value #ECART_PLAN_POURCENT} % d'écart.
+     * Appelé pour un marché à commandes seulement.
+     */
+    public static void montantsACommandes(Map<String, String> valeurs, Map<Integer, BigDecimal> montantsPlan, int nbLots, BilanControlesDto bilan) {
+        List<Integer> lots = new ArrayList<>();
+        if (LotsFiche.alloti(nbLots)) {
+            for (int n = 1; n <= nbLots; n++) {
+                lots.add(n);
+            }
+        } else {
+            lots.add(null);
+        }
+        BigDecimal duree = nombre(valeurs.get("B02-AU-04"));
+        for (Integer lot : lots) {
+            String suffixe = lot == null ? "" : String.valueOf(LotsFiche.SEPARATEUR) + lot;
+            String nomLot = lot == null ? "" : " (lot " + lot + ")";
+            BigDecimal min = nombre(valeurs.get("B05-TP-02" + suffixe) != null ? valeurs.get("B05-TP-02" + suffixe) : valeurs.get("B05-TP-02"));
+            BigDecimal max = nombre(valeurs.get("B05-TP-03" + suffixe) != null ? valeurs.get("B05-TP-03" + suffixe) : valeurs.get("B05-TP-03"));
+            List<String> champs = List.of("B05-TP-02" + suffixe, "B05-TP-03" + suffixe);
+            if (min != null && max != null) {
+                if (min.compareTo(max) > 0) {
+                    bilan.bloquants().add(new Controle(MARCHE_A_COMMANDES_MONTANTS, champs, "B05", "Le minimum annuel" + nomLot + " ("
+                            + ValeursPpmService.montant(min) + " Ar) dépasse le maximum annuel (" + ValeursPpmService.montant(max) + " Ar)."));
+                    continue;
+                }
+                bilan.ok().add(new Controle(MARCHE_A_COMMANDES_MONTANTS, champs, "B05", "Minimum annuel ≤ maximum annuel" + nomLot + "."));
+            }
+            BigDecimal plan = montantsPlan == null ? null : montantsPlan.get(lot);
+            if (max == null || duree == null || duree.signum() <= 0 || plan == null || plan.signum() <= 0) {
+                continue;
+            }
+            BigDecimal total = max.multiply(duree).divide(BigDecimal.valueOf(12), 0, RoundingMode.HALF_UP);
+            BigDecimal ecart = total.subtract(plan).abs().multiply(BigDecimal.valueOf(100)).divide(plan, 1, RoundingMode.HALF_UP);
+            if (ecart.compareTo(BigDecimal.valueOf(ECART_PLAN_POURCENT)) > 0) {
+                bilan.avertissements().add(new Controle(MARCHE_A_COMMANDES_MONTANTS, List.of("B05-TP-03" + suffixe, "B02-AU-04"), "B05",
+                        "Le maximum annuel" + nomLot + " sur la durée du marché (" + ValeursPpmService.montant(total) + " Ar pour "
+                                + duree.stripTrailingZeros().toPlainString() + " mois) s'écarte de " + ecart.stripTrailingZeros().toPlainString()
+                                + " % du montant au plan (" + ValeursPpmService.montant(plan) + " Ar)."));
+            }
         }
     }
 

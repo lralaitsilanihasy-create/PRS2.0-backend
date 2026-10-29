@@ -137,6 +137,58 @@ public class ContratVigueurService {
         c.setLot(lot);
         c.setTypeMarche(type);
         c.setDateEffet(a.getDateNotification());
+        figer(c, v);
+        c.setDateFin(finDePeriode(c.getDateEffet(), c.getPeriodeMois() == null ? c.getDureeMaxMois() : c.getPeriodeMois()));
+        c.setCreeLe(maintenant());
+        contrats.save(c);
+        evaluation.tracerAttribution(a.getIdDmc(), "CONTRAT_EN_VIGUEUR", "Lot " + lot + " : " + (ContratVigueur.CONTRAT_CADRE.equals(type)
+                ? "contrat-cadre" : "marché à commandes") + " en vigueur du " + c.getDateEffet().format(JOUR) + " au " + c.getDateFin().format(JOUR)
+                + (c.isReconductible() ? ", reconductible " + Objects.toString(c.getReconductionsMax(), "—") + " fois" : ""));
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (demande front « marche-a-commandes-champs », §B3) — la PRMP de la fiche relit ce qui régit le contrat depuis la
+     * <strong>dernière version validée</strong> (après une révision qui a complété la période, le minimum ou le maximum annuels…) : les
+     * mêmes valeurs que la notification ({@link #figer}). La date de fin est recalculée de l'effet tant qu'aucune reconduction n'a eu
+     * lieu ; reconduit, elle est gardée. Les bons, remises et réceptions déjà faits ne sont pas touchés. 409 {@code CONTRAT_ECHU},
+     * {@code FICHE_NON_VALIDEE}, {@code FORME_CHANGEE} (la fiche n'est plus de la forme du contrat). Journal {@code CONTRAT_RELU}.
+     */
+    @Transactional
+    public ContratVigueurDto relireDepuisFiche(Long id) {
+        ContratVigueur c = exiger(id);
+        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.PRMP) {
+            throw new AccessDeniedException("Le contrat en vigueur se relit depuis la fiche par sa PRMP.");
+        }
+        fiches.controlerLecture(c.getIdDmc());
+        if (aujourdhui().isAfter(c.getDateFin())) {
+            throw new BusinessRuleException("Le contrat est échu depuis le " + c.getDateFin().format(JOUR) + ".", "CONTRAT_ECHU");
+        }
+        FicheMarcheService.EtatVersion v = fiches.etatValide(c.getIdDmc())
+                .orElseThrow(() -> new BusinessRuleException("La fiche n'a pas de version validée.", "FICHE_NON_VALIDEE"));
+        if (!c.getTypeMarche().equals(v.type())) {
+            throw new BusinessRuleException("La fiche validée n'est plus de la forme du contrat (" + c.getTypeMarche() + ").", "FORME_CHANGEE");
+        }
+        String avant = resume(c);
+        figer(c, v);
+        if (c.getReconductions() == 0) {
+            c.setDateFin(finDePeriode(c.getDateEffet(), c.getPeriodeMois() == null ? c.getDureeMaxMois() : c.getPeriodeMois()));
+        }
+        contrats.save(c);
+        evaluation.tracerAttribution(c.getIdDmc(), "CONTRAT_RELU", "Lot " + c.getLot() + " : contrat en vigueur relu depuis la fiche validée (version "
+                + v.version() + ") — avant : " + avant + " ; après : " + resume(c));
+        return dto(c);
+    }
+
+    private static String resume(ContratVigueur c) {
+        return "période " + Objects.toString(c.getPeriodeMois(), "—") + " mois, fin " + c.getDateFin().format(JOUR) + ", minimum "
+                + (c.getMontantMinimum() == null ? "—" : FormulairesEnLigne.lisible(c.getMontantMinimum())) + ", maximum "
+                + (c.getMontantMaximum() == null ? "—" : FormulairesEnLigne.lisible(c.getMontantMaximum()));
+    }
+
+    /** Ce qui régit le contrat, lu sur la version validée de la fiche (valeur du lot d'abord) : à la notification, et à la relecture. */
+    private void figer(ContratVigueur c, FicheMarcheService.EtatVersion v) {
+        String type = c.getTypeMarche();
+        Integer lot = c.getLot();
         if (ContratVigueur.CONTRAT_CADRE.equals(type)) {
             TermesCadre t = TermesCadre.de(v, lot);
             c.setPeriodeMois(t.periodeMois());
@@ -150,10 +202,9 @@ public class ContratVigueurService {
             c.setRythme(valeur(v, "B02-PC-02", lot));
             c.setCalendrier(valeur(v, "B02-PC-03", lot));
             // ⚠️ V147 (« contrat-cadre-4a », §B3) — le calendrier structuré, figé seulement quand le rythme est celui du calendrier.
-            if (SELON_CALENDRIER.equals(c.getRythme())) {
-                c.setPeriodiciteMois(entier(v, PERIODICITE, lot));
-                c.setPremiereRemise(ControlesFicheMarche.date(valeur(v, PREMIERE_REMISE, lot)));
-            }
+            boolean calendrier = SELON_CALENDRIER.equals(c.getRythme());
+            c.setPeriodiciteMois(calendrier ? entier(v, PERIODICITE, lot) : null);
+            c.setPremiereRemise(calendrier ? ControlesFicheMarche.date(valeur(v, PREMIERE_REMISE, lot)) : null);
         } else {
             Integer periode = entier(v, "B02-AU-04", lot);
             c.setPeriodeMois(periode == null ? null : Math.min(periode, MOIS_MAX_A_COMMANDE));   // loi, art. 30 : trois ans au plus
@@ -165,12 +216,6 @@ public class ContratVigueurService {
             c.setMontantEstime(c.getMontantMaximum());
             c.setRythme(valeur(v, "B09-DX-03", lot));
         }
-        c.setDateFin(finDePeriode(c.getDateEffet(), c.getPeriodeMois() == null ? c.getDureeMaxMois() : c.getPeriodeMois()));
-        c.setCreeLe(maintenant());
-        contrats.save(c);
-        evaluation.tracerAttribution(a.getIdDmc(), "CONTRAT_EN_VIGUEUR", "Lot " + lot + " : " + (ContratVigueur.CONTRAT_CADRE.equals(type)
-                ? "contrat-cadre" : "marché à commandes") + " en vigueur du " + c.getDateEffet().format(JOUR) + " au " + c.getDateFin().format(JOUR)
-                + (c.isReconductible() ? ", reconductible " + Objects.toString(c.getReconductionsMax(), "—") + " fois" : ""));
     }
 
     /** La fin d'une période : le dernier jour avant la date anniversaire ({@code effet + mois − 1 jour}) ; sans durée, l'effet. */

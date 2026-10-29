@@ -691,6 +691,16 @@ forme et rythme des marchés subséquents.
     avant chaque échéance, et tant qu'aucune remise n'a été lancée dans cette fenêtre, la PRMP est alertée et notifiée (une fois
     par échéance). La remise elle-même, son objet et sa date limite restent décidés par la PRMP ou l'UGPM.
   - Un contrat entré en vigueur avant cette règle garde son calendrier en texte libre : aucune échéance n'en est déduite.
+- ⚠️ **2026-10-29 (demande front « marche-a-commandes-champs »)** — **ce qui régit le contrat se saisit dans la fiche, et se relit.**
+  - Quand la fiche d'un marché à commandes porte un minimum et un maximum annuels, **le minimum ne dépasse pas le maximum** ; un
+    maximum qui, sur la durée du marché, s'écarte nettement du montant du plan est signalé. Que le maximum devienne obligatoire et
+    que le minimum revienne dans la fiche (le pilote les avait rendus facultatif et retiré le 29/09, avant que le contrat ne les lise)
+    reste à décider par le pilote.
+  - **Le contrat en vigueur garde ce que la fiche disait à la notification.** Une fiche révisée ensuite ne le change pas d'elle-même :
+    la PRMP le **relit** depuis la dernière version validée. La date de fin suit la nouvelle période tant que le contrat n'a pas été
+    reconduit ; ce qui a déjà été commandé ou reçu reste acquis.
+  - Un marché à commandes de travaux suit le délai de garantie des travaux. Que la forme soit admise en travaux reste à trancher
+    par le pilote.
 
 #### La remise en concurrence des titulaires et le marché subséquent (2026-10-16)
 
