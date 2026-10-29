@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.ReceptionCommandeDto;
 import cnm.prs.entity.BonCommande;
+import cnm.prs.entity.BonCommandeLigne;
 import cnm.prs.entity.CommissionReception;
 import cnm.prs.entity.CommissionReceptionMembre;
 import cnm.prs.entity.CompteCandidat;
@@ -33,6 +34,7 @@ import cnm.prs.entity.ContratVigueur;
 import cnm.prs.entity.DossierMec;
 import cnm.prs.entity.Offre;
 import cnm.prs.entity.ReceptionCommande;
+import cnm.prs.entity.ReceptionLigne;
 import cnm.prs.entity.ReceptionSignature;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
@@ -102,13 +104,18 @@ public class ReceptionCommandeService {
     private final EvaluationService evaluation;
     private final GenerateurDocumentsFiche generateur;
     private final Clock horloge;
+    /** ⚠️ 2026-10-29 (« bons-reception », §B3) — les lignes du bon et les quantités livrées et reçues par réception. */
+    private final cnm.prs.repository.BonCommandeLigneRepository bonLignes;
+    private final cnm.prs.repository.ReceptionLigneRepository receptionLignes;
 
     public ReceptionCommandeService(ReceptionCommandeRepository receptions, ReceptionSignatureRepository signatures,
             CommissionReceptionRepository commissions, CommissionReceptionMembreRepository membres, BonCommandeRepository bons,
             ContratVigueurRepository contrats, OffreRepository offres, CompteCandidatRepository candidats, CompteCaoRepository comptesCao,
             CompteCaoService comptes, DossierMecRepository dmcRepository, FicheMarcheService fiches, ValeursPpmService valeursPpm,
             NotificationService notifications, CeremonieService ceremonies, EvaluationService evaluation, GenerateurDocumentsFiche generateur,
-            Clock horloge) {
+            Clock horloge, cnm.prs.repository.BonCommandeLigneRepository bonLignes, cnm.prs.repository.ReceptionLigneRepository receptionLignes) {
+        this.bonLignes = bonLignes;
+        this.receptionLignes = receptionLignes;
         this.receptions = receptions;
         this.signatures = signatures;
         this.commissions = commissions;
@@ -275,13 +282,18 @@ public class ReceptionCommandeService {
 
     /**
      * 400 {@code DATE_INVALIDE} (avant l'émission du bon, ou future) ; 409 {@code BON_ANNULE}, {@code RECEPTION_EN_COURS} (une réception
-     * non signée), {@code DEJA_RECU}.
+     * non signée), {@code DEJA_RECU}. ⚠️ 2026-10-29 (« bons-reception », §B3) — les quantités livrées par ligne, chacune entre 0 et son
+     * reliquat (400 {@code QUANTITE_LIVREE_INVALIDE}, {@code details} = {@code rang}, {@code reliquat}) ; une ligne omise : rien ; sans
+     * {@code lignes} : tout le reliquat. Au moins une quantité positive.
      */
     private void livrer(BonCommande b, ContratVigueur c, ReceptionCommandeDto.LivraisonRequest r) {
         if (BonCommande.ANNULE.equals(b.getEtat())) {
             throw new BusinessRuleException("Le bon de commande est annulé.", "BON_ANNULE");
         }
-        String etat = etatReception(b, receptions.findByIdBonOrderByIdAsc(b.getId()), garantieMois(c));
+        List<ReceptionCommande> avant = receptions.findByIdBonOrderByIdAsc(b.getId());
+        List<BonCommandeLigne> ls = bonLignes.findByIdBonOrderByRangAsc(b.getId());
+        Quantites q = quantites(ls, avant, lignesPar(avant));
+        String etat = etatReception(b, avant, garantieMois(c), q.resteALivrer());
         if ("EN_RECEPTION".equals(etat) || "EN_RECEPTION_DEFINITIVE".equals(etat)) {
             throw new BusinessRuleException("Une réception de ce bon est en cours.", "RECEPTION_EN_COURS");
         }
@@ -293,6 +305,28 @@ public class ReceptionCommandeService {
             throw new BadRequestException("La date de livraison se situe entre l'émission du bon (" + b.getEmisLe().format(JOUR) + ") et aujourd'hui.",
                     "DATE_INVALIDE");
         }
+        Map<Integer, BigDecimal> livrees = new java.util.LinkedHashMap<>();
+        if (r != null && r.lignes() != null && !r.lignes().isEmpty()) {
+            ls.forEach(l -> livrees.put(l.getRang(), BigDecimal.ZERO));
+            Set<Integer> vus = new java.util.HashSet<>();
+            for (ReceptionCommandeDto.LigneLivree l : r.lignes()) {
+                Integer rang = l == null ? null : l.rang();
+                BigDecimal reliquat = rang == null ? null : q.reliquat(rang);
+                if (rang == null || !livrees.containsKey(rang) || !vus.add(rang) || l.quantiteLivree() == null || l.quantiteLivree().signum() < 0
+                        || l.quantiteLivree().compareTo(reliquat) > 0) {
+                    throw new BadRequestException("La quantité livrée de la ligne " + rang + " va de 0 à son reliquat"
+                            + (reliquat == null || !livrees.containsKey(rang) ? " (ligne inconnue du bon)" : " (" + FormulairesEnLigne.lisible(reliquat) + ")")
+                            + ".", "QUANTITE_LIVREE_INVALIDE", Map.<String, Object>of("rang", rang == null ? "" : rang, "reliquat",
+                                    reliquat == null ? BigDecimal.ZERO : reliquat));
+                }
+                livrees.put(rang, l.quantiteLivree());
+            }
+        } else {
+            ls.forEach(l -> livrees.put(l.getRang(), q.reliquat(l.getRang())));
+        }
+        if (!ls.isEmpty() && livrees.values().stream().noneMatch(v -> v.signum() > 0)) {
+            throw new BadRequestException("La livraison porte sur au moins une quantité.", "QUANTITE_LIVREE_INVALIDE", Map.<String, Object>of());
+        }
         ReceptionCommande x = new ReceptionCommande();
         x.setIdBon(b.getId());
         x.setType(ReceptionCommande.PROVISOIRE);
@@ -302,6 +336,13 @@ public class ReceptionCommandeService {
         x.setDeclareeLe(maintenant());
         x.setDeclareePar(acteur());
         receptions.save(x);
+        livrees.forEach((rang, quantite) -> {
+            ReceptionLigne l = new ReceptionLigne();
+            l.setIdReception(x.getId());
+            l.setRang(rang);
+            l.setQuantiteLivree(quantite);
+            receptionLignes.save(l);
+        });
         for (CommissionReceptionMembre m : membres.findByIdContratOrderByRangAscIdAsc(c.getId())) {
             notifications.emettreMembreCao(TypeNotification.LIVRAISON_DECLAREE, m.getIdCompte(), m.getEmail(), c.getIdDmc().intValue(),
                     TypeObjet.PROCEDURE, "Livraison à réceptionner", "La livraison du bon de commande n° " + b.getNumero() + " « " + b.getObjet()
@@ -322,7 +363,7 @@ public class ReceptionCommandeService {
         exigerPresident(c);
         List<ReceptionCommande> rs = receptions.findByIdBonOrderByIdAsc(idBon);
         Integer garantie = garantieMois(c);
-        String etat = etatReception(b, rs, garantie);
+        String etat = etatReception(b, rs, garantie, quantites(b, rs).resteALivrer());
         if ("EN_RECEPTION_DEFINITIVE".equals(etat)) {
             throw new BusinessRuleException("La réception définitive est en cours.", "RECEPTION_EN_COURS");
         }
@@ -374,9 +415,15 @@ public class ReceptionCommandeService {
         if (!ReceptionCommande.RECEPTION.equals(decision) && motif == null) {
             throw new BadRequestException("L'ajournement, la réfaction et le rejet se motivent.", "MOTIF_OBLIGATOIRE");
         }
+        // ⚠️ 2026-10-29 (« bons-reception », §B3) — les quantités reçues, au plus les livrées ; la valeur reçue borne la réfaction.
+        List<BonCommandeLigne> ls = bonLignes.findByIdBonOrderByRangAsc(b.getId());
+        List<ReceptionLigne> rl = definitive ? List.of() : receptionLignes.findByIdReceptionOrderByRangAsc(id);
+        Map<Integer, BigDecimal> recues = recues(rl, acceptee(decision), r.lignes());
+        BigDecimal valeurRecue = rl.isEmpty() ? b.getMontantHt() : valeur(ls, recues);
         BigDecimal refaction = ReceptionCommande.REFACTION.equals(decision) ? r.montantRefaction() : null;
-        if (ReceptionCommande.REFACTION.equals(decision) && (refaction == null || refaction.signum() <= 0 || refaction.compareTo(b.getMontantHt()) >= 0)) {
-            throw new BadRequestException("La réfaction est un montant positif, inférieur au montant du bon.", "REFACTION_INVALIDE");
+        if (ReceptionCommande.REFACTION.equals(decision) && (refaction == null || refaction.signum() <= 0 || refaction.compareTo(valeurRecue) >= 0)) {
+            throw new BadRequestException("La réfaction est un montant positif, inférieur à la valeur reçue (" + FormulairesEnLigne.lisible(valeurRecue)
+                    + " Ariary HT).", "REFACTION_INVALIDE");
         }
         LocalDate le = r.dateReception() == null ? aujourdhui() : r.dateReception();
         LocalDate plancher = definitive ? x.getDeclareeLe().toLocalDate() : x.getDateLivraison();
@@ -400,8 +447,14 @@ public class ReceptionCommandeService {
             LocalDate echeance = echeanceLivraison(b);
             x.setJoursRetard(echeance == null ? null : (int) Math.max(0, ChronoUnit.DAYS.between(echeance, x.getDateLivraison())));
             x.setTauxPenalite(taux);
+            // ⚠️ 2026-10-29 (§B3, Q4) — la pénalité porte sur la valeur livrée à cette livraison, avec ses propres jours de retard.
+            BigDecimal valeurLivree = rl.isEmpty() ? b.getMontantHt() : valeur(ls, livrees(rl));
             x.setPenaliteIndicative(penaliteApplicable(c) && x.getJoursRetard() != null && acceptee(decision)
-                    ? penalite(b.getMontantHt(), taux, x.getJoursRetard(), plafond(c)) : null);
+                    ? penalite(valeurLivree, taux, x.getJoursRetard(), plafond(c)) : null);
+            for (ReceptionLigne l : rl) {
+                l.setQuantiteRecue(recues.getOrDefault(l.getRang(), BigDecimal.ZERO));
+                receptionLignes.save(l);
+            }
         }
         x.setEtabliLe(maintenant());
         x.setEtabliPar(acteur());
@@ -541,8 +594,133 @@ public class ReceptionCommandeService {
 
     // ------------------------------------------------------------------ dérivations
 
-    /** L'état de réception d'un bon, depuis ses réceptions dans l'ordre. */
+    /**
+     * ⚠️ 2026-10-29 (« bons-reception », §B3) — les quantités d'un bon par rang : {@code livre} = toutes les livraisons déclarées
+     * (réceptions provisoires), {@code recu} = les PV provisoires signés qui acceptent (réception, réfaction). Une réception sans ligne
+     * (avant V148) vaut tout le bon.
+     */
+    record Quantites(Map<Integer, BigDecimal> commande, Map<Integer, BigDecimal> livre, Map<Integer, BigDecimal> recu) {
+
+        BigDecimal reliquat(Integer rang) {
+            BigDecimal r = commande.getOrDefault(rang, BigDecimal.ZERO).subtract(recu.getOrDefault(rang, BigDecimal.ZERO));
+            return r.signum() < 0 ? BigDecimal.ZERO : r;
+        }
+
+        boolean resteALivrer() {
+            return commande.keySet().stream().anyMatch(rang -> reliquat(rang).signum() > 0);
+        }
+    }
+
+    static Quantites quantites(List<BonCommandeLigne> ls, List<ReceptionCommande> rs, Map<Long, List<ReceptionLigne>> parReception) {
+        Map<Integer, BigDecimal> commande = new java.util.LinkedHashMap<>();
+        Map<Integer, BigDecimal> livre = new java.util.LinkedHashMap<>();
+        Map<Integer, BigDecimal> recu = new java.util.LinkedHashMap<>();
+        ls.forEach(l -> {
+            commande.put(l.getRang(), l.getQuantite());
+            livre.put(l.getRang(), BigDecimal.ZERO);
+            recu.put(l.getRang(), BigDecimal.ZERO);
+        });
+        for (ReceptionCommande x : rs) {
+            if (!ReceptionCommande.PROVISOIRE.equals(x.getType())) {
+                continue;
+            }
+            boolean recue = ReceptionCommande.SIGNE.equals(x.getEtat()) && acceptee(x.getDecision());
+            List<ReceptionLigne> rl = parReception.getOrDefault(x.getId(), List.of());
+            if (rl.isEmpty()) {   // avant V148 : tout le bon
+                commande.forEach((rang, q) -> {
+                    livre.merge(rang, q, BigDecimal::add);
+                    if (recue) {
+                        recu.merge(rang, q, BigDecimal::add);
+                    }
+                });
+                continue;
+            }
+            for (ReceptionLigne l : rl) {
+                livre.merge(l.getRang(), l.getQuantiteLivree(), BigDecimal::add);
+                if (recue && l.getQuantiteRecue() != null) {
+                    recu.merge(l.getRang(), l.getQuantiteRecue(), BigDecimal::add);
+                }
+            }
+        }
+        return new Quantites(commande, livre, recu);
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (« bons-reception », §B3) — les quantités reçues au PV : acceptée (réception, réfaction), celles demandées
+     * ({@code lignes}, chacune entre 0 et la quantité livrée, 400 {@code QUANTITE_RECUE_INVALIDE}), une ligne omise valant sa quantité
+     * livrée, et au moins une positive ; non acceptée (ajournement, rejet), rien.
+     */
+    static Map<Integer, BigDecimal> recues(List<ReceptionLigne> rl, boolean acceptee, List<ReceptionCommandeDto.LigneRecue> demandees) {
+        Map<Integer, BigDecimal> out = new java.util.LinkedHashMap<>();
+        if (rl.isEmpty()) {
+            return out;
+        }
+        Map<Integer, BigDecimal> livrees = livrees(rl);
+        livrees.forEach((rang, q) -> out.put(rang, acceptee ? q : BigDecimal.ZERO));
+        if (!acceptee) {
+            return out;
+        }
+        if (demandees != null) {
+            Set<Integer> vus = new java.util.HashSet<>();
+            for (ReceptionCommandeDto.LigneRecue d : demandees) {
+                Integer rang = d == null ? null : d.rang();
+                BigDecimal livree = rang == null ? null : livrees.get(rang);
+                if (livree == null || !vus.add(rang) || d.quantiteRecue() == null || d.quantiteRecue().signum() < 0
+                        || d.quantiteRecue().compareTo(livree) > 0) {
+                    throw new BadRequestException("La quantité reçue de la ligne " + rang + " va de 0 à la quantité livrée"
+                            + (livree == null ? " (ligne absente de la livraison)" : " (" + FormulairesEnLigne.lisible(livree) + ")") + ".",
+                            "QUANTITE_RECUE_INVALIDE", Map.<String, Object>of("rang", rang == null ? "" : rang, "quantiteLivree",
+                                    livree == null ? BigDecimal.ZERO : livree));
+                }
+                out.put(rang, d.quantiteRecue());
+            }
+        }
+        if (out.values().stream().noneMatch(v -> v.signum() > 0)) {
+            throw new BadRequestException("Une réception porte sur au moins une quantité reçue ; sinon, la commission ajourne ou rejette.",
+                    "QUANTITE_RECUE_INVALIDE", Map.<String, Object>of());
+        }
+        return out;
+    }
+
+    static Map<Integer, BigDecimal> livrees(List<ReceptionLigne> rl) {
+        Map<Integer, BigDecimal> m = new java.util.LinkedHashMap<>();
+        rl.forEach(l -> m.put(l.getRang(), l.getQuantiteLivree()));
+        return m;
+    }
+
+    /** Σ quantité × prix unitaire de la ligne du même rang, au centime. */
+    static BigDecimal valeur(List<BonCommandeLigne> ls, Map<Integer, BigDecimal> quantites) {
+        BigDecimal v = BigDecimal.ZERO;
+        for (BonCommandeLigne l : ls) {
+            BigDecimal q = quantites.get(l.getRang());
+            if (q != null) {
+                v = v.add(q.multiply(l.getPrixUnitaire()));
+            }
+        }
+        return v.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private Map<Long, List<ReceptionLigne>> lignesPar(List<ReceptionCommande> rs) {
+        Map<Long, List<ReceptionLigne>> m = new java.util.HashMap<>();
+        rs.forEach(x -> m.put(x.getId(), receptionLignes.findByIdReceptionOrderByRangAsc(x.getId())));
+        return m;
+    }
+
+    private Quantites quantites(BonCommande b, List<ReceptionCommande> rs) {
+        return quantites(bonLignes.findByIdBonOrderByRangAsc(b.getId()), rs, lignesPar(rs));
+    }
+
+    /** L'état de réception d'un bon, depuis ses réceptions dans l'ordre (sans reliquat : avant la réception partielle). */
     static String etatReception(BonCommande b, List<ReceptionCommande> rs, Integer garantie) {
+        return etatReception(b, rs, garantie, false);
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (« bons-reception », §B3, Q3) — avec le reliquat : la dernière livraison reçue alors qu'une quantité reste à livrer
+     * laisse le bon {@code RECU_PARTIEL}, ouvert à une nouvelle livraison ; la réception provisoire du bon n'est prononcée qu'avec la
+     * dernière quantité.
+     */
+    static String etatReception(BonCommande b, List<ReceptionCommande> rs, Integer garantie, boolean resteALivrer) {
         if (BonCommande.ANNULE.equals(b.getEtat())) {
             return "ANNULE";
         }
@@ -565,6 +743,9 @@ public class ReceptionCommandeService {
         }
         if (ReceptionCommande.REJET.equals(d.getDecision())) {
             return "REJETE";
+        }
+        if (resteALivrer) {
+            return "RECU_PARTIEL";
         }
         return garantie == null || garantie <= 0 ? "RECU_DEFINITIF" : "RECU_PROVISOIRE";
     }
@@ -641,8 +822,9 @@ public class ReceptionCommandeService {
         if (!acceptee(x.getDecision())) {
             return "Livraison non acceptée : pas de pénalité calculée.";
         }
-        return "À titre indicatif, jamais retenue : " + x.getTauxPenalite().stripTrailingZeros().toPlainString() + " ‰ du montant du bon par jour de "
-                + "retard, plafonnée à " + plafond(c).stripTrailingZeros().toPlainString() + " %.";
+        // ⚠️ 2026-10-29 (« bons-reception », Q4) — la base est la valeur livrée à cette livraison (tout le bon avant V148).
+        return "À titre indicatif, jamais retenue : " + x.getTauxPenalite().stripTrailingZeros().toPlainString() + " ‰ de la valeur livrée par jour "
+                + "de retard, plafonnée à " + plafond(c).stripTrailingZeros().toPlainString() + " %.";
     }
 
     // ------------------------------------------------------------------ signataires et droits
@@ -737,26 +919,43 @@ public class ReceptionCommandeService {
     private ReceptionCommandeDto.DuBon duBon(BonCommande b, ContratVigueur c) {
         List<ReceptionCommande> rs = receptions.findByIdBonOrderByIdAsc(b.getId());
         Integer garantie = garantieMois(c);
-        String etat = etatReception(b, rs, garantie);
+        List<BonCommandeLigne> ls = bonLignes.findByIdBonOrderByRangAsc(b.getId());
+        Quantites q = quantites(ls, rs, lignesPar(rs));
+        String etat = etatReception(b, rs, garantie, q.resteALivrer());
         LocalDate jusquau = garantieJusquau(rs, garantie);
         List<String> alertes = new ArrayList<>();
         if ("RECU_PROVISOIRE".equals(etat) && jusquau != null && !aujourdhui().isBefore(jusquau)) {
             alertes.add(RECEPTION_DEFINITIVE_A_PRONONCER);
         }
         Offre o = offres.findById(b.getIdOffre()).orElse(null);
+        List<ReceptionCommandeDto.LigneBon> lignes = ls.stream().map(l -> new ReceptionCommandeDto.LigneBon(l.getRang(), l.getIdArticle(),
+                l.getDesignation(), l.getUnite(), l.getQuantite(), q.livre().get(l.getRang()), q.recu().get(l.getRang()), q.reliquat(l.getRang())))
+                .toList();
         return new ReceptionCommandeDto.DuBon(b.getId(), b.getNumero(), b.getObjet(), o == null ? null : o.getRaisonSociale(), etat, garantie, jusquau, alertes,
-                rs.stream().map(x -> dto(x, b, c)).toList());
+                rs.stream().map(x -> dto(x, b, c)).toList(), lignes);
     }
 
     private ReceptionCommandeDto dto(ReceptionCommande x, BonCommande b, ContratVigueur c) {
-        BigDecimal recu = x.getDecision() == null || !acceptee(x.getDecision()) ? null
-                : x.getMontantRefaction() == null ? b.getMontantHt() : b.getMontantHt().subtract(x.getMontantRefaction());
         boolean provisoire = ReceptionCommande.PROVISOIRE.equals(x.getType());
+        // ⚠️ 2026-10-29 (« bons-reception », §B3) — les quantités de cette livraison ; sans ligne (avant V148), tout le bon.
+        List<BonCommandeLigne> ls = bonLignes.findByIdBonOrderByRangAsc(b.getId());
+        List<ReceptionLigne> rl = provisoire ? receptionLignes.findByIdReceptionOrderByRangAsc(x.getId()) : List.of();
+        Map<Integer, BigDecimal> recues = new java.util.HashMap<>();
+        rl.stream().filter(l -> l.getQuantiteRecue() != null).forEach(l -> recues.put(l.getRang(), l.getQuantiteRecue()));
+        BigDecimal valeurRecue = rl.isEmpty() ? b.getMontantHt() : valeur(ls, recues);
+        BigDecimal recu = x.getDecision() == null || !acceptee(x.getDecision()) ? null
+                : x.getMontantRefaction() == null ? valeurRecue : valeurRecue.subtract(x.getMontantRefaction());
+        BigDecimal valeurLivree = !provisoire ? null : rl.isEmpty() ? b.getMontantHt() : valeur(ls, livrees(rl));
+        Map<Integer, ReceptionLigne> parRang = new java.util.HashMap<>();
+        rl.forEach(l -> parRang.put(l.getRang(), l));
+        List<ReceptionCommandeDto.LigneReception> lignes = rl.isEmpty() ? List.of() : ls.stream().filter(l -> parRang.containsKey(l.getRang()))
+                .map(l -> new ReceptionCommandeDto.LigneReception(l.getRang(), l.getIdArticle(), l.getDesignation(), l.getUnite(), l.getPrixUnitaire(),
+                        l.getQuantite(), parRang.get(l.getRang()).getQuantiteLivree(), parRang.get(l.getRang()).getQuantiteRecue())).toList();
         return new ReceptionCommandeDto(x.getId(), b.getId(), b.getNumero(), c.getId(), c.getIdDmc(), c.getLot(), x.getType(), x.getEtat(), x.getDateLivraison(),
                 x.getLivraisonObservations(), x.getDeclareeLe(), x.getDeclareePar(), x.getDecision(), x.getDateReception(), x.getMotif(), x.getReserves(),
                 b.getMontantHt(), x.getMontantRefaction(), recu, provisoire ? echeanceLivraison(b) : null, x.getJoursRetard(), x.getTauxPenalite(),
                 provisoire ? plafond(c) : null, x.getPenaliteIndicative(), penaliteNote(c, x), x.getEtabliLe(), x.getEtabliPar(), x.getPvPdf() != null,
-                attendus(c, x), x.getSigneLe());
+                attendus(c, x), x.getSigneLe(), valeurLivree, lignes);
     }
 
     private void produirePv(ReceptionCommande x, BonCommande b, ContratVigueur c) {
@@ -790,6 +989,33 @@ public class ReceptionCommandeService {
         });
         if (x.getReserves() != null) {
             para(el, "Réserves : " + x.getReserves());
+        }
+        // ⚠️ 2026-10-29 (« bons-reception », §B3) — le tableau des quantités : commandé, livré à cette livraison, reçu, reliquat après ce PV.
+        List<ReceptionLigne> rl = definitive ? List.of() : receptionLignes.findByIdReceptionOrderByRangAsc(x.getId());
+        if (!rl.isEmpty()) {
+            List<BonCommandeLigne> ls = bonLignes.findByIdBonOrderByRangAsc(b.getId());
+            List<ReceptionCommande> autres = receptions.findByIdBonOrderByIdAsc(b.getId()).stream().filter(y -> !y.getId().equals(x.getId())).toList();
+            Quantites avant = quantites(ls, autres, lignesPar(autres));
+            Map<Integer, ReceptionLigne> parRang = new java.util.HashMap<>();
+            rl.forEach(l -> parRang.put(l.getRang(), l));
+            List<List<List<String>>> t = new ArrayList<>();
+            t.add(List.of(List.of("N°"), List.of("Désignation"), List.of("Unité"), List.of("Commandé"), List.of("Livré"), List.of("Reçu"),
+                    List.of("Reliquat")));
+            for (BonCommandeLigne l : ls) {
+                ReceptionLigne y = parRang.get(l.getRang());
+                BigDecimal livree = y == null ? BigDecimal.ZERO : y.getQuantiteLivree();
+                BigDecimal recue = y == null || y.getQuantiteRecue() == null ? BigDecimal.ZERO : y.getQuantiteRecue();
+                BigDecimal reliquat = avant.reliquat(l.getRang()).subtract(recue).max(BigDecimal.ZERO);
+                t.add(List.of(List.of(String.valueOf(l.getRang())), List.of(l.getDesignation()), List.of(Objects.toString(l.getUnite(), "—")),
+                        List.of(FormulairesEnLigne.lisible(l.getQuantite())), List.of(FormulairesEnLigne.lisible(livree)),
+                        List.of(FormulairesEnLigne.lisible(recue)), List.of(FormulairesEnLigne.lisible(reliquat))));
+            }
+            el.add(new DocumentLibre.Tableau(7, t));
+            ReceptionCommandeDto vue = dto(x, b, c);
+            if (vue.montantReceptionne() != null) {
+                para(el, "Montant réceptionné : " + FormulairesEnLigne.lisible(vue.montantReceptionne()) + " Ariary hors taxes (quantités reçues "
+                        + "aux prix unitaires du bon" + (x.getMontantRefaction() == null ? "" : ", réfaction déduite") + ").");
+            }
         }
         if (!definitive && x.getJoursRetard() != null) {
             LocalDate echeance = echeanceLivraison(b);

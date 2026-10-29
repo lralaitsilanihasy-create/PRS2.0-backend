@@ -8634,8 +8634,30 @@ Tables **`t_bon_commande`** (numérotée par contrat, unique sur `(ID_CONTRAT, N
     (loi art. 30-II) ;
   - `MONTANT_ESTIME_DEPASSE` : contrat-cadre, cumul au-delà de la valeur maximale estimée (décret art. 8) — signalé, jamais refusé.
     Pas de minimum pour le contrat-cadre (art. 34).
-- **Pas encore** : un plafond **en quantité** par article (seul le montant est contrôlé) ; le TTC (le bon porte le hors taxes) ;
-  la réception des livraisons : lot MS-4, ci-dessous.
+- ~~**Pas encore** : un plafond **en quantité** par article (seul le montant est contrôlé) ; le TTC (le bon porte le hors taxes)~~ —
+  livrés le 2026-10-29, ci-dessous ; la réception des livraisons : lot MS-4, ci-dessous.
+
+> ⚠️ **2026-10-29 — quantités, TTC** (demande front « bons-reception », §B1, §B2 ; propositions Q1, Q2, Q5 du front retenues ; **V148**).
+> - **Plafond en quantité (§B1, marché à commandes).** Pour une ligne qui porte un `idArticle` : le cumul des quantités de l'article sur
+>   les bons **émis** (annulés exclus) de l'**année contractuelle**, plus la demande du bon (plusieurs lignes du même article
+>   s'additionnent), ne dépasse pas sa `quantiteMax` (besoin de la fiche) : 409 **`QUANTITE_MAX_DEPASSEE`**, `details` =
+>   `{ rang (la première ligne de l'article), idArticle, quantiteMax, dejaCommande, demande }`. Ce contrôle passe avant
+>   `MAXIMUM_DEPASSE`. Une ligne sans `idArticle` n'est pas bornée en quantité. Le contrat-cadre n'a pas de plafond en quantité
+>   (Q5 : son devis n'est pas structuré).
+> - **`Consommation.articles[]`** (marché à commandes ; vide pour un contrat-cadre) : `{ idArticle, designation, unite, quantiteMin,
+>   quantiteMax, commandeAnnee, resteQuantite }`, un par article du besoin, dans l'ordre du besoin ; `resteQuantite` nul sans
+>   `quantiteMax`.
+> - **Alerte `QUANTITE_MIN_NON_ATTEINTE`** (jumelle de `MINIMUM_NON_ATTEINT`) : un article sous sa `quantiteMin` à **30 jours** au plus
+>   de la fin de l'année contractuelle. Signalée, jamais bloquante. Servie dans **`Consommation.alertes`** seulement (pas dans
+>   `ContratVigueurDto.alertes`, qui ne lit pas le besoin).
+> - **TTC (§B2).** Le bon porte **`tauxTva`** (en %, figé à l'émission), **`montantTva`** et **`montantTtc`**, arrondis au centime
+>   (`BonCommandeDto`, en fin d'objet). Le taux (Q1) : le rapport TTC / HT de l'offre du titulaire **à l'attribution** (sa ligne de
+>   titulaire d'un contrat-cadre, sinon l'attributaire du lot), qui suit une offre exonérée (0 % : TTC = HT) ; à défaut le paramètre
+>   `FICHE_TAUX_TVA` ; sans l'un ni l'autre, les trois sont nuls. Un bon émis **avant V148** n'a pas de TVA (rien n'est recalculé).
+> - Le **document du bon** ajoute deux lignes au tableau, « TVA (n %) » et « Total toutes taxes comprises », et « soit … Ariary toutes
+>   taxes comprises » à la phrase d'arrêté.
+> - **`Consommation.cumulTtc`** : le TTC des bons émis qui en portent un. Les **plafonds restent contrôlés en HT** (Q2) : maximum
+>   annuel, montant retenu du marché subséquent.
 
 
 ### La réception des commandes — lot MS-4 — V127 ⚠️ 2026-10-16
@@ -8699,7 +8721,34 @@ fournitures, art. 22 ; réponse Q1 du pilote). Tables **`t_commission_reception`
   attendus[{ signataire, nom, president, signeLe }], signeLe }`.
 - **`DuBon`** : `{ idBon, numero, objet, titulaire, etatReception, garantieMois, garantieJusquau, alertes[], receptions[] }` ;
   **`Mienne`** : `{ reception, objetBon, titulaire, president, aEtablir, aSigner }`.
-- **Pas encore** : la réception partielle (par article) ; la retenue effective des pénalités (hors de l'application, H4).
+- **Pas encore** : ~~la réception partielle (par article)~~ (livrée le 2026-10-29, ci-dessous) ; la retenue effective des pénalités
+  (hors de l'application, H4).
+
+> ⚠️ **2026-10-29 — la réception partielle par ligne** (demande front « bons-reception », §B3 ; propositions Q3, Q4 du front retenues ;
+> **V148** : table `t_reception_ligne`, quantités livrées puis reçues par réception provisoire et par ligne du bon).
+> - **Livraison** (`…/livraison`, PRMP/UGPM ou titulaire) : `{ dateLivraison, observations, lignes[{ rang, quantiteLivree }] }`. Chaque
+>   quantité va de 0 au **reliquat** de la ligne (commandé − reçu) ; une ligne omise vaut 0 ; au moins une quantité positive :
+>   400 **`QUANTITE_LIVREE_INVALIDE`** (`details.rang`, `details.reliquat`). **Sans `lignes`**, la livraison vaut tout le reliquat.
+> - **PV** (`…/pv`, président) : `lignes[{ rang, quantiteRecue }]`, chacune entre 0 et la quantité **livrée** à cette livraison ; une
+>   ligne omise vaut sa quantité livrée ; au moins une positive pour une réception ou une réfaction : 400
+>   **`QUANTITE_RECUE_INVALIDE`** (`details.rang`, `details.quantiteLivree`). Ajournement ou rejet : rien de reçu.
+>   - `montantReceptionne` = Σ quantité reçue × prix unitaire, **moins la réfaction** ; la réfaction est inférieure à la **valeur
+>     reçue** (au lieu du montant du bon).
+> - **Q3 : un PV par livraison.** Chaque livraison est reçue, ajournée ou rejetée pour ce qu'elle apporte. Tant qu'une ligne a un
+>   reliquat, la dernière livraison reçue laisse le bon **`RECU_PARTIEL`** (nouvel `etatReception`), ouvert à une nouvelle livraison ;
+>   la réception provisoire du bon (`RECU_PROVISOIRE`, ou `RECU_DEFINITIF` sans garantie) n'est prononcée qu'avec la dernière quantité.
+>   Le délai de garantie part de la **dernière** réception acceptée ; la réception définitive suit `RECU_PROVISOIRE` comme avant.
+> - **Q4 : pénalité indicative sur la valeur livrée** de chaque livraison (Σ quantité livrée × prix unitaire), avec ses propres jours
+>   de retard ; `penaliteNote` dit « ‰ de la valeur livrée ».
+> - **`ReceptionCommandeDto`** gagne, en fin d'objet, `valeurLivree` (réception provisoire) et `lignes[{ rang, idArticle, designation,
+>   unite, prixUnitaire, quantiteCommandee, quantiteLivree, quantiteRecue }]` (`quantiteRecue` nulle avant le PV).
+> - **`DuBon`** gagne `lignes[{ rang, idArticle, designation, unite, commande, livre, recu, reliquat }]` : `livre` = toutes les
+>   livraisons déclarées (ajournées et rejetées comprises), `recu` = les PV provisoires signés qui acceptent, `reliquat` = commandé −
+>   reçu.
+> - Le **PV** ajoute le tableau des quantités (N°, désignation, unité, commandé, livré, reçu, reliquat après ce PV) et le montant
+>   réceptionné.
+> - **Avant V148**, une réception provisoire n'a pas de ligne : elle vaut **tout le bon** (livré = reçu = commandé si elle est
+>   acceptée), sans `lignes` dans le DTO ; ses montants restent ceux du bon.
 
 
 ### L'attribution, lot 2, tranche 2d-3 : la déclaration sans suite — V93 ⚠️ 2026-10-08

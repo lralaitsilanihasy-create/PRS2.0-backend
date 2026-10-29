@@ -68,6 +68,8 @@ public class BonCommandeService {
 
     public static final String MINIMUM_NON_ATTEINT = "MINIMUM_NON_ATTEINT";
     public static final String MONTANT_ESTIME_DEPASSE = "MONTANT_ESTIME_DEPASSE";
+    /** ⚠️ 2026-10-29 (« bons-reception », §B1) — servie dans la consommation seulement. */
+    public static final String QUANTITE_MIN_NON_ATTEINTE = "QUANTITE_MIN_NON_ATTEINTE";
     private static final Set<ProfilUtilisateur> EXTERNES = Set.of(ProfilUtilisateur.CANDIDAT, ProfilUtilisateur.DEPOSITAIRE,
             ProfilUtilisateur.MEMBRE_CAO);
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -91,12 +93,18 @@ public class BonCommandeService {
     private final EvaluationService evaluation;
     private final GenerateurDocumentsFiche generateur;
     private final Clock horloge;
+    /** ⚠️ 2026-10-29 (« bons-reception », §B2, Q1) — le taux de TVA : l'offre du titulaire à l'attribution, à défaut le paramètre. */
+    private final cnm.prs.repository.AttributionTitulaireRepository titulaires;
+    private final ParametreService parametres;
 
     public BonCommandeService(BonCommandeRepository bons, BonCommandeLigneRepository lignes, ContratVigueurRepository contrats,
             ContratVigueurService contratsService, RemiseConcurrenceRepository remises, AttributionRepository attributions, OffreRepository offres,
             CompteCandidatRepository candidats, DossierMecRepository dmcRepository, FicheMarcheService fiches, FormulairesEnLigne formulaires,
             SeanceService seance, ValeursPpmService valeursPpm, NotificationService notifications, CeremonieService ceremonies,
-            EvaluationService evaluation, GenerateurDocumentsFiche generateur, Clock horloge) {
+            EvaluationService evaluation, GenerateurDocumentsFiche generateur, Clock horloge,
+            cnm.prs.repository.AttributionTitulaireRepository titulaires, ParametreService parametres) {
+        this.titulaires = titulaires;
+        this.parametres = parametres;
         this.bons = bons;
         this.lignes = lignes;
         this.contrats = contrats;
@@ -176,7 +184,11 @@ public class BonCommandeService {
                         + FormulairesEnLigne.lisible(remise.getMontantRetenu()) + " Ariary HT ; déjà commandé : " + FormulairesEnLigne.lisible(deja)
                         + ").", "MONTANT_SUBSEQUENT_DEPASSE", null, Map.<String, Object>of("montantRetenu", remise.getMontantRetenu(), "dejaCommande", deja, "montant", total));
             }
-        } else if (c.getMontantMaximum() != null) {
+        }
+        if (!cadre) {
+            controlerQuantites(c, ls, duContrat);   // ⚠️ 2026-10-29 (« bons-reception », §B1)
+        }
+        if (remise == null && c.getMontantMaximum() != null) {
             LocalDate[] annee = anneeContractuelle(c, aujourdhui());
             BigDecimal deja = cumul(duAnnee(duContrat, annee));
             if (deja.add(total).compareTo(c.getMontantMaximum()) > 0) {
@@ -197,6 +209,13 @@ public class BonCommandeService {
         b.setDelaiLivraison(delai);
         b.setObservations(nettoyer(r.observations()));
         b.setMontantHt(total);
+        // ⚠️ 2026-10-29 (« bons-reception », §B2, Q1) — la TVA, figée à l'émission.
+        BigDecimal taux = tauxTva(c, idOffre);
+        if (taux != null) {
+            b.setTauxTva(taux);
+            b.setMontantTva(total.multiply(taux).divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP));
+            b.setMontantTtc(total.add(b.getMontantTva()));
+        }
         b.setEmisLe(maintenant());
         b.setEmisPar(acteur());
         bons.save(b);
@@ -282,6 +301,109 @@ public class BonCommandeService {
         return out;
     }
 
+    /**
+     * ⚠️ 2026-10-29 (demande front « bons-reception », §B1) — marché à commandes : le cumul des quantités d'un article du besoin, sur
+     * les bons émis (annulés exclus) de l'année contractuelle, ne dépasse pas sa {@code quantiteMax} (409 {@code QUANTITE_MAX_DEPASSEE},
+     * {@code details} = {@code rang} (la première ligne de l'article), {@code idArticle}, {@code quantiteMax}, {@code dejaCommande},
+     * {@code demande}). Une ligne sans {@code idArticle} n'est pas bornée en quantité : le montant reste son seul contrôle.
+     */
+    private void controlerQuantites(ContratVigueur c, List<BonCommandeLigne> ls, List<BonCommande> duContrat) {
+        Map<Integer, BesoinEnLigneDto.Article> besoin = besoin(c);
+        Map<Integer, BigDecimal> demande = new java.util.LinkedHashMap<>();
+        Map<Integer, Integer> premierRang = new HashMap<>();
+        for (BonCommandeLigne l : ls) {
+            if (l.getIdArticle() != null) {
+                demande.merge(l.getIdArticle(), l.getQuantite(), BigDecimal::add);
+                premierRang.putIfAbsent(l.getIdArticle(), l.getRang());
+            }
+        }
+        if (demande.isEmpty()) {
+            return;
+        }
+        Map<Integer, BigDecimal> deja = quantitesAnnee(duAnnee(duContrat, anneeContractuelle(c, aujourdhui())));
+        for (Map.Entry<Integer, BigDecimal> e : demande.entrySet()) {
+            BesoinEnLigneDto.Article a = besoin.get(e.getKey());
+            BigDecimal max = a == null ? null : a.quantiteMax();
+            BigDecimal commande = deja.getOrDefault(e.getKey(), BigDecimal.ZERO);
+            if (max != null && commande.add(e.getValue()).compareTo(max) > 0) {
+                throw new BusinessRuleException("« " + a.designation() + " » : la quantité commandée dans l'année contractuelle dépasserait sa "
+                        + "quantité maximale (" + FormulairesEnLigne.lisible(max) + " ; déjà commandé : " + FormulairesEnLigne.lisible(commande)
+                        + " ; demandé : " + FormulairesEnLigne.lisible(e.getValue()) + ").", "QUANTITE_MAX_DEPASSEE", null,
+                        Map.<String, Object>of("rang", premierRang.get(e.getKey()), "idArticle", e.getKey(), "quantiteMax", max,
+                                "dejaCommande", commande, "demande", e.getValue()));
+            }
+        }
+    }
+
+    /** Les articles du besoin du lot, par identifiant. */
+    private Map<Integer, BesoinEnLigneDto.Article> besoin(ContratVigueur c) {
+        Map<Integer, BesoinEnLigneDto.Article> besoin = new java.util.LinkedHashMap<>();
+        formulaires.lot(c.getIdDmc(), c.getLot()).ifPresent(l -> l.articles().forEach(a -> besoin.put(a.idArticle(), a)));
+        return besoin;
+    }
+
+    /** Les quantités commandées par article ({@code idArticle}) sur des bons, les annulés exclus. */
+    private Map<Integer, BigDecimal> quantitesAnnee(List<BonCommande> bs) {
+        Map<Integer, BigDecimal> q = new HashMap<>();
+        for (BonCommande b : bs) {
+            if (!BonCommande.EMIS.equals(b.getEtat())) {
+                continue;
+            }
+            for (BonCommandeLigne l : lignes.findByIdBonOrderByRangAsc(b.getId())) {
+                if (l.getIdArticle() != null) {
+                    q.merge(l.getIdArticle(), l.getQuantite(), BigDecimal::add);
+                }
+            }
+        }
+        return q;
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (« bons-reception », §B2, Q1 : la proposition du front) — le taux de TVA du bon, en % : le rapport TTC / HT de
+     * l'offre du titulaire à l'attribution (sa ligne de titulaire d'un contrat-cadre, sinon l'attributaire du lot), qui suit l'offre
+     * retenue, exonérée comprise (0 %) ; à défaut le paramètre {@code FICHE_TAUX_TVA} ; nul sans l'un ni l'autre.
+     */
+    BigDecimal tauxTva(ContratVigueur c, String idOffre) {
+        BigDecimal ht = null;
+        BigDecimal ttc = null;
+        for (cnm.prs.entity.AttributionTitulaire t : titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(c.getIdDmc(), c.getLot())) {
+            if (t.getIdOffre().equals(idOffre)) {
+                ht = t.getMontant();
+                ttc = t.getMontantTtc();
+            }
+        }
+        if (ht == null || ttc == null) {
+            Attribution a = attributions.findById(new Attribution.Cle(c.getIdDmc(), c.getLot())).orElse(null);
+            if (a != null && idOffre.equals(a.getIdOffreAttribuee())) {
+                ht = a.getMontant();
+                ttc = a.getMontantTtc();
+            }
+        }
+        BigDecimal deLOffre = taux(ht, ttc);
+        return deLOffre != null ? deLOffre : parametres.tauxTva();
+    }
+
+    /** {@code (TTC − HT) / HT × 100}, à deux décimales ; nul si l'un manque, si le HT n'est pas positif ou si le TTC lui est inférieur. */
+    static BigDecimal taux(BigDecimal ht, BigDecimal ttc) {
+        if (ht == null || ttc == null || ht.signum() <= 0 || ttc.compareTo(ht) < 0) {
+            return null;
+        }
+        return ttc.subtract(ht).multiply(BigDecimal.valueOf(100)).divide(ht, 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (« bons-reception », §B1) — {@code QUANTITE_MIN_NON_ATTEINTE} : marché à commandes, à trente jours au plus de la fin
+     * de l'année contractuelle, un article du besoin n'a pas atteint sa {@code quantiteMin}. Signalée, jamais bloquante.
+     */
+    static boolean quantiteMinNonAtteinte(ContratVigueur c, List<BonCommandeDto.ArticleConsomme> articles, LocalDate aujourdhui) {
+        if (!ContratVigueur.A_COMMANDE.equals(c.getTypeMarche()) || aujourdhui.isAfter(c.getDateFin())) {
+            return false;
+        }
+        LocalDate[] annee = anneeContractuelle(c, aujourdhui);
+        return ChronoUnit.DAYS.between(aujourdhui, annee[1]) <= ContratVigueurService.JOURS_ECHEANCE_PROCHE && articles.stream()
+                .anyMatch(a -> a.quantiteMin() != null && a.commandeAnnee().compareTo(a.quantiteMin()) < 0);
+    }
+
     /** La PRMP annule un bon (motif obligatoire, 400 {@code MOTIF_OBLIGATOIRE}) ; 409 {@code DEJA_ANNULE}. Le titulaire en est notifié. */
     @Transactional
     public BonCommandeDto annuler(Long id, BonCommandeDto.AnnulationRequest r) {
@@ -332,10 +454,26 @@ public class BonCommandeService {
                         x.getMontantRetenu() == null ? null : x.getMontantRetenu().subtract(commande)));
             }
         }
+        // ⚠️ 2026-10-29 (« bons-reception », §B1) — marché à commandes : les quantités par article du besoin.
+        List<BonCommandeDto.ArticleConsomme> articles = new ArrayList<>();
+        if (!cadre) {
+            Map<Integer, BigDecimal> q = quantitesAnnee(duAnnee(duContrat, annee));
+            for (BesoinEnLigneDto.Article a : besoin(c).values()) {
+                BigDecimal commande = q.getOrDefault(a.idArticle(), BigDecimal.ZERO);
+                articles.add(new BonCommandeDto.ArticleConsomme(a.idArticle(), a.designation(), a.unite(), a.quantiteMin(), a.quantiteMax(),
+                        commande, a.quantiteMax() == null ? null : a.quantiteMax().subtract(commande)));
+            }
+        }
+        List<String> alertes = new ArrayList<>(alertes(c, duContrat, aujourdhui()));
+        if (quantiteMinNonAtteinte(c, articles, aujourdhui())) {
+            alertes.add(QUANTITE_MIN_NON_ATTEINTE);
+        }
+        BigDecimal cumulTtc = duContrat.stream().filter(b -> BonCommande.EMIS.equals(b.getEtat()) && b.getMontantTtc() != null)
+                .map(BonCommande::getMontantTtc).reduce(BigDecimal.ZERO, BigDecimal::add);
         return new BonCommandeDto.Consommation(idContrat, c.getTypeMarche(), cumul(duContrat), annee == null ? null : annee[0],
                 annee == null ? null : annee[1], cumulAnnee, cadre ? null : c.getMontantMinimum(), cadre ? null : c.getMontantMaximum(),
                 cadre || c.getMontantMaximum() == null ? null : c.getMontantMaximum().subtract(cumulAnnee), c.getMontantEstime(), subsequents,
-                alertes(c, duContrat, aujourdhui()), duContrat.stream().map(b -> dto(b, c)).toList());
+                alertes, duContrat.stream().map(b -> dto(b, c)).toList(), cumulTtc, articles);
     }
 
     @Transactional(readOnly = true)
@@ -448,7 +586,7 @@ public class BonCommandeService {
         return new BonCommandeDto(b.getId(), b.getIdContrat(), c.getIdDmc(), c.getLot(), c.getTypeMarche(), b.getNumero(), b.getIdRemise(),
                 numeroRemise, b.getIdOffre(), o == null ? null : o.getNumero(), o == null ? null : o.getRaisonSociale(), b.getEtat(), b.getObjet(),
                 b.getLieuLivraison(), b.getDelaiLivraison(), b.getObservations(), ls, b.getMontantHt(), b.getEmisLe(), b.getEmisPar(), b.getAccuseLe(),
-                b.getAnnuleLe(), b.getAnnulePar(), b.getMotifAnnulation());
+                b.getAnnuleLe(), b.getAnnulePar(), b.getMotifAnnulation(), b.getTauxTva(), b.getMontantTva(), b.getMontantTtc());
     }
 
     private DocumentLibre document(ContratVigueur c, BonCommande b, RemiseConcurrence remise, List<BonCommandeLigne> ls) {
@@ -480,9 +618,17 @@ public class BonCommandeService {
                     List.of(FormulairesEnLigne.lisible(l.getMontant()))));
         }
         t.add(List.of(List.of(""), List.of("Total hors taxes"), List.of(""), List.of(""), List.of(""), List.of(FormulairesEnLigne.lisible(b.getMontantHt()))));
+        // ⚠️ 2026-10-29 (« bons-reception », §B2) — la TVA et le total TTC.
+        if (b.getMontantTtc() != null) {
+            t.add(List.of(List.of(""), List.of("TVA (" + b.getTauxTva().stripTrailingZeros().toPlainString() + " %)"), List.of(""), List.of(""),
+                    List.of(""), List.of(FormulairesEnLigne.lisible(b.getMontantTva()))));
+            t.add(List.of(List.of(""), List.of("Total toutes taxes comprises"), List.of(""), List.of(""), List.of(""),
+                    List.of(FormulairesEnLigne.lisible(b.getMontantTtc()))));
+        }
         el.add(new DocumentLibre.Tableau(6, t));
-        para(el, "Arrêté le présent bon de commande à la somme de " + FormulairesEnLigne.lisible(b.getMontantHt()) + " Ariary hors taxes, aux prix "
-                + (cadre ? "de l'offre retenue au marché subséquent." : "du bordereau de l'offre du titulaire (loi n° 2016-055, art. 30)."));
+        para(el, "Arrêté le présent bon de commande à la somme de " + FormulairesEnLigne.lisible(b.getMontantHt()) + " Ariary hors taxes"
+                + (b.getMontantTtc() == null ? "" : ", soit " + FormulairesEnLigne.lisible(b.getMontantTtc()) + " Ariary toutes taxes comprises")
+                + ", aux prix " + (cadre ? "de l'offre retenue au marché subséquent." : "du bordereau de l'offre du titulaire (loi n° 2016-055, art. 30)."));
         para(el, "Délai de livraison : " + b.getDelaiLivraison() + ", à compter du lendemain de la notification du présent bon de commande.");
         if (b.getLieuLivraison() != null) {
             para(el, "Lieu de livraison : " + b.getLieuLivraison() + ".");

@@ -56,6 +56,31 @@ class BonCommandeServiceTest {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-10-29 (bons-reception, Q1) — le taux de TVA de l'offre : (TTC − HT) / HT, exonéré 0 % ; sans les deux montants, rien")
+    void tauxDeLOffre() {
+        assertThat(BonCommandeService.taux(new BigDecimal("1000000"), new BigDecimal("1200000"))).isEqualByComparingTo("20");
+        assertThat(BonCommandeService.taux(new BigDecimal("179570562"), new BigDecimal("215484674"))).isEqualByComparingTo("20.00");
+        assertThat(BonCommandeService.taux(new BigDecimal("1000"), new BigDecimal("1000"))).isEqualByComparingTo("0");
+        assertThat(BonCommandeService.taux(new BigDecimal("1000"), null)).isNull();
+        assertThat(BonCommandeService.taux(new BigDecimal("1000"), new BigDecimal("900"))).isNull();
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-29 (bons-reception, §B1) — quantité minimale non atteinte : marché à commandes, à 30 jours de la fin d'année")
+    void quantiteMinNonAtteinte() {
+        ContratVigueur c = contrat(ContratVigueur.A_COMMANDE, LocalDate.of(2025, 11, 1), 24);
+        List<cnm.prs.dto.BonCommandeDto.ArticleConsomme> sous = List.of(new cnm.prs.dto.BonCommandeDto.ArticleConsomme(1, "Ramette", "u",
+                new BigDecimal("100"), new BigDecimal("500"), new BigDecimal("40"), new BigDecimal("460")));
+        List<cnm.prs.dto.BonCommandeDto.ArticleConsomme> atteint = List.of(new cnm.prs.dto.BonCommandeDto.ArticleConsomme(1, "Ramette", "u",
+                new BigDecimal("100"), new BigDecimal("500"), new BigDecimal("100"), new BigDecimal("400")));
+        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, sous, LocalDate.of(2026, 9, 1))).isFalse();
+        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, sous, LocalDate.of(2026, 10, 2))).isTrue();
+        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, atteint, LocalDate.of(2026, 10, 2))).isFalse();
+        c.setTypeMarche(ContratVigueur.CONTRAT_CADRE);
+        assertThat(BonCommandeService.quantiteMinNonAtteinte(c, sous, LocalDate.of(2026, 10, 2))).isFalse();
+    }
+
+    @Test
     @DisplayName("Contrat-cadre : pas de minimum (art. 34) ; le cumul au-delà de la valeur maximale estimée est signalé (art. 8)")
     void valeurEstimee() {
         ContratVigueur c = contrat(ContratVigueur.CONTRAT_CADRE, LocalDate.of(2026, 1, 1), 12);

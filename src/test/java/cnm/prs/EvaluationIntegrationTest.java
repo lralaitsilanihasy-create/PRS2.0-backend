@@ -1674,6 +1674,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         notifiee.setLot(1);
         notifiee.setEtat("NOTIFIE");
         notifiee.setIdOffreAttribuee(a);
+        notifiee.setMontant(new java.math.BigDecimal("10000000"));       // ⚠️ 29/10 (Q1) : TTC / HT de l'offre = 20 %
+        notifiee.setMontantTtc(new java.math.BigDecimal("12000000"));
         attributionRepository.save(notifiee);
         long idContrat = contrat("A_COMMANDE", aujourdhui.minusYears(1).plusDays(20), null, "8000000", "10000000");
         String url = "/api/contrats-en-vigueur/" + idContrat + "/bons-commande";
@@ -1686,12 +1688,36 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 + "\"quantite\":%s,\"prixUnitaire\":20000}]}";
         mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(String.format(bon, 300))).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idOffre").value(a)).andExpect(jsonPath("$.idRemise").value(org.hamcrest.Matchers.nullValue()))
-                .andExpect(jsonPath("$.montantHt").value(6000000)).andExpect(jsonPath("$.lignes[0].prixDuBordereau").value(false));
+                .andExpect(jsonPath("$.montantHt").value(6000000)).andExpect(jsonPath("$.lignes[0].prixDuBordereau").value(false))
+                // ⚠️ 29/10 (« bons-reception », §B2) — la TVA de l'offre retenue, figée à l'émission.
+                .andExpect(jsonPath("$.tauxTva").value(20)).andExpect(jsonPath("$.montantTva").value(1200000))
+                .andExpect(jsonPath("$.montantTtc").value(7200000));
         mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(String.format(bon, 250))).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("MAXIMUM_DEPASSE")).andExpect(jsonPath("$.details.maximum").value(10000000));
-        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.cumulAnnee").value(6000000))
-                .andExpect(jsonPath("$.resteMaximum").value(4000000)).andExpect(jsonPath("$.anneeFin").value(aujourdhui.plusDays(19).toString()))
-                .andExpect(jsonPath("$.alertes[0]").value("MINIMUM_NON_ATTEINT"));
+        // ⚠️ 29/10 (§B1) — le plafond en quantité d'un article du besoin (min 7, max 8) ; une ligne libre n'est pas bornée.
+        List<Integer> articles = JsonPath.read(mvc.perform(get("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp))
+                .andReturn().getResponse().getContentAsString(), "$[*].idArticle");
+        cnm.prs.entity.FicheArticle article = ficheArticleRepository.findById(articles.get(0)).orElseThrow();
+        article.setQuantiteMin(new java.math.BigDecimal("7"));
+        article.setQuantiteMax(new java.math.BigDecimal("8"));
+        ficheArticleRepository.save(article);
+        String parArticle = "{\"objet\":\"Ordinateurs\",\"delaiLivraison\":\"10 jours\",\"lignes\":[{\"idArticle\":" + articles.get(0)
+                + ",\"quantite\":%s,\"prixUnitaire\":1000}]}";
+        String pdf = texteDuPdf(mvc.perform(get("/api/bons-commande/" + JsonPath.<Number>read(mvc.perform(post(url).header("Authorization", tokenPrmp)
+                .contentType(JSON).content(String.format(parArticle, 6))).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(),
+                "$.id").longValue() + "/document").header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsByteArray())
+                .replaceAll("\\s+", " ");
+        assertThat(pdf).contains("TVA (20 %)", "1 200", "Total toutes taxes comprises", "7 200", "toutes taxes comprises");
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(String.format(parArticle, 3))).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("QUANTITE_MAX_DEPASSEE")).andExpect(jsonPath("$.details.rang").value(1))
+                .andExpect(jsonPath("$.details.quantiteMax").value(8)).andExpect(jsonPath("$.details.dejaCommande").value(6))
+                .andExpect(jsonPath("$.details.demande").value(3));
+        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.cumulAnnee").value(6006000))
+                .andExpect(jsonPath("$.resteMaximum").value(3994000)).andExpect(jsonPath("$.anneeFin").value(aujourdhui.plusDays(19).toString()))
+                .andExpect(jsonPath("$.alertes[0]").value("MINIMUM_NON_ATTEINT"))
+                .andExpect(jsonPath("$.alertes").value(org.hamcrest.Matchers.hasItem("QUANTITE_MIN_NON_ATTEINTE")))
+                .andExpect(jsonPath("$.cumulTtc").value(7207200)).andExpect(jsonPath("$.articles[0].commandeAnnee").value(6))
+                .andExpect(jsonPath("$.articles[0].resteQuantite").value(2)).andExpect(jsonPath("$.articles[1].resteQuantite").value(org.hamcrest.Matchers.nullValue()));
         cnm.prs.entity.ContratVigueur c = contratRepository.findById(idContrat).orElseThrow();
         c.setDateFin(aujourdhui.minusDays(1));
         contratRepository.save(c);
@@ -1701,6 +1727,75 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
 
     @Autowired private cnm.prs.repository.BonCommandeRepository bonRepository;
     @Autowired private cnm.prs.repository.ReceptionCommandeRepository receptionCommandeRepository;
+    @Autowired private cnm.prs.repository.FicheArticleRepository ficheArticleRepository;
+
+    @Test
+    @DisplayName("⚠️ 2026-10-29 (« bons-reception », §B3, Q3) : la livraison et la réception par ligne ; reçu au plus le livré, montant "
+            + "réceptionné sur les quantités reçues ; un reliquat laisse le bon RECU_PARTIEL, la dernière livraison prononce la réception")
+    void receptionPartielle() throws Exception {
+        String a = offre("C900000051", "1111222333", "BTP Alpha", 1, "INTACTE", null, "12500000");
+        cnm.prs.entity.Attribution notifiee = new cnm.prs.entity.Attribution();
+        notifiee.setIdDmc(idDmc);
+        notifiee.setLot(1);
+        notifiee.setEtat("NOTIFIE");
+        notifiee.setIdOffreAttribuee(a);
+        attributionRepository.save(notifiee);
+        long idContrat = contrat("A_COMMANDE", aujourdhui.minusMonths(1), null, null, null);
+        long idBon = JsonPath.<Number>read(mvc.perform(post("/api/contrats-en-vigueur/" + idContrat + "/bons-commande").header("Authorization", tokenPrmp)
+                .contentType(JSON).content("{\"objet\":\"Fournitures\",\"delaiLivraison\":\"30 jours\",\"lignes\":[{\"designation\":\"Ramette A4\","
+                        + "\"quantite\":100,\"prixUnitaire\":20000},{\"designation\":\"Toner\",\"quantite\":10,\"prixUnitaire\":50000}]}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.id").longValue();
+        String com = mvc.perform(put("/api/contrats-en-vigueur/" + idContrat + "/commission-reception").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"decision\":{\"reference\":\"DEC-REC-02\",\"date\":\"" + aujourdhui + "\"},\"membres\":[{\"nom\":\"Rabe\",\"prenom\":\"Hery\","
+                        + "\"email\":\"p1@rec.mg\"}]}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String jetonR = bearer("p1@rec.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, JsonPath.read(com, "$.membres[0].idCompte"), null);
+        String livraison = "/api/candidat/bons-commande/" + idBon + "/livraison";
+
+        // Première livraison : 60 ramettes, pas de toner ; au-delà du reliquat, refusé.
+        mvc.perform(post(livraison).header("Authorization", jetonA).contentType(JSON).content("{\"lignes\":[{\"rang\":1,\"quantiteLivree\":120}]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("QUANTITE_LIVREE_INVALIDE"))
+                .andExpect(jsonPath("$.details.reliquat").value(100));
+        long r1 = JsonPath.<Number>read(mvc.perform(post(livraison).header("Authorization", jetonA).contentType(JSON)
+                .content("{\"lignes\":[{\"rang\":1,\"quantiteLivree\":60}]}")).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.receptions[0].lignes[0].quantiteLivree").value(60)).andExpect(jsonPath("$.receptions[0].lignes[1].quantiteLivree").value(0))
+                .andExpect(jsonPath("$.receptions[0].valeurLivree").value(1200000)).andReturn().getResponse().getContentAsString(), "$.receptions[0].id").longValue();
+        String pv1 = "/api/receptions-commandes/" + r1;
+        mvc.perform(post(pv1 + "/pv").header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"RECEPTION\",\"lignes\":[{\"rang\":1,"
+                + "\"quantiteRecue\":70}]}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("QUANTITE_RECUE_INVALIDE"));
+        mvc.perform(post(pv1 + "/pv").header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"REFACTION\",\"motif\":\"x\","
+                + "\"montantRefaction\":1000000,\"lignes\":[{\"rang\":1,\"quantiteRecue\":50}]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REFACTION_INVALIDE"));
+        mvc.perform(post(pv1 + "/pv").header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"RECEPTION\",\"lignes\":[{\"rang\":1,"
+                + "\"quantiteRecue\":50}]}")).andExpect(status().isOk()).andExpect(jsonPath("$.montantReceptionne").value(1000000))
+                .andExpect(jsonPath("$.lignes[0].quantiteRecue").value(50));
+        String texte = texteDuPdf(mvc.perform(get(pv1 + "/pv").header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(texte).contains("Commandé", "Livré", "Reçu", "Reliquat", "Montant réceptionné : 1 000 000");
+        for (String j : List.of(tokenPrmp, jetonR)) {
+            mvc.perform(post(pv1 + "/signature").header("Authorization", j)).andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etatReception").value("RECU_PARTIEL")).andExpect(jsonPath("$.lignes[0].commande").value(100))
+                .andExpect(jsonPath("$.lignes[0].livre").value(60)).andExpect(jsonPath("$.lignes[0].recu").value(50))
+                .andExpect(jsonPath("$.lignes[0].reliquat").value(50)).andExpect(jsonPath("$.lignes[1].reliquat").value(10));
+
+        // Seconde livraison, sans lignes : tout le reliquat (50 ramettes, 10 toners) ; reçue, la réception provisoire du bon est prononcée.
+        long r2 = JsonPath.<Number>read(mvc.perform(post(livraison).header("Authorization", jetonA).contentType(JSON).content("{}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.receptions[1].lignes[0].quantiteLivree").value(50))
+                .andExpect(jsonPath("$.receptions[1].lignes[1].quantiteLivree").value(10)).andReturn().getResponse().getContentAsString(),
+                "$.receptions[1].id").longValue();
+        mvc.perform(post("/api/receptions-commandes/" + r2 + "/pv").header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"RECEPTION\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.montantReceptionne").value(1500000));
+        for (String j : List.of(tokenPrmp, jetonR)) {
+            mvc.perform(post("/api/receptions-commandes/" + r2 + "/signature").header("Authorization", j)).andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etatReception").value(org.hamcrest.Matchers.anyOf(org.hamcrest.Matchers.is("RECU_PROVISOIRE"),
+                        org.hamcrest.Matchers.is("RECU_DEFINITIF")))).andExpect(jsonPath("$.lignes[0].reliquat").value(0))
+                .andExpect(jsonPath("$.lignes[1].reliquat").value(0));
+        mvc.perform(post(livraison).header("Authorization", jetonA).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DEJA_RECU"));
+    }
 
     @Test
     @DisplayName("MS-4 (16/10, réception, V127, loi 2016-055 art. 13) : la commission de réception désignée par la PRMP ; la livraison "

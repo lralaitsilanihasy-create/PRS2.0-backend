@@ -54,6 +54,65 @@ class ReceptionCommandeServiceTest {
         assertThat(ReceptionCommandeService.garantieJusquau(defi, null)).isNull();
     }
 
+    private static cnm.prs.entity.BonCommandeLigne ligne(int rang, String quantite, String pu) {
+        cnm.prs.entity.BonCommandeLigne l = new cnm.prs.entity.BonCommandeLigne();
+        l.setRang(rang);
+        l.setQuantite(new BigDecimal(quantite));
+        l.setPrixUnitaire(new BigDecimal(pu));
+        return l;
+    }
+
+    private static cnm.prs.entity.ReceptionLigne rl(long reception, int rang, String livree, String recue) {
+        cnm.prs.entity.ReceptionLigne l = new cnm.prs.entity.ReceptionLigne();
+        l.setIdReception(reception);
+        l.setRang(rang);
+        l.setQuantiteLivree(new BigDecimal(livree));
+        l.setQuantiteRecue(recue == null ? null : new BigDecimal(recue));
+        return l;
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-29 (bons-reception, §B3) — livré, reçu et reliquat par ligne : seuls les PV signés acceptés comptent au reçu ; "
+            + "une réception d'avant V148 vaut tout le bon ; reliquat : RECU_PARTIEL")
+    void receptionPartielle() {
+        List<cnm.prs.entity.BonCommandeLigne> ls = List.of(ligne(1, "10", "1000"), ligne(2, "4", "2500"));
+        ReceptionCommande premiere = r("PROVISOIRE", "SIGNE", "RECEPTION", LocalDate.of(2026, 2, 1));
+        premiere.setId(1L);
+        ReceptionCommande rejetee = r("PROVISOIRE", "SIGNE", "REJET", LocalDate.of(2026, 2, 5));
+        rejetee.setId(2L);
+        ReceptionCommande enCours = r("PROVISOIRE", "A_ETABLIR", null, null);
+        enCours.setId(3L);
+        java.util.Map<Long, List<cnm.prs.entity.ReceptionLigne>> par = java.util.Map.of(1L, List.of(rl(1, 1, "6", "6"), rl(1, 2, "0", "0")),
+                2L, List.of(rl(2, 1, "4", "0")), 3L, List.of(rl(3, 1, "4", null), rl(3, 2, "4", null)));
+        ReceptionCommandeService.Quantites q = ReceptionCommandeService.quantites(ls, List.of(premiere, rejetee, enCours), par);
+        assertThat(q.livre()).containsEntry(1, new BigDecimal("14")).containsEntry(2, new BigDecimal("4"));
+        assertThat(q.recu().get(1)).isEqualByComparingTo("6");
+        assertThat(q.reliquat(1)).isEqualByComparingTo("4");
+        assertThat(q.reliquat(2)).isEqualByComparingTo("4");
+        assertThat(q.resteALivrer()).isTrue();
+        assertThat(ReceptionCommandeService.etatReception(bon("10 jours"), List.of(premiere), 6, true)).isEqualTo("RECU_PARTIEL");
+        assertThat(ReceptionCommandeService.etatReception(bon("10 jours"), List.of(premiere), 6, false)).isEqualTo("RECU_PROVISOIRE");
+        assertThat(ReceptionCommandeService.valeur(ls, java.util.Map.of(1, new BigDecimal("6"), 2, BigDecimal.ONE))).isEqualByComparingTo("8500");
+        // Avant V148 : une réception sans ligne vaut tout le bon.
+        ReceptionCommandeService.Quantites tout = ReceptionCommandeService.quantites(ls, List.of(premiere), java.util.Map.of());
+        assertThat(tout.resteALivrer()).isFalse();
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-29 (§B3) — reçu au PV : au plus le livré, ligne omise = livré, au moins une positive ; ajournement ou rejet : rien")
+    void quantitesRecues() {
+        List<cnm.prs.entity.ReceptionLigne> livraison = List.of(rl(3, 1, "4", null), rl(3, 2, "2", null));
+        assertThat(ReceptionCommandeService.recues(livraison, true, null)).containsEntry(1, new BigDecimal("4")).containsEntry(2, new BigDecimal("2"));
+        assertThat(ReceptionCommandeService.recues(livraison, true, List.of(new cnm.prs.dto.ReceptionCommandeDto.LigneRecue(1, new BigDecimal("3")))))
+                .containsEntry(1, new BigDecimal("3")).containsEntry(2, new BigDecimal("2"));
+        assertThat(ReceptionCommandeService.recues(livraison, false, null).values()).allMatch(v -> v.signum() == 0);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> ReceptionCommandeService.recues(livraison, true,
+                List.of(new cnm.prs.dto.ReceptionCommandeDto.LigneRecue(1, new BigDecimal("5"))))).hasMessageContaining("va de 0");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> ReceptionCommandeService.recues(livraison, true,
+                List.of(new cnm.prs.dto.ReceptionCommandeDto.LigneRecue(1, BigDecimal.ZERO), new cnm.prs.dto.ReceptionCommandeDto.LigneRecue(2,
+                        BigDecimal.ZERO)))).hasMessageContaining("au moins une quantité");
+    }
+
     @Test
     @DisplayName("L'échéance de livraison : la notification + le délai lu en jours, semaines ou mois ; illisible, nulle")
     void echeanceLivraison() {

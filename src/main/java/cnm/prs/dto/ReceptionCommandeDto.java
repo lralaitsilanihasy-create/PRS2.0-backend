@@ -16,36 +16,69 @@ import java.util.List;
  * @param penaliteIndicative à titre indicatif, jamais retenue : montant du bon × taux journalier × jours de retard, plafonné ;
  *                           {@code penaliteNote} dit pourquoi elle est nulle le cas échéant
  * @param attendus           les signataires du PV : chaque membre, et la PRMP quand elle préside
+ * @param montantReceptionne ⚠️ 2026-10-29 (« bons-reception », §B3) — Σ quantité reçue × prix unitaire, moins la réfaction ; une réception
+ *                           d'avant V148 (sans lignes) : montant du bon − réfaction
+ * @param valeurLivree       ⚠️ 2026-10-29 (§B3, Q4) — Σ quantité livrée × prix unitaire (réception provisoire) : la base de la pénalité
+ *                           indicative ; nulle pour une réception définitive
+ * @param lignes             ⚠️ 2026-10-29 (§B3) — réception provisoire : par ligne du bon, commandé, livré à cette livraison, reçu au PV
  */
 public record ReceptionCommandeDto(Long id, Long idBon, Integer numeroBon, Long idContrat, Long idDmc, Integer lot, String type, String etat,
         LocalDate dateLivraison, String livraisonObservations, LocalDateTime declareeLe, String declareePar, String decision,
         LocalDate dateReception, String motif, String reserves, BigDecimal montantBon, BigDecimal montantRefaction, BigDecimal montantReceptionne,
         LocalDate echeanceLivraison, Integer joursRetard, BigDecimal tauxPenalite, BigDecimal plafondPenalite, BigDecimal penaliteIndicative,
-        String penaliteNote, LocalDateTime etabliLe, String etabliPar, boolean pvDisponible, List<Attendu> attendus, LocalDateTime signeLe) {
+        String penaliteNote, LocalDateTime etabliLe, String etabliPar, boolean pvDisponible, List<Attendu> attendus, LocalDateTime signeLe,
+        BigDecimal valeurLivree, List<LigneReception> lignes) {
 
     /** Un signataire attendu : {@code signataire} = l'identifiant du compte du membre, ou {@code PRMP}. */
     public record Attendu(String signataire, String nom, boolean president, LocalDateTime signeLe) {
     }
 
-    /** {@code POST /api/receptions-commandes/bons/{idBon}/livraison} (et l'espace du titulaire). */
-    public record LivraisonRequest(LocalDate dateLivraison, String observations) {
+    /**
+     * ⚠️ 2026-10-29 (§B3) — une ligne du bon dans une réception provisoire : {@code quantiteLivree} à cette livraison,
+     * {@code quantiteRecue} au PV (nulle avant).
+     */
+    public record LigneReception(Integer rang, Integer idArticle, String designation, String unite, BigDecimal prixUnitaire,
+            BigDecimal quantiteCommandee, BigDecimal quantiteLivree, BigDecimal quantiteRecue) {
+    }
+
+    /**
+     * {@code POST /api/receptions-commandes/bons/{idBon}/livraison} (et l'espace du titulaire). ⚠️ 2026-10-29 (§B3) — {@code lignes} :
+     * les quantités livrées par ligne du bon, chacune entre 0 et son reliquat ; sans {@code lignes}, tout le reliquat.
+     */
+    public record LivraisonRequest(LocalDate dateLivraison, String observations, List<LigneLivree> lignes) {
+    }
+
+    public record LigneLivree(Integer rang, BigDecimal quantiteLivree) {
     }
 
     /**
      * {@code POST /api/receptions-commandes/{id}/pv} : la décision du président. {@code tauxJournalier} en pour mille du montant du bon
-     * par jour de retard (⚠️ H : 1 ‰ à défaut) ; {@code montantRefaction} pour une réfaction.
+     * par jour de retard (⚠️ H : 1 ‰ à défaut) ; {@code montantRefaction} pour une réfaction. ⚠️ 2026-10-29 (§B3) — {@code lignes} :
+     * les quantités reçues par ligne, au plus la quantité livrée ; sans {@code lignes}, tout le livré pour une réception ou une
+     * réfaction, rien pour un ajournement ou un rejet.
      */
     public record PvRequest(String decision, LocalDate dateReception, String motif, String reserves, BigDecimal montantRefaction,
-            BigDecimal tauxJournalier) {
+            BigDecimal tauxJournalier, List<LigneRecue> lignes) {
+    }
+
+    public record LigneRecue(Integer rang, BigDecimal quantiteRecue) {
     }
 
     /**
      * Les réceptions d'un bon : {@code etatReception} ∈ {@code A_LIVRER}, {@code EN_RECEPTION}, {@code AJOURNE}, {@code REJETE},
-     * {@code RECU_PROVISOIRE} (garantie en cours), {@code EN_RECEPTION_DEFINITIVE}, {@code RECU_DEFINITIF}, {@code ANNULE} ;
-     * {@code alertes} : {@code RECEPTION_DEFINITIVE_A_PRONONCER} (le délai de garantie est écoulé).
+     * ⚠️ 2026-10-29 {@code RECU_PARTIEL} (une livraison reçue, un reliquat reste à livrer), {@code RECU_PROVISOIRE} (tout reçu,
+     * garantie en cours), {@code EN_RECEPTION_DEFINITIVE}, {@code RECU_DEFINITIF}, {@code ANNULE} ; {@code alertes} :
+     * {@code RECEPTION_DEFINITIVE_A_PRONONCER} (le délai de garantie est écoulé).
+     *
+     * @param lignes ⚠️ 2026-10-29 (§B3) — par ligne du bon : commandé, livré (toutes les livraisons déclarées), reçu (PV signés
+     *               acceptés), reliquat (commandé − reçu)
      */
     public record DuBon(Long idBon, Integer numero, String objet, String titulaire, String etatReception, Integer garantieMois,
-            LocalDate garantieJusquau, List<String> alertes, List<ReceptionCommandeDto> receptions) {
+            LocalDate garantieJusquau, List<String> alertes, List<ReceptionCommandeDto> receptions, List<LigneBon> lignes) {
+    }
+
+    public record LigneBon(Integer rang, Integer idArticle, String designation, String unite, BigDecimal commande, BigDecimal livre,
+            BigDecimal recu, BigDecimal reliquat) {
     }
 
     /** Une réception à traiter par un membre de la commission ({@code GET /api/receptions-commandes/miennes}). */

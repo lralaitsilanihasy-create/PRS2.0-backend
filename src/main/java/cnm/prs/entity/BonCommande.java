@@ -90,4 +90,14 @@ public class BonCommande {
 
     @Column(name = "MOTIF_ANNULATION")
     private String motifAnnulation;
+
+    /** ⚠️ V148 (« bons-reception », §B2) — le taux de TVA en %, figé à l'émission ; nul pour un bon émis avant V148. */
+    @Column(name = "TAUX_TVA", precision = 7, scale = 4)
+    private BigDecimal tauxTva;
+
+    @Column(name = "MONTANT_TVA", precision = 18, scale = 2)
+    private BigDecimal montantTva;
+
+    @Column(name = "MONTANT_TTC", precision = 18, scale = 2)
+    private BigDecimal montantTtc;
 }

@@ -741,6 +741,14 @@ subséquent — lot MS-2*.
   notifié à la PRMP.
 - **Un bon s'annule par une décision motivée** de la PRMP. Le titulaire en est notifié, et un bon annulé ne compte plus dans les
   cumuls.
+- ⚠️ **2026-10-29 (demande front « bons-reception »)** — **les quantités et les taxes.**
+  - **Marché à commandes : un article du besoin ne se commande pas au-delà de sa quantité maximale** dans l'année contractuelle. Le
+    bon qui la dépasserait est refusé ; une ligne libre, hors du besoin, n'est bornée que par le montant. Un article resté sous sa
+    quantité minimale à trente jours de la fin de l'année est signalé, jamais bloquant. Le contrat-cadre n'a pas de plafond en
+    quantité : son devis n'est pas structuré.
+  - **Le bon porte le TTC.** Le taux de TVA est figé à l'émission : celui de l'offre du titulaire à l'attribution (un titulaire
+    exonéré a un TTC égal au HT), à défaut le taux administrable des bordereaux. **Les plafonds restent en hors taxes** : maximum
+    annuel, montant du marché subséquent.
 
 #### La réception des commandes (2026-10-16)
 
@@ -760,6 +768,12 @@ subséquent — lot MS-2*.
   comme le prévoit le marché (à défaut, au plafond légal). La retenue relève de la PRMP, hors de l'application.
 - **La réception provisoire, puis la définitive au terme du délai de garantie** du contrat. Sans délai de garantie, la réception
   provisoire vaut définitive. Le délai écoulé, la réception définitive est signalée comme à prononcer.
+- ⚠️ **2026-10-29 (demande front « bons-reception »)** — **une commande se livre et se reçoit en plusieurs fois.**
+  - Chaque livraison dit les quantités qu'elle apporte, au plus ce qui reste à livrer. **Chaque livraison a son PV** : la commission
+    y dit ce qu'elle reçoit, au plus ce qui est livré, et le montant reçu se calcule sur ces quantités aux prix du bon.
+  - Tant qu'il reste une quantité à livrer, le bon est **reçu en partie** et attend la livraison suivante. **La réception provisoire
+    du bon n'est prononcée qu'avec la dernière quantité**, et le délai de garantie part de cette dernière réception.
+  - La pénalité indicative d'une livraison en retard porte sur **la valeur de ce qu'elle livre**, avec ses propres jours de retard.
 
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 
