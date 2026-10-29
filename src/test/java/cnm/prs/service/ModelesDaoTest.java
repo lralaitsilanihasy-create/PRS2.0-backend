@@ -205,6 +205,31 @@ class ModelesDaoTest {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-10-29 (contrat-cadre-4a, §B3) — rythme « selon le calendrier » : périodicité entière et première remise exigées ; "
+            + "autre rythme ou rythme vide : la règle n'est pas évaluée")
+    void calendrierRemises() {
+        List<ChampFicheMarche> champs = List.of(controle("B02-PC-02", "LISTE", "CALENDRIER_REMISES:RYTHME"),
+                controle("B02-PC-04", "NOMBRE", "CALENDRIER_REMISES:PERIODICITE"), controle("B02-PC-05", "DATE", "CALENDRIER_REMISES:PREMIERE"));
+        java.util.function.Function<Map<String, String>, cnm.prs.dto.BilanControlesDto> bilan =
+                v -> ControlesFicheMarche.bilan(champs, v, Map.of(), Map.of());
+        String regle = ControlesFicheMarche.CALENDRIER_REMISES;
+        String calendrier = "Selon le calendrier fixé ci-après";
+        assertThat(bilan.apply(v("B02-PC-02", calendrier)).bloquants()).filteredOn(c -> regle.equals(c.regle())).singleElement()
+                .satisfies(c -> assertThat(c.champs()).containsExactly("B02-PC-02", "B02-PC-04", "B02-PC-05"))
+                .satisfies(c -> assertThat(c.message()).contains("la périodicité", "la date de la première remise", "sont attendues"));
+        assertThat(bilan.apply(v("B02-PC-02", calendrier, "B02-PC-04", "2.5", "B02-PC-05", "2026-03-01")).bloquants())
+                .filteredOn(c -> regle.equals(c.regle())).singleElement().satisfies(c -> assertThat(c.message()).contains("est attendue"));
+        assertThat(bilan.apply(v("B02-PC-02", calendrier, "B02-PC-04", "3", "B02-PC-05", "2026-03-01")).ok())
+                .filteredOn(c -> regle.equals(c.regle())).singleElement()
+                .satisfies(c -> assertThat(c.message()).contains("tous les 3 mois à partir du 01/03/2026"));
+        for (Map<String, String> sans : List.of(v("B02-PC-02", "Au fur et à mesure des besoins"), Map.<String, String>of())) {
+            cnm.prs.dto.BilanControlesDto b = bilan.apply(sans);
+            assertThat(b.bloquants()).extracting(c -> c.regle()).doesNotContain(regle);
+            assertThat(b.ok()).extracting(c -> c.regle()).doesNotContain(regle);
+        }
+    }
+
+    @Test
     @DisplayName("Durée du contrat-cadre (15/10, marchés subséquents §B0.5, décret 2019-1064 art. 19) : au-delà de 24 mois — en mois ou "
             + "en années — bloquant sans justification, « ok » avec ; ≤ 24 mois ok ; aucune durée saisie : la règle attend")
     void dureeContratCadre() {

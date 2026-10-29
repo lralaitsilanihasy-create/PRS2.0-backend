@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.EntrepriseCandidatDto;
 import cnm.prs.dto.EvaluationDto;
+import cnm.prs.entity.ContratVigueur;
 import cnm.prs.entity.Lot;
 import cnm.prs.entity.Offre;
 import cnm.prs.repository.DossierMecRepository;
@@ -92,10 +93,10 @@ public class ProjetMarcheService {
     }
 
     public DocumentLibre document(Entree in) {
-        if (in.titulaires() != null && !in.titulaires().isEmpty()) {
-            return contratCadre(in);
-        }
         FicheMarcheService.EtatVersion v = fiches.etatValide(in.idDmc()).orElse(null);
+        if (estContratCadre(in, v)) {
+            return contratCadre(in, v);
+        }
         Valeurs val = new Valeurs(v, in.lot());
         String offreMot = in.pi() ? "la proposition" : "l'offre";
         String objet = objetDuMarche(v == null ? in.plan().get("OBJET") : v.etat().getDesignationMarche(), in.allotie() ? lotLibelle(in) : null);
@@ -180,13 +181,80 @@ public class ProjetMarcheService {
     }
 
     /**
+     * ⚠️ 2026-10-29 (demande front « contrat-cadre-4a », §B1) — le texte du contrat-cadre se choisit sur la <strong>forme de la
+     * fiche</strong> (dernière version validée : {@code CONTRAT_CADRE}), et non plus sur la présence de titulaires, qui ne nommait que
+     * le multi-attributaire ; sans fiche, sur les titulaires comme avant.
+     */
+    static boolean estContratCadre(Entree in, FicheMarcheService.EtatVersion v) {
+        return in.titulaires() != null && !in.titulaires().isEmpty() || v != null && ContratVigueur.CONTRAT_CADRE.equals(v.type());
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (« contrat-cadre-4a », §B1) — {@code MONO} ou {@code MULTI} : la valeur du cadrage ({@code attributaires}) ; sans
+     * elle, {@code MULTI} si la proposition nomme des titulaires, sinon {@code MONO}.
+     */
+    static String attributaires(Entree in, FicheMarcheService.EtatVersion v) {
+        Object a = v == null || v.etat() == null || v.etat().getCadrage() == null ? null : v.etat().getCadrage().get("attributaires");
+        if (a != null && !String.valueOf(a).isBlank()) {
+            return String.valueOf(a).trim().toUpperCase(Locale.ROOT);
+        }
+        return in.titulaires() != null && !in.titulaires().isEmpty() ? "MULTI" : "MONO";
+    }
+
+    /** Les titulaires du contrat-cadre : ceux de la proposition ; mono-attributaire, l'attributaire proposé et son offre. */
+    private static List<Titulaire> titulaires(Entree in) {
+        if (in.titulaires() != null && !in.titulaires().isEmpty()) {
+            return in.titulaires();
+        }
+        EvaluationDto.Proposition p = in.proposition();
+        return List.of(new Titulaire(in.offre(), p == null ? null : p.montant(), p == null ? null : p.montantTtc(), p == null ? null : p.delai()));
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (« contrat-cadre-4a », §B1) — la durée et la reconduction, lues comme le contrat en vigueur à sa création
+     * ({@link ContratVigueurService.TermesCadre}) ; chaque fragment écrit « …… » quand la donnée manque (art. 60).
+     */
+    record Duree(String periode, String reconductions, String preavis, String dureeMax, String reconductible) {
+
+        static Duree de(FicheMarcheService.EtatVersion v, Integer lot) {
+            ContratVigueurService.TermesCadre t = ContratVigueurService.TermesCadre.de(v, lot);
+            return new Duree(t.periodeMois() == null ? A_COMPLETER + " (durée en mois)" : t.periodeMois() + " mois",
+                    t.reconductionsMax() == null ? A_COMPLETER : String.valueOf(t.reconductionsMax()),
+                    t.preavisMois() == null ? null : String.valueOf(t.preavisMois()),
+                    t.dureeMaxMois() == null ? A_COMPLETER + " (durée maximale)" : t.dureeMaxMois() + " mois",
+                    t.reconductible() == null ? "inconnue" : t.reconductible() ? "oui" : "non");
+        }
+
+        String validite() {
+            return "Le contrat-cadre est conclu pour une période de validité de " + periode + " à compter de sa notification.";
+        }
+
+        String reconduction(boolean multi) {
+            return switch (reconductible) {
+                case "oui" -> "Il est reconductible " + reconductions + " fois par décision expresse de l'Autorité contractante"
+                        + (preavis == null ? "" : ", prise au moins " + preavis + " mois avant la fin de la période en cours")
+                        + ", sans que sa durée totale, reconductions comprises, puisse excéder " + dureeMax + ". La période de reconduction "
+                        + "commence à la date anniversaire de sa notification ; " + (multi ? "les Titulaires ne peuvent" : "le Titulaire ne peut")
+                        + " refuser la reconduction.";
+                case "non" -> "Il n'est pas reconductible.";
+                default -> "Reconduction : " + A_COMPLETER + " (reconductible ou non, nombre de reconductions, préavis).";
+            };
+        }
+    }
+
+    /**
      * ⚠️ 2026-10-15 (tranche MT-b1, réponse 3 du pilote) — le projet d'un contrat-cadre multi-attributaire : un seul contrat, entre
      * l'Autorité contractante et <strong>tous</strong> les titulaires (décret n° 2019-1064, art. 15) ; l'offre indicative de chacun ; les
      * montants des marchés subséquents définis à chaque remise en concurrence (art. 16) ; une signature par titulaire.
+     * <p>⚠️ 2026-10-29 (« contrat-cadre-4a », §B1) — et le contrat-cadre <strong>mono-attributaire</strong> : un seul titulaire,
+     * l'attributaire proposé ; son offre initiale, que les marchés subséquents complètent (AE-CC, complétude de l'offre). Dans les deux
+     * cas, la période de validité, la durée maximale, la reconduction et le préavis (article « Durée et reconduction »).</p>
      */
-    private DocumentLibre contratCadre(Entree in) {
-        FicheMarcheService.EtatVersion v = fiches.etatValide(in.idDmc()).orElse(null);
+    private DocumentLibre contratCadre(Entree in, FicheMarcheService.EtatVersion v) {
         Valeurs val = new Valeurs(v, in.lot());
+        boolean multi = "MULTI".equals(attributaires(in, v));
+        List<Titulaire> titulaires = titulaires(in);
+        Duree duree = Duree.de(v, in.lot());
         String objet = objetDuMarche(v == null ? in.plan().get("OBJET") : v.etat().getDesignationMarche(), in.allotie() ? lotLibelle(in) : null);
         String numero = val.get(NUMERO_AO);
         List<DocumentLibre.Element> el = new ArrayList<>();
@@ -197,8 +265,9 @@ public class ProjetMarcheService {
         para(el, Objects.toString(in.plan().get("ENTITE"), "l'Autorité contractante")
                 + (in.plan().get("MINISTERE") == null ? "" : " (" + in.plan().get("MINISTERE") + ")")
                 + ", représentée par sa Personne responsable des marchés publics, " + signataire(in) + ", ci-après « l'Autorité contractante »,");
-        para(el, "et les " + in.titulaires().size() + " titulaire(s) suivant(s), ci-après « les Titulaires » :");
-        for (Titulaire t : in.titulaires()) {
+        para(el, multi ? "et les " + titulaires.size() + " titulaire(s) suivant(s), ci-après « les Titulaires » :"
+                : "et le titulaire suivant, ci-après « le Titulaire » :");
+        for (Titulaire t : titulaires) {
             EntrepriseCandidatDto.Entreprise e = entreprise(t.offre());
             para(el, "– " + t.offre().getRaisonSociale() + ", NIF " + t.offre().getNif() + (e == null || e.adresse() == null ? "" : ", " + e.adresse())
                     + (e == null || e.representant() == null ? ", représentée par " + A_COMPLETER + " (nom et qualité du signataire)"
@@ -217,24 +286,42 @@ public class ProjetMarcheService {
 
         sous(el, "Article 3 — Pièces constitutives");
         para(el, "Le contrat-cadre est constitué, par ordre de priorité : le contrat-cadre valant acte d'engagement et cahier des clauses "
-                + "administratives particulières ; les spécifications techniques ; l'offre de chacun des Titulaires, dont le bordereau des prix "
-                + "indicatif ; le cahier des clauses administratives générales — tels qu'ils figurent au dossier et aux offres retenues.");
+                + "administratives particulières ; les spécifications techniques ; " + (multi ? "l'offre de chacun des Titulaires, dont le "
+                        + "bordereau des prix indicatif" : "l'offre du Titulaire, dont le bordereau des prix") + " ; le cahier des clauses "
+                + "administratives générales — tels qu'ils figurent au dossier et " + (multi ? "aux offres retenues." : "à l'offre retenue."));
 
-        sous(el, "Article 4 — Offres indicatives et prix des marchés subséquents");
-        for (Titulaire t : in.titulaires()) {
-            para(el, "– " + t.offre().getRaisonSociale() + " : offre indicative de " + (t.montant() == null ? A_COMPLETER + " (montant hors taxes)"
-                    : FormulairesEnLigne.lisible(t.montant()) + " Ariary hors taxes") + (t.delai() == null ? "" : ", délai : " + t.delai()) + ".");
+        if (multi) {
+            sous(el, "Article 4 — Offres indicatives et prix des marchés subséquents");
+            for (Titulaire t : titulaires) {
+                para(el, "– " + t.offre().getRaisonSociale() + " : offre indicative de " + (t.montant() == null ? A_COMPLETER + " (montant hors taxes)"
+                        : FormulairesEnLigne.lisible(t.montant()) + " Ariary hors taxes") + (t.delai() == null ? "" : ", délai : " + t.delai()) + ".");
+            }
+            para(el, "Le montant à payer est défini, après remise en concurrence des Titulaires, dans chaque marché subséquent attribué sur la base "
+                    + "du présent contrat-cadre (décret n° 2019-1064, art. 16).");
+        } else {
+            sous(el, "Article 4 — Offre du Titulaire et prix des marchés subséquents");
+            for (Titulaire t : titulaires) {
+                para(el, "– " + t.offre().getRaisonSociale() + " : offre initiale de " + (t.montant() == null ? A_COMPLETER + " (montant hors taxes)"
+                        : FormulairesEnLigne.lisible(t.montant()) + " Ariary hors taxes") + (t.delai() == null ? "" : ", délai : " + t.delai()) + ".");
+            }
+            para(el, "À la survenance du besoin, les marchés subséquents sont attribués au Titulaire après complétude de son offre initiale ; "
+                    + "le montant à payer est défini dans chaque marché subséquent passé sur la base du présent contrat-cadre (décret "
+                    + "n° 2019-1064).");
         }
-        para(el, "Le montant à payer est défini, après remise en concurrence des Titulaires, dans chaque marché subséquent attribué sur la base "
-                + "du présent contrat-cadre (décret n° 2019-1064, art. 16).");
 
-        sous(el, "Article 5 — Notification et entrée en vigueur");
+        sous(el, "Article 5 — Durée et reconduction");
+        para(el, duree.validite());
+        para(el, duree.reconduction(multi));
+
+        sous(el, "Article 6 — Notification et entrée en vigueur");
         para(el, "Date de notification du contrat-cadre : " + (in.dateNotification() == null ? A_COMPLETER : DATE.format(in.dateNotification())) + ".");
-        para(el, "Le contrat-cadre, signé par la Personne responsable des marchés publics et par chacun des Titulaires, prend effet à sa "
-                + "notification aux Titulaires (décret n° 2019-1064, art. 15).");
+        para(el, multi ? "Le contrat-cadre, signé par la Personne responsable des marchés publics et par chacun des Titulaires, prend effet à sa "
+                + "notification aux Titulaires (décret n° 2019-1064, art. 15)."
+                : "Le contrat-cadre, signé par la Personne responsable des marchés publics et par le Titulaire, prend effet à sa notification "
+                        + "au Titulaire.");
 
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
-        for (Titulaire t : in.titulaires()) {
+        for (Titulaire t : titulaires) {
             para(el, "Pour " + t.offre().getRaisonSociale() + " : ……………………………………  (nom, qualité, date et signature)");
         }
         para(el, "Pour l'Autorité contractante, la Personne responsable des marchés publics : ……………………………………  (date et signature)");
@@ -267,10 +354,17 @@ public class ProjetMarcheService {
         texte(x, "AC.SIGNATAIRE", signataire(in));
         texte(x, "MARCHE.DATE_NOTIFICATION", in.dateNotification() == null ? A_COMPLETER : DATE.format(in.dateNotification()));
         List<Map<String, ModelePvWord.Valeur>> titulaires = new ArrayList<>();
-        boolean cadre = in.titulaires() != null && !in.titulaires().isEmpty();
+        // ⚠️ 2026-10-29 (« contrat-cadre-4a », §B1) — tout contrat-cadre (forme de la fiche), mono- ou multi-attributaire.
+        boolean cadre = estContratCadre(in, v);
+        Duree duree = cadre ? Duree.de(v, in.lot()) : null;
         if (cadre) {
-            texte(x, "MARCHE.NB_TITULAIRES", String.valueOf(in.titulaires().size()));
-            for (Titulaire t : in.titulaires()) {
+            List<Titulaire> liste = titulaires(in);
+            texte(x, "MARCHE.NB_TITULAIRES", String.valueOf(liste.size()));
+            texte(x, "MARCHE.CC_PERIODE", duree.periode());
+            texte(x, "MARCHE.CC_RECONDUCTIONS", duree.reconductions());
+            texte(x, "MARCHE.CC_PREAVIS", duree.preavis());
+            texte(x, "MARCHE.CC_DUREE_MAX", duree.dureeMax());
+            for (Titulaire t : liste) {
                 Map<String, ModelePvWord.Valeur> item = new java.util.LinkedHashMap<>();
                 EntrepriseCandidatDto.Entreprise e = entreprise(t.offre());
                 texte(item, "TIT.CANDIDAT", t.offre().getRaisonSociale());
@@ -302,6 +396,8 @@ public class ProjetMarcheService {
         }
         Map<String, String> cles = new java.util.LinkedHashMap<>();
         cles.put("contratCadre", cadre ? "oui" : "non");
+        cles.put("attributaires", cadre ? attributaires(in, v) : "");
+        cles.put("reconductible", cadre ? duree.reconductible() : "");
         cles.put("pi", in.pi() ? "oui" : "non");
         cles.put("international", international(in.plan().get("MODE")) ? "oui" : "non");
         cles.put("receptionParTranches", "OUI".equalsIgnoreCase(val.get(RECEPTION_PAR_TRANCHES)) ? "oui" : "non");

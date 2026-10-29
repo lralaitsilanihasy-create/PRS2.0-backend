@@ -87,4 +87,24 @@ public class ContratVigueur {
 
     @Column(name = "CREE_LE", nullable = false)
     private LocalDateTime creeLe;
+
+    /** ⚠️ V147 (« contrat-cadre-4a », §B3) — le calendrier structuré des remises : périodicité en mois ({@code B02-PC-04}). */
+    @Column(name = "PERIODICITE_MOIS")
+    private Integer periodiciteMois;
+
+    /** ⚠️ V147 — la date de la première remise en concurrence ({@code B02-PC-05}). */
+    @Column(name = "PREMIERE_REMISE")
+    private LocalDate premiereRemise;
+
+    /** ⚠️ V147 (§B2) — la fin de période pour laquelle {@code RECONDUCTION_A_DECIDER} est notifiée. */
+    @Column(name = "RAPPEL_RECONDUCTION")
+    private LocalDate rappelReconduction;
+
+    /** ⚠️ V147 (§B3) — l'échéance du calendrier pour laquelle {@code REMISE_A_LANCER} est notifiée. */
+    @Column(name = "RAPPEL_REMISE")
+    private LocalDate rappelRemise;
+
+    /** ⚠️ V147 (§B2) — {@code CONTRAT_ECHU} notifié. */
+    @Column(name = "ECHU_NOTIFIE_LE")
+    private LocalDateTime echuNotifieLe;
 }

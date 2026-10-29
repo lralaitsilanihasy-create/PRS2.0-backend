@@ -63,6 +63,17 @@ public class ContratVigueurService {
     static final int JOURS_ECHEANCE_PROCHE = 30;
     /** Loi n° 2016-055, art. 30 : un marché à commandes ne dépasse pas trois ans. */
     static final int MOIS_MAX_A_COMMANDE = 36;
+    /**
+     * ⚠️ 2026-10-29 (demande front « contrat-cadre-4a », §B3 ; V147) — une échéance du calendrier des remises en concurrence approche
+     * (à {@value #JOURS_REMISE} jours) ou est passée, sans remise lancée depuis l'ouverture de sa fenêtre.
+     */
+    public static final String REMISE_A_LANCER = "REMISE_A_LANCER";
+    static final int JOURS_REMISE = 15;
+    /** Le rythme des marchés subséquents ({@code B02-PC-02}) qui appelle un calendrier. */
+    static final String SELON_CALENDRIER = "Selon le calendrier fixé ci-après";
+    /** ⚠️ V147 — les deux champs du calendrier structuré (bloc B02, référentiel). */
+    static final String PERIODICITE = "B02-PC-04";
+    static final String PREMIERE_REMISE = "B02-PC-05";
 
     private static final Set<ProfilUtilisateur> EXTERNES = Set.of(ProfilUtilisateur.CANDIDAT, ProfilUtilisateur.MEMBRE_CAO,
             ProfilUtilisateur.DEPOSITAIRE);
@@ -79,11 +90,21 @@ public class ContratVigueurService {
     private final EvaluationService evaluation;
     private final Clock horloge;
     private final cnm.prs.repository.BonCommandeRepository bons;
+    /** ⚠️ 2026-10-29 (« contrat-cadre-4a », §B2, §B3) — les rappels et les notifications du contrat. */
+    private final cnm.prs.repository.RemiseConcurrenceRepository remises;
+    private final cnm.prs.repository.CompteCandidatRepository candidats;
+    private final NotificationService notifications;
+    private final CeremonieService ceremonies;
 
     public ContratVigueurService(ContratVigueurRepository contrats, ContratReconductionRepository reconductions,
             AttributionRepository attributions, AttributionTitulaireRepository titulaires, OffreRepository offres,
             DossierMecRepository dmcRepository, FicheMarcheService fiches, ValeursPpmService valeursPpm, EvaluationService evaluation,
-            Clock horloge, cnm.prs.repository.BonCommandeRepository bons) {
+            Clock horloge, cnm.prs.repository.BonCommandeRepository bons, cnm.prs.repository.RemiseConcurrenceRepository remises,
+            cnm.prs.repository.CompteCandidatRepository candidats, NotificationService notifications, CeremonieService ceremonies) {
+        this.remises = remises;
+        this.candidats = candidats;
+        this.notifications = notifications;
+        this.ceremonies = ceremonies;
         this.contrats = contrats;
         this.reconductions = reconductions;
         this.attributions = attributions;
@@ -117,19 +138,22 @@ public class ContratVigueurService {
         c.setTypeMarche(type);
         c.setDateEffet(a.getDateNotification());
         if (ContratVigueur.CONTRAT_CADRE.equals(type)) {
-            Integer periode = entier(v, "B02-DC-02", lot);
-            Integer maxMois = entier(v, "B02-DC-01", lot);
-            Integer maxAns = entier(v, "B07-DU-05", lot);
-            c.setPeriodeMois(periode);
-            c.setDureeMaxMois(maxMois != null ? maxMois : maxAns != null ? maxAns * 12 : periode);
-            c.setReconductible("OUI".equalsIgnoreCase(valeur(v, "B02-DC-03", lot)));
-            c.setReconductionsMax(c.isReconductible() ? entier(v, "B07-DU-04", lot) : Integer.valueOf(0));
-            c.setPreavisMois(c.isReconductible() ? entier(v, "B07-DU-07", lot) : null);
+            TermesCadre t = TermesCadre.de(v, lot);
+            c.setPeriodeMois(t.periodeMois());
+            c.setDureeMaxMois(t.dureeMaxMois());
+            c.setReconductible(Boolean.TRUE.equals(t.reconductible()));
+            c.setReconductionsMax(t.reconductionsMax());
+            c.setPreavisMois(t.preavisMois());
             c.setMontantEstime(nombre(v, "B05-MT-01", lot));
             c.setMontantMinimum(nombre(v, "B05-MT-03", lot));
             c.setFormeSubsequents(valeur(v, "B07-FS-01", lot));
             c.setRythme(valeur(v, "B02-PC-02", lot));
             c.setCalendrier(valeur(v, "B02-PC-03", lot));
+            // ⚠️ V147 (« contrat-cadre-4a », §B3) — le calendrier structuré, figé seulement quand le rythme est celui du calendrier.
+            if (SELON_CALENDRIER.equals(c.getRythme())) {
+                c.setPeriodiciteMois(entier(v, PERIODICITE, lot));
+                c.setPremiereRemise(ControlesFicheMarche.date(valeur(v, PREMIERE_REMISE, lot)));
+            }
         } else {
             Integer periode = entier(v, "B02-AU-04", lot);
             c.setPeriodeMois(periode == null ? null : Math.min(periode, MOIS_MAX_A_COMMANDE));   // loi, art. 30 : trois ans au plus
@@ -152,6 +176,28 @@ public class ContratVigueurService {
     /** La fin d'une période : le dernier jour avant la date anniversaire ({@code effet + mois − 1 jour}) ; sans durée, l'effet. */
     static LocalDate finDePeriode(LocalDate debut, Integer mois) {
         return mois == null || mois <= 0 ? debut : debut.plusMonths(mois).minusDays(1);
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (demande front « contrat-cadre-4a », §B1) — la durée et la reconduction d'un contrat-cadre, lues sur la fiche validée :
+     * la <strong>même</strong> lecture pour le contrat en vigueur (à la notification) et pour son projet ({@link ProjetMarcheService}),
+     * pour qu'ils disent la même chose. Durée maximale : {@code B02-DC-01} (mois), à défaut {@code B07-DU-05} (ans), à défaut la période.
+     * Sans fiche, tout est nul ({@code reconductible} compris : ni oui ni non).
+     */
+    record TermesCadre(Integer periodeMois, Integer dureeMaxMois, Boolean reconductible, Integer reconductionsMax, Integer preavisMois) {
+
+        static TermesCadre de(FicheMarcheService.EtatVersion v, Integer lot) {
+            if (v == null) {
+                return new TermesCadre(null, null, null, null, null);
+            }
+            Integer periode = entier(v, "B02-DC-02", lot);
+            Integer maxMois = entier(v, "B02-DC-01", lot);
+            Integer maxAns = entier(v, "B07-DU-05", lot);
+            boolean reconductible = "OUI".equalsIgnoreCase(valeur(v, "B02-DC-03", lot));
+            // Integer.valueOf : sans lui, le ternaire déballerait une période nulle (NullPointerException).
+            return new TermesCadre(periode, maxMois != null ? maxMois : maxAns != null ? Integer.valueOf(maxAns * 12) : periode, reconductible,
+                    reconductible ? entier(v, "B07-DU-04", lot) : Integer.valueOf(0), reconductible ? entier(v, "B07-DU-07", lot) : null);
+        }
     }
 
     // ------------------------------------------------------------------ lecture
@@ -258,7 +304,144 @@ public class ContratVigueurService {
                         + (c.getReconductionsMax() == null ? "" : "/" + c.getReconductionsMax()) + ")"
                         : "contrat non reconduit, échéance le " + c.getDateFin().format(JOUR))
                 + ", décision " + reference + " du " + r.dateDecision().format(JOUR) + (x.isHorsPreavis() ? " (hors préavis)" : ""));
+        // ⚠️ 2026-10-29 (« contrat-cadre-4a », §B2) — chaque titulaire non retiré apprend la décision, et la date de fin qui en résulte.
+        String quoi = designation(c);
+        if (nouvelleFin != null) {
+            notifierTitulaires(c, cnm.prs.enums.TypeNotification.CONTRAT_RECONDUIT, "Contrat-cadre reconduit — " + quoi,
+                    "Le contrat-cadre " + quoi + " est reconduit jusqu'au " + nouvelleFin.format(JOUR) + " (décision " + reference + " du "
+                            + r.dateDecision().format(JOUR) + ").");
+        } else {
+            notifierTitulaires(c, cnm.prs.enums.TypeNotification.CONTRAT_NON_RECONDUIT, "Contrat-cadre non reconduit — " + quoi,
+                    "Le contrat-cadre " + quoi + " n'est pas reconduit (décision " + reference + " du " + r.dateDecision().format(JOUR)
+                            + ") : il prend fin le " + c.getDateFin().format(JOUR) + ".");
+        }
         return dto(c);
+    }
+
+    // ------------------------------------------------------------------ rappels de la tâche planifiée (§B2, §B3)
+
+    /**
+     * ⚠️ 2026-10-29 (demande front « contrat-cadre-4a », §B2, §B3 ; V147) — appelé toutes les heures par {@code AttributionScheduler} :
+     * <ul>
+     *   <li>{@code RECONDUCTION_A_DECIDER} à la PRMP et à ses UGPM, quand l'alerte du même nom s'allume (30 jours avant la date limite
+     *       de décision), une fois par période ({@code RAPPEL_RECONDUCTION} = la fin de période rappelée) ;</li>
+     *   <li>{@code REMISE_A_LANCER} à la PRMP et à ses UGPM, quand l'alerte du même nom s'allume, une fois par échéance du calendrier
+     *       ({@code RAPPEL_REMISE}) ;</li>
+     *   <li>{@code CONTRAT_ECHU} à la PRMP, à ses UGPM et aux titulaires, une fois ({@code ECHU_NOTIFIE_LE}) ; V147 a marqué notifiés
+     *       les contrats déjà échus : rien n'est rejoué.</li>
+     * </ul>
+     * Le serveur rappelle, il ne décide pas : aucune remise n'est lancée, aucune reconduction décidée. Rend le nombre de rappels émis.
+     */
+    @Transactional
+    public int rappeler() {
+        int n = 0;
+        LocalDate aujourdhui = aujourdhui();
+        for (ContratVigueur c : contrats.findAllByOrderByDateFinAscIdAsc()) {
+            if (aujourdhui.isAfter(c.getDateFin())) {
+                if (c.getEchuNotifieLe() == null) {
+                    String quoi = designation(c);
+                    String titre = "Contrat échu — " + quoi;
+                    String corps = "Le " + forme(c) + " " + quoi + " est échu depuis le " + c.getDateFin().format(JOUR)
+                            + " : plus aucune remise en concurrence ni commande.";
+                    ceremonies.notifierPrmpEtUgpm(c.getIdDmc(), cnm.prs.enums.TypeNotification.CONTRAT_ECHU, titre, corps);
+                    notifierTitulaires(c, cnm.prs.enums.TypeNotification.CONTRAT_ECHU, titre, corps);
+                    c.setEchuNotifieLe(maintenant());
+                    contrats.save(c);
+                    n++;
+                }
+                continue;
+            }
+            List<String> al = alertes(c);
+            if (al.contains(RECONDUCTION_A_DECIDER) && !c.getDateFin().equals(c.getRappelReconduction())) {
+                String quoi = designation(c);
+                LocalDate limite = dateLimiteDecision(c);
+                ceremonies.notifierPrmpEtUgpm(c.getIdDmc(), cnm.prs.enums.TypeNotification.RECONDUCTION_A_DECIDER,
+                        "Reconduction à décider — " + quoi, "La période en cours du contrat-cadre " + quoi + " prend fin le "
+                                + c.getDateFin().format(JOUR) + " : la décision écrite de le reconduire ou non est à prendre au plus tard le "
+                                + limite.format(JOUR) + " (préavis de " + c.getPreavisMois() + " mois).");
+                c.setRappelReconduction(c.getDateFin());
+                contrats.save(c);
+                n++;
+            }
+            LocalDate echeance = al.contains(REMISE_A_LANCER) ? prochaineRemise(c) : null;
+            if (echeance != null && !echeance.equals(c.getRappelRemise())) {
+                String quoi = designation(c);
+                ceremonies.notifierPrmpEtUgpm(c.getIdDmc(), cnm.prs.enums.TypeNotification.REMISE_A_LANCER,
+                        "Remise en concurrence à lancer — " + quoi, "Le calendrier du contrat-cadre " + quoi + " prévoit une remise en "
+                                + "concurrence des titulaires le " + echeance.format(JOUR) + " (tous les " + c.getPeriodiciteMois() + " mois). "
+                                + "Son objet, ses articles et sa date limite de réponse sont à fixer au lancement.");
+                c.setRappelRemise(echeance);
+                contrats.save(c);
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** « « objet » (procédure n, lot n) » : de quoi reconnaître le contrat dans une notification. */
+    private String designation(ContratVigueur c) {
+        String objet = fiches.etatValide(c.getIdDmc()).map(v -> v.etat().getDesignationMarche()).filter(o -> o != null && !o.isBlank())
+                .orElse(null);
+        return (objet == null ? "" : "« " + objet.trim() + " » ") + "(procédure " + c.getIdDmc() + ", lot " + c.getLot() + ")";
+    }
+
+    private static String forme(ContratVigueur c) {
+        return ContratVigueur.CONTRAT_CADRE.equals(c.getTypeMarche()) ? "contrat-cadre" : "marché à commandes";
+    }
+
+    /** Vers chaque titulaire non retiré (espace candidat), objet {@code PROCEDURE} = {@code idDmc}, comme {@code BON_COMMANDE}. */
+    private void notifierTitulaires(ContratVigueur c, cnm.prs.enums.TypeNotification type, String titre, String corps) {
+        for (ContratVigueurDto.Titulaire t : titulairesDto(c)) {
+            Offre o = t.idOffre() == null ? null : offres.findById(t.idOffre()).orElse(null);
+            if (o == null || o.getIdCandidat() == null) {
+                continue;
+            }
+            String email = candidats.findById(o.getIdCandidat()).map(cnm.prs.entity.CompteCandidat::getEmail).orElse(null);
+            notifications.emettreCandidat(type, o.getIdCandidat(), email, c.getIdDmc().intValue(), cnm.prs.enums.TypeObjet.PROCEDURE, titre, corps);
+        }
+    }
+
+    // ------------------------------------------------------------------ calendrier des remises (§B3)
+
+    /**
+     * ⚠️ 2026-10-29 (« contrat-cadre-4a », §B3 ; V147) — l'échéance du calendrier qui attend sa remise en concurrence : les échéances
+     * sont {@code premiereRemise + k × periodiciteMois}, entre l'entrée en vigueur et la fin de la période en cours. La fenêtre d'une
+     * échéance s'ouvre {@value #JOURS_REMISE} jours avant elle ; une remise lancée depuis cette ouverture la satisfait. Rend
+     * l'échéance dont la fenêtre est ouverte et non satisfaite (elle peut être passée : la remise est en retard), sinon la suivante ;
+     * nulle sans calendrier structuré (contrat créé avant V147, rythme « au fur et à mesure des besoins »), pour un contrat échu, ou
+     * quand plus aucune échéance ne tombe avant la fin.
+     */
+    LocalDate prochaineRemise(ContratVigueur c) {
+        LocalDate aujourdhui = aujourdhui();
+        if (!ContratVigueur.CONTRAT_CADRE.equals(c.getTypeMarche()) || c.getPeriodiciteMois() == null || c.getPeriodiciteMois() <= 0
+                || c.getPremiereRemise() == null || aujourdhui.isAfter(c.getDateFin())) {
+            return null;
+        }
+        LocalDate ouverte = null;
+        LocalDate suivante = null;
+        for (long k = 0; k < 1200; k++) {
+            LocalDate e = c.getPremiereRemise().plusMonths(k * c.getPeriodiciteMois());
+            if (e.isAfter(c.getDateFin())) {
+                break;
+            }
+            if (e.isBefore(c.getDateEffet())) {
+                continue;
+            }
+            if (e.minusDays(JOURS_REMISE).isAfter(aujourdhui)) {
+                suivante = e;
+                break;
+            }
+            ouverte = e;
+        }
+        if (ouverte != null) {
+            LocalDate depuis = ouverte.minusDays(JOURS_REMISE);
+            boolean lancee = remises.findByIdContratOrderByNumeroAsc(c.getId()).stream()
+                    .anyMatch(r -> r.getLanceeLe() != null && !r.getLanceeLe().toLocalDate().isBefore(depuis));
+            if (!lancee) {
+                return ouverte;
+            }
+        }
+        return suivante;
     }
 
     // ------------------------------------------------------------------ pour les lots suivants (MS-2, MS-3) et les compteurs
@@ -338,6 +521,11 @@ public class ContratVigueurService {
         if (ChronoUnit.DAYS.between(aujourdhui, c.getDateFin()) <= JOURS_ECHEANCE_PROCHE) {
             al.add(ECHEANCE_PROCHE);
         }
+        // ⚠️ 2026-10-29 (« contrat-cadre-4a », §B3) — l'échéance du calendrier dont la fenêtre est ouverte, sans remise lancée.
+        LocalDate remise = prochaineRemise(c);
+        if (remise != null && !remise.minusDays(JOURS_REMISE).isAfter(aujourdhui)) {
+            al.add(REMISE_A_LANCER);
+        }
         // ⚠️ MS-3 (V126) — la consommation : minimum annuel du marché à commandes, valeur estimée du contrat-cadre.
         al.addAll(BonCommandeService.alertes(c, bons.findByIdContratOrderByNumeroAsc(c.getId()), aujourdhui));
         return al;
@@ -355,7 +543,7 @@ public class ContratVigueurService {
                 aujourdhui().isAfter(c.getDateFin()) ? ECHU : EN_VIGUEUR, c.getDateEffet(), c.getDateFin(), c.getPeriodeMois(),
                 c.getDureeMaxMois(), finMaximale(c), c.isReconductible(), c.getReconductionsMax(), c.getReconductions(), c.getPreavisMois(),
                 dateLimiteDecision(c), c.getMontantEstime(), c.getMontantMinimum(), c.getMontantMaximum(), c.getFormeSubsequents(), c.getRythme(),
-                c.getCalendrier(), titulairesDto(c), decisions, alertes(c));
+                c.getCalendrier(), titulairesDto(c), decisions, alertes(c), c.getPeriodiciteMois(), c.getPremiereRemise(), prochaineRemise(c));
     }
 
     /** Les titulaires : ceux de l'attribution non retirés, sinon l'attributaire du lot. */

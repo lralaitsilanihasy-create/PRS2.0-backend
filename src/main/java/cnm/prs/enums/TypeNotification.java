@@ -283,5 +283,18 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-29 (§B4) — un recours contre l'attribution est déposé, ou tranché. */
     RECOURS,
     /** ⚠️ 2026-10-29 (§B4) — une révision validée change la date limite de remise des offres. */
-    PROCEDURE_DATES
+    PROCEDURE_DATES,
+    /**
+     * ⚠️ 2026-10-29 (demande front « contrat-cadre-4a », §B2 ; V147) — la décision de reconduire un contrat-cadre approche (30 jours
+     * avant sa date limite) : vers la PRMP de la fiche et ses UGPM, une fois par période, objet {@code PROCEDURE} = {@code idDmc}.
+     */
+    RECONDUCTION_A_DECIDER,
+    /** ⚠️ 2026-10-29 (§B2) — le contrat-cadre est reconduit : vers chaque titulaire non retiré, avec la nouvelle date de fin. */
+    CONTRAT_RECONDUIT,
+    /** ⚠️ 2026-10-29 (§B2) — le contrat-cadre n'est pas reconduit : vers chaque titulaire non retiré, avec sa date de fin. */
+    CONTRAT_NON_RECONDUIT,
+    /** ⚠️ 2026-10-29 (§B2) — le contrat est échu : vers la PRMP, ses UGPM et les titulaires, une fois. */
+    CONTRAT_ECHU,
+    /** ⚠️ 2026-10-29 (§B3) — une échéance du calendrier des remises en concurrence approche (15 jours) : vers la PRMP et ses UGPM, une fois par échéance. */
+    REMISE_A_LANCER
 }

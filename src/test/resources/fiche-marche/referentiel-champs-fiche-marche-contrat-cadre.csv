@@ -4,8 +4,10 @@ B02-SG-01;Personne responsable des marchés passés sur la base du contrat-cadre
 B02-SG-02;Délégation de la personne responsable (décision et date);TEXTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B02-SG-03;Acte de nomination de la PRMP (nature, numéro, date);TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX;;MANDAT:ACTE_NOMINATION
 B02-PC-01;Référence de l'article du code des marchés publics de la procédure choisie;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
-B02-PC-02;Rythme de passation des marchés subséquents;LISTE;SAISIE;DPAC;AE;CONTRAT_CADRE;;oui;;;Au fur et à mesure des besoins,Selon le calendrier fixé ci-après;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B02-PC-02;Rythme de passation des marchés subséquents;LISTE;SAISIE;DPAC;AE;CONTRAT_CADRE;;oui;;CALENDRIER_REMISES:RYTHME;Au fur et à mesure des besoins,Selon le calendrier fixé ci-après;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B02-PC-03;Calendrier de remise en concurrence des titulaires;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B02-PC-04;Périodicité des remises en concurrence selon le calendrier (mois);NOMBRE;SAISIE;AUCUN;;CONTRAT_CADRE;;non;;CALENDRIER_REMISES:PERIODICITE;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
+B02-PC-05;Date de la première remise en concurrence selon le calendrier;DATE;SAISIE;AUCUN;;CONTRAT_CADRE;;non;;CALENDRIER_REMISES:PREMIERE;;;;oui;FOURNITURES_SERVICES,TRAVAUX;non;
 B02-DC-01;Durée maximale du contrat-cadre (mois);NOMBRE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;DUREE_CONTRAT_CADRE_MAX:MOIS;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B02-DC-02;Durée de validité du contrat-cadre (mois);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DUREE_CONTRAT_CADRE_MAX:PERIODE;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B02-DC-03;Contrat-cadre reconductible;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX

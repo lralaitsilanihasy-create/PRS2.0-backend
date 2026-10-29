@@ -444,7 +444,8 @@ public final class ModelePvDepart {
         cadre.add(pp("", null));
         cadre.add(pp("Entre :", "justify"));
         cadre.add(pp(ac, "justify"));
-        cadre.add(pp("et les {{MARCHE.NB_TITULAIRES}} titulaire(s) suivant(s), ci-après « les Titulaires » :", "justify"));
+        cadre.add(pp("{{SI:MULTI}}et les {{MARCHE.NB_TITULAIRES}} titulaire(s) suivant(s), ci-après « les Titulaires » :{{FINSI:MULTI}}"
+                + "{{SI:MONO}}et le titulaire suivant, ci-après « le Titulaire » :{{FINSI:MONO}}", "justify"));
         cadre.add(repetition("TITULAIRES", pp("– {{TIT.CANDIDAT}}, NIF {{TIT.NIF}}{{SI:T_ADRESSE}}, {{TIT.ADRESSE}}{{FINSI:T_ADRESSE}}, "
                 + "représentée par {{SI:T_REPRESENTANT}}{{TIT.REPRESENTANT}}{{FINSI:T_REPRESENTANT}}{{SI:T_SANS_REPRESENTANT}}" + POINTS
                 + " (nom et qualité du signataire){{FINSI:T_SANS_REPRESENTANT}} (offre n° {{TIT.OFFRE_NUMERO}}) ;", "justify")));
@@ -456,19 +457,39 @@ public final class ModelePvDepart {
         cadre.add(pp("{{MARCHE.BASE_LEGALE}} Article 67 de " + loi + " et décret n° 2019-1064 du 28 mai 2019.", "justify"));
         cadre.add(article("cc-pieces", "Pièces constitutives"));
         cadre.add(pp("Le contrat-cadre est constitué, par ordre de priorité : le contrat-cadre valant acte d'engagement et cahier des clauses "
-                + "administratives particulières ; les spécifications techniques ; l'offre de chacun des Titulaires, dont le bordereau des prix "
-                + "indicatif ; le cahier des clauses administratives générales — tels qu'ils figurent au dossier et aux offres retenues.",
-                "justify"));
-        cadre.add(article("cc-prix", "Offres indicatives et prix des marchés subséquents"));
-        cadre.add(repetition("TITULAIRES", pp("– {{TIT.CANDIDAT}} : offre indicative de {{SI:T_MONTANT}}{{TIT.MONTANT_HT}} Ariary hors taxes"
-                + "{{FINSI:T_MONTANT}}{{SI:T_SANS_MONTANT}}" + POINTS + " (montant hors taxes){{FINSI:T_SANS_MONTANT}}{{SI:T_DELAI}}, délai : "
-                + "{{TIT.DELAI}}{{FINSI:T_DELAI}}.", "justify")));
-        cadre.add(pp("Le montant à payer est défini, après remise en concurrence des Titulaires, dans chaque marché subséquent attribué sur la "
-                + "base du présent contrat-cadre (décret n° 2019-1064, art. 16).", "justify"));
+                + "administratives particulières ; les spécifications techniques ; {{SI:MULTI}}l'offre de chacun des Titulaires, dont le "
+                + "bordereau des prix indicatif{{FINSI:MULTI}}{{SI:MONO}}l'offre du Titulaire, dont le bordereau des prix{{FINSI:MONO}} ; le "
+                + "cahier des clauses administratives générales — tels qu'ils figurent au dossier et {{SI:MULTI}}aux offres retenues."
+                + "{{FINSI:MULTI}}{{SI:MONO}}à l'offre retenue.{{FINSI:MONO}}", "justify"));
+        String montantTitulaire = "{{SI:T_MONTANT}}{{TIT.MONTANT_HT}} Ariary hors taxes{{FINSI:T_MONTANT}}{{SI:T_SANS_MONTANT}}" + POINTS
+                + " (montant hors taxes){{FINSI:T_SANS_MONTANT}}{{SI:T_DELAI}}, délai : {{TIT.DELAI}}{{FINSI:T_DELAI}}.";
+        cadre.add(bloc("MULTI", List.of(article("cc-prix", "Offres indicatives et prix des marchés subséquents"),
+                repetition("TITULAIRES", pp("– {{TIT.CANDIDAT}} : offre indicative de " + montantTitulaire, "justify")),
+                pp("Le montant à payer est défini, après remise en concurrence des Titulaires, dans chaque marché subséquent attribué sur la "
+                        + "base du présent contrat-cadre (décret n° 2019-1064, art. 16).", "justify"))));
+        // ⚠️ 2026-10-29 (« contrat-cadre-4a », §B1) — le contrat-cadre mono-attributaire : l'offre initiale, complétée à chaque besoin.
+        cadre.add(bloc("MONO", List.of(article("cc-prix-mono", "Offre du Titulaire et prix des marchés subséquents"),
+                repetition("TITULAIRES", pp("– {{TIT.CANDIDAT}} : offre initiale de " + montantTitulaire, "justify")),
+                pp("À la survenance du besoin, les marchés subséquents sont attribués au Titulaire après complétude de son offre initiale ; le "
+                        + "montant à payer est défini dans chaque marché subséquent passé sur la base du présent contrat-cadre (décret "
+                        + "n° 2019-1064).", "justify"))));
+        // ⚠️ 2026-10-29 (§B1) — la durée et la reconduction, lues comme le contrat en vigueur.
+        cadre.add(article("cc-duree", "Durée et reconduction"));
+        cadre.add(pp("Le contrat-cadre est conclu pour une période de validité de {{MARCHE.CC_PERIODE}} à compter de sa notification.", "justify"));
+        cadre.add(bloc("RECONDUCTIBLE", List.of(pp("Il est reconductible {{MARCHE.CC_RECONDUCTIONS}} fois par décision expresse de l'Autorité "
+                + "contractante{{SI:PREAVIS}}, prise au moins {{MARCHE.CC_PREAVIS}} mois avant la fin de la période en cours{{FINSI:PREAVIS}}, "
+                + "sans que sa durée totale, reconductions comprises, puisse excéder {{MARCHE.CC_DUREE_MAX}}. La période de reconduction "
+                + "commence à la date anniversaire de sa notification ; {{SI:MULTI}}les Titulaires ne peuvent{{FINSI:MULTI}}{{SI:MONO}}le "
+                + "Titulaire ne peut{{FINSI:MONO}} refuser la reconduction.", "justify"))));
+        cadre.add(bloc("NON_RECONDUCTIBLE", List.of(pp("Il n'est pas reconductible.", "justify"))));
+        cadre.add(bloc("RECONDUCTION_INCONNUE", List.of(pp("Reconduction : " + POINTS + " (reconductible ou non, nombre de reconductions, "
+                + "préavis).", "justify"))));
         cadre.add(article("cc-notification", "Notification et entrée en vigueur"));
         cadre.add(pp("Date de notification du contrat-cadre : {{MARCHE.DATE_NOTIFICATION}}.", "justify"));
-        cadre.add(pp("Le contrat-cadre, signé par la Personne responsable des marchés publics et par chacun des Titulaires, prend effet à sa "
-                + "notification aux Titulaires (décret n° 2019-1064, art. 15).", "justify"));
+        cadre.add(pp("{{SI:MULTI}}Le contrat-cadre, signé par la Personne responsable des marchés publics et par chacun des Titulaires, prend "
+                + "effet à sa notification aux Titulaires (décret n° 2019-1064, art. 15).{{FINSI:MULTI}}{{SI:MONO}}Le contrat-cadre, signé par la "
+                + "Personne responsable des marchés publics et par le Titulaire, prend effet à sa notification au Titulaire.{{FINSI:MONO}}",
+                "justify"));
         cadre.add(pp("", null));
         cadre.add(repetition("TITULAIRES", pp("Pour {{TIT.CANDIDAT}} : ……………………………………  (nom, qualité, date et signature)", "justify")));
         cadre.add(pp("Pour l'Autorité contractante, la Personne responsable des marchés publics : ……………………………………  (date et signature)",
@@ -487,7 +508,14 @@ public final class ModelePvDepart {
 
         List<ModelePvDto.Condition> conditions = List.of(
                 new ModelePvDto.Condition("SIMPLE", "contratCadre != oui", "Marché à un titulaire"),
-                new ModelePvDto.Condition("CONTRAT_CADRE", "contratCadre = oui", "Contrat-cadre à plusieurs titulaires"),
+                new ModelePvDto.Condition("CONTRAT_CADRE", "contratCadre = oui", "Contrat-cadre (un ou plusieurs titulaires)"),
+                // ⚠️ 2026-10-29 (« contrat-cadre-4a », §B1) — mono- ou multi-attributaire, et la reconduction.
+                new ModelePvDto.Condition("MULTI", "attributaires = MULTI", "Contrat-cadre à plusieurs titulaires"),
+                new ModelePvDto.Condition("MONO", "attributaires = MONO", "Contrat-cadre à un seul titulaire"),
+                new ModelePvDto.Condition("RECONDUCTIBLE", "reconductible = oui", "Contrat-cadre reconductible"),
+                new ModelePvDto.Condition("NON_RECONDUCTIBLE", "reconductible = non", "Contrat-cadre non reconductible"),
+                new ModelePvDto.Condition("RECONDUCTION_INCONNUE", "reconductible = inconnue", "Reconduction à compléter (fiche absente)"),
+                new ModelePvDto.Condition("PREAVIS", "MARCHE.CC_PREAVIS renseigne", "Le préavis de reconduction est connu"),
                 new ModelePvDto.Condition("MINISTERE", "AC.MINISTERE renseigne", "Le ministère est connu"),
                 new ModelePvDto.Condition("ADRESSE", "TITULAIRE.ADRESSE renseigne", "L'adresse du titulaire est connue"),
                 new ModelePvDto.Condition("REPRESENTANT", "TITULAIRE.REPRESENTANT renseigne", "Le représentant du titulaire est connu"),

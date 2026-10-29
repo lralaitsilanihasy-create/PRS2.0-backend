@@ -115,6 +115,40 @@ class ProjetMarcheModeleTest {
         comparer(in, "FOURNITURES_SERVICES");
     }
 
+    /** ⚠️ 2026-10-29 (« contrat-cadre-4a », §B1) — une fiche de contrat-cadre : sa forme, son cadrage et ses valeurs brutes. */
+    private void ficheCadre(String attributaires, Map<String, String> valeurs) {
+        FicheMarcheService.EtatVersion v = mock(FicheMarcheService.EtatVersion.class);
+        FicheMarcheDto etat = mock(FicheMarcheDto.class);
+        when(etat.getDesignationMarche()).thenReturn("Produits d'entretien");
+        when(etat.getCadrage()).thenReturn(Map.<String, Object>of("attributaires", attributaires));
+        when(etat.getValeurs()).thenReturn(valeurs);
+        when(v.etat()).thenReturn(etat);
+        when(v.type()).thenReturn("CONTRAT_CADRE");
+        when(v.valeur(anyString())).thenAnswer(i -> valeurs.get(i.getArgument(0, String.class)));
+        when(fiches.etatValide(any())).thenReturn(Optional.of(v));
+    }
+
+    @Test
+    void contratCadreMonoAttributaireReconductible() {
+        ficheCadre("MONO", Map.of("B02-DC-02", "12", "B02-DC-01", "24", "B02-DC-03", "OUI", "B07-DU-04", "1", "B07-DU-07", "3"));
+        when(entreprises.lire("C1")).thenThrow(new IllegalStateException("inconnue"));
+        EvaluationDto.Proposition p = new EvaluationDto.Proposition("O1", 1, "Hygiène SA", new BigDecimal("1000000"), null, "12 mois", false,
+                null, null);
+        ProjetMarcheService.Entree in = new ProjetMarcheService.Entree(43L, 1, p, offre("O1", "Hygiène SA", "500", 1, "C1"),
+                Map.of("ENTITE", "DAAF", "MODE", "Appel d'offres ouvert"), false, false, null, null, false, null);
+        comparer(in, "FOURNITURES_SERVICES");
+    }
+
+    @Test
+    void contratCadreMonoAttributaireNonReconductible() {
+        ficheCadre("MONO", Map.of("B02-DC-02", "12", "B02-DC-03", "NON"));
+        when(entreprises.lire("C1")).thenThrow(new IllegalStateException("inconnue"));
+        EvaluationDto.Proposition p = new EvaluationDto.Proposition("O1", 1, "Hygiène SA", null, null, null, false, null, null);
+        ProjetMarcheService.Entree in = new ProjetMarcheService.Entree(44L, 1, p, offre("O1", "Hygiène SA", "500", 1, "C1"),
+                Map.of("ENTITE", "DAAF", "MODE", "Appel d'offres ouvert"), false, false, null, null, false, null);
+        comparer(in, "FOURNITURES_SERVICES");
+    }
+
     private void comparer(ProjetMarcheService.Entree in, String categorie) {
         DocumentLibre attendu = service.document(in);
         List<String> code = new ArrayList<>();
@@ -148,7 +182,19 @@ class ProjetMarcheModeleTest {
         org.mockito.Mockito.reset(fiches, dmcs, lots, mandats, entreprises);
         contratCadreADeuxTitulaires();
         assertThat(dernier).contains("PROJET DE CONTRAT-CADRE", "– Hygiène SA, NIF 500, Ankorondrano, représentée par Soa RABE (offre n° 1) ;",
-                "– Nettoyage SARL : offre indicative de …… (montant hors taxes).", "Pour Nettoyage SARL :");
+                "– Nettoyage SARL : offre indicative de …… (montant hors taxes).", "Pour Nettoyage SARL :",
+                "Article 5 — Durée et reconduction", "Reconduction : …… (reconductible ou non");
+        org.mockito.Mockito.reset(fiches, dmcs, lots, mandats, entreprises);
+        contratCadreMonoAttributaireReconductible();
+        assertThat(dernier).contains("PROJET DE CONTRAT-CADRE", "et le titulaire suivant, ci-après « le Titulaire » :",
+                "– Hygiène SA : offre initiale de 1 000 000 Ariary hors taxes, délai : 12 mois.", "après complétude de son offre initiale",
+                "période de validité de 12 mois", "Il est reconductible 1 fois par décision expresse de l'Autorité contractante, prise au moins "
+                        + "3 mois avant la fin de la période en cours, sans que sa durée totale, reconductions comprises, puisse excéder 24 mois.",
+                "le Titulaire ne peut refuser la reconduction.", "Article 6 — Notification et entrée en vigueur")
+                .doesNotContain("PROJET DE MARCHÉ", "offre indicative", "remise en concurrence des Titulaires");
+        org.mockito.Mockito.reset(fiches, dmcs, lots, mandats, entreprises);
+        contratCadreMonoAttributaireNonReconductible();
+        assertThat(dernier).contains("Il n'est pas reconductible.", "…… (montant hors taxes)");
     }
 
     private static List<String> textes(JsonNode zone) {

@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import cnm.prs.dto.BilanControlesDto;
 import cnm.prs.dto.BilanControlesDto.Controle;
@@ -49,6 +50,7 @@ import cnm.prs.enums.TypeChampFiche;
  * <tr><td>MATERIEL_EXIGE (⚠️ V60)</td><td>TEXTE (B03-QT-09) — ou la liste du matériel ; travaux seulement</td><td>bloquant</td></tr>
  * <tr><td>DUREE_CONTRAT_CADRE_MAX (⚠️ 2026-10-15)</td><td>MOIS, PERIODE (mois), ANS (années), JUSTIFICATION (texte)</td><td>bloquant</td></tr>
  * <tr><td>DELAI_QUESTIONS (⚠️ 2026-10-18)</td><td>DELAI (jours avant la date limite, ≥ délai légal n° 3)</td><td>bloquant</td></tr>
+ * <tr><td>CALENDRIER_REMISES (⚠️ 2026-10-29)</td><td>RYTHME (liste), PERIODICITE (mois), PREMIERE (date)</td><td>bloquant</td></tr>
  * </table>
  */
 public final class ControlesFicheMarche {
@@ -75,6 +77,13 @@ public final class ControlesFicheMarche {
      * candidat une fenêtre que la plateforme lui ferme.
      */
     public static final String DELAI_QUESTIONS = "DELAI_QUESTIONS";
+    /**
+     * ⚠️ 2026-10-29 (demande front « contrat-cadre-4a », §B3) — quand le rythme des marchés subséquents est « Selon le calendrier fixé
+     * ci-après » ({@code B02-PC-02}), le calendrier structuré est exigé : périodicité en mois ({@code B02-PC-04}) et date de la première
+     * remise ({@code B02-PC-05}), figés au contrat en vigueur pour rappeler chaque remise. La grammaire des conditions d'affichage
+     * n'admet ni code de champ ni valeur à espaces : l'exigence vit ici, les deux champs restent facultatifs au référentiel.
+     */
+    public static final String CALENDRIER_REMISES = "CALENDRIER_REMISES";
     /**
      * ⚠️ 2026-10-02 (demande front « référentiel des travaux routiers », §B2) — l'assurance décennale, exigée pour des
      * travaux de bâtiment seulement : le CCAP-T ne l'imprime que sous {@code BATIMENT}.
@@ -304,6 +313,7 @@ public final class ControlesFicheMarche {
         delaiPaiement(roles.get(DELAI_PAIEMENT_75), valeurs, avertissements, ok);
         dureeContratCadre(roles.get(DUREE_CONTRAT_CADRE_MAX), valeurs, bloquants, ok);
         delaiQuestions(roles.get(DELAI_QUESTIONS), valeurs, bloquants, ok);
+        calendrierRemises(roles.get(CALENDRIER_REMISES), valeurs, bloquants, ok);
         assuranceDecennale(roles.get(ASSURANCE_DECENNALE), valeurs, bloquants, ok);
         liquiditeDouble(roles.get(LIQUIDITE_DOUBLE), valeurs, nbLots, bloquants, ok);
         caMoyenne(roles.get(CA_MOYENNE), valeurs, nbLots, bloquants, ok);
@@ -1256,6 +1266,44 @@ public final class ControlesFicheMarche {
         } else {
             ok.add(new Controle(DELAI_QUESTIONS, List.of(delai.getCode()), delai.codeBloc(),
                     "Délai des questions ≥ " + legal + " jours avant la date limite."));
+        }
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (« contrat-cadre-4a », §B3) — rythme « Selon le calendrier fixé ci-après » : la périodicité (nombre entier de mois
+     * &gt; 0) et la date de la première remise sont saisies. Autre rythme, ou rythme non saisi : la règle n'est pas évaluée.
+     */
+    private static void calendrierRemises(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, List<Controle> bloquants,
+            List<Controle> ok) {
+        ChampFicheMarche rythme = r == null ? null : r.get("RYTHME");
+        if (rythme == null || !ContratVigueurService.SELON_CALENDRIER.equals(Objects.toString(valeurs.get(rythme.getCode()), "").trim())) {
+            return;
+        }
+        ChampFicheMarche periodicite = r.get("PERIODICITE");
+        ChampFicheMarche premiere = r.get("PREMIERE");
+        List<String> champs = new ArrayList<>(List.of(rythme.getCode()));
+        List<String> manques = new ArrayList<>();
+        BigDecimal mois = periodicite == null ? null : nombre(valeurs.get(periodicite.getCode()));
+        if (periodicite != null) {
+            champs.add(periodicite.getCode());
+        }
+        if (mois == null || mois.signum() <= 0 || mois.stripTrailingZeros().scale() > 0) {
+            manques.add("la périodicité (nombre entier de mois)");
+        }
+        if (premiere != null) {
+            champs.add(premiere.getCode());
+        }
+        if (premiere == null || date(valeurs.get(premiere.getCode())) == null) {
+            manques.add("la date de la première remise");
+        }
+        if (manques.isEmpty()) {
+            ok.add(new Controle(CALENDRIER_REMISES, champs, rythme.codeBloc(), "Calendrier des remises en concurrence : tous les "
+                    + mois.stripTrailingZeros().toPlainString() + " mois à partir du " + date(valeurs.get(premiere.getCode()))
+                            .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) + "."));
+        } else {
+            bloquants.add(new Controle(CALENDRIER_REMISES, champs, rythme.codeBloc(), "Remise en concurrence selon un calendrier : "
+                    + String.join(" et ", manques) + " " + (manques.size() > 1 ? "sont attendues" : "est attendue")
+                    + ", pour que chaque remise soit rappelée à la PRMP."));
         }
     }
 

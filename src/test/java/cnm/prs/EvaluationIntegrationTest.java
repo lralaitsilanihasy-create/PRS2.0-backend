@@ -1325,6 +1325,21 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         c.setCreeLe(LocalDateTime.now());
         long id = contratRepository.save(c).getId();
         String url = "/api/contrats-en-vigueur";
+        // ⚠️ 2026-10-29 (« contrat-cadre-4a », §B2) — un titulaire, pour les notifications de la décision et de l'échéance.
+        String titulaire = offre("C900000053", "7777888999", "BTP Gamma", 1, "INTACTE", null, "5000000");
+        cnm.prs.entity.AttributionTitulaire tit = new cnm.prs.entity.AttributionTitulaire();
+        tit.setIdDmc(idDmc);
+        tit.setLot(1);
+        tit.setIdOffre(titulaire);
+        tit.setRang(1);
+        tit.setMontant(new java.math.BigDecimal("5000000"));
+        tit.setRetenuLe(LocalDateTime.now());
+        titulaireRepository.save(tit);
+        // La tâche planifiée : RECONDUCTION_A_DECIDER à la PRMP, une fois pour la période.
+        assertThat(contratService.rappeler()).isEqualTo(1);
+        assertThat(contratService.rappeler()).isZero();
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "RECONDUCTION_A_DECIDER".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireType).contains("PRMP");
 
         String liste = mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Number>>read(liste, "$[*].id")).extracting(Number::longValue).containsExactly(id);
@@ -1351,6 +1366,13 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RECONDUCTIONS_EPUISEES"));
         mvc.perform(post(rec).header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"NE_PAS_RECONDUIRE\"" + decision))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.decisions.length()").value(2));
+        // §B2 — chaque titulaire apprend la décision, avec la date de fin qui en résulte (espace candidat, objet PROCEDURE).
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "C900000053".equals(n.getDestinataireRef()))
+                .filteredOn(n -> n.getTypeNotif().startsWith("CONTRAT_"))
+                .extracting(Notification::getTypeNotif, Notification::getTypeObjet, n -> n.getCorps().contains(finReconduite.format(
+                        java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))))
+                .containsExactlyInAnyOrder(org.assertj.core.groups.Tuple.tuple("CONTRAT_RECONDUIT", "PROCEDURE", true),
+                        org.assertj.core.groups.Tuple.tuple("CONTRAT_NON_RECONDUIT", "PROCEDURE", true));
         mvc.perform(post(rec).header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"NE_PAS_RECONDUIRE\"" + decision))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_DECIDE"));
 
@@ -1362,10 +1384,16 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.etat").value("ECHU")).andExpect(jsonPath("$.alertes[0]").value("ECHU"));
         mvc.perform(post(rec).header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"NE_PAS_RECONDUIRE\"" + decision))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONTRAT_ECHU"));
+        // §B2 — l'échéance : CONTRAT_ECHU à la PRMP et au titulaire, une fois.
+        assertThat(contratService.rappeler()).isEqualTo(1);
+        assertThat(contratService.rappeler()).isZero();
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "CONTRAT_ECHU".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireType).contains("PRMP", "CANDIDAT");
     }
 
     @Autowired private cnm.prs.repository.AttributionTitulaireRepository titulaireRepository;
     @Autowired private cnm.prs.repository.RemiseConcurrenceRepository remiseRepository;
+    @Autowired private cnm.prs.service.ContratVigueurService contratService;
 
     @Test
     @DisplayName("MS-2 (16/10, remise en concurrence, V125, décret 2019-1064 art. 20-30) : tous les titulaires sont consultés et notifiés ; "
@@ -1401,7 +1429,17 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         c.setDureeMaxMois(12);
         c.setReconductible(false);
         c.setCreeLe(LocalDateTime.now());
+        // ⚠️ 2026-10-29 (« contrat-cadre-4a », §B3) — un calendrier structuré : tous les 3 mois, première remise dans 10 jours.
+        c.setPeriodiciteMois(3);
+        c.setPremiereRemise(aujourdhui.plusDays(10));
         long idContrat = contratRepository.save(c).getId();
+        mvc.perform(get("/api/contrats-en-vigueur/" + idContrat).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.prochaineRemise").value(aujourdhui.plusDays(10).toString()))
+                .andExpect(jsonPath("$.periodiciteMois").value(3)).andExpect(jsonPath("$.alertes[0]").value("REMISE_A_LANCER"));
+        assertThat(contratService.rappeler()).isEqualTo(1);
+        assertThat(contratService.rappeler()).isZero();
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "REMISE_A_LANCER".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireType).contains("PRMP");
         String url = "/api/contrats-en-vigueur/" + idContrat + "/remises";
         String echeance = LocalDateTime.now().plusDays(5).withNano(0).withSecond(0).toString();
         String corps = "{\"objet\":\"Fourniture de 40 ordinateurs portables\",\"specifications\":\"Processeur 8 cœurs, 16 Go\",\"delaiExecution\":\"30 jours\","
@@ -1428,6 +1466,10 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 "90 jours", "Processeur 8 cœurs");
         assertThat(notificationRepository.findAll()).filteredOn(n -> "REMISE_CONCURRENCE".equals(n.getTypeNotif()))
                 .extracting(Notification::getDestinataireRef).containsExactlyInAnyOrder("C900000051", "C900000052");
+        // §B3 — la remise lancée dans la fenêtre satisfait l'échéance : plus d'alerte, la suivante est servie.
+        mvc.perform(get("/api/contrats-en-vigueur/" + idContrat).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.prochaineRemise").value(aujourdhui.plusDays(10).plusMonths(3).toString()))
+                .andExpect(jsonPath("$.alertes").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("REMISE_A_LANCER"))));
 
         // Les réponses : en ligne par le titulaire (un non-consulté ne voit rien), sur papier par la PRMP ; fermées jusqu'à l'échéance.
         String jetonC = bearer("c@eval.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000053", null);

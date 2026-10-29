@@ -125,6 +125,11 @@ public final class CatalogueModelesPv {
             v("MARCHE.INDEMNITE_RESILIATION", "Projet de marché", "Indemnité de résiliation (vide si non saisie)", "2 %"),
             v("MARCHE.DATE_NOTIFICATION", "Projet de marché", "Date de notification (jj/mm/aaaa)", "05/11/2026"),
             v("MARCHE.NB_TITULAIRES", "Projet de marché", "Nombre de titulaires d'un contrat-cadre", "2"),
+            // ⚠️ 2026-10-29 (« contrat-cadre-4a », §B1) — la durée et la reconduction du contrat-cadre, lues comme le contrat en vigueur.
+            v("MARCHE.CC_PERIODE", "Projet de marché", "Période de validité du contrat-cadre, avec son unité (« …… » si inconnue)", "12 mois"),
+            v("MARCHE.CC_RECONDUCTIONS", "Projet de marché", "Nombre de reconductions possibles du contrat-cadre", "1"),
+            v("MARCHE.CC_PREAVIS", "Projet de marché", "Préavis de la décision de reconduction, en mois (vide si inconnu)", "3"),
+            v("MARCHE.CC_DUREE_MAX", "Projet de marché", "Durée maximale du contrat-cadre, reconductions comprises", "24 mois"),
             v("MARCHE.PROCEDURE", "Projet de marché", "Numéro de la procédure dans l'application (pied de page)", "40"),
             v("MARCHE.LOT_NUMERO", "Projet de marché", "Rang du lot (pied de page ; vide hors allotissement)", "1"),
             // ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1) — la lettre de renvoi : les marqueurs de LR_CENTRALE / LR_REGIONALE.
@@ -151,7 +156,10 @@ public final class CatalogueModelesPv {
             new CleCondition("forme", "Forme du marché", List.of("QUANTITE_FIXE", "A_COMMANDE", "CONTRAT_CADRE")),
             new CleCondition("titulaires", "Nombre de titulaires proposés", List.of()),
             // ⚠️ 2026-10-22 (« modeles-documents-marche », M1) — les règles du projet de marché.
-            new CleCondition("contratCadre", "Contrat-cadre à plusieurs titulaires", List.of("oui", "non")),
+            // ⚠️ 2026-10-29 (« contrat-cadre-4a », §B1) — tout contrat-cadre (forme de la fiche), et non plus le seul multi-attributaire.
+            new CleCondition("contratCadre", "Contrat-cadre (un ou plusieurs titulaires)", List.of("oui", "non")),
+            new CleCondition("attributaires", "Contrat-cadre : un seul titulaire ou plusieurs (valeur du cadrage)", List.of("MONO", "MULTI")),
+            new CleCondition("reconductible", "Contrat-cadre reconductible (« inconnue » sans fiche)", List.of("oui", "non", "inconnue")),
             new CleCondition("pi", "Prestations intellectuelles (« la proposition » au lieu de « l'offre »)", List.of("oui", "non")),
             new CleCondition("international", "Appel d'offres international", List.of("oui", "non")),
             new CleCondition("receptionParTranches", "Réception partielle par tranches", List.of("oui", "non")),
@@ -167,7 +175,8 @@ public final class CatalogueModelesPv {
     private static final Set<String> MARCHE_DU_PROJET = Set.of("MARCHE.OBJET", "MARCHE.NUMERO_AO", "MARCHE.LOT", "MARCHE.BASE_LEGALE",
             "MARCHE.ORIGINAL_AE", "MARCHE.MONTANT_HT", "MARCHE.MONTANT_TTC", "MARCHE.DELAI", "MARCHE.SANCTION_RETARD", "MARCHE.COMPTABLE",
             "MARCHE.IMPUTATION", "MARCHE.DOMICILIATION", "MARCHE.INDEMNITE_RESILIATION", "MARCHE.DATE_NOTIFICATION", "MARCHE.NB_TITULAIRES",
-            "MARCHE.PROCEDURE", "MARCHE.LOT_NUMERO");
+            "MARCHE.PROCEDURE", "MARCHE.LOT_NUMERO", "MARCHE.CC_PERIODE", "MARCHE.CC_RECONDUCTIONS", "MARCHE.CC_PREAVIS",
+            "MARCHE.CC_DUREE_MAX");
 
     /**
      * ⚠️ 2026-10-21 (« modele-lettre-renvoi », B1), étendu le 2026-10-22 (« modeles-documents-marche », M1) — les natures qu'une

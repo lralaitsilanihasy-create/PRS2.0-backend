@@ -676,6 +676,21 @@ forme et rythme des marchés subséquents.
 - **La PRMP est alertée** quand la décision de reconduire approche et quand l'échéance est à moins de trente jours.
 - **Passé l'échéance, le contrat est échu** : plus aucune remise en concurrence ni commande. Le contrat-cadre n'a pas de minimum
   (art. 34).
+- ⚠️ **2026-10-29 (demande front « contrat-cadre-4a »)** — **le projet dit ce que le contrat en vigueur fera.**
+  - **Tout contrat-cadre a un projet de contrat-cadre**, qu'il ait un seul titulaire ou plusieurs : c'est la forme de la fiche qui
+    choisit le texte. À un seul titulaire, les marchés subséquents lui sont attribués, à la survenance du besoin, **après
+    complétude de son offre initiale** ; à plusieurs, après remise en concurrence.
+  - Le projet porte la **période de validité, la durée maximale, la reconduction et son préavis**, lus de la même façon que le
+    contrat en vigueur les reprendra à la notification. Une donnée manquante reste « …… », à compléter par la PRMP.
+- ⚠️ **2026-10-29** — **le serveur rappelle, il ne décide pas.**
+  - **La PRMP et ses UGPM sont notifiées** quand la décision de reconduire approche (trente jours avant sa date limite), une fois
+    par période, et quand le contrat devient échu.
+  - **Chaque titulaire apprend la décision** de reconduire ou non, avec la date de fin qui en résulte, et l'échéance du contrat.
+  - **Un calendrier de remises se saisit aussi en données** : quand les marchés subséquents suivent « le calendrier fixé
+    ci-après », la fiche exige la périodicité (en mois) et la date de la première remise, à côté du texte imprimé. Quinze jours
+    avant chaque échéance, et tant qu'aucune remise n'a été lancée dans cette fenêtre, la PRMP est alertée et notifiée (une fois
+    par échéance). La remise elle-même, son objet et sa date limite restent décidés par la PRMP ou l'UGPM.
+  - Un contrat entré en vigueur avant cette règle garde son calendrier en texte libre : aucune échéance n'en est déduite.
 
 #### La remise en concurrence des titulaires et le marché subséquent (2026-10-16)
 

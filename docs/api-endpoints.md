@@ -5364,6 +5364,17 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
   La plus longue des durées saisies au-delà de **24 mois** est bloquante tant que la justification est vide. Justifiée,
   elle passe en `ok` (« justifiée »). Les `champs` du contrôle nomment les durées saisies et `B02-DC-05`. Sans aucune durée
   saisie, la règle n'est pas évaluée. Cette règle tranche le « plafond de durée » qui attendait le juriste (28/09).
+- ⚠️ **2026-10-29 — le calendrier structuré des remises en concurrence** (demande front « contrat-cadre-4a », §B3 ;
+  `docs/referentiel/2026-10-29-calendrier-remises-contrat-cadre.sql`). Deux champs nouveaux de la rubrique `B02-PC`, contrat-cadre,
+  fournitures et services et travaux, facultatifs au référentiel, imprimés par aucun document (document maître `AUCUN`) :
+  - `B02-PC-04` « Périodicité des remises en concurrence selon le calendrier (mois) », `NOMBRE` ;
+  - `B02-PC-05` « Date de la première remise en concurrence selon le calendrier », `DATE`.
+
+  Le texte libre `B02-PC-03` reste celui qu'impriment le DPAC-CC et l'AE-CC. La règle **bloquante** `CALENDRIER_REMISES`
+  (bloc `B02`) les exige quand `B02-PC-02` (rôle `RYTHME`) vaut « Selon le calendrier fixé ci-après » : périodicité (rôle
+  `PERIODICITE`, nombre entier de mois > 0) et date (rôle `PREMIERE`). Le message nomme ce qui manque ; les `champs` du contrôle
+  sont les trois codes. Autre rythme, ou rythme vide : la règle n'est pas évaluée. La grammaire des conditions d'affichage
+  n'admettant ni code de champ ni valeur à espaces, l'exigence vit dans la règle, pas dans une condition.
 - ⚠️ **Multi-attributaire signalé** (même demande, arbitrage du pilote du 15/10 sur B0 n° 3-4). L'avertissement
   **`MULTI_ATTRIBUTAIRE_NON_OUTILLE`** apparaît au bilan dès que le cadrage porte `attributaires = MULTI`. Il est rangé en
   bloc `B07`, sans champ, et **ne bloque jamais**. Son message : l'évaluation et l'attribution de l'application ne désignent
@@ -7840,6 +7851,25 @@ tardive** de l'information des candidats et de l'affichage du résultat. Migrati
   - **Projet de marché** : un **projet de contrat-cadre**. Il nomme comme parties l'Autorité contractante et **tous** les
     titulaires (les retenus, sinon les proposés), donne l'offre indicative de chacun, renvoie les prix aux marchés subséquents
     (art. 16) et prévoit une signature par titulaire.
+
+    > ⚠️ **2026-10-29 — tout contrat-cadre** (demande front « contrat-cadre-4a », §B1). Le texte « PROJET DE CONTRAT-CADRE » se
+    > choisit sur la **forme de la fiche** (dernière version validée `CONTRAT_CADRE`), et non plus sur la présence de titulaires,
+    > qui ne nommait que le multi-attributaire ; sans fiche validée, sur les titulaires comme avant. **Mono-attributaire**
+    > (`attributaires = MONO` au cadrage) :
+    > - une seule partie, l'attributaire proposé (« et le titulaire suivant, ci-après « le Titulaire » ») ;
+    > - pièces : l'offre du Titulaire et son bordereau des prix ;
+    > - article 4 « Offre du Titulaire et prix des marchés subséquents » : son **offre initiale** (montant HT, délai), puis « À la
+    >   survenance du besoin, les marchés subséquents sont attribués au Titulaire après complétude de son offre initiale » (au
+    >   lieu des offres indicatives et de la remise en concurrence) ;
+    > - entrée en vigueur à sa notification au Titulaire, une signature.
+    >
+    > **Dans les deux cas**, un article 5 « **Durée et reconduction** » (la notification devient l'article 6), lu **comme le contrat
+    > en vigueur à sa création** (`ContratVigueurService.TermesCadre`, la même méthode) : période de validité `B02-DC-02` ; si
+    > reconductible (`B02-DC-03`), le nombre de reconductions `B07-DU-04`, le préavis `B07-DU-07` (« prise au moins n mois avant la
+    > fin de la période en cours », omis s'il manque), la durée maximale `B02-DC-01` (à défaut `B07-DU-05` × 12, à défaut la
+    > période), la reconduction à la date anniversaire et le Titulaire qui ne peut la refuser ; sinon « Il n'est pas
+    > reconductible. » ; sans fiche, « Reconduction : …… ». Une donnée manquante s'écrit « …… » (art. 60). Un projet déjà produit
+    > se refait par le geste « Refaire » existant, tant que le marché n'est pas signé : rien n'est migré.
   - **Informer** : la lettre d'attribution du contrat-cadre part à **chaque** titulaire retenu. Elle nomme les autres titulaires et
     donne le montant de sa propre offre indicative ; la signature se fera par la PRMP et chacun des titulaires. Le candidat non
     retenu reçoit ses motifs et la liste des titulaires (dix jours francs de contestation, art. 15). Notification `ATTRIBUTION` à
@@ -8441,6 +8471,40 @@ n° 2016-055, art. 30). Tables **`t_contrat_vigueur`** (un contrat par lot notif
   **`CONTRAT_ECHU`**) servira MS-2 et MS-3. Pas de minimum pour le contrat-cadre (art. 34) : l'alerte « minimum non atteint »
   viendra avec les bons de commande du **marché à commandes** (MS-3).
 
+> ⚠️ **2026-10-29 — reconduction notifiée, remises au calendrier** (demande front « contrat-cadre-4a », §B2, §B3 ; **V147**).
+> - **Calendrier structuré (§B3).** Quand le rythme `B02-PC-02` vaut « Selon le calendrier fixé ci-après », la notification fige
+>   aussi `B02-PC-04` (périodicité, mois) et `B02-PC-05` (date de la première remise) : colonnes `PERIODICITE_MOIS` et
+>   `PREMIERE_REMISE` de `t_contrat_vigueur`. Le texte `calendrier` (`B02-PC-03`) reste celui imprimé.
+> - **`ContratVigueurDto`** gagne, en fin d'objet, `periodiciteMois`, `premiereRemise` et **`prochaineRemise`**. Les échéances
+>   sont `premiereRemise + k × periodiciteMois`, entre `dateEffet` et `dateFin` (période en cours). La fenêtre d'une échéance
+>   s'ouvre **15 jours** avant elle ; une remise **lancée** (`lanceeLe`, tout mode) depuis cette ouverture la satisfait.
+>   `prochaineRemise` = l'échéance dont la fenêtre est ouverte et non satisfaite (elle peut être **passée** : la remise est en
+>   retard), sinon la suivante. Elle est **nulle** sans calendrier structuré (rythme « au fur et à mesure des besoins », marché à
+>   commandes, et **contrats créés avant V147** : leur calendrier est un texte libre, sans prochaine remise ni alerte), pour un
+>   contrat échu, ou quand plus aucune échéance ne tombe avant `dateFin`.
+>
+>   ⚠️ Écart à la demande : elle disait « tant qu'aucune remise n'a été lancée **depuis l'échéance précédente** ». Le point de
+>   départ retenu est l'**ouverture de la fenêtre** (J−15) de l'échéance : une remise lancée en retard pour l'échéance précédente
+>   ne satisfait pas la suivante.
+> - **Alerte `REMISE_A_LANCER`** (`alertes[]`, après `ECHEANCE_PROCHE`) : la fenêtre de `prochaineRemise` est ouverte.
+> - **Notifications** (objet `PROCEDURE`, `idObjet = idDmc`), émises par la tâche planifiée **`AttributionScheduler`** (toutes
+>   les heures, `ContratVigueurService.rappeler`) ou par le geste :
+>
+>   | Type | Quand | Destinataires | Une fois |
+>   |---|---|---|---|
+>   | `RECONDUCTION_A_DECIDER` | l'alerte du même nom s'allume (30 jours avant `dateLimiteDecision`) | PRMP de la fiche et ses UGPM | par période (`RAPPEL_RECONDUCTION` = la `dateFin` rappelée) |
+>   | `CONTRAT_RECONDUIT` | `POST …/reconduction` `RECONDUIRE` | chaque titulaire non retiré (espace candidat) | — |
+>   | `CONTRAT_NON_RECONDUIT` | `POST …/reconduction` `NE_PAS_RECONDUIRE` | chaque titulaire non retiré | — |
+>   | `CONTRAT_ECHU` | le contrat passe `ECHU` | PRMP, ses UGPM et les titulaires | oui (`ECHU_NOTIFIE_LE`) |
+>   | `REMISE_A_LANCER` | l'alerte du même nom s'allume | PRMP de la fiche et ses UGPM | par échéance (`RAPPEL_REMISE`) |
+>
+>   Les textes nomment l'objet de la fiche, la procédure et le lot, et la date utile : fin de période et date limite de la
+>   décision, nouvelle date de fin (reconduit) ou date de fin (non reconduit), date de l'échéance du calendrier. `CONTRAT_ECHU`
+>   vaut aussi pour le **marché à commandes** (« Le marché à commandes … est échu »). **Rien n'est rejoué** : V147 marque notifiés
+>   les contrats déjà échus.
+> - **Le serveur rappelle, il ne décide pas** : aucune remise n'est lancée et aucune reconduction n'est décidée sans la PRMP ou
+>   l'UGPM (`RemiseConcurrenceService`, `…/reconduction`).
+
 
 ### La remise en concurrence et le marché subséquent — lot MS-2 — V125 ⚠️ 2026-10-16
 
@@ -8857,6 +8921,15 @@ marché comme modèle. Migration **V140**.
     `NB_TITULAIRES`, `PROCEDURE`, `LOT_NUMERO`) ; liste `TITULAIRES` (`TIT.CANDIDAT`, `NIF`, `ADRESSE`, `REPRESENTANT`,
     `OFFRE_NUMERO`, `MONTANT_HT`, `DELAI`) ; clés `contratCadre`, `pi`, `international`, `receptionParTranches`,
     `alloti`. La nature d'une variable est une propriété du catalogue (`CatalogueModelesPv.natures`), plus le seul préfixe.
+
+    > ⚠️ **2026-10-29** (« contrat-cadre-4a », §B1) — la clé **`contratCadre`** vaut `oui` pour **tout** contrat-cadre (forme de la
+    > fiche), plus seulement le multi-attributaire. Clés nouvelles **`attributaires`** (`MONO` / `MULTI`, la valeur du cadrage ;
+    > vide hors contrat-cadre) et **`reconductible`** (`oui` / `non` / `inconnue` sans fiche). Variables nouvelles du groupe
+    > « Projet de marché » : `MARCHE.CC_PERIODE` (« 12 mois », ou « …… (durée en mois) »), `MARCHE.CC_RECONDUCTIONS`,
+    > `MARCHE.CC_PREAVIS` (mois ; vide si inconnu), `MARCHE.CC_DUREE_MAX` (« 24 mois »). Mono-attributaire, la liste `TITULAIRES`
+    > porte l'attributaire seul. Le départ du contrat-cadre se règle par les conditions `MULTI` / `MONO`, `RECONDUCTIBLE` /
+    > `NON_RECONDUCTIBLE` / `RECONDUCTION_INCONNUE` et `PREAVIS` ; il redonne toujours le texte du code mot pour mot (cinq
+    > variantes testées). Un modèle déjà enregistré par l'Administrateur n'est pas modifié : il garde son texte.
   - Une donnée inconnue vaut « …… » (avec sa précision, comme le texte du code) ou reste vide quand le texte l'omet.
   - **Rattachement par catégorie** : `PUT …/rattachements` { categories: [FOURNITURES_SERVICES, TRAVAUX, PRESTATIONS_INTELLECTUELLES] }
     (table `t_rattachement_categorie_modele_pv`, V140) ; 400 `RATTACHEMENT_PAR_CATEGORIE` (sous-types sur un projet),
@@ -11287,6 +11360,10 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 >
 > Sans objet, faute d'événement dans le code : le report d'une séance et l'annulation d'une procédure. Rien n'est rejoué pour les
 > événements passés (H2).
+
+> ⚠️ **2026-10-29 — types nouveaux du contrat en vigueur** (demande front « contrat-cadre-4a », §B2, §B3) :
+> `RECONDUCTION_A_DECIDER`, `REMISE_A_LANCER` (PRMP et ses UGPM), `CONTRAT_RECONDUIT`, `CONTRAT_NON_RECONDUIT` (titulaires) et
+> `CONTRAT_ECHU` (PRMP, UGPM et titulaires). Objet `PROCEDURE`. Le détail est au § *Le contrat en vigueur — lot MS-1*.
 
 > ⚠️ **2026-10-28 — nouveau type `DECISION_TRANSMISE_SIGMP`** (demande front « decision-sigmp-prmp ») : la décision du dossier
 > est transmise à SIGMP. Destinataires : la PRMP du dossier et ses UGPM. Objet `DOSSIER` (`idObjet = idDossier`). Le détail

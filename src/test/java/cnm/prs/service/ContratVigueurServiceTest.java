@@ -42,10 +42,13 @@ class ContratVigueurServiceTest {
     private final FicheMarcheService fiches = mock(FicheMarcheService.class);
     private final EvaluationService evaluation = mock(EvaluationService.class);
     private final LocalDate aujourdhui = LocalDate.of(2026, 10, 16);
+    private final cnm.prs.repository.RemiseConcurrenceRepository remises = mock(cnm.prs.repository.RemiseConcurrenceRepository.class);
+    private final CeremonieService ceremonies = mock(CeremonieService.class);
     private final ContratVigueurService service = new ContratVigueurService(contrats, reconductions, mock(AttributionRepository.class),
             mock(AttributionTitulaireRepository.class), mock(OffreRepository.class), mock(DossierMecRepository.class), fiches,
             mock(ValeursPpmService.class), evaluation, Clock.fixed(aujourdhui.atStartOfDay(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault()),
-            mock(cnm.prs.repository.BonCommandeRepository.class));
+            mock(cnm.prs.repository.BonCommandeRepository.class), remises, mock(cnm.prs.repository.CompteCandidatRepository.class),
+            mock(NotificationService.class), ceremonies);
 
     private static FicheMarcheService.EtatVersion etat(String type, Map<String, String> valeurs) {
         FicheMarcheDto d = new FicheMarcheDto();
@@ -143,5 +146,114 @@ class ContratVigueurServiceTest {
         assertThat(ContratVigueurService.finDePeriode(LocalDate.of(2026, 1, 31), 1)).isEqualTo(LocalDate.of(2026, 2, 27));
         assertThat(ContratVigueurService.finDePeriode(LocalDate.of(2026, 1, 15), null)).isEqualTo(LocalDate.of(2026, 1, 15));
         verify(contrats, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-29 (contrat-cadre-4a, §B1) — termes lus sans période : rien ne casse, la durée maximale vient des années")
+    void termesSansPeriode() {
+        ContratVigueurService.TermesCadre t = ContratVigueurService.TermesCadre.de(etat("CONTRAT_CADRE", Map.of("B07-DU-05", "3")), 1);
+        assertThat(t.periodeMois()).isNull();
+        assertThat(t.dureeMaxMois()).isEqualTo(36);
+        assertThat(t.reconductible()).isFalse();
+        assertThat(ContratVigueurService.TermesCadre.de(etat("CONTRAT_CADRE", Map.of()), 1).dureeMaxMois()).isNull();
+        assertThat(ContratVigueurService.TermesCadre.de(null, 1).reconductible()).isNull();
+    }
+
+    private static ContratVigueur cadreAuCalendrier() {
+        ContratVigueur c = new ContratVigueur();
+        c.setId(1L);
+        c.setIdDmc(7L);
+        c.setLot(1);
+        c.setTypeMarche(ContratVigueur.CONTRAT_CADRE);
+        c.setDateEffet(LocalDate.of(2026, 1, 15));
+        c.setDateFin(LocalDate.of(2027, 1, 14));
+        c.setPeriodeMois(12);
+        c.setDureeMaxMois(24);
+        c.setReconductible(true);
+        c.setReconductionsMax(1);
+        c.setPreavisMois(3);
+        c.setPeriodiciteMois(3);
+        c.setPremiereRemise(LocalDate.of(2026, 3, 1));
+        return c;
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-29 (contrat-cadre-4a, §B3) — rythme « selon le calendrier » : périodicité et première remise figées ; autre "
+            + "rythme : rien")
+    void calendrierFigeALaNotification() {
+        Map<String, String> valeurs = new HashMap<>(Map.of("B02-DC-02", "12", "B02-DC-03", "NON", "B02-PC-02", ContratVigueurService.SELON_CALENDRIER,
+                "B02-PC-03", "chaque trimestre", "B02-PC-04", "3", "B02-PC-05", "2026-03-01"));
+        when(fiches.etatValide(7L)).thenReturn(Optional.of(etat("CONTRAT_CADRE", valeurs)));
+        when(contrats.findByIdDmcAndLot(7L, 1)).thenReturn(Optional.empty());
+        service.creerALaNotification(notifiee(LocalDate.of(2026, 1, 15)));
+        ArgumentCaptor<ContratVigueur> c = ArgumentCaptor.forClass(ContratVigueur.class);
+        verify(contrats).save(c.capture());
+        assertThat(c.getValue().getPeriodiciteMois()).isEqualTo(3);
+        assertThat(c.getValue().getPremiereRemise()).isEqualTo(LocalDate.of(2026, 3, 1));
+        assertThat(c.getValue().getCalendrier()).isEqualTo("chaque trimestre");
+        assertThat(c.getValue().getReconductionsMax()).isZero();
+
+        valeurs.put("B02-PC-02", "Au fur et à mesure des besoins");
+        when(fiches.etatValide(8L)).thenReturn(Optional.of(etat("CONTRAT_CADRE", valeurs)));
+        when(contrats.findByIdDmcAndLot(8L, 1)).thenReturn(Optional.empty());
+        Attribution autre = notifiee(LocalDate.of(2026, 1, 15));
+        autre.setIdDmc(8L);
+        service.creerALaNotification(autre);
+        verify(contrats, org.mockito.Mockito.times(2)).save(c.capture());
+        assertThat(c.getValue().getPeriodiciteMois()).isNull();
+        assertThat(c.getValue().getPremiereRemise()).isNull();
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-29 (§B3) — prochaine remise : l'échéance dont la fenêtre (J−15) est ouverte sans remise lancée, même passée ; "
+            + "satisfaite, la suivante ; sans calendrier ou échu : rien")
+    void prochaineRemiseEtAlerte() {
+        when(reconductions.findByIdContratOrderByLeAscIdAsc(anyLong())).thenReturn(List.of());
+        ContratVigueur c = cadreAuCalendrier();   // échéances 01/03, 01/06, 01/09, 01/12/2026 ; aujourd'hui 16/10
+        when(remises.findByIdContratOrderByNumeroAsc(1L)).thenReturn(List.of());
+        assertThat(service.prochaineRemise(c)).isEqualTo(LocalDate.of(2026, 9, 1));   // en retard
+        assertThat(service.alertes(c)).contains(ContratVigueurService.REMISE_A_LANCER);
+
+        cnm.prs.entity.RemiseConcurrence lancee = new cnm.prs.entity.RemiseConcurrence();
+        lancee.setLanceeLe(LocalDate.of(2026, 8, 20).atTime(10, 0));   // dans la fenêtre du 01/09 (ouverte le 17/08)
+        when(remises.findByIdContratOrderByNumeroAsc(1L)).thenReturn(List.of(lancee));
+        assertThat(service.prochaineRemise(c)).isEqualTo(LocalDate.of(2026, 12, 1));
+        assertThat(service.alertes(c)).doesNotContain(ContratVigueurService.REMISE_A_LANCER);
+
+        lancee.setLanceeLe(LocalDate.of(2026, 8, 10).atTime(10, 0));   // avant la fenêtre : ne compte pas pour le 01/09
+        assertThat(service.prochaineRemise(c)).isEqualTo(LocalDate.of(2026, 9, 1));
+
+        c.setPeriodiciteMois(null);
+        assertThat(service.prochaineRemise(c)).isNull();
+        c.setPeriodiciteMois(3);
+        c.setDateFin(LocalDate.of(2026, 10, 1));
+        assertThat(service.prochaineRemise(c)).isNull();
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-29 (§B2, §B3) — la tâche planifiée : reconduction à décider une fois par période, remise à lancer une fois par "
+            + "échéance, contrat échu une fois")
+    void rappelsUneSeuleFois() {
+        when(reconductions.findByIdContratOrderByLeAscIdAsc(anyLong())).thenReturn(List.of());
+        when(remises.findByIdContratOrderByNumeroAsc(anyLong())).thenReturn(List.of());
+        ContratVigueur c = cadreAuCalendrier();
+        ContratVigueur echu = cadreAuCalendrier();
+        echu.setId(2L);
+        echu.setDateFin(LocalDate.of(2026, 10, 1));
+        when(contrats.findAllByOrderByDateFinAscIdAsc()).thenReturn(List.of(echu, c));
+
+        assertThat(service.rappeler()).isEqualTo(3);
+        verify(ceremonies).notifierPrmpEtUgpm(org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.eq(cnm.prs.enums.TypeNotification.RECONDUCTION_A_DECIDER), any(), any());
+        verify(ceremonies).notifierPrmpEtUgpm(org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.eq(cnm.prs.enums.TypeNotification.REMISE_A_LANCER), any(),
+                org.mockito.ArgumentMatchers.contains("le 01/09/2026"));
+        verify(ceremonies).notifierPrmpEtUgpm(org.mockito.ArgumentMatchers.eq(7L),
+                org.mockito.ArgumentMatchers.eq(cnm.prs.enums.TypeNotification.CONTRAT_ECHU), any(), any());
+        assertThat(c.getRappelReconduction()).isEqualTo(c.getDateFin());
+        assertThat(c.getRappelRemise()).isEqualTo(LocalDate.of(2026, 9, 1));
+        assertThat(echu.getEchuNotifieLe()).isNotNull();
+
+        assertThat(service.rappeler()).isZero();   // rien de rejoué
     }
 }

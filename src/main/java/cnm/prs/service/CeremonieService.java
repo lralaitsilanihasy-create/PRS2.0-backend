@@ -93,14 +93,16 @@ public class CeremonieService {
 
     /** ⚠️ 2026-10-18 (« avis-a-imprimer », §B1) — en mode électronique, la clôture peut rendre l'avis imprimable. */
     private final org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer;
+    private final cnm.prs.repository.UgpmRepository ugpmRepository;
 
     public CeremonieService(CeremonieClesRepository ceremonieRepository, CleDetenteurRepository cleRepository,
             DefiCleRepository defiRepository, ParametresInternesService internes, ControleurRepository controleurRepository,
             DossierMecRepository dmcRepository, MarcheRepository marcheRepository, DossierRepository dossierRepository,
             PrmpRepository prmpRepository, NotificationService notifications, NotificationRepository notificationRepository,
             FicheMarcheService fiches, ProceduresEnLigneService procedures, ParametreService parametres,
-            org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer) {
+            org.springframework.beans.factory.ObjectProvider<AvisAImprimer> avisAImprimer, cnm.prs.repository.UgpmRepository ugpmRepository) {
         this.avisAImprimer = avisAImprimer;
+        this.ugpmRepository = ugpmRepository;
         this.ceremonieRepository = ceremonieRepository;
         this.cleRepository = cleRepository;
         this.defiRepository = defiRepository;
@@ -657,5 +659,23 @@ public class CeremonieService {
         }
         String email = prmpRepository.findById(idPrmp).map(Prmp::getEmailPrmp).orElse(null);
         notifications.emettrePrmp(type, idPrmp, email, idDmc.intValue(), TypeObjet.PROCEDURE, null, titre, corps);
+    }
+
+    /**
+     * ⚠️ 2026-10-29 (demande front « contrat-cadre-4a », §B2, §B3) — vers la PRMP du plan de la ligne du DMC <strong>et toutes ses
+     * UGPM</strong>, objet {@code PROCEDURE} = {@code idDmc}.
+     */
+    void notifierPrmpEtUgpm(Long idDmc, TypeNotification type, String titre, String corps) {
+        DossierMec dmc = dmcRepository.findById(idDmc).orElse(null);
+        String idPrmp = dmc == null ? null : marcheRepository.findIdDossierByIdDetail(dmc.getIdDetail()).flatMap(dossierRepository::findById)
+                .map(cnm.prs.entity.Dossier::getIdPrmp).orElse(null);
+        if (idPrmp == null) {
+            return;
+        }
+        notifications.emettrePrmp(type, idPrmp, prmpRepository.findById(idPrmp).map(Prmp::getEmailPrmp).orElse(null), idDmc.intValue(),
+                TypeObjet.PROCEDURE, null, titre, corps);
+        for (cnm.prs.entity.Ugpm u : ugpmRepository.findByIdPrmpTutelle(idPrmp)) {
+            notifications.emettreUgpm(type, u.getIdUgpm(), idPrmp, u.getEmailUgpm(), idDmc.intValue(), TypeObjet.PROCEDURE, null, titre, corps);
+        }
     }
 }
