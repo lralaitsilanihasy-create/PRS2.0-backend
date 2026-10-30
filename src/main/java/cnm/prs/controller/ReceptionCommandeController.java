@@ -56,10 +56,15 @@ public class ReceptionCommandeController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.declarerLivraison(idBon, r));
     }
 
-    /** 201 ; 409 {@code COMMISSION_NON_DESIGNEE}, {@code NON_RECU}, {@code GARANTIE_EN_COURS}, {@code SANS_GARANTIE}, {@code RECEPTION_EN_COURS}. */
+    /**
+     * 201 ; 409 {@code COMMISSION_NON_DESIGNEE}, {@code NON_RECU}, {@code GARANTIE_EN_COURS}, {@code SANS_GARANTIE}, {@code RECEPTION_EN_COURS}.
+     * ⚠️ 2026-10-30 (« ccag-penalites-reception », §B3) — {@code ?idReception=} : la livraison (réception provisoire) dont la définitive
+     * partielle s'ouvre (à défaut la première due) ; 409 {@code DEJA_RECU}, 404 hors du bon.
+     */
     @PostMapping("/api/receptions-commandes/bons/{idBon}/definitive")
-    public ResponseEntity<ReceptionCommandeDto.DuBon> definitive(@PathVariable Long idBon) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.ouvrirDefinitive(idBon));
+    public ResponseEntity<ReceptionCommandeDto.DuBon> definitive(@PathVariable Long idBon,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Long idReception) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.ouvrirDefinitive(idBon, idReception));
     }
 
     @GetMapping("/api/receptions-commandes/{id}")

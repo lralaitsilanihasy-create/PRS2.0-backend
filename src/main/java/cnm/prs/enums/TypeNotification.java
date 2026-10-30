@@ -301,5 +301,11 @@ public enum TypeNotification {
      * ⚠️ 2026-10-29 (demande front « chaine-attribution », §B3 ; loi art. 52-I) — le lot vient d'être attribué : informer les candidats,
      * vers la PRMP de la fiche ; le compteur {@code candidatsAInformer} la suit jusqu'à l'information.
      */
-    CANDIDATS_A_INFORMER
+    CANDIDATS_A_INFORMER,
+    /**
+     * ⚠️ 2026-10-30 (demande front « ccag-penalites-reception », §B5 ; CCAG fournitures, art. 22.1) — une livraison attend la décision de
+     * la commission de réception (livraison + 15 jours) : à 3 jours de l'échéance, puis une fois dépassée ; vers le président de la
+     * commission (la PRMP quand elle préside, sinon le membre président).
+     */
+    DECISION_RECEPTION
 }

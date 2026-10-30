@@ -21,13 +21,18 @@ import java.util.List;
  * @param valeurLivree       ⚠️ 2026-10-29 (§B3, Q4) — Σ quantité livrée × prix unitaire (réception provisoire) : la base de la pénalité
  *                           indicative ; nulle pour une réception définitive
  * @param lignes             ⚠️ 2026-10-29 (§B3) — réception provisoire : par ligne du bon, commandé, livré à cette livraison, reçu au PV
+ * @param idProvisoire       ⚠️ 2026-10-30 (« ccag-penalites-reception », §B3 ; CCAG fournitures, art. 22.2) — réception définitive : la
+ *                           réception provisoire (livraison) qu'elle prononce ; nul avant V150 et pour une provisoire
+ * @param garantieJusquau    ⚠️ 2026-10-30 (§B3) — réception provisoire prononcée : le terme de sa garantie (sa date + le délai) ; nul sinon
+ * @param decisionAvantLe    ⚠️ 2026-10-30 (§B5 ; art. 22.1) — réception provisoire : l'échéance de décision de la commission, livraison
+ *                           + 15 jours ; nulle pour une définitive
  */
 public record ReceptionCommandeDto(Long id, Long idBon, Integer numeroBon, Long idContrat, Long idDmc, Integer lot, String type, String etat,
         LocalDate dateLivraison, String livraisonObservations, LocalDateTime declareeLe, String declareePar, String decision,
         LocalDate dateReception, String motif, String reserves, BigDecimal montantBon, BigDecimal montantRefaction, BigDecimal montantReceptionne,
         LocalDate echeanceLivraison, Integer joursRetard, BigDecimal tauxPenalite, BigDecimal plafondPenalite, BigDecimal penaliteIndicative,
         String penaliteNote, LocalDateTime etabliLe, String etabliPar, boolean pvDisponible, List<Attendu> attendus, LocalDateTime signeLe,
-        BigDecimal valeurLivree, List<LigneReception> lignes) {
+        BigDecimal valeurLivree, List<LigneReception> lignes, Long idProvisoire, LocalDate garantieJusquau, LocalDate decisionAvantLe) {
 
     /** Un signataire attendu : {@code signataire} = l'identifiant du compte du membre, ou {@code PRMP}. */
     public record Attendu(String signataire, String nom, boolean president, LocalDateTime signeLe) {
@@ -68,7 +73,9 @@ public record ReceptionCommandeDto(Long id, Long idBon, Integer numeroBon, Long 
      * Les réceptions d'un bon : {@code etatReception} ∈ {@code A_LIVRER}, {@code EN_RECEPTION}, {@code AJOURNE}, {@code REJETE},
      * ⚠️ 2026-10-29 {@code RECU_PARTIEL} (une livraison reçue, un reliquat reste à livrer), {@code RECU_PROVISOIRE} (tout reçu,
      * garantie en cours), {@code EN_RECEPTION_DEFINITIVE}, {@code RECU_DEFINITIF}, {@code ANNULE} ; {@code alertes} :
-     * {@code RECEPTION_DEFINITIVE_A_PRONONCER} (le délai de garantie est écoulé).
+     * {@code RECEPTION_DEFINITIVE_A_PRONONCER} (le délai de garantie est écoulé ; ⚠️ 2026-10-30 : celui d'une livraison au moins, même
+     * bon reçu en partie) ; ⚠️ 2026-10-30 (§B5) {@code DECISION_RECEPTION_PROCHE} (une réception provisoire sans PV signé, à 3 jours au
+     * plus de son échéance de décision), {@code DECISION_RECEPTION_DEPASSEE} (échéance passée).
      *
      * @param lignes ⚠️ 2026-10-29 (§B3) — par ligne du bon : commandé, livré (toutes les livraisons déclarées), reçu (PV signés
      *               acceptés), reliquat (commandé − reçu)

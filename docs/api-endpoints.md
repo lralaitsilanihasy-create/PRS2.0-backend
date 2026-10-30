@@ -8796,6 +8796,36 @@ fournitures, art. 22 ; réponse Q1 du pilote). Tables **`t_commission_reception`
 > - **Avant V148**, une réception provisoire n'a pas de ligne : elle vaut **tout le bon** (livré = reçu = commandé si elle est
 >   acceptée), sans `lignes` dans le DTO ; ses montants restent ceux du bon.
 
+> ⚠️ **2026-10-30 — les CCAG** (demande front « ccag-penalites-reception », décision du pilote « suivre les textes en vigueur » ;
+> **V150** : `t_reception_commande.ID_PROVISOIRE`, `RAPPEL_DECISION_LE`, `RETARD_DECISION_LE`).
+> - **B1 — taux de pénalité par défaut** (à défaut de `tauxJournalier` au PV) : celui du **CCAP** de la fiche (`B09-PE-02` : un entier =
+>   des millièmes, « 1/2000 » = 0,5 ‰) s'il est saisi et lisible ; sinon celui du **CCAG de la catégorie** : fournitures et services
+>   1/1000 (art. 12.1), travaux 1/2000 (art. 20.1), prestations intellectuelles 1/2000 (art. 16.1). Le plafond (15 % / 10 %) est
+>   inchangé. `penaliteNote` cite la source (« CCAG travaux, art. 20.1 (1/2000) », « taux du CCAP du marché », ou « taux fixé au PV »).
+>   L'hypothèse « 1 ‰ pour tous » est levée.
+> - **B2 — base de la pénalité** : **retiré** par le pilote (Q2) ; la règle de V148 reste (valeur livrée de chaque livraison).
+> - **B3 — une réception définitive partielle par livraison** (CCAG fournitures, art. 22.2) :
+>   - `POST /api/receptions-commandes/bons/{idBon}/definitive[?idReception=]` : `idReception` désigne la réception provisoire
+>     (livraison) dont la définitive s'ouvre ; à défaut, la **première** prononcée sans définitive. Sa garantie court de **sa propre
+>     date** de réception ; possible **même bon reçu en partie** (`RECU_PARTIEL`). 409 `RECEPTION_EN_COURS` (toute réception non signée),
+>     `SANS_GARANTIE`, `NON_RECU`, `GARANTIE_EN_COURS`, **`DEJA_RECU`** (cette livraison a sa définitive) ; 404 hors du bon.
+>   - La définitive porte `idProvisoire` ; son PV nomme la livraison (« … de la livraison du …, reçue le … (réception définitive
+>     partielle, CCAG fournitures, art. 22.2) »).
+>   - `etatReception` ne se lit plus sur la seule dernière réception : `EN_RECEPTION` / `EN_RECEPTION_DEFINITIVE` dès qu'une réception
+>     n'est pas signée ; puis la dernière provisoire (`AJOURNE`, `REJETE`), le reliquat (`RECU_PARTIEL`) ; tout reçu : **`RECU_DEFINITIF`**
+>     quand **chaque** livraison reçue a sa définitive prononcée (la dernière définitive partielle vaut définitive), sinon
+>     `RECU_PROVISOIRE`. Une définitive d'avant V150 (sans `idProvisoire`) vaut pour les provisoires qui la précèdent.
+>   - `ReceptionCommandeDto.garantieJusquau` (provisoire prononcée : sa date + la garantie) et `idProvisoire`, en fin d'objet ;
+>     `DuBon.alertes` : `RECEPTION_DEFINITIVE_A_PRONONCER` dès qu'**une** livraison a sa garantie écoulée sans définitive.
+> - **B4 — garantie d'office en travaux** (CCAG travaux, art. 44.1) : à défaut de `B09-GT-01` (ou de `B09-GP-03` d'un contrat-cadre de
+>   travaux), **12 mois** ; la PRMP saisit 6 mois pour l'entretien ou les terrassements (Q1 : aucune reconnaissance automatique).
+>   Fournitures : inchangé (pas de garantie sans délai contractuel, art. 23.1).
+> - **B5 — l'échéance de décision de la commission** (CCAG fournitures, art. 22.1 : quinze jours, sauf disposition du CCAP) :
+>   `ReceptionCommandeDto.decisionAvantLe` = livraison + 15 jours (réception provisoire) ; `DuBon.alertes` :
+>   **`DECISION_RECEPTION_PROCHE`** (PV non signé, à 3 jours au plus), **`DECISION_RECEPTION_DEPASSEE`** (échéance passée) ;
+>   notification **`DECISION_RECEPTION`** au **président** (la PRMP quand elle préside, sinon le membre président), à l'approche puis une
+>   fois dépassée, une fois chacune (tâche planifiée horaire `AttributionScheduler`). Rien de bloquant.
+
 
 ### L'attribution, lot 2, tranche 2d-3 : la déclaration sans suite — V93 ⚠️ 2026-10-08
 
@@ -11497,6 +11527,10 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > ⚠️ **2026-10-29 — types nouveaux du contrat en vigueur** (demande front « contrat-cadre-4a », §B2, §B3) :
 > `RECONDUCTION_A_DECIDER`, `REMISE_A_LANCER` (PRMP et ses UGPM), `CONTRAT_RECONDUIT`, `CONTRAT_NON_RECONDUIT` (titulaires) et
 > `CONTRAT_ECHU` (PRMP, UGPM et titulaires). Objet `PROCEDURE`. Le détail est au § *Le contrat en vigueur — lot MS-1*.
+
+> ⚠️ **2026-10-30 — type nouveau `DECISION_RECEPTION`** (demande front « ccag-penalites-reception », §B5) : une livraison attend la
+> décision de la commission de réception (livraison + 15 jours) ; vers son président (PRMP, ou membre président `K…`), à 3 jours puis
+> une fois dépassée. Objet `PROCEDURE`. Détail au § *La réception des commandes — lot MS-4*.
 
 > ⚠️ **2026-10-29 — type nouveau `CANDIDATS_A_INFORMER`** (demande front « chaine-attribution », §B3) : le lot vient d'être attribué,
 > informer les candidats. Destinataire : la PRMP de la fiche. Objet `PROCEDURE`. Le détail est au § *visa du contrôleur financier,

@@ -104,4 +104,19 @@ public class ReceptionCommande {
 
     @Column(name = "SIGNE_LE")
     private LocalDateTime signeLe;
+
+    /**
+     * ⚠️ V150 (2026-10-30, « ccag-penalites-reception », §B3 ; CCAG fournitures, art. 22.2) — une réception définitive porte sur cette
+     * réception provisoire (une livraison) ; nul pour une définitive d'avant V150, qui vaut pour les provisoires qui la précèdent.
+     */
+    @Column(name = "ID_PROVISOIRE")
+    private Long idProvisoire;
+
+    /** ⚠️ V150 (§B5) — le rappel au président : l'échéance de décision (livraison + 15 jours) approche. */
+    @Column(name = "RAPPEL_DECISION_LE")
+    private LocalDateTime rappelDecisionLe;
+
+    /** ⚠️ V150 (§B5) — le rappel au président : l'échéance de décision est dépassée. */
+    @Column(name = "RETARD_DECISION_LE")
+    private LocalDateTime retardDecisionLe;
 }

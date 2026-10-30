@@ -1769,6 +1769,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private cnm.prs.repository.BonCommandeRepository bonRepository;
     @Autowired private cnm.prs.repository.ReceptionCommandeRepository receptionCommandeRepository;
     @Autowired private cnm.prs.repository.FicheArticleRepository ficheArticleRepository;
+    @Autowired private cnm.prs.service.ReceptionCommandeService receptionCommandeService;
 
     @Test
     @DisplayName("⚠️ 2026-10-29 (« bons-reception », §B3, Q3) : la livraison et la réception par ligne ; reçu au plus le livré, montant "
@@ -1800,6 +1801,18 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"lignes\":[{\"rang\":1,\"quantiteLivree\":60}]}")).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.receptions[0].lignes[0].quantiteLivree").value(60)).andExpect(jsonPath("$.receptions[0].lignes[1].quantiteLivree").value(0))
                 .andExpect(jsonPath("$.receptions[0].valeurLivree").value(1200000)).andReturn().getResponse().getContentAsString(), "$.receptions[0].id").longValue();
+        // ⚠️ 2026-10-30 (« ccag-penalites-reception », §B5) — l'échéance de décision : livraison + 15 jours ; à 3 jours, l'alerte et un
+        // rappel au président (la PRMP, qui préside), une fois.
+        cnm.prs.entity.ReceptionCommande enAttente = receptionCommandeRepository.findById(r1).orElseThrow();
+        enAttente.setDateLivraison(aujourdhui.minusDays(13));
+        receptionCommandeRepository.save(enAttente);
+        mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.receptions[0].decisionAvantLe").value(aujourdhui.plusDays(2).toString()))
+                .andExpect(jsonPath("$.alertes").value(org.hamcrest.Matchers.hasItem("DECISION_RECEPTION_PROCHE")));
+        assertThat(receptionCommandeService.rappeler()).isEqualTo(1);
+        assertThat(receptionCommandeService.rappeler()).isZero();
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "DECISION_RECEPTION".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireType).containsExactly("PRMP");
         String pv1 = "/api/receptions-commandes/" + r1;
         mvc.perform(post(pv1 + "/pv").header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":\"RECEPTION\",\"lignes\":[{\"rang\":1,"
                 + "\"quantiteRecue\":70}]}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("QUANTITE_RECUE_INVALIDE"));
@@ -1836,6 +1849,45 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.lignes[1].reliquat").value(0));
         mvc.perform(post(livraison).header("Authorization", jetonA).contentType(JSON).content("{}")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DEJA_RECU"));
+
+        // ⚠️ 2026-10-30 (« ccag-penalites-reception », §B3 ; CCAG fournitures, art. 22.2) — une réception définitive partielle par livraison,
+        // chacune au terme de sa propre garantie ; la dernière vaut réception définitive du bon.
+        int garantie = JsonPath.<Integer>read(mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", tokenPrmp))
+                .andReturn().getResponse().getContentAsString(), "$.garantieMois");
+        for (long id : List.of(r1, r2)) {
+            cnm.prs.entity.ReceptionCommande p = receptionCommandeRepository.findById(id).orElseThrow();
+            p.setDateReception(aujourdhui.minusMonths(garantie).minusDays(1));
+            receptionCommandeRepository.save(p);
+        }
+        String definitive = "/api/receptions-commandes/bons/" + idBon + "/definitive";
+        mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.alertes").value(org.hamcrest.Matchers.hasItem("RECEPTION_DEFINITIVE_A_PRONONCER")))
+                .andExpect(jsonPath("$.receptions[0].garantieJusquau").value(aujourdhui.minusDays(1).toString()));
+        long d2 = JsonPath.<Number>read(mvc.perform(post(definitive).param("idReception", String.valueOf(r2)).header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.receptions[2].idProvisoire").value(r2)).andReturn().getResponse()
+                .getContentAsString(), "$.receptions[2].id").longValue();
+        mvc.perform(post("/api/receptions-commandes/" + d2 + "/pv").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"decision\":\"RECEPTION\"}")).andExpect(status().isOk());
+        for (String j : List.of(tokenPrmp, jetonR)) {
+            mvc.perform(post("/api/receptions-commandes/" + d2 + "/signature").header("Authorization", j)).andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.etatReception").value("RECU_PROVISOIRE"));   // la livraison r1 attend encore sa définitive
+        mvc.perform(post(definitive).param("idReception", String.valueOf(r2)).header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DEJA_RECU"));
+        long d1 = JsonPath.<Number>read(mvc.perform(post(definitive).header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.receptions[3].idProvisoire").value(r1)).andReturn().getResponse().getContentAsString(),
+                "$.receptions[3].id").longValue();
+        mvc.perform(post("/api/receptions-commandes/" + d1 + "/pv").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"decision\":\"RECEPTION\"}")).andExpect(status().isOk());
+        String texteDef = texteDuPdf(mvc.perform(get("/api/receptions-commandes/" + d1 + "/pv").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(texteDef).contains("réception définitive partielle", "art. 22.2");
+        for (String j : List.of(tokenPrmp, jetonR)) {
+            mvc.perform(post("/api/receptions-commandes/" + d1 + "/signature").header("Authorization", j)).andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.etatReception").value("RECU_DEFINITIF")).andExpect(jsonPath("$.alertes.length()").value(0));
     }
 
     @Test

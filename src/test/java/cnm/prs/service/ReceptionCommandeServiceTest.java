@@ -131,6 +131,61 @@ class ReceptionCommandeServiceTest {
                 "TRAVAUX"))).isEqualTo(3);
     }
 
+    private static FicheMarcheService.EtatVersion fiche(String categorie, java.util.Map<String, String> valeurs) {
+        cnm.prs.dto.FicheMarcheDto d = new cnm.prs.dto.FicheMarcheDto();
+        d.setValeurs(new java.util.HashMap<>(valeurs));
+        return new FicheMarcheService.EtatVersion(1, d, java.util.Map.of(), "A_COMMANDE", categorie);
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-30 (ccag-penalites-reception, §B1, §B4) — taux par défaut : CCAP (B09-PE-02) sinon CCAG de la catégorie (1 ‰, "
+            + "0,5 ‰ en travaux et PI) ; garantie de 12 mois en travaux sans B09-GT-01")
+    void ccagParCategorie() {
+        assertThat(ReceptionCommandeService.tauxDefaut(fiche("FOURNITURES_SERVICES", java.util.Map.of()), 1).taux()).isEqualByComparingTo("1");
+        assertThat(ReceptionCommandeService.tauxDefaut(fiche("TRAVAUX", java.util.Map.of()), 1))
+                .satisfies(t -> assertThat(t.taux()).isEqualByComparingTo("0.5")).satisfies(t -> assertThat(t.source()).contains("art. 20.1"));
+        assertThat(ReceptionCommandeService.tauxDefaut(fiche("PRESTATIONS_INTELLECTUELLES", java.util.Map.of()), 1).source()).contains("art. 16.1");
+        assertThat(ReceptionCommandeService.tauxDefaut(fiche("TRAVAUX", java.util.Map.of("B09-PE-02", "1/2000")), 1))
+                .satisfies(t -> assertThat(t.taux()).isEqualByComparingTo("0.5")).satisfies(t -> assertThat(t.source()).contains("CCAP"));
+        assertThat(ReceptionCommandeService.tauxCcap("2")).isEqualByComparingTo("2");
+        assertThat(ReceptionCommandeService.tauxCcap("un millième")).isNull();
+        cnm.prs.entity.ContratVigueur c = new cnm.prs.entity.ContratVigueur();
+        c.setTypeMarche(cnm.prs.entity.ContratVigueur.A_COMMANDE);
+        c.setLot(1);
+        assertThat(ReceptionCommandeService.garantieMois(c, fiche("TRAVAUX", java.util.Map.of()))).isEqualTo(12);
+        assertThat(ReceptionCommandeService.garantieMois(c, fiche("TRAVAUX", java.util.Map.of("B09-GT-01", "6")))).isEqualTo(6);
+        assertThat(ReceptionCommandeService.garantieMois(c, fiche("FOURNITURES_SERVICES", java.util.Map.of()))).isNull();
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-30 (§B3, CCAG art. 22.2) — une définitive partielle par livraison : le bon n'est RECU_DEFINITIF qu'avec la "
+            + "définitive de chaque livraison reçue ; la définitive d'une livraison est due à sa propre garantie ; échéance de décision J+15")
+    void definitivesPartielles() {
+        BonCommande b = bon("10 jours");
+        ReceptionCommande p1 = r("PROVISOIRE", "SIGNE", "RECEPTION", LocalDate.of(2026, 2, 1));
+        p1.setId(1L);
+        ReceptionCommande p2 = r("PROVISOIRE", "SIGNE", "RECEPTION", LocalDate.of(2026, 5, 1));
+        p2.setId(2L);
+        ReceptionCommande d1 = r("DEFINITIVE", "SIGNE", "RECEPTION", LocalDate.of(2026, 8, 2));
+        d1.setId(3L);
+        d1.setIdProvisoire(1L);
+        assertThat(ReceptionCommandeService.etatReception(b, List.of(p1, p2), 6, false)).isEqualTo("RECU_PROVISOIRE");
+        assertThat(ReceptionCommandeService.etatReception(b, List.of(p1, p2, d1), 6, false)).isEqualTo("RECU_PROVISOIRE");   // p2 sans définitive
+        assertThat(ReceptionCommandeService.definitivesAPrononcer(List.of(p1, p2, d1), 6, LocalDate.of(2026, 9, 1))).isEmpty();
+        assertThat(ReceptionCommandeService.definitivesAPrononcer(List.of(p1, p2, d1), 6, LocalDate.of(2026, 11, 1))).containsExactly(p2);
+        ReceptionCommande d2 = r("DEFINITIVE", "SIGNE", "RECEPTION", LocalDate.of(2026, 11, 2));
+        d2.setId(4L);
+        d2.setIdProvisoire(2L);
+        assertThat(ReceptionCommandeService.etatReception(b, List.of(p1, p2, d1, d2), 6, false)).isEqualTo("RECU_DEFINITIF");
+        // Bon reçu en partie : la définitive de la première livraison est due sans attendre le reste.
+        assertThat(ReceptionCommandeService.etatReception(b, List.of(p1), 6, true)).isEqualTo("RECU_PARTIEL");
+        assertThat(ReceptionCommandeService.definitivesAPrononcer(List.of(p1), 6, LocalDate.of(2026, 8, 1))).containsExactly(p1);
+        ReceptionCommande livree = r("PROVISOIRE", "A_ETABLIR", null, null);
+        livree.setDateLivraison(LocalDate.of(2026, 3, 1));
+        assertThat(ReceptionCommandeService.decisionAvantLe(livree)).isEqualTo(LocalDate.of(2026, 3, 16));
+        assertThat(ReceptionCommandeService.decisionAvantLe(d1)).isNull();
+    }
+
     @Test
     @DisplayName("L'échéance de livraison : la notification + le délai lu en jours, semaines ou mois ; illisible, nulle")
     void echeanceLivraison() {

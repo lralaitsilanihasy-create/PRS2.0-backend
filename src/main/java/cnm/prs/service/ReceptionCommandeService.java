@@ -78,7 +78,10 @@ public class ReceptionCommandeService {
 
     public static final String RECEPTION_DEFINITIVE_A_PRONONCER = "RECEPTION_DEFINITIVE_A_PRONONCER";
     static final String PRMP = "PRMP";
-    /** ⚠️ H (à confirmer) : la pénalité journalière du CCAP courant — 1/1000 du montant de la commande (CCAP du jeu 2463, art. 11). */
+    /**
+     * ⚠️ H (à confirmer) : la pénalité journalière du CCAP courant — 1/1000 du montant de la commande (CCAP du jeu 2463, art. 11).
+     * ⚠️ 2026-10-30 (« ccag-penalites-reception », §B1) : remplacé par {@link #tauxDefaut} (CCAP de la fiche, sinon CCAG de la catégorie).
+     */
     static final BigDecimal TAUX_DEFAUT = BigDecimal.ONE;
     private static final Set<String> DECISIONS = Set.of(ReceptionCommande.RECEPTION, ReceptionCommande.AJOURNEMENT, ReceptionCommande.REFACTION,
             ReceptionCommande.REJET);
@@ -352,33 +355,67 @@ public class ReceptionCommandeService {
                 + " déclarée le " + le.format(JOUR));
     }
 
+    /** Sans réception provisoire désignée : la première dont la définitive est due. */
+    @Transactional
+    public ReceptionCommandeDto.DuBon ouvrirDefinitive(Long idBon) {
+        return ouvrirDefinitive(idBon, null);
+    }
+
     /**
      * Le président ouvre la réception définitive, au terme du délai de garantie : 409 {@code NON_RECU} (pas de réception provisoire
      * prononcée), {@code GARANTIE_EN_COURS}, {@code SANS_GARANTIE} (la provisoire vaut définitive), {@code RECEPTION_EN_COURS}.
+     * ⚠️ 2026-10-30 (« ccag-penalites-reception », §B3 ; CCAG fournitures, art. 22.2) — une réception <strong>définitive partielle par
+     * livraison</strong> : {@code idReception} désigne la réception provisoire (à défaut, la première prononcée sans définitive) ; sa
+     * garantie court de sa propre date ; possible même si le bon n'est reçu qu'en partie. 409 {@code DEJA_RECU} (cette livraison a déjà
+     * sa définitive), 404 hors des réceptions du bon.
      */
     @Transactional
-    public ReceptionCommandeDto.DuBon ouvrirDefinitive(Long idBon) {
+    public ReceptionCommandeDto.DuBon ouvrirDefinitive(Long idBon, Long idReception) {
         BonCommande b = bon(idBon);
         ContratVigueur c = contrat(b.getIdContrat());
         exigerPresident(c);
         List<ReceptionCommande> rs = receptions.findByIdBonOrderByIdAsc(idBon);
         Integer garantie = garantieMois(c);
-        String etat = etatReception(b, rs, garantie, quantites(b, rs).resteALivrer());
-        if ("EN_RECEPTION_DEFINITIVE".equals(etat)) {
-            throw new BusinessRuleException("La réception définitive est en cours.", "RECEPTION_EN_COURS");
+        if (rs.stream().anyMatch(x -> !ReceptionCommande.SIGNE.equals(x.getEtat()))) {
+            throw new BusinessRuleException("Une réception de ce bon est en cours.", "RECEPTION_EN_COURS");
         }
         if (garantie == null || garantie <= 0) {
             throw new BusinessRuleException("Sans délai de garantie, la réception provisoire vaut réception définitive.", "SANS_GARANTIE");
         }
-        if (!"RECU_PROVISOIRE".equals(etat)) {
+        ReceptionCommande cible = null;
+        for (int i = 0; i < rs.size(); i++) {
+            ReceptionCommande p = rs.get(i);
+            if (idReception != null && !idReception.equals(p.getId())) {
+                continue;
+            }
+            if (!provisoireAcceptee(p)) {
+                if (idReception != null) {
+                    throw new BusinessRuleException("La réception définitive suit une réception provisoire prononcée.", "NON_RECU");
+                }
+                continue;
+            }
+            if (couverte(rs, i)) {
+                if (idReception != null) {
+                    throw new BusinessRuleException("Cette livraison a déjà sa réception définitive.", "DEJA_RECU");
+                }
+                continue;
+            }
+            cible = p;
+            break;
+        }
+        if (cible == null) {
+            if (idReception != null) {
+                throw new ResourceNotFoundException("Réception provisoire introuvable pour ce bon : " + idReception + ".");
+            }
             throw new BusinessRuleException("La réception définitive suit la réception provisoire prononcée.", "NON_RECU");
         }
-        LocalDate fin = garantieJusquau(rs, garantie);
+        LocalDate fin = garantieDe(cible, garantie);
         if (aujourdhui().isBefore(fin)) {
             throw new BusinessRuleException("Le délai de garantie court jusqu'au " + fin.format(JOUR) + ".", "GARANTIE_EN_COURS");
         }
         ReceptionCommande x = new ReceptionCommande();
         x.setIdBon(idBon);
+        x.setIdProvisoire(cible.getId());
         x.setType(ReceptionCommande.DEFINITIVE);
         x.setEtat(ReceptionCommande.A_ETABLIR);
         x.setDeclareeLe(maintenant());
@@ -430,7 +467,8 @@ public class ReceptionCommandeService {
         if (le.isAfter(aujourdhui()) || le.isBefore(plancher)) {
             throw new BadRequestException("La date de réception se situe entre le " + plancher.format(JOUR) + " et aujourd'hui.", "DATE_INVALIDE");
         }
-        BigDecimal taux = r.tauxJournalier() == null ? TAUX_DEFAUT : r.tauxJournalier();
+        BigDecimal taux = r.tauxJournalier() == null ? tauxDefaut(fiches.etatValide(c.getIdDmc()).orElse(null), c.getLot()).taux()
+                : r.tauxJournalier();
         if (taux.signum() < 0 || taux.compareTo(BigDecimal.valueOf(100)) > 0) {
             throw new BadRequestException("Le taux journalier de pénalité s'exprime en pour mille du montant du bon, entre 0 et 100.", "TAUX_INVALIDE");
         }
@@ -727,16 +765,17 @@ public class ReceptionCommandeService {
         if (rs.isEmpty()) {
             return "A_LIVRER";
         }
-        ReceptionCommande d = rs.get(rs.size() - 1);
-        boolean signe = ReceptionCommande.SIGNE.equals(d.getEtat());
-        if (ReceptionCommande.DEFINITIVE.equals(d.getType())) {
-            if (!signe) {
-                return "EN_RECEPTION_DEFINITIVE";
-            }
-            return ReceptionCommande.RECEPTION.equals(d.getDecision()) ? "RECU_DEFINITIF" : "RECU_PROVISOIRE";
-        }
-        if (!signe) {
+        // ⚠️ 2026-10-30 (« ccag-penalites-reception », §B3 ; CCAG fournitures, art. 22.2) — une réception définitive partielle par
+        // livraison : l'état ne se lit plus sur la seule dernière réception.
+        if (rs.stream().anyMatch(x -> ReceptionCommande.PROVISOIRE.equals(x.getType()) && !ReceptionCommande.SIGNE.equals(x.getEtat()))) {
             return "EN_RECEPTION";
+        }
+        if (rs.stream().anyMatch(x -> ReceptionCommande.DEFINITIVE.equals(x.getType()) && !ReceptionCommande.SIGNE.equals(x.getEtat()))) {
+            return "EN_RECEPTION_DEFINITIVE";
+        }
+        ReceptionCommande d = rs.stream().filter(x -> ReceptionCommande.PROVISOIRE.equals(x.getType())).reduce((x, y) -> y).orElse(null);
+        if (d == null) {
+            return "A_LIVRER";
         }
         if (ReceptionCommande.AJOURNEMENT.equals(d.getDecision())) {
             return "AJOURNE";
@@ -747,7 +786,130 @@ public class ReceptionCommandeService {
         if (resteALivrer) {
             return "RECU_PARTIEL";
         }
-        return garantie == null || garantie <= 0 ? "RECU_DEFINITIF" : "RECU_PROVISOIRE";
+        if (garantie == null || garantie <= 0) {
+            return "RECU_DEFINITIF";
+        }
+        // La dernière réception définitive partielle vaut réception définitive (art. 22.2) : toutes les livraisons reçues sont couvertes.
+        for (int i = 0; i < rs.size(); i++) {
+            ReceptionCommande p = rs.get(i);
+            if (provisoireAcceptee(p) && !couverte(rs, i)) {
+                return "RECU_PROVISOIRE";
+            }
+        }
+        return "RECU_DEFINITIF";
+    }
+
+    static boolean provisoireAcceptee(ReceptionCommande p) {
+        return ReceptionCommande.PROVISOIRE.equals(p.getType()) && ReceptionCommande.SIGNE.equals(p.getEtat()) && acceptee(p.getDecision());
+    }
+
+    /**
+     * ⚠️ 2026-10-30 (§B3) — la réception provisoire de rang {@code i} a sa réception définitive (signée, prononcée) : celle qui la nomme
+     * ({@code idProvisoire}), ou, avant V150, une définitive sans lien qui la suit.
+     */
+    static boolean couverte(List<ReceptionCommande> rs, int i) {
+        ReceptionCommande p = rs.get(i);
+        for (int j = 0; j < rs.size(); j++) {
+            ReceptionCommande d = rs.get(j);
+            if (!ReceptionCommande.DEFINITIVE.equals(d.getType()) || !ReceptionCommande.SIGNE.equals(d.getEtat())
+                    || !ReceptionCommande.RECEPTION.equals(d.getDecision())) {
+                continue;
+            }
+            if (d.getIdProvisoire() != null ? d.getIdProvisoire().equals(p.getId()) : j > i) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** ⚠️ 2026-10-30 (§B3) — le terme de la garantie d'une réception provisoire prononcée : sa date + la garantie ; nul sinon. */
+    static LocalDate garantieDe(ReceptionCommande p, Integer garantie) {
+        return garantie == null || garantie <= 0 || !provisoireAcceptee(p) || p.getDateReception() == null ? null : p.getDateReception().plusMonths(garantie);
+    }
+
+    /**
+     * ⚠️ 2026-10-30 (§B3) — les réceptions provisoires dont la définitive partielle est à prononcer : prononcées, sans définitive,
+     * garantie écoulée ; dans l'ordre.
+     */
+    static List<ReceptionCommande> definitivesAPrononcer(List<ReceptionCommande> rs, Integer garantie, LocalDate aujourdhui) {
+        List<ReceptionCommande> out = new ArrayList<>();
+        for (int i = 0; i < rs.size(); i++) {
+            LocalDate fin = garantieDe(rs.get(i), garantie);
+            if (fin != null && !couverte(rs, i) && !aujourdhui.isBefore(fin)) {
+                out.add(rs.get(i));
+            }
+        }
+        return out;
+    }
+
+    /** ⚠️ 2026-10-30 (§B5 ; CCAG fournitures, art. 22.1) — la décision de la commission est notifiée dans les 15 jours de la livraison. */
+    static final int JOURS_DECISION = 15;
+    /** ⚠️ §B5 — le rappel au président, à ce nombre de jours de l'échéance. */
+    static final int JOURS_RAPPEL_DECISION = 3;
+    public static final String DECISION_RECEPTION_PROCHE = "DECISION_RECEPTION_PROCHE";
+    public static final String DECISION_RECEPTION_DEPASSEE = "DECISION_RECEPTION_DEPASSEE";
+
+    /**
+     * ⚠️ 2026-10-30 (demande front « ccag-penalites-reception », §B5 ; CCAG fournitures, art. 22.1 : la décision est notifiée « dans un
+     * délai qui, sauf disposition différente du CCAP, ne peut excéder quinze jours ») — appelé toutes les heures par
+     * {@code AttributionScheduler} : pour chaque réception provisoire sans PV signé, le président de la commission (la PRMP quand elle
+     * préside, sinon le membre président) est notifié {@code DECISION_RECEPTION} à {@value #JOURS_RAPPEL_DECISION} jours de l'échéance,
+     * puis une fois l'échéance dépassée ; une fois chacun (V150). Rien n'est bloqué. Rend le nombre de rappels émis.
+     */
+    @Transactional
+    public int rappeler() {
+        int n = 0;
+        LocalDate aujourdhui = aujourdhui();
+        for (ReceptionCommande x : receptions.findAll()) {
+            LocalDate echeance = decisionAvantLe(x);
+            if (echeance == null || ReceptionCommande.SIGNE.equals(x.getEtat())) {
+                continue;
+            }
+            boolean depassee = aujourdhui.isAfter(echeance);
+            boolean proche = !depassee && !aujourdhui.isBefore(echeance.minusDays(JOURS_RAPPEL_DECISION));
+            if (depassee ? x.getRetardDecisionLe() != null : !proche || x.getRappelDecisionLe() != null) {
+                continue;
+            }
+            BonCommande b = bons.findById(x.getIdBon()).orElse(null);
+            ContratVigueur c = b == null ? null : contrats.findById(b.getIdContrat()).orElse(null);
+            if (c == null) {
+                continue;
+            }
+            String corps = "La livraison du bon de commande n° " + b.getNumero() + " « " + b.getObjet() + " » (procédure " + c.getIdDmc() + ", lot "
+                    + c.getLot() + "), déclarée le " + x.getDateLivraison().format(JOUR) + ", attend la décision de la commission de réception : "
+                    + (depassee ? "l'échéance du " + echeance.format(JOUR) + " est dépassée" : "elle est à notifier au plus tard le " + echeance.format(JOUR))
+                    + " (CCAG fournitures, art. 22.1 : quinze jours, sauf disposition différente du CCAP).";
+            notifierPresident(c, depassee ? "Décision de réception en retard" : "Décision de réception à prendre", corps);
+            if (depassee) {
+                x.setRetardDecisionLe(maintenant());
+            }
+            if (x.getRappelDecisionLe() == null) {
+                x.setRappelDecisionLe(maintenant());
+            }
+            receptions.save(x);
+            n++;
+        }
+        return n;
+    }
+
+    /** Le président de la commission : la PRMP quand elle préside, sinon le membre président. */
+    private void notifierPresident(ContratVigueur c, String titre, String corps) {
+        CommissionReception cr = commissions.findById(c.getId()).orElse(null);
+        if (cr == null) {
+            return;
+        }
+        if (cr.isPresideeParPrmp()) {
+            ceremonies.notifierPrmp(c.getIdDmc(), TypeNotification.DECISION_RECEPTION, titre, corps);
+            return;
+        }
+        membres.findByIdContratOrderByRangAscIdAsc(c.getId()).stream().filter(CommissionReceptionMembre::isPresident).findFirst()
+                .ifPresent(m -> notifications.emettreMembreCao(TypeNotification.DECISION_RECEPTION, m.getIdCompte(), m.getEmail(),
+                        c.getIdDmc().intValue(), TypeObjet.PROCEDURE, titre, corps));
+    }
+
+    /** ⚠️ 2026-10-30 (§B5) — l'échéance de décision d'une réception provisoire : livraison + 15 jours ; nulle pour une définitive. */
+    static LocalDate decisionAvantLe(ReceptionCommande x) {
+        return ReceptionCommande.PROVISOIRE.equals(x.getType()) && x.getDateLivraison() != null ? x.getDateLivraison().plusDays(JOURS_DECISION) : null;
     }
 
     /** Le terme du délai de garantie : la réception provisoire prononcée + la garantie. */
@@ -797,10 +959,58 @@ public class ReceptionCommandeService {
      * {@code B09-GT-01}, le délai de garantie du référentiel des travaux ({@code B09-DG-01} n'y existe pas).
      */
     static Integer garantieMois(ContratVigueur c, FicheMarcheService.EtatVersion v) {
-        String code = ContratVigueur.CONTRAT_CADRE.equals(c.getTypeMarche()) ? "B09-GP-03"
-                : v != null && cnm.prs.enums.CategorieDao.TRAVAUX.name().equals(v.categorie()) ? "B09-GT-01" : "B09-DG-01";
+        boolean travaux = v != null && cnm.prs.enums.CategorieDao.TRAVAUX.name().equals(v.categorie());
+        String code = ContratVigueur.CONTRAT_CADRE.equals(c.getTypeMarche()) ? "B09-GP-03" : travaux ? "B09-GT-01" : "B09-DG-01";
         BigDecimal n = ControlesFicheMarche.nombre(ContratVigueurService.valeur(v, code, c.getLot()));
+        if (n == null && travaux) {
+            // ⚠️ 2026-10-30 (« ccag-penalites-reception », §B4, décision du pilote ; CCAG travaux, art. 44.1) — sauf stipulation du
+            // marché, un an à compter de la réception ; la PRMP saisit 6 mois pour l'entretien ou les terrassements.
+            return GARANTIE_TRAVAUX_MOIS;
+        }
         return n == null || n.signum() <= 0 ? null : n.intValue();
+    }
+
+    /** ⚠️ 2026-10-30 (§B4) — CCAG travaux, art. 44.1 : le délai de garantie, à défaut de stipulation du marché. */
+    static final int GARANTIE_TRAVAUX_MOIS = 12;
+
+    /**
+     * ⚠️ 2026-10-30 (demande front « ccag-penalites-reception », §B1, décision du pilote « suivre les textes en vigueur ») — le taux
+     * journalier de pénalité par défaut, en ‰, et sa source : celui du CCAP de la fiche ({@code B09-PE-02} : un entier = des
+     * millièmes, « 1/2000 » = 0,5 ‰) s'il est saisi et lisible ; sinon celui du CCAG de la catégorie (fournitures et services : 1/1000,
+     * art. 12.1 ; travaux : 1/2000, art. 20.1 ; prestations intellectuelles : 1/2000, art. 16.1). Le taux saisi au PV prime.
+     */
+    record TauxDefaut(BigDecimal taux, String source) {
+    }
+
+    static TauxDefaut tauxDefaut(FicheMarcheService.EtatVersion v, Integer lot) {
+        BigDecimal ccap = tauxCcap(ContratVigueurService.valeur(v, "B09-PE-02", lot));
+        if (ccap != null) {
+            return new TauxDefaut(ccap, "taux du CCAP du marché");
+        }
+        String categorie = v == null ? null : v.categorie();
+        if (cnm.prs.enums.CategorieDao.TRAVAUX.name().equals(categorie)) {
+            return new TauxDefaut(new BigDecimal("0.5"), "CCAG travaux, art. 20.1 (1/2000)");
+        }
+        if (cnm.prs.enums.CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie)) {
+            return new TauxDefaut(new BigDecimal("0.5"), "CCAG prestations intellectuelles, art. 16.1 (1/2000)");
+        }
+        return new TauxDefaut(BigDecimal.ONE, "CCAG fournitures et services courants, art. 12.1 (1/1000)");
+    }
+
+    /** « 2 » (millièmes) → 2 ; « 1/2000 » → 0,5 ; illisible ou nul → {@code null}. */
+    static BigDecimal tauxCcap(String brut) {
+        if (brut == null || brut.isBlank()) {
+            return null;
+        }
+        String s = brut.trim().replace(" ", "").replace(',', '.');
+        Matcher m = Pattern.compile("^(\\d+(?:\\.\\d+)?)/(\\d+(?:\\.\\d+)?)$").matcher(s);
+        if (m.matches()) {
+            BigDecimal den = new BigDecimal(m.group(2));
+            return den.signum() == 0 ? null : new BigDecimal(m.group(1)).multiply(BigDecimal.valueOf(1000)).divide(den, 4, RoundingMode.HALF_UP)
+                    .stripTrailingZeros();
+        }
+        BigDecimal n = ControlesFicheMarche.nombre(s);
+        return n == null || n.signum() <= 0 ? null : n;
     }
 
     /** Contrat-cadre dont les pénalités sont « Non applicables » ({@code B07-PE-01}) : aucune pénalité. */
@@ -834,8 +1044,11 @@ public class ReceptionCommandeService {
             return "Livraison non acceptée : pas de pénalité calculée.";
         }
         // ⚠️ 2026-10-29 (« bons-reception », Q4) — la base est la valeur livrée à cette livraison (tout le bon avant V148).
+        // ⚠️ 2026-10-30 (« ccag-penalites-reception », §B1) — la source du taux : le CCAP ou le CCAG de la catégorie, sinon le PV.
+        TauxDefaut defaut = tauxDefaut(fiches.etatValide(c.getIdDmc()).orElse(null), c.getLot());
+        String source = x.getTauxPenalite().compareTo(defaut.taux()) == 0 ? defaut.source() : "taux fixé au PV";
         return "À titre indicatif, jamais retenue : " + x.getTauxPenalite().stripTrailingZeros().toPlainString() + " ‰ de la valeur livrée par jour "
-                + "de retard, plafonnée à " + plafond(c).stripTrailingZeros().toPlainString() + " %.";
+                + "de retard (" + source + "), plafonnée à " + plafond(c).stripTrailingZeros().toPlainString() + " %.";
     }
 
     // ------------------------------------------------------------------ signataires et droits
@@ -935,8 +1148,22 @@ public class ReceptionCommandeService {
         String etat = etatReception(b, rs, garantie, q.resteALivrer());
         LocalDate jusquau = garantieJusquau(rs, garantie);
         List<String> alertes = new ArrayList<>();
-        if ("RECU_PROVISOIRE".equals(etat) && jusquau != null && !aujourdhui().isBefore(jusquau)) {
+        // ⚠️ 2026-10-30 (« ccag-penalites-reception », §B3) — une définitive partielle due, livraison par livraison (bon reçu en partie compris).
+        if (!"EN_RECEPTION".equals(etat) && !"EN_RECEPTION_DEFINITIVE".equals(etat)
+                && !definitivesAPrononcer(rs, garantie, aujourdhui()).isEmpty()) {
             alertes.add(RECEPTION_DEFINITIVE_A_PRONONCER);
+        }
+        // ⚠️ 2026-10-30 (§B5 ; CCAG fournitures, art. 22.1) — l'échéance de décision de la commission (livraison + 15 jours).
+        for (ReceptionCommande x : rs) {
+            LocalDate echeance = decisionAvantLe(x);
+            if (echeance == null || ReceptionCommande.SIGNE.equals(x.getEtat())) {
+                continue;
+            }
+            if (aujourdhui().isAfter(echeance)) {
+                alertes.add(DECISION_RECEPTION_DEPASSEE);
+            } else if (!aujourdhui().isBefore(echeance.minusDays(JOURS_RAPPEL_DECISION))) {
+                alertes.add(DECISION_RECEPTION_PROCHE);
+            }
         }
         Offre o = offres.findById(b.getIdOffre()).orElse(null);
         List<ReceptionCommandeDto.LigneBon> lignes = ls.stream().map(l -> new ReceptionCommandeDto.LigneBon(l.getRang(), l.getIdArticle(),
@@ -966,7 +1193,8 @@ public class ReceptionCommandeService {
                 x.getLivraisonObservations(), x.getDeclareeLe(), x.getDeclareePar(), x.getDecision(), x.getDateReception(), x.getMotif(), x.getReserves(),
                 b.getMontantHt(), x.getMontantRefaction(), recu, provisoire ? echeanceLivraison(b) : null, x.getJoursRetard(), x.getTauxPenalite(),
                 provisoire ? plafond(c) : null, x.getPenaliteIndicative(), penaliteNote(c, x), x.getEtabliLe(), x.getEtabliPar(), x.getPvPdf() != null,
-                attendus(c, x), x.getSigneLe(), valeurLivree, lignes);
+                attendus(c, x), x.getSigneLe(), valeurLivree, lignes, x.getIdProvisoire(), provisoire ? garantieDe(x, garantieMois(c)) : null,
+                decisionAvantLe(x));
     }
 
     private void produirePv(ReceptionCommande x, BonCommande b, ContratVigueur c) {
@@ -982,7 +1210,11 @@ public class ReceptionCommandeService {
                 : "marché à commandes") + "). Titulaire : " + (o == null ? b.getIdOffre() : o.getRaisonSociale()) + ". Montant du bon : "
                 + FormulairesEnLigne.lisible(b.getMontantHt()) + " Ariary hors taxes.");
         para(el, "La commission de réception désignée par décision n° " + cr.getDecisionReference() + " du " + cr.getDecisionDate().format(JOUR)
-                + " (loi n° 2016-055, art. 13) s'est réunie le " + x.getDateReception().format(JOUR) + (definitive ? ", au terme du délai de garantie."
+                + " (loi n° 2016-055, art. 13) s'est réunie le " + x.getDateReception().format(JOUR) + (definitive ? ", au terme du délai de garantie"
+                        // ⚠️ 2026-10-30 (« ccag-penalites-reception », §B3) — la définitive partielle nomme la livraison qu'elle prononce.
+                        + (x.getIdProvisoire() == null ? "" : receptions.findById(x.getIdProvisoire()).filter(p -> p.getDateLivraison() != null)
+                                .map(p -> " de la livraison du " + p.getDateLivraison().format(JOUR) + ", reçue le " + p.getDateReception().format(JOUR)
+                                        + " (réception définitive partielle, CCAG fournitures, art. 22.2)").orElse("")) + "."
                         : " pour constater la livraison déclarée le " + x.getDateLivraison().format(JOUR) + "."));
         if (x.getLivraisonObservations() != null) {
             para(el, "Observations à la livraison : " + x.getLivraisonObservations());

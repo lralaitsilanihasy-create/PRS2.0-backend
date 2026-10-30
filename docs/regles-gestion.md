@@ -788,6 +788,14 @@ subséquent — lot MS-2*.
   - Tant qu'il reste une quantité à livrer, le bon est **reçu en partie** et attend la livraison suivante. **La réception provisoire
     du bon n'est prononcée qu'avec la dernière quantité**, et le délai de garantie part de cette dernière réception.
   - La pénalité indicative d'une livraison en retard porte sur **la valeur de ce qu'elle livre**, avec ses propres jours de retard.
+- ⚠️ **2026-10-30 (décision du pilote : « suivre les textes en vigueur », CCAG)** —
+  - **La pénalité journalière suit le marché, puis le CCAG** : le taux du CCAP s'il est fixé, sinon 1/1000 en fournitures et services,
+    1/2000 en travaux et en prestations intellectuelles ; le président peut toujours le fixer au PV.
+  - **Chaque livraison a sa réception définitive**, au terme de sa propre garantie, même si la commande n'est pas encore toute livrée ;
+    la commande est reçue définitivement quand chaque livraison reçue l'est.
+  - **En travaux, la garantie est d'un an** sauf stipulation du marché (six mois à saisir pour l'entretien ou les terrassements).
+  - **La commission décide dans les quinze jours de la livraison** : son président est prévenu à l'approche de l'échéance, puis si elle
+    est dépassée. Rien n'est bloqué.
 
 #### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
 
