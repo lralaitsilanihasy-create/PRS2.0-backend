@@ -359,7 +359,7 @@ public class CodesCitesPointsCtrl {
     }
 
     /** Les sous-types qu'une fiche de fournitures ou de travaux produit (et ceux qui en héritent la grille). */
-    private static final Set<String> APPELS_D_OFFRES = Set.of(SousTypesDossier.DAOO, SousTypesDossier.DAOO_CC, SousTypesDossier.DAOR,
+    private static final Set<String> APPELS_D_OFFRES = Set.of(SousTypesDossier.DAOO, SousTypesDossier.DAOO_CC, SousTypesDossier.DAOR, SousTypesDossier.DAOR_CC,
             SousTypesDossier.DAOOI, SousTypesDossier.DAORI, SousTypesDossier.DAOOPREQUAL);
 
     /** Les formes admises valent pour celle du point : le contrat-cadre, ou l'une des autres formes. */

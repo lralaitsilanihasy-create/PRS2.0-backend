@@ -13,4 +13,7 @@ public interface ContratVigueurRepository extends JpaRepository<ContratVigueur, 
     Optional<ContratVigueur> findByIdDmcAndLot(Long idDmc, Integer lot);
 
     List<ContratVigueur> findAllByOrderByDateFinAscIdAsc();
+
+    /** ⚠️ 2026-10-30 (« contrat-cadre-4b », §B3) — les contrats des lots d'une procédure. */
+    List<ContratVigueur> findByIdDmcOrderByLotAsc(Long idDmc);
 }

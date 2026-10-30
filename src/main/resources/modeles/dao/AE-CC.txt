@@ -125,6 +125,7 @@ PARA	{{FINSI:GROUPEMENT}}
 SOUS_TITRE	ARTICLE 2 – Objet du contrat-cadre et des marchés subséquents conclus sur sa base
 PARA	Le présent contrat-cadre a pour objet de définir les termes régissant les marchés à passer au cours de la période fixée à l’article 7.
 PARA	L’objet de cet accord et des marchés subséquents qui seront conclus sur son fondement est {{B02-OB-01}}.
+PARA	Les quantités du besoin sont indicatives, sans engagement de l’acheteur public : le contrat-cadre n’impose aucun minimum de commande (décret n° 2019-1064, art. 6, 8 et 34).
 PARA	{{SI:NA-MONO}}
 PARA	Le contrat-cadre n’est pas alloti. Il est mono-attributaire.
 PARA	{{FINSI:NA-MONO}}

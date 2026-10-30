@@ -2857,6 +2857,21 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > soumis, rectifiés) ; seule la création est fermée. **H3** : les pièces `PAPIER` restent au référentiel (dossiers anciens, autres
 > sous-types).
 >
+> ⚠️ **2026-10-30 (demande front « contrat-cadre-4b », §B1, §B2 ; V152)** — **`DAOR-CC`** (« Dossier d'appel d'offres restreint —
+> contrat-cadre », famille DMC, grille de base `DAOO`, pièces de `DAOR` valant pour le contrat-cadre) et **`MAOR-CC`** (« Marché sur
+> appel d'offres restreint — contrat-cadre », famille DDM, grille de base `MAOO`, pièces de `MAOR`) : un appel d'offres **restreint** en
+> contrat-cadre produit `DAOR-CC` (`SousTypesDossier.dossierMiseEnConcurrence(mode, pi, true)`), son attribution `MAOR-CC` ;
+> `formeImposee(DAOR-CC)` = `CONTRAT_CADRE` ; produits par la fiche ou la procédure (409 `DOSSIER_PAR_FICHE` /
+> `DOSSIER_PAR_PROCEDURE` à la main) ; `ck_dossier_dmc_dao` admet `DAOR-CC`. **Consultation** (art. 41) : pas de sous-type de
+> consultation en fournitures et travaux (le mode « consultation » produit `DAOO`, donc `DAOO-CC` en contrat-cadre, comme avant) ;
+> `DC` reste la consultation de prestations intellectuelles. **Évaluation en deux temps de l'art. 14** (candidatures, puis offres des
+> candidats retenus) : **n'existe pas** hors prestations intellectuelles (enveloppes technique puis financière) et AMI (présélection) ;
+> l'évaluation des fournitures et travaux examine les offres puis qualifie l'attributaire. Les dossiers existants ne changent pas de
+> sous-type. **Quantités indicatives (§B1)** : le DPAC-CC (art. 1) et l'AE-CC (art. 2) disent « Les quantités du besoin sont
+> indicatives, sans engagement de l'acheteur public : le contrat-cadre n'impose aucun minimum de commande (décret n° 2019-1064, art. 6,
+> 8 et 34) » ; la liste des fournitures (`LF`) et le bordereau estimatif d'un contrat-cadre titrent « Quantité indicative », la liste
+> le rappelle sous chaque tableau. Aucune règle n'en fait un minimum (art. 34) ; le total estimé reste comparé au plan (art. 8).
+
 > ⚠️ **2026-10-18 (demande front « sous-type-contrat-cadre » ; V131)** — **`DAOO-CC`** (« Dossier d'appel d'offres ouvert —
 > contrat-cadre », `GRILLE_BASE = DAOO`) rejoint `PRODUITS_PAR_FICHE` : sa saisie directe est refusée de même (409
 > `DOSSIER_PAR_FICHE`).
@@ -8547,6 +8562,17 @@ Demande front `frontend/docs/demande-backend-2026-10-15-marches-subsequents.md`,
 n° 2016-055, art. 33). Tables **`t_remise_concurrence`** (une remise par contrat, numérotée, unique sur `(ID_CONTRAT, NUMERO)`),
 **`t_remise_consulte`** (les titulaires consultés) et **`t_remise_reponse`** (une réponse par titulaire, remplaçable jusqu'à
 l'échéance). Aucune dépendance ajoutée.
+
+> ⚠️ **2026-10-30 — la remise commune à tous les lots** (demande front « contrat-cadre-4b », §B3 ; décret n° 2019-1064, art. 31 ;
+> **V151** : `t_remise_concurrence.ID_GROUPE`). Au rythme **« Selon le calendrier fixé ci-après »** (`rythme` du contrat), `POST
+> …/{id}/remises` lance la remise sur **tous les lots** : une remise par contrat en vigueur des lots de la procédure (contrat-cadre, même
+> rythme, non échu), mêmes objet, spécifications et échéance, chacune avec ses titulaires (complétude si un seul), sa lettre et ses
+> réponses ; elles portent le même `idGroupe` (l'identifiant de la première). Un lot qui ne peut pas être consulté bloque le tout : 409
+> `SANS_TITULAIRE` ou `REMISE_EN_COURS` avec `details.lot`. Au rythme **« Au fur et à mesure des besoins »**, la remise reste celle du
+> seul lot (art. 31 : les lots pour lesquels un besoin est constaté). **`RemiseDto`** gagne, en fin d'objet, `idGroupe` et
+> `lots[{ idRemise, idContrat, lot, numero, mode, etat }]` (la remise de chaque lot, celle-ci comprise ; vide hors groupe). Évaluation,
+> décision et réponses restent par lot (une réponse par lot et par titulaire). Journal : « (remise commune à tous les lots, décret
+> n° 2019-1064, art. 31) ».
 
 | Méthode | URL | Corps | Statuts | Accès |
 |---|---|---|---|---|

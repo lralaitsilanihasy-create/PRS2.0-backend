@@ -22,7 +22,16 @@ public record RemiseDto(Long id, Long idContrat, Long idDmc, Integer lot, Intege
         LocalDateTime echeance, boolean echeancePassee, LocalDateTime lanceeLe, String lanceePar, boolean lettreDisponible,
         List<Consulte> consultes, List<Reponse> reponses, BigDecimal prixMoyen, String idOffreProposee, String observations,
         LocalDateTime evalueeLe, String evalueePar, boolean rapportDisponible, String idOffreRetenue, BigDecimal montantRetenu,
-        String motifDecision, LocalDateTime decideeLe, String decideePar, List<String> alertes) {
+        String motifDecision, LocalDateTime decideeLe, String decideePar, List<String> alertes,
+        /**
+         * ⚠️ 2026-10-30 (« contrat-cadre-4b », §B3 ; décret n° 2019-1064, art. 31) — la remise commune à tous les lots (rythme selon le
+         * calendrier) : son groupe et la remise de chaque lot (celle-ci comprise) ; nul et vide pour une remise d'un seul lot.
+         */
+        Long idGroupe, List<LotGroupe> lots) {
+
+    /** ⚠️ 2026-10-30 (§B3) — la remise d'un lot dans une remise commune. */
+    public record LotGroupe(Long idRemise, Long idContrat, Integer lot, Integer numero, String mode, String etat) {
+    }
 
     /** Un titulaire consulté : {@code absencesConsecutives} compte cette remise et les précédentes du contrat restées sans sa réponse. */
     public record Consulte(String idOffre, Integer numero, String candidat, LocalDateTime notifieLe, boolean reponseRecue, boolean sansReponse,

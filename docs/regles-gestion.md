@@ -1597,6 +1597,16 @@ et ne pouvait rien en dire : aucune colonne ne reliait les deux objets. Le lien 
 DMC, objet de préparation. **Unique** dans les deux sens ; **sous-type `DAO` seulement** (contrainte en base et garde
 de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM — lot 1b*.
 
+> ⚠️ **2026-10-30 — le contrat-cadre par appel d'offres restreint (décision du pilote « suivre les textes en vigueur » ; décret
+> n° 2019-1064, art. 7 ; V152).** Un appel d'offres **restreint** en contrat-cadre produit un « Dossier d'appel d'offres restreint —
+> contrat-cadre » (`DAOR-CC`), puis à l'attribution un « Marché sur appel d'offres restreint — contrat-cadre » (`MAOR-CC`). Leurs pièces
+> sont celles de l'appel d'offres restreint (dossier) et de son marché, comme pour `DAOO-CC` et `MAOO-CC` ; leur grille est celle de
+> l'appel d'offres ouvert, avec ses variantes propres au contrat-cadre ; la forme y est imposée. La **consultation** (art. 41) n'a pas
+> de sous-type propre en fournitures et travaux : elle produit, comme avant, un dossier d'appel d'offres ouvert (`DAOO-CC` en
+> contrat-cadre). Les quantités d'un contrat-cadre sont **indicatives** et n'engagent pas l'acheteur (art. 6, 8, 34) : les documents
+> le disent, et aucune règle n'en fait un minimum. Au rythme « selon le calendrier », une remise en concurrence porte sur **tous les
+> lots** (art. 31).
+>
 > ⚠️ **2026-10-18 — le contrat-cadre garde son sous-type : `DAOO-CC` (arbitrage du pilote ; V131).** Un appel d'offres ouvert
 > dont la forme est le **contrat-cadre** produit un dossier « Dossier d'appel d'offres ouvert — contrat-cadre » (`DAOO-CC`), et
 > non `DAOO`. La forme est celle du plan, à défaut le type de la fiche. Comme les autres sous-types produits par une fiche, il ne

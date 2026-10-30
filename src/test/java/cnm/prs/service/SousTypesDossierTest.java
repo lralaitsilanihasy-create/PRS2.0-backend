@@ -22,9 +22,14 @@ class SousTypesDossierTest {
         // ⚠️ 2026-10-18 (« sous-type-contrat-cadre ») — l'appel d'offres ouvert en contrat-cadre seul ; Q3 : les autres modes gardent le leur.
         assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres ouvert", false, true)).isEqualTo("DAOO-CC");
         assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres ouvert", false, false)).isEqualTo("DAOO");
-        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres restreint", false, true)).isEqualTo("DAOR");
+        // ⚠️ 2026-10-30 (« contrat-cadre-4b », §B2 ; décret 2019-1064, art. 7) — l'appel d'offres restreint en contrat-cadre : DAOR-CC, MAOR-CC.
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres restreint", false, true)).isEqualTo("DAOR-CC");
         assertThat(SousTypesDossier.dossierMiseEnConcurrence("APPEL D'OFFRE OUVERT INTERNATIONAL", false, true)).isEqualTo("DAOOI");
-        assertThat(SousTypesDossier.PRODUITS_PAR_FICHE).contains("DAOO-CC");
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Consultation", false, true)).isEqualTo("DAOO-CC");   // pas de sous-type propre
+        assertThat(SousTypesDossier.PRODUITS_PAR_FICHE).contains("DAOO-CC", "DAOR-CC");
+        assertThat(SousTypesDossier.PRODUITS_PAR_PROCEDURE).contains("MAOR-CC");
+        assertThat(SousTypesDossier.dossierMarche("Appel d'offres restreint", false, "DAOR-CC")).isEqualTo("MAOR-CC");
+        assertThat(SousTypesDossier.formeImposee("DAOR-CC")).isEqualTo("CONTRAT_CADRE");
         assertThat(SousTypesDossier.dossierMarche("Appel d'offres ouvert", false)).isEqualTo("MAOO");
         assertThat(SousTypesDossier.dossierMarche("Appel d'offres restreint", false)).isEqualTo("MAOR");
         assertThat(SousTypesDossier.dossierMarche("APPEL D'OFFRE OUVERT INTERNATIONAL", false)).isEqualTo("MAOOI");

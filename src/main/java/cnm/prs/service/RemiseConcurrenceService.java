@@ -145,19 +145,56 @@ public class RemiseConcurrenceService {
     public RemiseDto lancer(Long idContrat, RemiseDto.RemiseRequest r) {
         ContratVigueur c = contrats.findById(idContrat).orElseThrow(() -> new ResourceNotFoundException("Contrat introuvable : " + idContrat + "."));
         exigerPrmpOuUgpm(c.getIdDmc());
+        exigerLancable(c);
+        // ⚠️ 2026-10-30 (demande front « contrat-cadre-4b », §B3 ; décret n° 2019-1064, art. 31) — au rythme « Selon le calendrier fixé
+        // ci-après », la remise en concurrence porte sur tous les lots : une remise par contrat de lot (ses titulaires, leurs réponses),
+        // reliées par un groupe. Au fur et à mesure des besoins, elle reste celle du seul lot.
+        List<ContratVigueur> lots = new ArrayList<>(List.of(c));
+        if (ContratVigueurService.SELON_CALENDRIER.equals(c.getRythme())) {
+            for (ContratVigueur autre : contrats.findByIdDmcOrderByLotAsc(c.getIdDmc())) {
+                if (!autre.getId().equals(c.getId()) && ContratVigueur.CONTRAT_CADRE.equals(autre.getTypeMarche())
+                        && ContratVigueurService.SELON_CALENDRIER.equals(autre.getRythme()) && !maintenant().toLocalDate().isAfter(autre.getDateFin())) {
+                    exigerLancable(autre);
+                    lots.add(autre);
+                }
+            }
+        }
+        Long groupe = null;
+        RemiseConcurrence lancee = null;
+        for (ContratVigueur lot : lots) {
+            RemiseConcurrence x = lancerUn(lot, r, groupe);
+            if (lots.size() > 1 && groupe == null) {
+                groupe = x.getId();
+                x.setIdGroupe(groupe);
+                remises.save(x);
+            }
+            lancee = lancee == null ? x : lancee;
+        }
+        return dto(lancee, c);
+    }
+
+    /** Le contrat admet une remise : en vigueur, contrat-cadre, avec titulaires, sans remise en attente de décision. */
+    private void exigerLancable(ContratVigueur c) {
         contratsService.exigerEnVigueur(c.getIdDmc(), c.getLot());
         if (!ContratVigueur.CONTRAT_CADRE.equals(c.getTypeMarche())) {
             throw new BusinessRuleException("Un marché à commandes s'exécute par bons de commande : il n'a pas de remise en concurrence.",
                     "FORME_SANS_REMISE");
         }
-        List<ContratVigueurDto.Titulaire> titulaires = contratsService.titulairesDto(c);
-        if (titulaires.isEmpty()) {
-            throw new BusinessRuleException("Le contrat n'a plus de titulaire.", "SANS_TITULAIRE");
+        if (contratsService.titulairesDto(c).isEmpty()) {
+            throw new BusinessRuleException("Le contrat du lot " + c.getLot() + " n'a plus de titulaire.", "SANS_TITULAIRE",
+                    null, Map.<String, Object>of("lot", c.getLot()));
         }
-        if (remises.findByIdContratOrderByNumeroAsc(idContrat).stream().anyMatch(x -> RemiseConcurrence.LANCEE.equals(x.getEtat())
+        if (remises.findByIdContratOrderByNumeroAsc(c.getId()).stream().anyMatch(x -> RemiseConcurrence.LANCEE.equals(x.getEtat())
                 || RemiseConcurrence.EVALUEE.equals(x.getEtat()))) {
-            throw new BusinessRuleException("Une remise en concurrence de ce contrat attend sa décision.", "REMISE_EN_COURS");
+            throw new BusinessRuleException("Une remise en concurrence du lot " + c.getLot() + " attend sa décision.", "REMISE_EN_COURS",
+                    null, Map.<String, Object>of("lot", c.getLot()));
         }
+    }
+
+    /** La remise d'un contrat (un lot) : validation des champs, lettre, titulaires consultés et notifiés ; {@code groupe} si commune. */
+    private RemiseConcurrence lancerUn(ContratVigueur c, RemiseDto.RemiseRequest r, Long groupe) {
+        Long idContrat = c.getId();
+        List<ContratVigueurDto.Titulaire> titulaires = contratsService.titulairesDto(c);
         String objet = obligatoire(r == null ? null : r.objet(), "objet");
         String specifications = obligatoire(r.specifications(), "specifications");
         String delai = obligatoire(r.delaiExecution(), "delaiExecution");
@@ -190,6 +227,7 @@ public class RemiseConcurrenceService {
         x.setEcheance(echeance);
         x.setLanceeLe(maintenant);
         x.setLanceePar(acteur());
+        x.setIdGroupe(groupe);
         remises.save(x);
         for (GenerateurDocumentsFiche.Fichier f : generateur.generer(lettre(c, x))) {
             if ("pdf".equals(f.extension())) {
@@ -213,8 +251,8 @@ public class RemiseConcurrenceService {
         }
         evaluation.tracerAttribution(c.getIdDmc(), "REMISE_EN_CONCURRENCE", "Lot " + c.getLot() + " : " + (completude ? "complétude" : "remise en concurrence")
                 + " n° " + x.getNumero() + " lancée — « " + objet + " », " + titulaires.size() + " titulaire(s) consulté(s), échéance le "
-                + echeance.format(HEURE));
-        return dto(x, c);
+                + echeance.format(HEURE) + (groupe == null ? "" : " (remise commune à tous les lots, décret n° 2019-1064, art. 31)"));
+        return x;
     }
 
     // ------------------------------------------------------------------ lecture
@@ -606,7 +644,18 @@ public class RemiseConcurrenceService {
                 x.getSpecifications(), x.getCriteres(), x.getLieuLivraison(), x.getDelaiExecution(), x.getValiditeJours(), x.getVisite(),
                 x.getEcheance(), ouvertes, x.getLanceeLe(), x.getLanceePar(), x.getLettrePdf() != null, cs, vues, x.getPrixMoyen(),
                 x.getIdOffreProposee(), x.getObservations(), x.getEvalueeLe(), x.getEvalueePar(), x.getRapportPdf() != null, x.getIdOffreRetenue(),
-                x.getMontantRetenu(), x.getMotifDecision(), x.getDecideeLe(), x.getDecideePar(), alertes);
+                x.getMontantRetenu(), x.getMotifDecision(), x.getDecideeLe(), x.getDecideePar(), alertes, x.getIdGroupe(), lotsDuGroupe(x));
+    }
+
+    /** ⚠️ 2026-10-30 (« contrat-cadre-4b », §B3) — les remises de chaque lot d'une remise commune ; vide hors groupe. */
+    private List<RemiseDto.LotGroupe> lotsDuGroupe(RemiseConcurrence x) {
+        if (x.getIdGroupe() == null) {
+            return List.of();
+        }
+        return remises.findByIdGroupeOrderByIdAsc(x.getIdGroupe()).stream().map(y -> {
+            ContratVigueur cy = contrats.findById(y.getIdContrat()).orElse(null);
+            return new RemiseDto.LotGroupe(y.getId(), y.getIdContrat(), cy == null ? null : cy.getLot(), y.getNumero(), y.getMode(), y.getEtat());
+        }).toList();
     }
 
     private RemiseDto.Reponse reponseDto(RemiseReponse y, RemiseConcurrence x, Integer rang, boolean ouverte, boolean plafondDepasse) {

@@ -503,7 +503,8 @@ public class DocumentsFicheMarcheService {
         els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
         List<List<List<String>>> rangees = new ArrayList<>();
         rangees.add(List.of(List.of(travaux ? "N° de prix" : "N°"), List.of("Désignation"), List.of("Unité"),
-                List.of(aCommande ? "Quantité maximum" : "Quantité"), List.of("Prix unitaire estimé HT"), List.of("Montant HT")));
+                List.of(aCommande ? "Quantité maximum" : "CONTRAT_CADRE".equals(etat.getTypeMarche()) ? "Quantité indicative" : "Quantité"),
+                List.of("Prix unitaire estimé HT"), List.of("Montant HT")));   // ⚠️ 2026-10-30 (« contrat-cadre-4b », §B1)
         java.math.BigDecimal total = java.math.BigDecimal.ZERO;
         Map<String, List<BesoinFiche.Article>> series = new LinkedHashMap<>();
         articles.forEach(a -> series.computeIfAbsent(travaux && a.serie() != null ? a.serie() : "", k -> new ArrayList<>()).add(a));

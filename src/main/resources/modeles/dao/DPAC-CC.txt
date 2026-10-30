@@ -48,6 +48,7 @@ SOUS_TITRE	ARTICLE 1 : OBJET ET ETENDUE DU CONTRAT-CADRE
 SOUS_TITRE	Objet du contrat-cadre
 PARA	Le présent contrat-cadre a pour objet de définir les termes régissant les marchés à passer pendant la période précisée à l’article suivant.
 PARA	Il porte sur: {{B02-OB-01}}. Les détails des besoins à couvrir sont présentés dans le cahier des charges (annexe 1 au contrat-cadre).
+PARA	Les quantités du besoin sont indicatives, sans engagement de l’acheteur public : le contrat-cadre n’impose aucun minimum de commande (décret n° 2019-1064, art. 6, 8 et 34).
 SOUS_TITRE	Procédure de mise en concurrence
 PARA	{{SI:MONO}}
 PARA	La présente consultation en vue de l’attribution du contrat-cadre à un seul titulaire (mono-attributaire) est passée selon la procédure {{B01-AC-13}} en application de l’article {{B02-PC-01}} du code des marchés publics.

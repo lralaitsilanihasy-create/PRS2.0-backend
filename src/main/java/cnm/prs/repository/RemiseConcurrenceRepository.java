@@ -13,4 +13,7 @@ public interface RemiseConcurrenceRepository extends JpaRepository<RemiseConcurr
     List<RemiseConcurrence> findByIdContratOrderByNumeroAsc(Long idContrat);
 
     Optional<RemiseConcurrence> findFirstByIdContratOrderByNumeroDesc(Long idContrat);
+
+    /** ⚠️ 2026-10-30 (« contrat-cadre-4b », §B3) — les remises d'une remise commune à tous les lots. */
+    List<RemiseConcurrence> findByIdGroupeOrderByIdAsc(Long idGroupe);
 }

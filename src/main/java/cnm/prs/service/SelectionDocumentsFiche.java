@@ -304,8 +304,11 @@ public final class SelectionDocumentsFiche {
         }
         boolean aCommande = "A_COMMANDE".equals(fiche.getTypeMarche());
         int nbLots = Boolean.TRUE.equals(fiche.getSaisieParLot()) && fiche.getNbLots() != null ? fiche.getNbLots() : 0;
+        // ⚠️ 2026-10-30 (demande front « contrat-cadre-4b », §B1 ; décret n° 2019-1064, art. 6, 8, 11, 34) — les quantités d'un
+        // contrat-cadre sont indicatives.
+        boolean cadre = "CONTRAT_CADRE".equals(fiche.getTypeMarche());
         List<String> entetes = aCommande ? List.of("N°", "Désignation", "Unité", "Quantité minimum", "Quantité maximum")
-                : List.of("N°", "Désignation", "Unité", "Quantité");
+                : List.of("N°", "Désignation", "Unité", cadre ? "Quantité indicative" : "Quantité");
         List<DocumentFicheModele.Tableau> tableaux = new ArrayList<>();
         List<Integer> lots = new ArrayList<>();
         if (LotsFiche.alloti(nbLots)) {
@@ -337,6 +340,9 @@ public final class SelectionDocumentsFiche {
             if (delai != null) {
                 mentions.add((aCommande ? "Délai maximum de livraison de chaque commande : " : "Délai de livraison : ")
                         + delai + " jours");
+            }
+            if (cadre) {   // ⚠️ 2026-10-30 (« contrat-cadre-4b », §B1)
+                mentions.add("Quantités indicatives, sans engagement de l'acheteur public (décret n° 2019-1064, art. 8 et 34)");
             }
             tableaux.add(new DocumentFicheModele.Tableau(lot == null ? "Fournitures" : "Lot " + lot, entetes, lignes, mentions));
         }

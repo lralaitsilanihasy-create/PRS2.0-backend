@@ -126,4 +126,11 @@ public class RemiseConcurrence {
 
     @Column(name = "DECIDEE_PAR", length = 100)
     private String decideePar;
+
+    /**
+     * ⚠️ V151 (2026-10-30, « contrat-cadre-4b », §B3 ; décret n° 2019-1064, art. 31) — la remise commune à tous les lots (rythme selon le
+     * calendrier) : le même groupe pour la remise de chaque lot (l'identifiant de la première) ; nul pour une remise d'un seul lot.
+     */
+    @Column(name = "ID_GROUPE")
+    private Long idGroupe;
 }

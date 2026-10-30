@@ -1422,6 +1422,58 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .extracting(Notification::getDestinataireType).contains("PRMP", "CANDIDAT");
     }
 
+    @Test
+    @DisplayName("⚠️ 2026-10-30 (« contrat-cadre-4b », §B3 ; décret n° 2019-1064, art. 31) : au rythme « selon le calendrier », la remise "
+            + "en concurrence porte sur tous les lots — une remise par lot, reliées par un groupe ; au fur et à mesure des besoins, le seul lot")
+    void remiseCommuneATousLesLots() throws Exception {
+        String a = offre("C900000051", "1111222333", "BTP Alpha", 1, "INTACTE", null, "12500000");
+        String b = offre("C900000052", "4444555666", "BTP Beta", 2, "INTACTE", null, "11900000");
+        long[] ids = new long[2];
+        for (int lot = 1; lot <= 2; lot++) {
+            cnm.prs.entity.Attribution notifiee = new cnm.prs.entity.Attribution();
+            notifiee.setIdDmc(idDmc);
+            notifiee.setLot(lot);
+            notifiee.setEtat("NOTIFIE");
+            notifiee.setIdOffreAttribuee(lot == 1 ? a : b);
+            attributionRepository.save(notifiee);
+            cnm.prs.entity.ContratVigueur c = new cnm.prs.entity.ContratVigueur();
+            c.setIdDmc(idDmc);
+            c.setLot(lot);
+            c.setTypeMarche("CONTRAT_CADRE");
+            c.setDateEffet(aujourdhui.minusMonths(1));
+            c.setPeriodeMois(12);
+            c.setDateFin(aujourdhui.plusMonths(11));
+            c.setDureeMaxMois(12);
+            c.setRythme("Selon le calendrier fixé ci-après");
+            c.setCreeLe(LocalDateTime.now());
+            ids[lot - 1] = contratRepository.save(c).getId();
+        }
+        String echeance = LocalDateTime.now().plusDays(5).withNano(0).withSecond(0).toString();
+        String corps = "{\"objet\":\"Fournitures du trimestre\",\"specifications\":\"Selon le cahier des charges\",\"delaiExecution\":\"30 jours\","
+                + "\"echeance\":\"" + echeance + "\"}";
+        String lancee = mvc.perform(post("/api/contrats-en-vigueur/" + ids[0] + "/remises").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(corps)).andExpect(status().isCreated()).andExpect(jsonPath("$.idGroupe").isNumber())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(lancee, "$.lots[*].lot")).containsExactly(1, 2);
+        mvc.perform(get("/api/contrats-en-vigueur/" + ids[1] + "/remises").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].idGroupe").value(JsonPath.<Number>read(lancee, "$.idGroupe").intValue()));
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "REMISE_CONCURRENCE".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireRef).containsExactlyInAnyOrder("C900000051", "C900000052");
+        // Une remise du groupe attend sa décision : le lot 2 ne se relance pas seul.
+        mvc.perform(post("/api/contrats-en-vigueur/" + ids[1] + "/remises").header("Authorization", tokenPrmp).contentType(JSON).content(corps))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("REMISE_EN_COURS"));
+        // Au fur et à mesure des besoins : la remise du seul lot.
+        for (long id : ids) {
+            cnm.prs.entity.ContratVigueur c = contratRepository.findById(id).orElseThrow();
+            c.setRythme("Au fur et à mesure des besoins");
+            contratRepository.save(c);
+        }
+        remiseRepository.findAll().forEach(x -> { x.setEtat(cnm.prs.entity.RemiseConcurrence.INFRUCTUEUSE); remiseRepository.save(x); });
+        mvc.perform(post("/api/contrats-en-vigueur/" + ids[0] + "/remises").header("Authorization", tokenPrmp).contentType(JSON).content(corps))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.idGroupe").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.lots.length()").value(0));
+    }
+
     @Autowired private cnm.prs.repository.AttributionTitulaireRepository titulaireRepository;
     @Autowired private cnm.prs.repository.RemiseConcurrenceRepository remiseRepository;
     @Autowired private cnm.prs.service.ContratVigueurService contratService;

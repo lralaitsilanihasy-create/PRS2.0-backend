@@ -20,6 +20,8 @@ public final class SousTypesDossier {
     /** ⚠️ 2026-10-18 (« sous-type-contrat-cadre », §B1 ; arbitrage du pilote : le contrat-cadre garde son sous-type) — V131. */
     public static final String DAOO_CC = "DAOO-CC";
     public static final String DAOR = "DAOR";
+    /** ⚠️ 2026-10-30 (« contrat-cadre-4b », §B2 ; décret n° 2019-1064, art. 7 : appel d'offres restreint) — V152. */
+    public static final String DAOR_CC = "DAOR-CC";
     public static final String DAOOI = "DAOOI";
     public static final String DAORI = "DAORI";
     public static final String DAOOPREQUAL = "DAOOPREQUAL";
@@ -30,19 +32,21 @@ public final class SousTypesDossier {
     /** ⚠️ 2026-10-19 (« dossier-marche-contrat-cadre », §B1) — le marché d'un appel d'offres ouvert en contrat-cadre ; V137. */
     public static final String MAOO_CC = "MAOO-CC";
     public static final String MAOR = "MAOR";
+    /** ⚠️ 2026-10-30 (« contrat-cadre-4b », §B2) — le marché d'un appel d'offres restreint en contrat-cadre ; V152. */
+    public static final String MAOR_CC = "MAOR-CC";
     public static final String MAOOI = "MAOOI";
     public static final String MAORI = "MAORI";
     public static final String MAOOPREQUAL = "MAOOPREQUAL";
     public static final String MPI = "MPI";
 
     /** Les sous-types qu'une fiche marché produit (le dossier porte alors {@code ID_DMC}). */
-    public static final Set<String> PRODUITS_PAR_FICHE = Set.of(DAOO, DAOO_CC, DAOR, DAOOI, DAORI, DAOOPREQUAL, DC);
+    public static final Set<String> PRODUITS_PAR_FICHE = Set.of(DAOO, DAOO_CC, DAOR, DAOR_CC, DAOOI, DAORI, DAOOPREQUAL, DC);
 
     /**
      * ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P3) — les sous-types de marché qu'une procédure produit : l'attribution d'un lot
      * (remise électronique) ou le lot d'une procédure papier.
      */
-    public static final Set<String> PRODUITS_PAR_PROCEDURE = Set.of(MAOO, MAOO_CC, MAOR, MAOOI, MAORI, MAOOPREQUAL, MPI);
+    public static final Set<String> PRODUITS_PAR_PROCEDURE = Set.of(MAOO, MAOO_CC, MAOR, MAOR_CC, MAOOI, MAORI, MAOOPREQUAL, MPI);
 
     private SousTypesDossier() {
     }
@@ -100,7 +104,8 @@ public final class SousTypesDossier {
      */
     public static String dossierMiseEnConcurrence(String mode, boolean prestationsIntellectuelles, boolean contratCadre) {
         String s = dossierMiseEnConcurrence(mode, prestationsIntellectuelles);
-        return contratCadre && DAOO.equals(s) ? DAOO_CC : s;
+        // ⚠️ 2026-10-30 (« contrat-cadre-4b », §B2) — et un appel d'offres restreint en contrat-cadre, un DAOR-CC.
+        return !contratCadre ? s : DAOO.equals(s) ? DAOO_CC : DAOR.equals(s) ? DAOR_CC : s;
     }
 
     /**
@@ -108,7 +113,7 @@ public final class SousTypesDossier {
      * pour {@code DAOO-CC}, nul pour les autres (la forme se lit alors sur la fiche du dossier).
      */
     public static String formeImposee(String sousType) {
-        return DAOO_CC.equals(sousType) ? cnm.prs.entity.PieceSousType.CONTRAT_CADRE : null;
+        return DAOO_CC.equals(sousType) || DAOR_CC.equals(sousType) ? cnm.prs.entity.PieceSousType.CONTRAT_CADRE : null;
     }
 
     /** Le sous-type du dossier de marché, par la même règle : {@code MPI}, {@code MAORI}, {@code MAOOI}, {@code MAOOPREQUAL}, {@code MAOR}, {@code MAOO}. */
@@ -130,7 +135,8 @@ public final class SousTypesDossier {
      * {@code MAOR-CC} ni de {@code MAOOI-CC}.
      */
     public static String dossierMarche(String mode, boolean prestationsIntellectuelles, String sousTypeMiseEnConcurrence) {
-        return DAOO_CC.equals(sousTypeMiseEnConcurrence) ? MAOO_CC : dossierMarche(mode, prestationsIntellectuelles);
+        return DAOO_CC.equals(sousTypeMiseEnConcurrence) ? MAOO_CC : DAOR_CC.equals(sousTypeMiseEnConcurrence) ? MAOR_CC   // ⚠️ 2026-10-30
+                : dossierMarche(mode, prestationsIntellectuelles);
     }
 
     /** Minuscules, sans accent. */
