@@ -217,7 +217,7 @@ public class DocumentsFicheMarcheService {
      */
     public List<Produit> produire(FicheMarcheDto etat, List<BesoinFiche.Article> articles, LocalDateTime validation,
             Map<String, String> jetons) {
-        List<ChampFicheMarche> champs = champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc();
+        List<ChampFicheMarche> champs = champRepository.actifs();
         List<DocumentFicheModele> modeles = new ArrayList<>(SelectionDocumentsFiche.selectionner(etat, champs,
                 blocRepository.findAllByOrderByRangAsc(), rubriqueRepository.findAllByOrderByCodeBlocAscRangAscCodeAsc(), validation));
         Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
@@ -339,7 +339,7 @@ public class DocumentsFicheMarcheService {
             throw new GenerationDocumentsException("Aucun modèle d'avis spécifique pour la catégorie " + etat.getCategorie() + ".", null);
         }
         Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
-        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
+        champRepository.actifs().forEach(c -> parCode.put(c.getCode(), c));
         DocumentLibre doc;
         List<GenerateurDocumentsFiche.Fichier> fichiers;
         try {
@@ -376,7 +376,7 @@ public class DocumentsFicheMarcheService {
             throw new GenerationDocumentsException("Aucun modèle de lettre d'invitation pour la catégorie " + etat.getCategorie() + ".", null);
         }
         Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
-        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
+        champRepository.actifs().forEach(c -> parCode.put(c.getCode(), c));
         Map<String, String> parametres = parametresDocuments();
         String piedSigmp = this.parametres.piedSigmp();   // ⚠️ R3a (§B3) — le même pied sur chaque lettre
         Map<Integer, List<Produit>> parRang = new LinkedHashMap<>();
@@ -425,7 +425,7 @@ public class DocumentsFicheMarcheService {
         }
         String type = lettre ? TYPE_LETTRE_PROJET : TYPE_AVIS_PROJET;
         Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
-        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
+        champRepository.actifs().forEach(c -> parCode.put(c.getCode(), c));
         List<GenerateurDocumentsFiche.Fichier> fichiers;
         try {
             fichiers = generateur.generer(FormulairesCandidat.rendreModele(lettre ? TYPE_LETTRE : TYPE_AVIS, null, etat, parCode, modele,
@@ -584,7 +584,7 @@ public class DocumentsFicheMarcheService {
     /** ⚠️ 2026-10-22 (« modeles-dao ») — les champs actifs de la fiche, par code (le contrat des jetons du moteur). */
     public Map<String, ChampFicheMarche> champsParCode() {
         Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
-        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
+        champRepository.actifs().forEach(c -> parCode.put(c.getCode(), c));
         return parCode;
     }
 
@@ -619,7 +619,7 @@ public class DocumentsFicheMarcheService {
             throw new GenerationDocumentsException("Aucun modèle " + sigle + ".", null);
         }
         Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
-        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
+        champRepository.actifs().forEach(c -> parCode.put(c.getCode(), c));
         return FormulairesCandidat.rendreModele(lettre ? TYPE_LETTRE : TYPE_AVIS, null, etat, parCode, modele, null, parametresDocuments());
     }
 
@@ -673,7 +673,9 @@ public class DocumentsFicheMarcheService {
         if (numeros.isEmpty()) {
             return List.of();
         }
-        return documentRepository.findByIdFicheInAndTypeInOrderByIdDocumentDesc(numeros.keySet(), TYPES_PUBLICATION).stream()
+        // ⚠️ 2026-10-30 (« performance », §B1) — lus une fois par appel de liste.
+        return cnm.prs.repository.MemoLecture.lire("avis:" + numeros.keySet(),
+                () -> documentRepository.findByIdFicheInAndTypeInOrderByIdDocumentDesc(numeros.keySet(), TYPES_PUBLICATION)).stream()
                 .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(), SelectionDocumentsFiche.titre(d.getType()),
                         d.getExtension(), d.getNomFichier(), d.getTailleOctets(), d.getDateGeneration(),
                         numeros.get(d.getIdFiche()), d.getLot(), publication(d.getPublication())))

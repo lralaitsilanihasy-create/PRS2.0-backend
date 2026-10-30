@@ -17,6 +17,7 @@ import cnm.prs.entity.AuditLog;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.AuditLogMapper;
+import cnm.prs.repository.AuditLogRecherche;
 import cnm.prs.repository.AuditLogRepository;
 
 /**
@@ -64,7 +65,7 @@ public class AuditLogService {
      */
     @Transactional(readOnly = true)
     public List<AuditLogDto> findAll() {
-        return repository.rechercher(true, List.of(), null, null, null,
+        return repository.findAll(AuditLogRecherche.filtres(List.of(), null, null, null),
                 PageRequest.of(0, LIMITE_HISTORIQUE, PLUS_RECENT_DABORD))
                 .map(AuditLogMapper::toDto).getContent();
     }
@@ -90,11 +91,11 @@ public class AuditLogService {
             Pageable pageable) {
         Pageable page = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), PLUS_RECENT_DABORD);
         List<String> tables = tables(nomTables);
-        return repository.rechercher(tables.isEmpty(), tables, vide(acteur),
+        return repository.findAll(AuditLogRecherche.filtres(tables, vide(acteur),
                 du == null ? null : du.atStartOfDay(),
                 // Dernier instant représentable du jour (t_audit_log."DATE_ACTION" est un timestamp(6)) :
                 // la journée demandée est incluse en entier, sans risque d'arrondi sur le lendemain.
-                au == null ? null : au.plusDays(1).atStartOfDay().minusNanos(1_000),
+                au == null ? null : au.plusDays(1).atStartOfDay().minusNanos(1_000)),
                 page)
                 .map(AuditLogMapper::toDto);
     }

@@ -45,6 +45,27 @@
 - `GET /api/actualites` pagine aussi (`?page=&size=`, Administrateur) mais garde son **tri métier**
   (date de création décroissante) : pas de tri PK.
 
+### Performance des listes (⚠️ 2026-10-30, demande front « performance »)
+Aucun contrat ne change (mêmes routes, mêmes corps, mêmes codes) : seul le nombre de requêtes SQL par appel baisse.
+- **B1, listes de procédures** — `GET /api/fiches-marche/en-ligne`, `GET /api/dmcs/eligibles` et `GET /api/contrats-en-vigueur`
+  ouvrent une **mémoire de lecture** le temps de l'appel (`MemoLecture`) : le responsable, la CAO, les versions et l'état de la
+  fiche, le contexte du plan, les valeurs, les articles, les lots, les avis imprimés et la cérémonie d'une procédure ne sont lus
+  **qu'une fois par appel** (ils l'étaient jusqu'à 16 fois). `en-ligne` précharge en outre, en une requête chacun pour toute la
+  liste, responsables, membres de CAO, cérémonies, versions de fiche, séances et offres. Mesures (base de test) : `en-ligne`
+  **342 → 58** requêtes pour trois procédures, `eligibles` sur une procédure évaluée **395 → 76**. **Reste** une lecture par nature
+  et par procédure pour l'état de la fiche (valeurs, besoin, pièces) et le plan (ligne, lots, bénéficiaires, prévision) : le
+  nombre croît encore avec les procédures (≈ 11 par procédure), sans atteindre l'objectif d'un nombre constant.
+- **B2** — `GET /api/dossiers` : l'avis à imprimer passe par la même mémoire (lectures répétées d'un même DMC) ; les lectures du
+  plan, une par dossier, restent. `pv-examens/definitifs`, `receptions`, `dispatchs` : inchangés.
+- **B3, cache des paramètres** (`t_parametre`) : valeurs gardées en mémoire, cache vidé à chaque écriture (que seul
+  `ParametreService` fait) ; une transaction qui a écrit un paramètre lit la base jusqu'à sa fin (validée ou annulée), puis le cache
+  est vidé. Une instance seule (Q1). Le **référentiel des champs** de la fiche est lu une fois par appel de liste (mémoire de
+  lecture), sans cache global : `t_capm` et `tr_profile` sans changement.
+- **B4, journal d'audit** — index `ix_audit_log_date_action` (`DATE_ACTION`) et `ix_audit_log_table_date` (`NOM_TABLE`,
+  `DATE_ACTION`) (**V153**) ; la recherche paginée (`GET /api/audit-logs?page=`) ne place plus dans sa requête que les filtres
+  saisis (`AuditLogRecherche`), condition pour que ces index servent. Le total (`totalElements`, donc un `count`) reste servi tant que
+  Q2 n'est pas tranchée.
+
 ### Sécurité des réponses (⚠️ audit front 2026-08-16)
 - **En-têtes** posés sur toutes les réponses : `Content-Security-Policy: default-src 'self';
   object-src 'none'; frame-ancestors 'self'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options:

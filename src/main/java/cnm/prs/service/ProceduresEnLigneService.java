@@ -280,7 +280,7 @@ public class ProceduresEnLigneService {
         if (RemiseElectronique.rangNiveau(etat.valeur(CHAMP_SIGNATURE)) > 0) {
             return Optional.empty();   // Q5 : Avancée ou Qualifiée, pas encore
         }
-        List<FicheMarche> versions = ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc);
+        List<FicheMarche> versions = ficheRepository.versions(idDmc);
         // ⚠️ PI-a (§B1) — une consultation restreinte n'a pas d'avis : ses lettres d'invitation la lancent.
         boolean pi = ModelesDao.sigleLettre(etat.categorie()) != null;
         List<DocumentFicheDto> avis = documents.listerAvis(versions).stream()
@@ -306,7 +306,7 @@ public class ProceduresEnLigneService {
     public ProcedureEnLigneDto vue(Long idDmc) {
         FicheMarcheService.EtatVersion etat = fiches.etatCourant(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("La fiche de la procédure " + idDmc + " n'est pas encore enregistrée."));
-        List<DocumentFicheDto> avis = documents.listerAvis(ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc)).stream()
+        List<DocumentFicheDto> avis = documents.listerAvis(ficheRepository.versions(idDmc)).stream()
                 .filter(d -> DocumentsFicheMarcheService.TYPE_AVIS.equals(d.type())).toList();
         return construire(idDmc, etat, avis, LocalDateTime.now(HorlogeRecette.HORLOGE));
     }
@@ -589,7 +589,7 @@ public class ProceduresEnLigneService {
         if (idDetail == null) {
             return List.of();
         }
-        List<Lot> lots = new ArrayList<>(lotRepository.findByIdDetail(idDetail));
+        List<Lot> lots = new ArrayList<>(lotRepository.parDetail(idDetail));
         lots.sort(Comparator.comparing(Lot::getIdLot));
         List<ProcedureEnLigneDto.Lot> out = new ArrayList<>();
         for (int i = 0; i < lots.size(); i++) {

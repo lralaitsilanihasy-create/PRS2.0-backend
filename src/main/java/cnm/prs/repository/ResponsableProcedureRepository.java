@@ -15,6 +15,9 @@ public interface ResponsableProcedureRepository extends JpaRepository<Responsabl
     /** Le titulaire actif (désignation non retirée) ; un seul par DMC (index partiel unique). */
     Optional<ResponsableProcedure> findFirstByIdDmcAndDateRetraitIsNull(Long idDmc);
 
+    /** ⚠️ 2026-10-30 (« performance », §B1) — les titulaires actifs de plusieurs DMC, en une requête (préchargement des listes). */
+    List<ResponsableProcedure> findByIdDmcInAndDateRetraitIsNullOrderByIdAsc(java.util.Collection<Long> idDmcs);
+
     /** Les désignations actives d'un acteur (toutes ses procédures). */
     List<ResponsableProcedure> findByImResponsableAndDateRetraitIsNull(String imResponsable);
 }

@@ -114,9 +114,11 @@ class BloquantsR9aTest {
         ParametreService p = new ParametreService(repo);
         when(repo.findById(ParametreService.RECOURS_SUSPENSIFS)).thenReturn(Optional.empty());
         assertThat(p.recoursSuspensifs()).containsExactlyInAnyOrder("REVISION_ARMP", "REFERE");
+        // ⚠️ 2026-10-30 (« performance », §B3) — le service garde les paramètres lus en cache : un service neuf par valeur simulée.
         when(repo.findById(ParametreService.RECOURS_SUSPENSIFS)).thenReturn(Optional.of(new Parametre(ParametreService.RECOURS_SUSPENSIFS, "AUCUN", null, null)));
-        assertThat(p.recoursSuspensifs()).isEmpty();
+        assertThat(new ParametreService(repo).recoursSuspensifs()).isEmpty();
         when(repo.findById(ParametreService.RECOURS_SUSPENSIFS)).thenReturn(Optional.of(new Parametre(ParametreService.RECOURS_SUSPENSIFS, "reexamen, FOO", null, null)));
+        p = new ParametreService(repo);
         assertThat(p.recoursSuspensifs()).containsExactly("REEXAMEN");
         assertThat(p.lireRecoursSuspensifs().connus()).containsExactly("REEXAMEN", "REVISION_ARMP", "REFERE");
     }

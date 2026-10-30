@@ -636,7 +636,11 @@ public class DossierService {
         }
         enrichirCibles(dtos);
         masquerActeursInternesPourPrmp(dtos);
-        enrichirImpressionAvis(dtos);
+        // ⚠️ 2026-10-30 (demande front « performance », §B2) — l'avis à imprimer lit la fiche et le plan de chaque dossier : les lectures
+        // répétées pour un même DMC passent par la mémoire de lecture de l'appel.
+        try (cnm.prs.repository.MemoLecture memo = cnm.prs.repository.MemoLecture.ouvrir()) {
+            enrichirImpressionAvis(dtos);
+        }
         return dtos;
     }
 

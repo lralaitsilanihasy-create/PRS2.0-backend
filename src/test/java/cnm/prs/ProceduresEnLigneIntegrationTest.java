@@ -318,6 +318,44 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         deposer("/api/procedures-en-ligne/" + idDmc + "/recus", jetonCandidat, "%PDF".getBytes(), "{}").andExpect(status().isConflict());
     }
 
+    @Test
+    @DisplayName("⚠️ 2026-10-30 (« performance », §B1) : les listes des procédures en ligne et des lignes éligibles ne relisent plus "
+            + "plusieurs fois chaque procédure — une lecture par nature et par procédure (342 → moins de 70 ordres SQL pour trois)")
+    void listeEnLigneSansLectureParProcedure() throws Throwable {
+        long une = ordresSql(() -> mvc.perform(get("/api/fiches-marche/en-ligne").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1)));
+        long eligiblesUne = ordresSql(() -> mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp)).andExpect(status().isOk()));
+        for (int id : List.of(9902, 9903)) {
+            Marche l = marche(id, 9900, 9900);
+            l.setIdMode(92);
+            l.setIdNature(natureFournitures());
+            l.setFormeMarche(FormeMarche.QUANTITE_FIXE);
+            l.setDesignationMarche("Acquisition " + id);
+            marcheRepository.save(l);
+            marchePrevisionRepository.save(new MarchePrevision(id, id, 9901, aujourdhui.plusDays(10), aujourdhui.plusDays(10), null, null));
+            ficheElectroniqueValidee(id);
+        }
+        long trois = ordresSql(() -> mvc.perform(get("/api/fiches-marche/en-ligne").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(3)));
+        long eligiblesTrois = ordresSql(() -> mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp)).andExpect(status().isOk()));
+        assertThat(eligiblesTrois - eligiblesUne).as("éligibles : ordres SQL ajoutés par deux lignes de plus").isLessThanOrEqualTo(10);
+        // Avant : 116 et 342 (≈ 113 par procédure). Reste une lecture par nature et par procédure (fiche, plan, besoin) ; les paramètres,
+        // relus ici parce que le test en a écrit un dans sa transaction, sont servis par le cache hors test.
+        assertThat(trois - une).as("ordres SQL ajoutés par deux procédures de plus").isLessThanOrEqualTo(36);
+        assertThat(trois).isLessThanOrEqualTo(70);
+    }
+
+    @Autowired private jakarta.persistence.EntityManager entityManager;
+
+    /** Ordres SQL préparés pendant un appel (compteur Hibernate remis à zéro juste avant). */
+    private long ordresSql(org.junit.jupiter.api.function.ThrowingSupplier<?> appel) throws Throwable {
+        org.hibernate.stat.Statistics stats = entityManager.getEntityManagerFactory().unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        stats.setStatisticsEnabled(true);
+        stats.clear();
+        appel.get();
+        return stats.getPrepareStatementCount();
+    }
+
     private org.springframework.test.web.servlet.ResultActions deposer(String url, String jeton, byte[] fichier, String data) throws Exception {
         return mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(url)
                 .file(new org.springframework.mock.web.MockMultipartFile("fichier", "recu.pdf", "application/pdf", fichier))
@@ -550,7 +588,11 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     private Long ficheElectroniqueValidee() throws Exception {
-        String corps = mvc.perform(post("/api/dmcs/par-marche/9901").header("Authorization", tokenPrmp))
+        return ficheElectroniqueValidee(9901);
+    }
+
+    private Long ficheElectroniqueValidee(int idMarche) throws Exception {
+        String corps = mvc.perform(post("/api/dmcs/par-marche/" + idMarche).header("Authorization", tokenPrmp))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long dmc = ((Number) JsonPath.read(corps, "$.idDmc")).longValue();
         mvc.perform(put("/api/fiches-marche/" + dmc + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)

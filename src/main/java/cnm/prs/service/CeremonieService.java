@@ -31,6 +31,7 @@ import cnm.prs.repository.DefiCleRepository;
 import cnm.prs.repository.DossierMecRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.MarcheRepository;
+import cnm.prs.repository.MemoLecture;
 import cnm.prs.repository.NotificationRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.security.CurrentUser;
@@ -127,7 +128,20 @@ public class CeremonieService {
         if (!electronique) {
             return null;
         }
-        return ceremonieRepository.findById(idDmc).map(CeremonieCles::getEtat).orElse(CeremonieCles.A_VENIR);
+        // ⚠️ 2026-10-30 (« performance », §B1) — préchargé par les listes de procédures (MemoLecture).
+        return MemoLecture.lire("ceremonie:" + idDmc, () -> ceremonieRepository.findById(idDmc)).map(CeremonieCles::getEtat)
+                .orElse(CeremonieCles.A_VENIR);
+    }
+
+    /** ⚠️ 2026-10-30 (« performance », §B1) — précharge les cérémonies de ces DMC dans la mémoire de lecture ouverte. */
+    @Transactional(readOnly = true)
+    public void precharger(java.util.Collection<Long> idDmcs) {
+        if (!MemoLecture.ouverte() || idDmcs.isEmpty()) {
+            return;
+        }
+        java.util.Map<Long, CeremonieCles> lues = new java.util.HashMap<>();
+        ceremonieRepository.findAllById(idDmcs).forEach(c -> lues.put(c.getIdDmc(), c));
+        idDmcs.forEach(id -> MemoLecture.poser("ceremonie:" + id, Optional.ofNullable(lues.get(id))));
     }
 
     /**

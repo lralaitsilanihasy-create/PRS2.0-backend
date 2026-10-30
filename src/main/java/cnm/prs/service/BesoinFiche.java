@@ -89,11 +89,12 @@ public class BesoinFiche {
         if (idFiche == null) {
             return List.of();
         }
-        List<FicheArticle> articles = articleRepository.findParFiche(idFiche);
+        // ⚠️ 2026-10-30 (« performance », §B1) — les articles et leurs caractéristiques, lus une fois par appel de liste.
+        List<FicheArticle> articles = cnm.prs.repository.MemoLecture.lire("articles:" + idFiche, () -> articleRepository.findParFiche(idFiche));
         Map<Integer, List<ArticleBesoinDto.Caracteristique>> caracs = new LinkedHashMap<>();
         if (!articles.isEmpty()) {
-            caracteristiqueRepository.findByIdArticleInOrderByIdArticleAscOrdreAsc(
-                    articles.stream().map(FicheArticle::getIdArticle).toList())
+            cnm.prs.repository.MemoLecture.lire("caracteristiques:" + idFiche, () -> caracteristiqueRepository.findByIdArticleInOrderByIdArticleAscOrdreAsc(
+                    articles.stream().map(FicheArticle::getIdArticle).toList()))
                     .forEach(c -> caracs.computeIfAbsent(c.getIdArticle(), k -> new ArrayList<>()).add(
                             new ArticleBesoinDto.Caracteristique(c.getIdCaracteristique(), c.getOrdre(), c.getLibelle(),
                                     c.getExigence())));

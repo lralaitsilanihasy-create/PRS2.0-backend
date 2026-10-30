@@ -269,7 +269,11 @@ public class ContratVigueurService {
                     .collect(java.util.stream.Collectors.toSet());
             tous = tous.stream().filter(c -> miens.contains(c.getIdDmc() + "#" + c.getLot())).toList();
         }
-        return tous.stream().map(this::dto).toList();
+        // ⚠️ 2026-10-30 (demande front « performance », §B1) — 113 requêtes pour 2 contrats : chaque contrat relisait la fiche, les
+        // titulaires et les paramètres ; ces lectures passent par la mémoire de lecture de l'appel (une fois par nature et par procédure).
+        try (cnm.prs.repository.MemoLecture memo = cnm.prs.repository.MemoLecture.ouvrir()) {
+            return tous.stream().map(this::dto).toList();
+        }
     }
 
     /** Un contrat : mêmes lecteurs ; la PRMP et l'UGPM au périmètre de la fiche ; 404 inconnu. */

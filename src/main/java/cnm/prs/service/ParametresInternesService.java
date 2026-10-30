@@ -1,5 +1,7 @@
 package cnm.prs.service;
 
+import cnm.prs.repository.MemoLecture;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -169,7 +171,35 @@ public class ParametresInternesService {
     /** Le titulaire actif du rôle pour ce DMC, s'il y en a un. */
     @Transactional(readOnly = true)
     public Optional<ResponsableProcedure> responsable(Long idDmc) {
-        return responsableRepository.findFirstByIdDmcAndDateRetraitIsNull(idDmc);
+        // ⚠️ 2026-10-30 (« performance », §B1) — préchargé par les listes de procédures (MemoLecture).
+        return MemoLecture.lire(CLE_RESPONSABLE + idDmc, () -> responsableRepository.findFirstByIdDmcAndDateRetraitIsNull(idDmc));
+    }
+
+    /** Clés de la mémoire de lecture : le responsable et les membres de la CAO d'un DMC. */
+    static final String CLE_RESPONSABLE = "responsable:";
+    static final String CLE_MEMBRES_CAO = "caoMembres:";
+
+    /**
+     * ⚠️ 2026-10-30 (« performance », §B1) — précharge dans la mémoire de lecture ouverte le responsable et les membres de la CAO de
+     * ces DMC, en une requête chacun (sans effet sans mémoire ouverte).
+     */
+    @Transactional(readOnly = true)
+    public void precharger(java.util.Collection<Long> idDmcs) {
+        if (!MemoLecture.ouverte() || idDmcs.isEmpty()) {
+            return;
+        }
+        Map<Long, ResponsableProcedure> responsables = new java.util.HashMap<>();
+        responsableRepository.findByIdDmcInAndDateRetraitIsNullOrderByIdAsc(idDmcs).forEach(r -> responsables.putIfAbsent(r.getIdDmc(), r));
+        Map<Long, List<CaoMembre>> membres = caoMembreRepository.findByIdDmcInOrderByIdDmcAscRangAscIdMembreAsc(idDmcs).stream()
+                .collect(java.util.stream.Collectors.groupingBy(CaoMembre::getIdDmc));
+        for (Long id : idDmcs) {
+            MemoLecture.poser(CLE_RESPONSABLE + id, Optional.ofNullable(responsables.get(id)));
+            MemoLecture.poser(CLE_MEMBRES_CAO + id, membres.getOrDefault(id, List.of()));
+        }
+    }
+    /** Les membres de la CAO d'un DMC, rang croissant (préchargés par les listes). */
+    private List<CaoMembre> membresLus(Long idDmc) {
+        return MemoLecture.lire(CLE_MEMBRES_CAO + idDmc, () -> caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc));
     }
 
     /** Le titulaire en DTO, {@code null} sans titulaire. */
@@ -374,7 +404,7 @@ public class ParametresInternesService {
     /** Les membres détenteurs d'une part : les identifiants courts ({@code K…}) des membres de qualité {@code MEMBRE} de la CAO. */
     @Transactional(readOnly = true)
     public List<String> membresCao(Long idDmc) {
-        return caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc).stream()
+        return membresLus(idDmc).stream()
                 .filter(m -> m.estMembre() && m.getIdCompte() != null).map(CaoMembre::getIdCompte).toList();
     }
 
@@ -387,7 +417,7 @@ public class ParametresInternesService {
     /** ⚠️ 2026-10-28 (§B2) — ce qui empêche la CAO d'être constituée, en clair ; vide = constituée. */
     @Transactional(readOnly = true)
     public List<String> caoManques(Long idDmc) {
-        return CaoRegles.manques(caoRepository.findById(idDmc).orElse(null), caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc))
+        return CaoRegles.manques(caoRepository.findById(idDmc).orElse(null), membresLus(idDmc))
                 .stream().map(CaoDto.Anomalie::message).toList();
     }
 
@@ -397,7 +427,7 @@ public class ParametresInternesService {
         if (!electronique) {
             return null;
         }
-        return CaoRegles.etat(caoRepository.findById(idDmc).orElse(null), caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc));
+        return CaoRegles.etat(caoRepository.findById(idDmc).orElse(null), membresLus(idDmc));
     }
 
     /** « NOM Prénom » d'un détenteur : un membre de CAO ({@code K…}), ou un contrôleur ; le matricule à défaut. */
@@ -650,7 +680,7 @@ public class ParametresInternesService {
             return null;
         }
         String code = null;
-        for (ChampFicheMarche c : champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc()) {
+        for (ChampFicheMarche c : champRepository.actifs()) {
             for (String[] rr : ControlesFicheMarche.controles(c)) {
                 if (ControlesFicheMarche.SE_CEREMONIE.equals(rr[0]) && RemiseElectronique.ROLE_PUBLICATION.equals(rr[1])) {
                     code = c.getCode();
@@ -661,7 +691,7 @@ public class ParametresInternesService {
             return null;
         }
         String cible = code;
-        return valeurRepository.findByIdFiche(f.getIdFiche()).stream().filter(v -> cible.equals(v.getCodeChamp()))
+        return valeurRepository.lues(f.getIdFiche()).stream().filter(v -> cible.equals(v.getCodeChamp()))
                 .map(v -> RemiseElectronique.dateHeure(v.getValeur())).filter(Objects::nonNull).findFirst().orElse(null);
     }
 

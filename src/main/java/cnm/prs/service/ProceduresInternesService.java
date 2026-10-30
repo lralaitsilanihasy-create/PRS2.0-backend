@@ -1,5 +1,7 @@
 package cnm.prs.service;
 
+import cnm.prs.repository.MemoLecture;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -84,14 +86,35 @@ public class ProceduresInternesService {
         boolean admin = profil == ProfilUtilisateur.ADMINISTRATEUR;
         Set<String> titulaires = admin ? Set.of() : interims.suppleancesActivesDe(moi, profil).stream().map(Suppleance::imTitulaire)
                 .collect(Collectors.toSet());
+        // ⚠️ 2026-10-30 (demande front « performance », §B1) — la liste relisait chaque procédure (≈ 113 requêtes par procédure) : les
+        // lectures répétées passent par une mémoire de lecture, préchargée en une requête par nature pour toutes les procédures.
+        try (MemoLecture memo = MemoLecture.ouvrir()) {
+            return lister(moi, admin, titulaires);
+        }
+    }
+
+    private List<ProcedureInterneDto> lister(String moi, boolean admin, Set<String> titulaires) {
         Map<Long, List<FicheMarche>> parDmc = ficheRepository.findAll().stream().collect(Collectors.groupingBy(FicheMarche::getIdDmc));
         Integer conservation = parametres.offreConservationAnnees();
         LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
+        List<FicheMarche> electroniques = ficheRepository.findDernieresVersions().stream()
+                .filter(f -> RemiseElectronique.electronique(cadrage(f))).toList();
+        List<Long> ids = electroniques.stream().map(FicheMarche::getIdDmc).toList();
+        internes.precharger(ids);
+        ceremonies.precharger(ids);
+        for (Long id : ids) {
+            List<FicheMarche> versions = parDmc.getOrDefault(id, List.of()).stream()
+                    .sorted(Comparator.comparing(FicheMarche::getNumeroVersion)).toList();
+            MemoLecture.poser("versions:" + id, versions);
+            MemoLecture.poser("ficheDerniere:" + id, versions.isEmpty() ? Optional.empty() : Optional.of(versions.get(versions.size() - 1)));
+        }
+        Map<Long, Seance> seancesLues = seances.findAllById(ids).stream().collect(Collectors.toMap(Seance::getIdDmc, x -> x));
+        Map<Long, Long> nbOffres = offres.findByIdDmcIn(ids).stream()
+                .filter(o -> Offre.DEPOSEE.equals(o.getEtat()) || Offre.ECARTEE.equals(o.getEtat()))
+                .filter(o -> !Offre.FINANCIERE.equals(o.getEnveloppe()))   // ⚠️ V86 (PI-b) — une proposition PI compte une fois
+                .collect(Collectors.groupingBy(Offre::getIdDmc, Collectors.counting()));
         List<ProcedureInterneDto> out = new ArrayList<>();
-        for (FicheMarche derniere : ficheRepository.findDernieresVersions()) {
-            if (!RemiseElectronique.electronique(cadrage(derniere))) {
-                continue;
-            }
+        for (FicheMarche derniere : electroniques) {
             Long idDmc = derniere.getIdDmc();
             ResponsableProcedureDto responsable = internes.responsableDto(idDmc);
             boolean sienne = responsable != null && PredicatsIdentite.estResponsableProcedure(moi, responsable.im());
@@ -100,12 +123,13 @@ public class ProceduresInternesService {
             if (!admin && !sienne && !parInterim) {
                 continue;
             }
-            Seance s = seances.findById(idDmc).orElse(null);
+            Seance s = seancesLues.get(idDmc);
             boolean close = s != null && (Seance.CLOSE.equals(s.getEtat()) || Seance.ILLISIBLE.equals(s.getEtat()));
             if (close && conservation != null && s.getCloseLe() != null && s.getCloseLe().plusYears(conservation).isBefore(maintenant)) {
                 continue;   // H1 : au-delà de la conservation, la procédure sort de la liste
             }
-            out.add(ligne(derniere, parDmc.getOrDefault(idDmc, List.of()), responsable, parInterim, s, maintenant));
+            out.add(ligne(derniere, parDmc.getOrDefault(idDmc, List.of()), responsable, parInterim, s, nbOffres.getOrDefault(idDmc, 0L),
+                    maintenant));
         }
         out.sort(Comparator.comparing((ProcedureInterneDto p) -> !p.aTraiter())
                 .thenComparing(p -> Seance.CLOSE.equals(p.etatSeance()) || Seance.ILLISIBLE.equals(p.etatSeance()))
@@ -115,7 +139,7 @@ public class ProceduresInternesService {
     }
 
     private ProcedureInterneDto ligne(FicheMarche derniere, List<FicheMarche> versions, ResponsableProcedureDto responsable,
-            boolean parInterim, Seance s, LocalDateTime maintenant) {
+            boolean parInterim, Seance s, long nbOffres, LocalDateTime maintenant) {
         Long idDmc = derniere.getIdDmc();
         Optional<ProceduresEnLigneService.Lue> lancee = procedures.trouver(idDmc);
         ProcedureEnLigneDto dto = lancee.map(ProceduresEnLigneService.Lue::dto).orElseGet(() -> vue(idDmc));
@@ -130,9 +154,6 @@ public class ProceduresInternesService {
         boolean seanceDuJour = heure != null && heure.toLocalDate().equals(LocalDate.now(HorlogeRecette.HORLOGE)) && (s == null || SEANCE_EN_COURS.contains(s.getEtat()));
         boolean aTraiter = responsable == null || !CeremonieCles.CLOSE.equals(etatCeremonie)
                 || s != null && SEANCE_EN_COURS.contains(s.getEtat()) || seanceDuJour;
-        long nbOffres = offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).stream()
-                .filter(o -> Offre.DEPOSEE.equals(o.getEtat()) || Offre.ECARTEE.equals(o.getEtat()))
-                .filter(o -> !Offre.FINANCIERE.equals(o.getEnveloppe())).count();   // ⚠️ V86 (PI-b) — une proposition PI compte une fois
         return new ProcedureInterneDto(idDmc, dto == null ? derniere.getIdDmc().toString() : dto.reference(), dto == null ? null : dto.objet(),
                 dto == null ? null : dto.autoriteContractante(), dto == null ? null : dto.categorie(), statut, responsable, parInterim,
                 internes.etatCao(idDmc, true), etatCeremonie, lancee.isPresent() ? dto.datePublication() : null,

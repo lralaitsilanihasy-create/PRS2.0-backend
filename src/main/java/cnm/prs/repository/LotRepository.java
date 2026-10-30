@@ -15,6 +15,11 @@ public interface LotRepository extends JpaRepository<Lot, Integer> {
     /** Lots d'un marché (pour cascader leurs tranches avant suppression). */
     List<Lot> findByIdDetail(Integer idDetail);
 
+    /** ⚠️ 2026-10-30 (« performance », §B1) — les lots d'une ligne, lus une fois par appel de liste ({@link MemoLecture}) ; une copie modifiable. */
+    default List<Lot> parDetail(Integer idDetail) {
+        return new java.util.ArrayList<>(MemoLecture.<List<Lot>>lire("lots:" + idDetail, () -> findByIdDetail(idDetail)));
+    }
+
     /** Lots d'un dossier (tous les lots de toutes ses lignes de marché). */
     List<Lot> findByIdDossier(Integer idDossier);
 

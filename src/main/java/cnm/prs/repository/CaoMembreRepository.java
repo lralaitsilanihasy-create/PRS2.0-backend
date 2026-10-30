@@ -13,6 +13,9 @@ public interface CaoMembreRepository extends JpaRepository<CaoMembre, Long> {
 
     List<CaoMembre> findByIdDmcOrderByRangAscIdMembreAsc(Long idDmc);
 
+    /** ⚠️ 2026-10-30 (« performance », §B1) — les membres de plusieurs CAO, en une requête (préchargement des listes). */
+    List<CaoMembre> findByIdDmcInOrderByIdDmcAscRangAscIdMembreAsc(java.util.Collection<Long> idDmcs);
+
     /** Les CAO où siège un compte (qualité {@code MEMBRE}). */
     List<CaoMembre> findByIdCompteOrderByIdDmcDesc(String idCompte);
 }

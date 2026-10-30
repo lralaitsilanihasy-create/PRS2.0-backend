@@ -17,6 +17,12 @@ public interface FicheMarcheRepository extends JpaRepository<FicheMarche, Intege
     /** Toutes les versions d'un DMC, de la plus ancienne à la plus récente. */
     List<FicheMarche> findByIdDmcOrderByNumeroVersionAsc(Long idDmc);
 
+    /** ⚠️ 2026-10-30 (« performance », §B1) — les versions d'un DMC (ordre croissant), lues une fois par appel de liste ({@link MemoLecture}) ; ne pas modifier la liste rendue. */
+    default List<FicheMarche> versions(Long idDmc) {
+        return MemoLecture.lire("versions:" + idDmc, () -> findByIdDmcOrderByNumeroVersionAsc(idDmc));
+    }
+
+
     Optional<FicheMarche> findByIdDmcAndNumeroVersion(Long idDmc, Integer numeroVersion);
 
     /**

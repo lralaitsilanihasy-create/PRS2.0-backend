@@ -1,5 +1,7 @@
 package cnm.prs.service;
 
+import cnm.prs.repository.MemoLecture;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -376,7 +378,7 @@ public class FicheMarcheService {
     /** ⚠️ Lot C (2026-09-27) — la dernière version de la fiche, quel que soit son statut ({@code empty} si jamais enregistrée). */
     @Transactional(readOnly = true)
     public java.util.Optional<FicheMarche> derniereVersion(Long idDmc) {
-        return ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc);
+        return MemoLecture.lire("ficheDerniere:" + idDmc, () -> ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc));   // ⚠️ 2026-10-30 (« performance »)
     }
 
     /** ⚠️ Lot C — le numéro de la dernière version <strong>validée</strong>, {@code null} s'il n'y en a pas. */
@@ -397,8 +399,8 @@ public class FicheMarcheService {
     }
 
     private java.util.Optional<FicheMarche> derniereValidee(Long idDmc) {
-        return ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
-                .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((a, b) -> b);
+        return MemoLecture.lire("ficheValidee:" + idDmc, () -> ficheRepository.versions(idDmc).stream()
+                .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((a, b) -> b));   // ⚠️ 2026-10-30 (« performance »)
     }
 
     /**
@@ -449,7 +451,8 @@ public class FicheMarcheService {
     /** ⚠️ Lot C — l'état de la dernière version validée ({@code empty} si aucune). Sans contrôle de périmètre. */
     @Transactional(readOnly = true)
     public java.util.Optional<EtatVersion> etatValide(Long idDmc) {
-        return derniereValidee(idDmc).map(f -> etatVersion(contexte(idDmc, false), f));
+        // ⚠️ 2026-10-30 (« performance », §B1) — lu une fois par DMC dans une liste (MemoLecture).
+        return MemoLecture.lire("etatValide:" + idDmc, () -> derniereValidee(idDmc).map(f -> etatVersion(contexte(idDmc, false), f)));
     }
 
     /**
@@ -520,13 +523,21 @@ public class FicheMarcheService {
      */
     @Transactional(readOnly = true)
     public java.util.Optional<EtatVersion> etatCourant(Long idDmc) {
-        return derniereVersion(idDmc).map(f -> etatVersion(contexte(idDmc, false), f));
+        // ⚠️ 2026-10-30 (« performance », §B1) — lu une fois par DMC dans une liste (MemoLecture).
+        return MemoLecture.lire("etatCourant:" + idDmc, () -> derniereVersion(idDmc).map(f -> etatVersion(contexte(idDmc, false), f)));
     }
 
     private EtatVersion etatVersion(Contexte ctx, FicheMarche fiche) {
+        // ⚠️ 2026-10-30 (« performance », §B1) — une version n'est reconstruite qu'une fois par appel de liste : la version courante
+        // et la dernière validée sont le plus souvent la même.
+        return fiche.getIdFiche() == null ? construireEtat(ctx, fiche)
+                : MemoLecture.lire("etatVersion:" + fiche.getIdFiche(), () -> construireEtat(ctx, fiche));
+    }
+
+    private EtatVersion construireEtat(Contexte ctx, FicheMarche fiche) {
         FicheMarcheDto d = toDto(ctx, fiche);
         Map<String, ChampFicheMarche> champs = new LinkedHashMap<>();
-        champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> champs.put(c.getCode(), c));
+        champRepository.referentiel().forEach(c -> champs.put(c.getCode(), c));
         String type = d.getTypeMarche() != null ? d.getTypeMarche()
                 : fiche.getTypeMarche() != null ? fiche.getTypeMarche() : TypeMarcheDao.QUANTITE_FIXE.name();
         String categorie = d.getCategorie() != null ? d.getCategorie() : CategorieDao.FOURNITURES_SERVICES.name();
@@ -884,7 +895,7 @@ public class FicheMarcheService {
         Map<String, Object> cadrage = lireJson(fiche.getCadrage());
         String typeMarche = ctx.forme().name();   // outillée : contexteEcriture l'a exigé
         Map<String, ChampFicheMarche> champs = new LinkedHashMap<>();
-        champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> champs.put(c.getCode(), c));
+        champRepository.referentiel().forEach(c -> champs.put(c.getCode(), c));
         // ⚠️ 2026-09-25 (§B2) — le nombre de lots du plan (ligne courante) : un champ « par lot » d'une ligne allotie se
         // saisit sous CODE#n, n de 1 à ce nombre.
         ValeursPpmService.ValeursPpm ppm = valeursPpm.lire(ctx.idDetail());
@@ -1085,7 +1096,7 @@ public class FicheMarcheService {
 
         // Les valeurs : mêmes refus que la saisie d'un bloc, le bloc en moins.
         Map<String, ChampFicheMarche> champs = new LinkedHashMap<>();
-        champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> champs.put(c.getCode(), c));
+        champRepository.referentiel().forEach(c -> champs.put(c.getCode(), c));
         ValeursPpmService.ValeursPpm ppm = valeursPpm.lire(ctx.idDetail());
         int nbLots = LotsFiche.nbLots(ppm.valeurs());
         Map<String, String> aEcrire = new TreeMap<>();
@@ -1403,7 +1414,7 @@ public class FicheMarcheService {
         // la révision ne reprend que les valeurs que le référentiel d'aujourd'hui admet encore (voir valeurReprise) : les
         // autres restent lisibles dans la version précédente et se ressaisissent.
         Map<String, ChampFicheMarche> referentiel = new LinkedHashMap<>();
-        champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> referentiel.put(c.getCode(), c));
+        champRepository.referentiel().forEach(c -> referentiel.put(c.getCode(), c));
         int nbLots = LotsFiche.nbLots(valeursPpm.lire(ctx.idDetail()).valeurs());
         for (FicheMarcheValeur v : valeurRepository.findByIdFiche(source.getIdFiche())) {
             if (valeurReprise(referentiel, v.getCodeChamp(), v.getValeur(), nbLots)) {
@@ -1511,6 +1522,11 @@ public class FicheMarcheService {
 
     /** {@code controlerPerimetre = false} : l'appelant a déjà vérifié un périmètre qui l'englobe (lot 1b). */
     private Contexte contexte(Long idDmc, boolean controlerPerimetre) {
+        // ⚠️ 2026-10-30 (« performance », §B1) — sans contrôle de périmètre, le contexte est lu une fois par DMC dans une liste.
+        return controlerPerimetre ? lireContexte(idDmc, true) : MemoLecture.lire("ficheCtx:" + idDmc, () -> lireContexte(idDmc, false));
+    }
+
+    private Contexte lireContexte(Long idDmc, boolean controlerPerimetre) {
         DossierMec dmc = dmcRepository.findById(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
         Integer idDossier = marcheRepository.findIdDossierByIdDetail(dmc.getIdDetail()).orElse(null);
@@ -1575,7 +1591,7 @@ public class FicheMarcheService {
             // ⚠️ V47 (2026-09-26, formulaires du candidat, R6) — les valeurs par défaut du référentiel sont RECOPIÉES à la
             // création de la fiche (champs saisis, actifs, de sa forme et de sa catégorie) : la fiche les porte ensuite comme
             // toute saisie, et un changement de défaut ne la touche plus.
-            for (ChampFicheMarche c : champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc()) {
+            for (ChampFicheMarche c : champRepository.actifs()) {
                 if (c.getValeurDefaut() != null && SourceChampFiche.SAISIE.name().equals(c.getSource())
                         && c.pourTypeMarche(ctx.forme().name())
                         && c.pourCategorie(ctx.codeCategorie() != null ? ctx.codeCategorie() : CategorieDao.FOURNITURES_SERVICES.name())) {
@@ -1644,7 +1660,7 @@ public class FicheMarcheService {
         // travaux. À défaut, un reflet quelconque de la clé.
         Map<String, ChampFicheMarche> reflets = new LinkedHashMap<>();
         Map<String, ChampFicheMarche> autres = new LinkedHashMap<>();
-        for (ChampFicheMarche c : champRepository.findAllByOrderByCodeRubriqueAscRangAsc()) {
+        for (ChampFicheMarche c : champRepository.referentiel()) {
             if (SourceChampFiche.CADRAGE.name().equals(c.getSource()) && c.getCleCadrage() != null) {
                 boolean dela = c.pourCategorie(categorie != null ? categorie : CategorieDao.FOURNITURES_SERVICES.name())
                         && c.pourTypeMarche(typeMarche);
@@ -1824,7 +1840,7 @@ public class FicheMarcheService {
         Map<String, String> valeurs = new TreeMap<>();
         List<String> champsCalcules = new ArrayList<>();   // V50 : les clés posées par le serveur
         if (fiche.getIdFiche() != null) {
-            for (FicheMarcheValeur v : valeurRepository.findByIdFiche(fiche.getIdFiche())) {
+            for (FicheMarcheValeur v : valeurRepository.lues(fiche.getIdFiche())) {
                 valeurs.put(v.getCodeChamp(), v.getValeur());
                 if (Boolean.TRUE.equals(v.getCalculee())) {
                     champsCalcules.add(v.getCodeChamp());
@@ -1839,7 +1855,7 @@ public class FicheMarcheService {
         Map<String, String> enLettres = new TreeMap<>();
         Map<String, String> valeursCadrage = new TreeMap<>();
         Map<String, String> valeursPpmParCode = new TreeMap<>();
-        for (ChampFicheMarche c : champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc()) {
+        for (ChampFicheMarche c : champRepository.actifs()) {
             if (!c.pourTypeMarche(typeOuverture) || !c.pourCategorie(categorieOuverture) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
                 continue;
             }
@@ -1945,7 +1961,7 @@ public class FicheMarcheService {
                 internes.responsableDto(idDmc), internes.estTitulaire(idDmc), internes.etat(idDmc).name(), champsCalcules,
                 // ⚠️ V66 (lot 2, §B2.1) — l'état de la cérémonie des clés, null en mode papier.
                 !RemiseElectronique.electronique(cadrage) ? null
-                        : ceremonieRepository.findById(idDmc).map(cnm.prs.entity.CeremonieCles::getEtat).orElse(cnm.prs.entity.CeremonieCles.A_VENIR),
+                        : MemoLecture.lire("ceremonie:" + idDmc, () -> ceremonieRepository.findById(idDmc)).map(cnm.prs.entity.CeremonieCles::getEtat).orElse(cnm.prs.entity.CeremonieCles.A_VENIR),
                 // ⚠️ V67 (lot 2a, §B5) — l'état de la commission d'appel d'offres, null en mode papier.
                 internes.etatCao(idDmc, RemiseElectronique.electronique(cadrage)), null,   // ⚠️ V68 : depots, posé par lire()
                 // ⚠️ R8 (§B3 ; V110) — le mode figé et la migration portée par cette version.
@@ -1969,7 +1985,7 @@ public class FicheMarcheService {
      * la dernière version validée ; vide tant qu'aucune version n'est validée (le cadrage reste libre).
      */
     public Optional<String> modeFige(Long idDmc) {
-        List<FicheMarche> versions = ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc);
+        List<FicheMarche> versions = ficheRepository.versions(idDmc);
         FicheMarche migree = versions.stream().filter(f -> f.getModeMigreLe() != null).reduce((a, b) -> b).orElse(null);
         FicheMarche validee = versions.stream().filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((a, b) -> b).orElse(null);
         if (migree != null && (validee == null || migree.getNumeroVersion() >= validee.getNumeroVersion())) {

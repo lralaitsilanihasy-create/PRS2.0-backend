@@ -166,6 +166,31 @@ class AuditLogListeIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    @DisplayName("⚠️ 2026-10-30 (« performance », §B4) — le journal est indexé sur DATE_ACTION et (NOM_TABLE, DATE_ACTION) ; "
+            + "la page filtrée par table s'appuie sur l'index quand le parcours séquentiel est écarté")
+    void auditLogs_indexes() throws Exception {
+        org.assertj.core.api.Assertions.assertThat(jdbcTemplate.queryForList(
+                "select indexname from pg_indexes where schemaname = 'public' and tablename = 't_audit_log'", String.class))
+                .contains("ix_audit_log_date_action", "ix_audit_log_table_date");
+        // La requête que construit AuditLogRecherche pour une table (filtres absents hors requête) : sur la petite base de test,
+        // le planificateur préférerait le parcours séquentiel ; on l'écarte pour lire l'index qu'il retiendrait en volume.
+        String plan = jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<String>) c -> {
+            try (var s = c.createStatement()) {
+                s.execute("set local enable_seqscan = off");
+                StringBuilder b = new StringBuilder();
+                try (var r = s.executeQuery("explain select * from public.t_audit_log where \"NOM_TABLE\" = 't_parametre' "
+                        + "order by \"DATE_ACTION\" desc limit 4")) {
+                    while (r.next()) {
+                        b.append(r.getString(1)).append('\n');
+                    }
+                }
+                return b.toString();
+            }
+        });
+        org.assertj.core.api.Assertions.assertThat(plan).contains("ix_audit_log_table_date");
+    }
+
     /** Insère {@code combien} entrées d'audit, espacées d'une heure à partir de {@code depart}. */
     private void semer(int combien, String nomTable, String acteur, LocalDateTime depart) {
         List<Object[]> lignes = new ArrayList<>();

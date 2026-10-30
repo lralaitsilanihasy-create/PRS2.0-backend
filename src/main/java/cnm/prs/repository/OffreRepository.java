@@ -17,6 +17,9 @@ public interface OffreRepository extends JpaRepository<Offre, String> {
 
     List<Offre> findByIdDmcOrderByNumeroAscDateCreationAsc(Long idDmc);
 
+    /** ⚠️ 2026-10-30 (« performance », §B1) — les offres de plusieurs DMC, en une requête (listes). */
+    List<Offre> findByIdDmcIn(java.util.Collection<Long> idDmcs);
+
     Optional<Offre> findFirstByIdDmcAndIdEntrepriseAndLotAndEtat(Long idDmc, Integer idEntreprise, Integer lot, String etat);
 
     Optional<Offre> findFirstByIdDmcAndIdEntrepriseAndLotIsNullAndEtat(Long idDmc, Integer idEntreprise, String etat);

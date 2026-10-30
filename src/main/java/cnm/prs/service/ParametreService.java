@@ -1,9 +1,13 @@
 package cnm.prs.service;
 
 import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import cnm.prs.config.HorlogeRecette;
 import cnm.prs.entity.Parametre;
@@ -41,9 +45,46 @@ public class ParametreService {
      */
     @Transactional(readOnly = true)
     public boolean actualitesActives() {
-        return repository.findById(ACTUALITES_ACTIVES)
-                .map(p -> !"false".equalsIgnoreCase(p.getValeur()))
+        return lue(ACTUALITES_ACTIVES)
+                .map(v -> !"false".equalsIgnoreCase(v))
                 .orElse(true);
+    }
+
+    // ------------------------------------------------------------------ ⚠️ 2026-10-30 — le cache des paramètres
+
+    /**
+     * ⚠️ 2026-10-30 (demande front « performance », §B3) — les valeurs lues de {@code t_parametre}, gardées en mémoire : la table
+     * (quelques lignes) était relue à chaque usage (2 104 parcours pendant la mesure du front, 92 lectures dans un seul appel de
+     * liste), et une clé absente — le cas courant — n'était jamais retenue par Hibernate. Une instance seule (Q1) : le cache est
+     * vidé à chaque écriture, que seul ce service fait. Une transaction qui a écrit un paramètre lit la base sans passer par le
+     * cache, qui est vidé de nouveau à sa fin, validée ou annulée : il ne retient jamais une valeur non validée.
+     */
+    private final Map<String, Optional<String>> cache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Marqueur, lié à la transaction, d'une écriture de paramètre. */
+    private final Object ecritureEnCours = new Object();
+
+    /** La valeur brute d'un paramètre (vide si la ligne ou la valeur manque). */
+    private Optional<String> lue(String cle) {
+        if (TransactionSynchronizationManager.hasResource(ecritureEnCours)) {
+            return repository.findById(cle).map(Parametre::getValeur);
+        }
+        return cache.computeIfAbsent(cle, k -> repository.findById(k).map(Parametre::getValeur));
+    }
+
+    /** Après toute écriture : cache vidé, et de nouveau à la fin de la transaction ; d'ici là, lectures en base. */
+    private void ecrit() {
+        cache.clear();
+        if (TransactionSynchronizationManager.isSynchronizationActive() && !TransactionSynchronizationManager.hasResource(ecritureEnCours)) {
+            TransactionSynchronizationManager.bindResource(ecritureEnCours, Boolean.TRUE);
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    TransactionSynchronizationManager.unbindResourceIfPossible(ecritureEnCours);
+                    cache.clear();
+                }
+            });
+        }
     }
 
     /**
@@ -55,8 +96,7 @@ public class ParametreService {
      */
     @Transactional(readOnly = true)
     public java.math.BigDecimal seuilAgpmMontant() {
-        return repository.findById(AGPM_SEUIL_MONTANT)
-                .map(Parametre::getValeur)
+        return lue(AGPM_SEUIL_MONTANT)
                 .map(v -> {
                     try {
                         return new java.math.BigDecimal(v.trim());
@@ -79,6 +119,7 @@ public class ParametreService {
         p.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         repository.save(p);
+        ecrit();
         return seuil;
     }
 
@@ -512,7 +553,7 @@ public class ParametreService {
     /** La valeur texte d'un paramètre ; {@code null} si absent ou vide. */
     @Transactional(readOnly = true)
     public String texte(String cle) {
-        return repository.findById(cle).map(Parametre::getValeur).filter(v -> v != null && !v.isBlank()).map(String::trim)
+        return lue(cle).filter(v -> v != null && !v.isBlank()).map(String::trim)
                 .orElse(null);
     }
 
@@ -534,6 +575,7 @@ public class ParametreService {
     private void ecrireTexte(String cle, String valeur) {
         if (valeur == null || valeur.isBlank()) {
             repository.deleteById(cle);
+            ecrit();
             return;
         }
         Parametre p = repository.findById(cle).orElseGet(() -> new Parametre(cle, null, null, null));
@@ -541,10 +583,11 @@ public class ParametreService {
         p.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         repository.save(p);
+        ecrit();
     }
 
     private java.math.BigDecimal nombre(String cle) {
-        return repository.findById(cle).map(Parametre::getValeur).filter(v -> v != null && !v.isBlank()).map(v -> {
+        return lue(cle).filter(v -> v != null && !v.isBlank()).map(v -> {
             try {
                 return new java.math.BigDecimal(v.trim().replace(',', '.'));
             } catch (RuntimeException e) {
@@ -559,6 +602,7 @@ public class ParametreService {
         p.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         repository.save(p);
+        ecrit();
     }
 
     /** Bascule l'interrupteur (Administrateur) — upsert horodaté avec l'identité JWT. */
@@ -569,6 +613,7 @@ public class ParametreService {
         p.setDateMaj(LocalDateTime.now(HorlogeRecette.HORLOGE));
         p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         repository.save(p);
+        ecrit();
         return actif;
     }
 

@@ -15,6 +15,11 @@ public interface FicheMarcheValeurRepository extends JpaRepository<FicheMarcheVa
 
     List<FicheMarcheValeur> findByIdFiche(Integer idFiche);
 
+    /** ⚠️ 2026-10-30 (« performance », §B1) — les valeurs d'une version, lues une fois par appel de liste ({@link MemoLecture}). */
+    default List<FicheMarcheValeur> lues(Integer idFiche) {
+        return MemoLecture.lire("valeurs:" + idFiche, () -> findByIdFiche(idFiche));
+    }
+
     /**
      * ⚠️ 2026-10-20 (« liste-dossier-marche », §B1) — les numéros de procédure de toutes les fiches, sur leur dernière version :
      * {@code [idDmc, typeMarche, codeChamp, valeur]} pour {@code B02-OE-01} et {@code B02-OB-03}.

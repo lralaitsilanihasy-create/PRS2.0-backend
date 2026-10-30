@@ -238,7 +238,7 @@ public class DmcService {
         ValeursPpmService.ValeursPpm ppm = valeursPpm.lire(idDetail);
         // Clé = code du champ de source PPM (comme sur la fiche), valeur telle qu'affichée.
         Map<String, String> parCode = new java.util.TreeMap<>();
-        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().stream()
+        champRepository.actifs().stream()
                 .filter(c -> "PPM".equals(c.getSource()) && c.getClePpm() != null)
                 .forEach(c -> parCode.put(c.getCode(), ppm.valeurs().get(c.getClePpm())));
         dto.setValeursPpm(parCode);
@@ -268,6 +268,15 @@ public class DmcService {
             throw new BadRequestException("Sous-type « " + sousType + " » inconnu : attendu l'un de "
                     + new java.util.TreeSet<>(SousTypesDossier.PRODUITS_PAR_FICHE) + ".", "SOUS_TYPE_INCONNU");
         }
+        // ⚠️ 2026-10-30 (demande front « performance », §B1) — 818 requêtes en recette (≈ 23 par ligne) : l'état de la remise papier et le
+        // résumé de l'attribution relisaient, procédure par procédure et plusieurs fois chacun, responsable, CAO, fiche et plan. Ces
+        // lectures passent par la mémoire de lecture de l'appel (MemoLecture) : une fois par nature et par procédure.
+        try (cnm.prs.repository.MemoLecture memo = cnm.prs.repository.MemoLecture.ouvrir()) {
+            return eligiblesFiltres(filtre);
+        }
+    }
+
+    private List<LigneEligibleDto> eligiblesFiltres(String filtre) {
         List<Marche> lignes;
         if (Visibilite.voitTout()) {
             lignes = marcheRepository.findAll();

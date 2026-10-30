@@ -110,7 +110,7 @@ public class MarchePapierService {
     @Transactional(readOnly = true)
     public List<LigneEligibleDto.LotProcedure> lots(Integer idDetail) {
         List<Lot> duPlan = idDetail == null ? List.of()
-                : lots.findByIdDetail(idDetail).stream().sorted(Comparator.comparing(Lot::getIdLot)).toList();
+                : lots.parDetail(idDetail).stream().sorted(Comparator.comparing(Lot::getIdLot)).toList();
         if (duPlan.size() <= 1) {
             return List.of(new LigneEligibleDto.LotProcedure(1, duPlan.isEmpty() ? null : ProjetMarcheService.intituleLot(duPlan, 1)));
         }
