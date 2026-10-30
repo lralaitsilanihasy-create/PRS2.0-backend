@@ -53,6 +53,9 @@ public class PiecesFournies {
     public static final String PV_CNM_DMC = "PV_CNM_DMC";
     public static final String PV_VALIDATION_CAO = "PV_VALIDATION_CAO";
     static final String RAPPORT_ANALYSE = "RAPPORT_ANALYSE";
+    /** ⚠️ 2026-10-30 (« pieces-ddm-donnees », §B1, §B2) — les publications fournies au dossier de marché. */
+    public static final String PUBLICATION_AGPM = PublicationAgpmService.CODE_PIECE;
+    public static final String PUBLICATION_AVIS = "PUBLICATION_AVIS";
 
     private final FicheMarcheService fiches;
     private final CalendrierAnnuelService calendrier;
@@ -66,16 +69,23 @@ public class PiecesFournies {
     private final cnm.prs.repository.MarcheRepository marches;
     private final cnm.prs.repository.LotRepository lots;
     private final org.springframework.beans.factory.ObjectProvider<PvDocumentService> pvDocuments;
+    /** ⚠️ 2026-10-30 (« pieces-ddm-donnees », §B1, §B2) — les publications de l'AGPM (plan) et de l'avis (procédure). */
+    private final org.springframework.beans.factory.ObjectProvider<PublicationAgpmService> publicationsAgpm;
+    private final org.springframework.beans.factory.ObjectProvider<PublicationAvisService> publicationsAvis;
 
     public PiecesFournies(FicheMarcheService fiches, CalendrierAnnuelService calendrier, PvExamenRepository pvs,
             cnm.prs.repository.AttributionRepository attributions, cnm.prs.repository.DossierRepository dossiers,
             cnm.prs.repository.PieceJointeDossierRepository pieces, cnm.prs.repository.TypePieceJointeRepository types,
             cnm.prs.repository.DossierMecRepository dmcs, cnm.prs.repository.MarcheRepository marches,
-            cnm.prs.repository.LotRepository lots, org.springframework.beans.factory.ObjectProvider<PvDocumentService> pvDocuments) {
+            cnm.prs.repository.LotRepository lots, org.springframework.beans.factory.ObjectProvider<PvDocumentService> pvDocuments,
+            org.springframework.beans.factory.ObjectProvider<PublicationAgpmService> publicationsAgpm,
+            org.springframework.beans.factory.ObjectProvider<PublicationAvisService> publicationsAvis) {
         this.dmcs = dmcs;
         this.marches = marches;
         this.lots = lots;
         this.pvDocuments = pvDocuments;
+        this.publicationsAgpm = publicationsAgpm;
+        this.publicationsAvis = publicationsAvis;
         this.fiches = fiches;
         this.calendrier = calendrier;
         this.pvs = pvs;
@@ -158,6 +168,18 @@ public class PiecesFournies {
         types.findFirstByCode(RAPPORT_ANALYSE).flatMap(t -> pieces.findByIdDossier(d.getIdDossier()).stream()
                 .filter(p -> t.getIdTypePiece().equals(p.getIdTypePiece()) && p.getProduitePar() != null).findFirst())
                 .ifPresent(p -> out.put(PV_VALIDATION_CAO, new Fourniture("/api/piece-jointe-dossiers/" + p.getIdPiece() + "/contenu", null, null)));
+        // ⚠️ 2026-10-30 (demande front « pieces-ddm-donnees », §B1, forme (b) ; demande du pilote) — la publication de l'AGPM déposée
+        // sur le plan de la ligne (V118) : fournie, sans copie du fichier ; lue par GET /api/dossiers/{id}/publication-agpm/contenu.
+        PublicationAgpmService agpm = publicationsAgpm.getIfAvailable();
+        Integer plan = agpm == null ? null : agpm.planDuDossier(d);
+        if (plan != null && agpm.enVigueurDuPlan(plan).isPresent()) {
+            out.put(PUBLICATION_AGPM, new Fourniture(racine + "/publication-agpm/contenu", plan, null));
+        }
+        // ⚠️ 2026-10-30 (§B2, décision du pilote sur Q1) — la publication de l'avis déposée sur la procédure (V154) : fournie, sans copie.
+        PublicationAvisService avis = publicationsAvis.getIfAvailable();
+        if (avis != null && avis.enVigueur(procedure.idDmc()).isPresent()) {
+            out.put(PUBLICATION_AVIS, new Fourniture(racine + "/publication-avis/contenu", null, null));
+        }
         return out;
     }
 

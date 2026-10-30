@@ -1475,6 +1475,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Autowired private cnm.prs.repository.AttributionTitulaireRepository titulaireRepository;
+    @Autowired private cnm.prs.repository.PublicationAvisRepository publicationAvisRepository;
     @Autowired private cnm.prs.repository.RemiseConcurrenceRepository remiseRepository;
     @Autowired private cnm.prs.service.ContratVigueurService contratService;
 
@@ -2151,6 +2152,15 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
             ps.setCondition(t[1]);
             pieceSousTypeRepository.save(ps);
         }
+        // ⚠️ 2026-10-30 (« pieces-ddm-donnees », §B1, §B2) — les deux publications, facultatives ici (la soumission n'en dépend pas).
+        for (String code : List.of("PUBLICATION_AGPM", "PUBLICATION_AVIS")) {
+            cnm.prs.entity.TypePieceJointe tp = typePieceJointeRepository.findFirstByCode(code).orElseGet(() -> {
+                cnm.prs.entity.TypePieceJointe n = typePieceJointeRepository.findById(seedTypePiece(code, false, null, 0)).orElseThrow();
+                n.setCode(code);
+                return typePieceJointeRepository.save(n);
+            });
+            pieceSousTypeRepository.save(new cnm.prs.entity.PieceSousType(tp.getIdTypePiece(), "MAOO-CC", false, ordre++, null, null));
+        }
         Dossier mec = dossierLoc(9960, "CLOTURE", "ANT", "PRMP001");
         mec.setIdTypeDossier("DMC");
         mec.setIdSousType("DAOO-CC");
@@ -2450,6 +2460,46 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/pv-examens/" + idPvMec).header("Authorization", bearer("PRMP002", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP002", "ANT")))
                 .andExpect(status().isForbidden());
         assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='PV_VALIDATION_CAO')].lien").get(0)).startsWith("/api/piece-jointe-dossiers/");
+        // ⚠️ 2026-10-30 (« pieces-ddm-donnees ») — B1 la publication de l'AGPM du plan, B2 celle de l'avis déposée sur la procédure :
+        // fournies (forme (b)), sans copie ; B3 un dépôt sur une pièce fournie est refusé.
+        Integer plan = marcheRepository.findById(dossierMecRepository.findById(idDmc).orElseThrow().getIdDetail()).orElseThrow().getIdDossier();
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.fourniePar=='APPLICATION')].code")).doesNotContain("PUBLICATION_AGPM", "PUBLICATION_AVIS");
+        cnm.prs.entity.PublicationAgpm agpm = new cnm.prs.entity.PublicationAgpm();
+        agpm.setIdDossier(plan);
+        agpm.setJournal("Midi Madagasikara");
+        agpm.setDateParution(LocalDate.now().minusDays(40));
+        agpm.setReferenceAgpm("AGPM-2026");
+        agpm.setNomFichier("agpm.pdf");
+        agpm.setContenu("%PDF-1.4 agpm".getBytes(StandardCharsets.ISO_8859_1));
+        agpm.setTaille(13L);
+        agpm.setDeposeLe(LocalDateTime.now());
+        publicationAgpmRepository.save(agpm);
+        cnm.prs.entity.PublicationAvis avis = new cnm.prs.entity.PublicationAvis();
+        avis.setIdDmc(idDmc);
+        avis.setNature(cnm.prs.entity.PublicationAvis.JOURNAL);
+        avis.setJournal("L'Express de Madagascar");
+        avis.setNumero("1234");
+        avis.setDateParution(LocalDate.now().minusDays(30));
+        avis.setNomFichier("avis.pdf");
+        avis.setContenu("%PDF-1.4 avis".getBytes(StandardCharsets.ISO_8859_1));
+        avis.setTaille(13L);
+        avis.setDeposeLe(LocalDateTime.now());
+        publicationAvisRepository.save(avis);
+        exigees = mvc.perform(get("/api/dossiers/" + idDossier + "/pieces-exigees").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='PUBLICATION_AGPM')].lien"))
+                .containsExactly("/api/dossiers/" + idDossier + "/publication-agpm/contenu");
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='PUBLICATION_AVIS')].lien"))
+                .containsExactly("/api/dossiers/" + idDossier + "/publication-avis/contenu");
+        assertThat(JsonPath.<List<String>>read(exigees, "$[?(@.code=='PUBLICATION_AVIS')].fourniePar")).containsExactly("APPLICATION");
+        mvc.perform(get("/api/dossiers/" + idDossier + "/publication-avis/contenu").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(get("/api/dossiers/" + idDossier + "/publication-avis").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.journal").value("L'Express de Madagascar")).andExpect(jsonPath("$.nature").value("JOURNAL"));
+        mvc.perform(get("/api/dossiers/" + idDossier + "/publication-agpm/contenu").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        int idTypeAvis = typePieceJointeRepository.findFirstByCode("PUBLICATION_AVIS").orElseThrow().getIdTypePiece();
+        mvc.perform(multipart("/api/piece-jointe-dossiers").file(pdf).file(data(idDossier, idTypeAvis)).header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PIECE_FOURNIE_PAR_APPLICATION"))
+                .andExpect(jsonPath("$.details.code").value("PUBLICATION_AVIS"));
         // La fiche de présentation du marché : ⚠️ 2026-10-20 (« fiche-presentation-marche », §B1) la sienne — l'attribution (un titulaire
         // par ligne, l'écart à l'estimation), la mise en concurrence, la séance, l'évaluation ; plus le calendrier du plan ni la cohérence.
         // ⚠️ 2026-10-20 (« liste-dossier-marche », §B2) — plusieurs titulaires proposés : le rang 1 et leur nombre.

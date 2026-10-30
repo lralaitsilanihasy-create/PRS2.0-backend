@@ -624,6 +624,43 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    @DisplayName("⚠️ 2026-10-30 (« pieces-ddm-donnees », §B2) : la publication de l'avis se dépose une fois sur la procédure, après "
+            + "l'impression de l'avis (409 AVIS_NON_PUBLIE avant) ; 400 nominatif ; une nouvelle remplace la précédente ; lue depuis "
+            + "la procédure et depuis le dossier")
+    void publicationDeLAvis() throws Exception {
+        Dossier plan = dossierRepository.findById(9900).orElseThrow();
+        plan.setIdTypeDossier("DDP");
+        plan.setIdSousType("PPM");
+        dossierRepository.save(plan);
+        int idDossier = creerDossier();
+        pvSigne(idDossier, "FAV", "EN_VERIFICATION");
+        deposerPublication();
+        String url = "/api/fiches-marche/" + idDmc + "/publication-avis";
+        org.springframework.mock.web.MockMultipartFile scan = new org.springframework.mock.web.MockMultipartFile("fichier", "journal.pdf",
+                "application/pdf", "%PDF-1.4 journal".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(url).file(scan).param("journal", "Midi Madagasikara").param("dateParution", java.time.LocalDate.now().toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AVIS_NON_PUBLIE"));
+        imprimer(idDmc).andExpect(status().isCreated());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(url).param("dateParution", java.time.LocalDate.now().plusDays(3).toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[*].champ").value(org.hamcrest.Matchers.containsInAnyOrder("fichier", "journal", "dateParution")));
+        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PUBLICATION_AVIS_ABSENTE"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(url).file(scan).param("journal", "Midi Madagasikara").param("numero", "10234")
+                .param("dateParution", java.time.LocalDate.now().minusDays(1).toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.nature").value("JOURNAL"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(url).file(scan).param("journal", "L'Express de Madagascar").param("dateParution", java.time.LocalDate.now().toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isCreated());
+        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.journal").value("L'Express de Madagascar")).andExpect(jsonPath("$.numero").doesNotExist());
+        mvc.perform(get(url + "/contenu").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(get("/api/dossiers/" + idDossier + "/publication-avis").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.idDmc").value(idDmc));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(url).file(scan).param("journal", "X").param("dateParution", java.time.LocalDate.now().toString())
+                .header("Authorization", tokenPresident)).andExpect(status().isForbidden());
+    }
+
     private org.springframework.test.web.servlet.ResultActions imprimer(Long dmc) throws Exception {
         return mvc.perform(post("/api/fiches-marche/" + dmc + "/avis-specifique").header("Authorization", tokenPrmp)
                 .contentType(JSON).content(CORPS));

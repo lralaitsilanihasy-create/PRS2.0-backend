@@ -1597,6 +1597,13 @@ et ne pouvait rien en dire : aucune colonne ne reliait les deux objets. Le lien 
 DMC, objet de préparation. **Unique** dans les deux sens ; **sous-type `DAO` seulement** (contrainte en base et garde
 de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM — lot 1b*.
 
+> ⚠️ **2026-10-30 — les publications du dossier de marché viennent des données (demande du pilote ; V154).** Le dossier de marché né
+> de l'attribution ne reçoit plus de fichier pour la **publication de l'AGPM** (celle déposée une fois sur le plan) ni pour la
+> **publication de l'avis** : ce sont des pièces fournies par l'application. Le journal de publication de l'avis reste exigé (décision
+> du pilote) : il se dépose **une seule fois, sur la procédure**, par la PRMP ou son UGPM, après l'impression de l'avis (en prestations
+> intellectuelles, les lettres d'invitation avec accusé). Une pièce que l'application fournit ne se dépose plus à la main, sur aucun
+> dossier.
+>
 > ⚠️ **2026-10-30 — le contrat-cadre par appel d'offres restreint (décision du pilote « suivre les textes en vigueur » ; décret
 > n° 2019-1064, art. 7 ; V152).** Un appel d'offres **restreint** en contrat-cadre produit un « Dossier d'appel d'offres restreint —
 > contrat-cadre » (`DAOR-CC`), puis à l'attribution un « Marché sur appel d'offres restreint — contrat-cadre » (`MAOR-CC`). Leurs pièces

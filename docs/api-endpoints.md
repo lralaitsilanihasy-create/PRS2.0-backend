@@ -3526,6 +3526,20 @@ propositions du front validées par le pilote le 15/10 ; arbitrages de l'utilisa
   sous-type exige `PUBLICATION_AGPM` et qui ne la porte pas la reçoit (`PUBLICATION_AGPM_<référence>.pdf`, journal
   `PUBLICATION_AGPM_REPRISE`). Sans publication sur le plan, la pièce reste à joindre, et le refus de soumission le dit : « … est
   obligatoire. Elle se dépose une fois sur le plan de passation contrôlé, et chaque dossier du plan la reprend d'office. »
+- ⚠️ **2026-10-30 — la publication de l'avis déposée sur la procédure** (demande front « pieces-ddm-donnees », §B2 ; décision du pilote
+  sur Q1 : le journal reste exigé ; **V154**, `t_publication_avis`).
+
+  | Méthode | URL | Corps | Réponse | Statuts |
+  |---|---|---|---|---|
+  | POST | /api/fiches-marche/{idDmc}/publication-avis | multipart : `fichier` (PDF), `journal` (obligatoire hors prestations intellectuelles), `numero` (facultatif), `dateParution` (AAAA-MM-JJ, pas dans le futur ; date d'envoi des lettres en PI) | `PublicationAvisDto` | 201, 400 nominatif, 403 (hors PRMP de la fiche et son UGPM), 409 `FICHE_NON_VALIDEE`, `AVIS_NON_PUBLIE` (avis spécifique pas encore imprimé ; en PI, lettres d'invitation pas produites) |
+  | GET | /api/fiches-marche/{idDmc}/publication-avis | — | `PublicationAvisDto` en vigueur | 200, 403, 404 `PUBLICATION_AVIS_ABSENTE` |
+  | GET | /api/fiches-marche/{idDmc}/publication-avis/contenu | — | le scan (PDF) | 200, 403, 404 |
+  | GET | /api/dossiers/{idDossier}/publication-avis[/contenu] | — | la même, lue depuis le dossier né de la fiche ou le dossier de marché de l'attribution | 200, 403, 404 |
+
+  `PublicationAvisDto` = `{ idPublication, idDmc, nature, journal, numero, dateParution, nomFichier, taille, deposePar, deposeLe }` ;
+  `nature` : `JOURNAL`, ou `LETTRES_INVITATION` en prestations intellectuelles (lettres avec accusé, journal sans objet). Un nouveau
+  dépôt **remplace** la publication en vigueur ; journal du dossier né de la fiche : `PUBLICATION_AVIS_DEPOSEE`. L'avis imprimé par
+  l'application et sa date de première impression ne la remplacent pas (données de la procédure, sans valeur de preuve de parution).
 - **H1** : l'avis spécifique lit sur elle le numéro et la date du journal (voir `POST …/avis-specifique`). **H3** : `PUBLICATION_AMI`
   (journal de l'AMI) reste à joindre au dossier de consultation. **H4** : les dossiers déjà soumis ne changent pas (la reprise ne joue
   qu'à la création et à la soumission).
@@ -9021,6 +9035,16 @@ concurrence.
     | `FICHE_PRESENTATION` | la fiche de la procédure a une version validée | `/api/dossiers/{id}/fiche-presentation` |
     | `PV_CNM_DMC` | le PV d'examen du dossier de mise en concurrence est **signé** | `/api/pv-examens/{idPv}/document` |
     | `PV_VALIDATION_CAO` | le rapport d'évaluation signé est joint d'office (il vaut PV de validation) | `/api/piece-jointe-dossiers/{idPiece}/contenu` |
+    | ⚠️ 2026-10-30 `PUBLICATION_AGPM` | une publication de l'AGPM est en vigueur sur le plan de la ligne (« pieces-ddm-donnees », §B1, forme (b)) ; `idDossierPlan` = ce plan | `/api/dossiers/{id}/publication-agpm/contenu` |
+    | ⚠️ 2026-10-30 `PUBLICATION_AVIS` | une publication de l'avis est déposée sur la procédure (§B2, V154) | `/api/dossiers/{id}/publication-avis/contenu` |
+
+    ⚠️ **2026-10-30** — les deux publications sont **fournies, sans copie du fichier** : la reprise d'office de la publication de
+    l'AGPM (`PUBLICATION_AGPM_REPRISE`) ne joue plus pour le dossier de marché, puisque la pièce n'y est plus à fournir ; elle ne change
+    pas pour les dossiers de mise en concurrence. Un fichier déjà déposé à la main reste en place (les dossiers de recette 100398 et
+    100399 en portent ; le front les retire, accord du pilote).
+  - ⚠️ **2026-10-30 (« pieces-ddm-donnees », §B3)** — `POST /api/piece-jointe-dossiers` sur un type que `pieces-exigees` déclare
+    `fourniePar = "APPLICATION"` (pour **tout** dossier, mise en concurrence comprise) : **409 `PIECE_FOURNIE_PAR_APPLICATION`**,
+    `details.piece` (libellé) et `details.code`.
 
   - **`GET /api/dossiers/{id}/fiche-presentation`** sert aussi le dossier de marché : `idDmc` est celui de la procédure, une section
     **`ATTRIBUTION`** s'ajoute après `PROCEDURE` (`LOT`, `DOSSIER_MISE_EN_CONCURRENCE`, `ATTRIBUTAIRE`, ou `TITULAIRES` par rang

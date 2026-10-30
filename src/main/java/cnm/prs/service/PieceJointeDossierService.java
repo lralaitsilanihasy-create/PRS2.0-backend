@@ -79,6 +79,32 @@ public class PieceJointeDossierService {
         this.notificationService = notificationService;
     }
 
+    /** ⚠️ 2026-10-30 (« pieces-ddm-donnees », §B3) — une pièce que l'application fournit ne se dépose pas. */
+    public static final String CODE_FOURNIE_PAR_APPLICATION = "PIECE_FOURNIE_PAR_APPLICATION";
+
+    private org.springframework.beans.factory.ObjectProvider<PiecesFournies> piecesFournies;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setPiecesFournies(org.springframework.beans.factory.ObjectProvider<PiecesFournies> piecesFournies) {
+        this.piecesFournies = piecesFournies;
+    }
+
+    /**
+     * ⚠️ 2026-10-30 (demande front « pieces-ddm-donnees », §B3) — 409 {@code PIECE_FOURNIE_PAR_APPLICATION} (libellé de la pièce dans
+     * {@code details.piece}, son code dans {@code details.code}) pour un dépôt sur une pièce que {@code pieces-exigees} déclare
+     * {@code fourniePar = APPLICATION} : l'écran ne la propose pas, le refus protège des dépôts par script et des anciens écrans.
+     */
+    private void exigerNonFournie(Dossier dossier, Integer idTypePiece) {
+        PiecesFournies fournies = piecesFournies == null ? null : piecesFournies.getIfAvailable();
+        cnm.prs.entity.TypePieceJointe type = idTypePiece == null ? null : typePieceRepository.findById(idTypePiece).orElse(null);
+        if (fournies == null || type == null || type.getCode() == null || !fournies.de(dossier).containsKey(type.getCode())) {
+            return;
+        }
+        throw new BusinessRuleException("La pièce « " + type.getLibellePiece() + " » est fournie par l'application : rien à déposer.",
+                CODE_FOURNIE_PAR_APPLICATION, dossier.getIdDossier(),
+                java.util.Map.<String, Object>of("piece", type.getLibellePiece(), "code", type.getCode()));
+    }
+
     /** Pièces d'un dossier — ⚠️ C1 : 403 si le dossier est hors du périmètre de lecture (§1). */
     @Transactional(readOnly = true)
     public List<PieceJointeDossierDto> findByDossier(Integer idDossier) {
@@ -111,6 +137,7 @@ public class PieceJointeDossierService {
         exigerProprietaire(dossier);
         exigerDepotPossible(dossier, meta.getIdLettre() != null);
         exigerPasDeSubstitution(dossier, meta.getIdTypePiece());
+        exigerNonFournie(dossier, meta.getIdTypePiece());
         boolean apres = false;
         Integer idLettre = null;
         if (meta.getIdLettre() != null
