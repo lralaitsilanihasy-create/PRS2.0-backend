@@ -171,7 +171,7 @@ public class ValeursPpmService {
                 : modePassationRepository.findById(ligne.getIdMode()).map(m -> m.getLibelle()).orElse(null));
         v.put("MONTANT_ESTIMATIF", montant(ligne.getMontEstim()));
         v.put("FINANCEMENT", ligne.getFinancement());
-        List<ServiceBeneficiaire> benefs = serviceBeneficiaireRepository.findByIdDetail(ligne.getIdDetail());
+        List<ServiceBeneficiaire> benefs = serviceBeneficiaireRepository.lus(ligne.getIdDetail());   // ⚠️ 2026-10-30 (« performance »)
         v.put("BENEFICIAIRES", beneficiaires(benefs));
         v.put("COMPTES", comptes(ligne, benefs));
         v.put("DATES_PREVISIONNELLES", datesPrevisionnelles(ligne, dates));
@@ -363,7 +363,7 @@ public class ValeursPpmService {
      * {@code dates} par mot-clé d'étape (LANCEMENT, REMISE, OUVERTURE, ATTRIBUTION) — la plus précoce par étape.
      */
     private String datesPrevisionnelles(Marche ligne, Map<String, LocalDate> dates) {
-        List<MarchePrevision> prevs = marchePrevisionRepository.findByMarcheOrdonne(ligne.getIdDetail());
+        List<MarchePrevision> prevs = marchePrevisionRepository.ordonneesLues(ligne.getIdDetail());   // ⚠️ 2026-10-30 (« performance »)
         if (prevs.isEmpty()) {
             return null;
         }

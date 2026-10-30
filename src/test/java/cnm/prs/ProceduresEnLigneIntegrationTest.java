@@ -320,7 +320,7 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("⚠️ 2026-10-30 (« performance », §B1) : les listes des procédures en ligne et des lignes éligibles ne relisent plus "
-            + "plusieurs fois chaque procédure — une lecture par nature et par procédure (342 → moins de 70 ordres SQL pour trois)")
+            + "chaque procédure — une lecture par nature pour toute la liste (342 → moins de 40 ordres SQL pour trois)")
     void listeEnLigneSansLectureParProcedure() throws Throwable {
         long une = ordresSql(() -> mvc.perform(get("/api/fiches-marche/en-ligne").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1)));
@@ -338,11 +338,27 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         long trois = ordresSql(() -> mvc.perform(get("/api/fiches-marche/en-ligne").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(3)));
         long eligiblesTrois = ordresSql(() -> mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp)).andExpect(status().isOk()));
-        assertThat(eligiblesTrois - eligiblesUne).as("éligibles : ordres SQL ajoutés par deux lignes de plus").isLessThanOrEqualTo(10);
-        // Avant : 116 et 342 (≈ 113 par procédure). Reste une lecture par nature et par procédure (fiche, plan, besoin) ; les paramètres,
-        // relus ici parce que le test en a écrit un dans sa transaction, sont servis par le cache hors test.
-        assertThat(trois - une).as("ordres SQL ajoutés par deux procédures de plus").isLessThanOrEqualTo(36);
-        assertThat(trois).isLessThanOrEqualTo(70);
+        assertThat(eligiblesTrois - eligiblesUne).as("éligibles : ordres SQL ajoutés par deux lignes de plus").isLessThanOrEqualTo(2);
+        // Avant : 116 et 342 (≈ 113 par procédure) ; une lecture par nature pour toute la liste (PrechargementFiches). Seuls croissent
+        // ici les paramètres, relus parce que le test en a écrit un dans sa transaction : hors test, le cache les sert.
+        assertThat(trois - une).as("ordres SQL ajoutés par deux procédures de plus").isLessThanOrEqualTo(12);
+        assertThat(trois).isLessThanOrEqualTo(40);
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-30 (« performance », B6) : GET /api/marche-previsions?dossier= rend les prévisions de toutes les lignes du "
+            + "plan, par ligne puis ordre du processus (ordre lu au référentiel) ; ?marche= l'emporte")
+    void previsionsDUnPlan() throws Exception {
+        Marche l = marche(9902, 9900, 9900);
+        l.setIdMode(92);
+        marcheRepository.save(l);
+        marchePrevisionRepository.save(new MarchePrevision(9902, 9902, 9901, aujourdhui.plusDays(20), aujourdhui.plusDays(20), null, null));
+        String plan = mvc.perform(get("/api/marche-previsions").param("dossier", "9900").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(plan, "$[*].idDetail")).containsExactly(9901, 9902);
+        assertThat(JsonPath.<List<Integer>>read(plan, "$[*].ordre")).containsExactly(1, 1);
+        mvc.perform(get("/api/marche-previsions").param("dossier", "9900").param("marche", "9902").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].idDetail").value(9902));
     }
 
     @Autowired private jakarta.persistence.EntityManager entityManager;

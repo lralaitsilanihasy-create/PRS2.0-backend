@@ -2605,8 +2605,9 @@ public class EvaluationService {
 
     private Map<String, EvaluationDecision> enVigueur(Long idDmc, String etape) {
         Map<String, EvaluationDecision> m = new HashMap<>();
-        decisions.findByIdDmcAndRemplaceeLeIsNullOrderByLeAscIdAsc(idDmc).stream().filter(d -> etape.equals(d.getEtape()))
-                .forEach(d -> m.put(d.getIdOffre(), d));
+        // ⚠️ 2026-10-30 (« performance ») — lues une fois par appel de liste (MemoLecture) : la vue en relisait une par étape.
+        cnm.prs.repository.MemoLecture.lire("decisions:" + idDmc, () -> decisions.findByIdDmcAndRemplaceeLeIsNullOrderByLeAscIdAsc(idDmc))
+                .stream().filter(d -> etape.equals(d.getEtape())).forEach(d -> m.put(d.getIdOffre(), d));
         return m;
     }
 

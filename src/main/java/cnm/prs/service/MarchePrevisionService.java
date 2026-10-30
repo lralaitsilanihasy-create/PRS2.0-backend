@@ -52,8 +52,35 @@ public class MarchePrevisionService {
     /** Prévisions du périmètre de l'appelant (Président/Admin : toutes ; CC : sa localité ; PRMP : ses dossiers). */
     @Transactional(readOnly = true)
     public List<MarchePrevisionDto> findAll() {
-        return perimetre.filtrer(repository::findAll, repository::findParDossiers)
-                .stream().map(MarchePrevisionMapper::toDto).map(this::peuplerOrdre).toList();
+        return peuplerOrdres(perimetre.filtrer(repository::findAll, repository::findParDossiers));
+    }
+
+    /**
+     * ⚠️ 2026-10-30 (demande front « performance », B6) — les prévisions de toutes les lignes d'un plan ({@code ?dossier=}), triées par
+     * ligne puis par l'ordre du processus ; 403 hors périmètre. Évite un appel par ligne aux écrans qui montrent un plan entier.
+     */
+    @Transactional(readOnly = true)
+    public List<MarchePrevisionDto> findByDossier(Integer idDossier) {
+        perimetre.controler(idDossier);
+        List<MarchePrevisionDto> out = new java.util.ArrayList<>(peuplerOrdres(repository.findParDossiers(List.of(idDossier))));
+        out.sort(java.util.Comparator.comparing(MarchePrevisionDto::getIdDetail, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+                .thenComparing(MarchePrevisionDto::getOrdre, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+                .thenComparing(MarchePrevisionDto::getIdPrevision, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        return out;
+    }
+
+    /**
+     * ⚠️ 2026-10-30 (« performance », B3) — l'{@code ordre} d'une liste de prévisions, lu en une fois dans le référentiel {@code t_capm}
+     * (il était relu par prévision : 33 lectures pour la liste du plan de recette).
+     */
+    private List<MarchePrevisionDto> peuplerOrdres(List<MarchePrevision> lignes) {
+        java.util.Map<Integer, Integer> ordres = new java.util.HashMap<>();
+        capmRepository.findAll().forEach(c -> ordres.put(c.getIdCapm(), c.getOrdre()));
+        return lignes.stream().map(MarchePrevisionMapper::toDto).peek(d -> {
+            if (d.getIdCapm() != null && ordres.containsKey(d.getIdCapm())) {
+                d.setOrdre(ordres.get(d.getIdCapm()));
+            }
+        }).toList();
     }
 
     @Transactional(readOnly = true)

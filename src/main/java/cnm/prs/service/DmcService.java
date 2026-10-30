@@ -153,6 +153,8 @@ public class DmcService {
     private final org.springframework.beans.factory.ObjectProvider<AttributionService> attributionService;
     /** ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P1) — mode de remise, lots et dossier de marché d'une procédure papier. */
     private final org.springframework.beans.factory.ObjectProvider<MarchePapierService> marchePapier;
+    /** ⚠️ 2026-10-30 (« performance », second chantier) — l'état des procédures de la liste, en lot. */
+    private final PrechargementFiches prechargement;
 
     public DmcService(DossierMecRepository repository, MarcheRepository marcheRepository,
             ModePassationRepository modeRepository, TypeDmcRepository typeDmcRepository,
@@ -165,8 +167,9 @@ public class DmcService {
             cnm.prs.repository.AttributionRepository attributionRepository,
             cnm.prs.repository.FicheMarcheValeurRepository valeurRepository, cnm.prs.repository.EvaluationRepository evaluationRepository,
             org.springframework.beans.factory.ObjectProvider<AttributionService> attributionService,
-            org.springframework.beans.factory.ObjectProvider<MarchePapierService> marchePapier) {
+            org.springframework.beans.factory.ObjectProvider<MarchePapierService> marchePapier, PrechargementFiches prechargement) {
         this.marchePapier = marchePapier;
+        this.prechargement = prechargement;
         this.valeurRepository = valeurRepository;
         this.evaluationRepository = evaluationRepository;
         this.attributionService = attributionService;
@@ -292,6 +295,9 @@ public class DmcService {
             dmcParOrigine.putIfAbsent((Integer) row[0], (DossierMec) row[1]);
         }
         Caches caches = new Caches(dmcParOrigine);
+        // ⚠️ 2026-10-30 (« performance », second chantier) — responsable, CAO, cérémonie, fiche et plan des procédures de la liste : en lot.
+        prechargement.precharger(lignes.stream().map(m -> dmcParOrigine.get(m.getIdLigneOrigine())).filter(java.util.Objects::nonNull)
+                .map(DossierMec::getIdDmc).distinct().toList(), null);
         // ⚠️ 2026-10-06 (compteurs, §B2) — reçus en attente et offres déposées : une requête chacun pour toute la liste.
         Map<Long, Long> recusEnAttente = new HashMap<>();
         recuRepository.compterEnAttenteParDmc().forEach(r -> recusEnAttente.put((Long) r[0], (Long) r[1]));

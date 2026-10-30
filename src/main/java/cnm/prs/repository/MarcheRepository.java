@@ -150,4 +150,9 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
               and d.idEntiteContract = :entite and p.exercice in :exercices
             """)
     List<Marche> findLignesDeLAutorite(@Param("entite") Integer entite, @Param("exercices") java.util.Collection<Integer> exercices);
+
+    /** âš ï¸ 2026-10-30 (Â« performance Â», second chantier) â€” {@link #findIdDossierByIdDetail}, lu une fois par appel de liste. */
+    default Optional<Integer> idDossierDuDetail(Integer idDetail) {
+        return MemoLecture.lire("idDossierDetail:" + idDetail, () -> findIdDossierByIdDetail(idDetail));
+    }
 }

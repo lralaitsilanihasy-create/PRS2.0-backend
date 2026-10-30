@@ -52,15 +52,24 @@ Aucun contrat ne change (mêmes routes, mêmes corps, mêmes codes) : seul le no
   fiche, le contexte du plan, les valeurs, les articles, les lots, les avis imprimés et la cérémonie d'une procédure ne sont lus
   **qu'une fois par appel** (ils l'étaient jusqu'à 16 fois). `en-ligne` précharge en outre, en une requête chacun pour toute la
   liste, responsables, membres de CAO, cérémonies, versions de fiche, séances et offres. Mesures (base de test) : `en-ligne`
-  **342 → 58** requêtes pour trois procédures, `eligibles` sur une procédure évaluée **395 → 76**. **Reste** une lecture par nature
-  et par procédure pour l'état de la fiche (valeurs, besoin, pièces) et le plan (ligne, lots, bénéficiaires, prévision) : le
-  nombre croît encore avec les procédures (≈ 11 par procédure), sans atteindre l'objectif d'un nombre constant.
-- **B2** — `GET /api/dossiers` : l'avis à imprimer passe par la même mémoire (lectures répétées d'un même DMC) ; les lectures du
-  plan, une par dossier, restent. `pv-examens/definitifs`, `receptions`, `dispatchs` : inchangés.
+  **342 → 58** requêtes pour trois procédures, `eligibles` sur une procédure évaluée **395 → 76**.
+  ⚠️ **Second chantier (2026-10-30, `PrechargementFiches`)** : l'état des fiches et le plan sont aussi préchargés en lot (versions,
+  valeurs, articles et caractéristiques, pièces, avis imprimés, dossier né de la fiche, ligne du plan, lots, bénéficiaires,
+  prévisions, avec responsable, CAO et cérémonie), dans `en-ligne`, `eligibles`, `contrats-en-vigueur` et l'avis à imprimer de
+  `GET /api/dossiers` : **une requête par nature pour toute la liste**. Base de test : `en-ligne` 20 requêtes (hors paramètres) pour
+  une comme pour trois procédures ; `eligibles` 25 pour une comme pour trois lignes. Une donnée absente du préchargement (ligne du
+  plan remplacée dans la filiation) est lue à la demande. **Reste** proportionnel au nombre de procédures **en évaluation** le résumé
+  de l'attribution de `eligibles` (vue de l'évaluation : offres, entreprises, exclusions) ; les décisions d'évaluation n'y sont plus
+  lues qu'une fois par procédure.
+- **B2** — `GET /api/dossiers` : l'avis à imprimer passe par la même mémoire et le même préchargement. `pv-examens/definitifs`,
+  `receptions`, `dispatchs` : inchangés.
+- **B6** — `GET /api/marche-previsions?dossier={idDossier}` : les prévisions de **toutes les lignes d'un plan**, triées par ligne puis
+  par l'ordre du processus ; 403 hors périmètre ; `?marche=` l'emporte s'il est aussi donné. Les listes de prévisions lisent le
+  référentiel `t_capm` **une fois** (il était relu par prévision : 33 lectures).
 - **B3, cache des paramètres** (`t_parametre`) : valeurs gardées en mémoire, cache vidé à chaque écriture (que seul
   `ParametreService` fait) ; une transaction qui a écrit un paramètre lit la base jusqu'à sa fin (validée ou annulée), puis le cache
   est vidé. Une instance seule (Q1). Le **référentiel des champs** de la fiche est lu une fois par appel de liste (mémoire de
-  lecture), sans cache global : `t_capm` et `tr_profile` sans changement.
+  lecture), sans cache global ; `t_capm` lu une fois par liste de prévisions (B6) ; `tr_profile` sans changement.
 - **B4, journal d'audit** — index `ix_audit_log_date_action` (`DATE_ACTION`) et `ix_audit_log_table_date` (`NOM_TABLE`,
   `DATE_ACTION`) (**V153**) ; la recherche paginée (`GET /api/audit-logs?page=`) ne place plus dans sa requête que les filtres
   saisis (`AuditLogRecherche`), condition pour que ces index servent. Le total (`totalElements`, donc un `count`) reste servi tant que
@@ -11179,7 +11188,8 @@ exempté).
 Dates prévisionnelles d'un marché, en relation **1,N** avec `/api/marches` : **une ligne par
 processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) et une `dateFin`
 **optionnelle** (fin non connue / ouverte). Le filtre `?marche={idDetail}` renvoie les lignes
-**triées par `t_capm.ordre` ASC**.
+**triées par `t_capm.ordre` ASC**. ⚠️ **2026-10-30 (demande front « performance », B6)** — `?dossier={idDossier}` renvoie celles de
+**toutes les lignes du plan**, triées par `idDetail` puis `ordre` (403 hors périmètre) ; `?marche=` l'emporte s'il est aussi donné.
 
 **Champs `MarchePrevisionDto`**
 

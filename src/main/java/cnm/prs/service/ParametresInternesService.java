@@ -179,24 +179,6 @@ public class ParametresInternesService {
     static final String CLE_RESPONSABLE = "responsable:";
     static final String CLE_MEMBRES_CAO = "caoMembres:";
 
-    /**
-     * ⚠️ 2026-10-30 (« performance », §B1) — précharge dans la mémoire de lecture ouverte le responsable et les membres de la CAO de
-     * ces DMC, en une requête chacun (sans effet sans mémoire ouverte).
-     */
-    @Transactional(readOnly = true)
-    public void precharger(java.util.Collection<Long> idDmcs) {
-        if (!MemoLecture.ouverte() || idDmcs.isEmpty()) {
-            return;
-        }
-        Map<Long, ResponsableProcedure> responsables = new java.util.HashMap<>();
-        responsableRepository.findByIdDmcInAndDateRetraitIsNullOrderByIdAsc(idDmcs).forEach(r -> responsables.putIfAbsent(r.getIdDmc(), r));
-        Map<Long, List<CaoMembre>> membres = caoMembreRepository.findByIdDmcInOrderByIdDmcAscRangAscIdMembreAsc(idDmcs).stream()
-                .collect(java.util.stream.Collectors.groupingBy(CaoMembre::getIdDmc));
-        for (Long id : idDmcs) {
-            MemoLecture.poser(CLE_RESPONSABLE + id, Optional.ofNullable(responsables.get(id)));
-            MemoLecture.poser(CLE_MEMBRES_CAO + id, membres.getOrDefault(id, List.of()));
-        }
-    }
     /** Les membres de la CAO d'un DMC, rang croissant (préchargés par les listes). */
     private List<CaoMembre> membresLus(Long idDmc) {
         return MemoLecture.lire(CLE_MEMBRES_CAO + idDmc, () -> caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc));
@@ -675,7 +657,9 @@ public class ParametresInternesService {
 
     /** La date de publication de l'avis de la version courante (rôle {@code SE_CEREMONIE:PUBLICATION}) ; {@code null} sans elle. */
     private LocalDateTime datePublication(Long idDmc) {
-        FicheMarche f = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null);
+        // ⚠️ 2026-10-30 (« performance », second chantier) — la dernière version, préchargée par les listes (MemoLecture).
+        FicheMarche f = MemoLecture.<Optional<FicheMarche>>lire("ficheDerniere:" + idDmc,
+                () -> ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc)).orElse(null);
         if (f == null || f.getIdFiche() == null) {
             return null;
         }

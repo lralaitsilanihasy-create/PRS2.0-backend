@@ -621,4 +621,13 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
 
     /** ⚠️ R6b (manuel révisé, V107) — les dossiers d'une famille soumis et pas encore réputés approuvés (candidats du planificateur). */
     List<Dossier> findByIdTypeDossierAndReputeApprouveLeIsNullAndDateSoumissionIsNotNull(String idTypeDossier);
+
+    /** âš ï¸ 2026-10-30 (Â« performance Â», second chantier) â€” {@code [idDmc, idDossier]} des dossiers nÃ©s de ces fiches, en une requÃªte. */
+    @Query("select d.idDmc, d.idDossier from Dossier d where d.idDmc in :idDmcs")
+    List<Object[]> findIdsDossierParDmc(@Param("idDmcs") java.util.Collection<Long> idDmcs);
+
+    /** âš ï¸ 2026-10-30 â€” {@link #findIdDossierByIdDmc}, lu une fois par appel de liste ({@link MemoLecture}). */
+    default Optional<Integer> idDossierDuDmc(Long idDmc) {
+        return MemoLecture.lire("idDossierDmc:" + idDmc, () -> findIdDossierByIdDmc(idDmc));
+    }
 }

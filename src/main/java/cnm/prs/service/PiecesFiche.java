@@ -45,7 +45,7 @@ public class PiecesFiche {
         if (idFiche == null) {
             return List.of();
         }
-        return pieceRepository.findByIdFicheOrderByOrdreAsc(idFiche).stream().map(p -> new PieceExigeeDto(p.getIdPiece(),
+        return pieceRepository.lues(idFiche).stream().map(p -> new PieceExigeeDto(p.getIdPiece(),
                 p.getOrdre(), p.getRubrique(), p.getNumero(), p.getLibelle(), p.getForme(), p.getAncienneteMaxMois(),
                 p.isParLot(), p.getModele())).toList();
     }

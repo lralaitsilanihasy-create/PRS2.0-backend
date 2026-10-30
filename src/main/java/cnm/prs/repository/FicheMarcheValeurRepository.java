@@ -35,4 +35,7 @@ public interface FicheMarcheValeurRepository extends JpaRepository<FicheMarcheVa
     @Modifying
     @Query("delete from FicheMarcheValeur v where v.idFiche = :idFiche and v.codeChamp like :prefixe")
     int deleteParBloc(@Param("idFiche") Integer idFiche, @Param("prefixe") String prefixe);
+
+    /** âš ï¸ 2026-10-30 (Â« performance Â», second chantier) â€” les valeurs de plusieurs versions, en une requÃªte. */
+    List<FicheMarcheValeur> findByIdFicheIn(java.util.Collection<Integer> idFiches);
 }

@@ -40,10 +40,14 @@ public class MarchePrevisionController {
         this.service = service;
     }
 
-    /** Liste toutes les dates prévisionnelles, ou celles d'un marché si {@code marche} est fourni. */
+    /**
+     * Liste toutes les dates prévisionnelles, celles d'un marché si {@code marche} est fourni, ou ⚠️ 2026-10-30 (« performance », B6)
+     * celles de toutes les lignes d'un plan si {@code dossier} l'est ({@code marche} l'emporte).
+     */
     @GetMapping
-    public List<MarchePrevisionDto> findAll(@RequestParam(name = "marche", required = false) Integer idDetail) {
-        return idDetail == null ? service.findAll() : service.findByMarche(idDetail);
+    public List<MarchePrevisionDto> findAll(@RequestParam(name = "marche", required = false) Integer idDetail,
+            @RequestParam(name = "dossier", required = false) Integer idDossier) {
+        return idDetail != null ? service.findByMarche(idDetail) : idDossier != null ? service.findByDossier(idDossier) : service.findAll();
     }
 
     @GetMapping("/{id}")

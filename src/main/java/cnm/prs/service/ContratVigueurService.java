@@ -96,6 +96,14 @@ public class ContratVigueurService {
     private final NotificationService notifications;
     private final CeremonieService ceremonies;
 
+    /** ⚠️ 2026-10-30 (« performance », second chantier) — le préchargement des listes ; absent dans les tests unitaires. */
+    private PrechargementFiches prechargement;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPrechargement(PrechargementFiches prechargement) {
+        this.prechargement = prechargement;
+    }
+
     public ContratVigueurService(ContratVigueurRepository contrats, ContratReconductionRepository reconductions,
             AttributionRepository attributions, AttributionTitulaireRepository titulaires, OffreRepository offres,
             DossierMecRepository dmcRepository, FicheMarcheService fiches, ValeursPpmService valeursPpm, EvaluationService evaluation,
@@ -272,6 +280,9 @@ public class ContratVigueurService {
         // ⚠️ 2026-10-30 (demande front « performance », §B1) — 113 requêtes pour 2 contrats : chaque contrat relisait la fiche, les
         // titulaires et les paramètres ; ces lectures passent par la mémoire de lecture de l'appel (une fois par nature et par procédure).
         try (cnm.prs.repository.MemoLecture memo = cnm.prs.repository.MemoLecture.ouvrir()) {
+            if (prechargement != null) {   // ⚠️ second chantier — responsable, CAO, cérémonie, fiche et plan des procédures : en lot
+                prechargement.precharger(tous.stream().map(ContratVigueur::getIdDmc).distinct().toList(), null);
+            }
             return tous.stream().map(this::dto).toList();
         }
     }

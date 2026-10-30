@@ -648,6 +648,14 @@ public class DossierService {
      * ⚠️ 2026-10-18 (demande front « avis-a-imprimer », §B2) — {@code impressionAvis} sur les dossiers nés d'une fiche, pour la PRMP
      * et l'UGPM seulement (la liste leur est déjà bornée à leur périmètre). En lot ({@link AvisAImprimer#etats}).
      */
+    /** ⚠️ 2026-10-30 (« performance », §B2) — le préchargement des procédures de la liste (facultatif). */
+    private PrechargementFiches prechargement;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPrechargement(PrechargementFiches prechargement) {
+        this.prechargement = prechargement;
+    }
+
     private void enrichirImpressionAvis(List<DossierDto> dtos) {
         if (!Visibilite.estPrmp()) {
             return;
@@ -660,6 +668,9 @@ public class DossierService {
         }
         if (dmcParDossier.isEmpty()) {
             return;
+        }
+        if (prechargement != null) {   // ⚠️ 2026-10-30 (« performance », §B2) — la fiche et le plan de chaque procédure : en lot
+            prechargement.precharger(dmcParDossier.values().stream().distinct().toList(), null);
         }
         Map<Integer, AvisAImprimer.Impression> etats = avisAImprimer.getObject().etats(dmcParDossier);
         for (DossierDto dto : dtos) {

@@ -133,17 +133,6 @@ public class CeremonieService {
                 .orElse(CeremonieCles.A_VENIR);
     }
 
-    /** ⚠️ 2026-10-30 (« performance », §B1) — précharge les cérémonies de ces DMC dans la mémoire de lecture ouverte. */
-    @Transactional(readOnly = true)
-    public void precharger(java.util.Collection<Long> idDmcs) {
-        if (!MemoLecture.ouverte() || idDmcs.isEmpty()) {
-            return;
-        }
-        java.util.Map<Long, CeremonieCles> lues = new java.util.HashMap<>();
-        ceremonieRepository.findAllById(idDmcs).forEach(c -> lues.put(c.getIdDmc(), c));
-        idDmcs.forEach(id -> MemoLecture.poser("ceremonie:" + id, Optional.ofNullable(lues.get(id))));
-    }
-
     /**
      * ⚠️ V68 (lot 3, §B4) — la première offre scellée pose {@code premierDepot} : plus de réouverture, la CAO figée, une clé
      * remplacée est désormais archivée (S4). Sans effet si déjà posé.

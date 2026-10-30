@@ -69,4 +69,7 @@ public interface FicheMarcheRepository extends JpaRepository<FicheMarche, Intege
              where f.numeroVersion = (select max(g.numeroVersion) from FicheMarche g where g.idDmc = f.idDmc)
             """)
     List<Object[]> findEtatsDernieresVersions();
+
+    /** ⚠️ 2026-10-30 (« performance », second chantier) — les versions de plusieurs DMC, en une requête. */
+    List<FicheMarche> findByIdDmcIn(java.util.Collection<Long> idDmcs);
 }

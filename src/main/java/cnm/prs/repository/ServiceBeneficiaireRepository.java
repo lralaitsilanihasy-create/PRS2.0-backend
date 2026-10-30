@@ -34,4 +34,12 @@ public interface ServiceBeneficiaireRepository extends JpaRepository<ServiceBene
     /** Dossier rattaché à un bénéficiaire (via son marché) — contrôle de périmètre d'un accès unitaire. */
     @Query("select m.idDossier from ServiceBeneficiaire s, Marche m where s.idBenef = :id and m.idDetail = s.idDetail")
     Optional<Integer> findIdDossier(@Param("id") Integer id);
+
+    /** âš ï¸ 2026-10-30 (Â« performance Â», second chantier) â€” les bÃ©nÃ©ficiaires de plusieurs lignes, en une requÃªte. */
+    List<ServiceBeneficiaire> findByIdDetailIn(java.util.Collection<Integer> idDetails);
+
+    /** âš ï¸ 2026-10-30 â€” les bÃ©nÃ©ficiaires d'une ligne, lus une fois par appel de liste ({@link MemoLecture}). */
+    default List<ServiceBeneficiaire> lus(Integer idDetail) {
+        return MemoLecture.lire("beneficiaires:" + idDetail, () -> findByIdDetail(idDetail));
+    }
 }

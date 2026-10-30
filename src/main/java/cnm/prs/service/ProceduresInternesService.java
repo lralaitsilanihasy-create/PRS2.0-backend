@@ -58,10 +58,11 @@ public class ProceduresInternesService {
     private final InterimService interims;
     private final ParametreService parametres;
     private final ObjectMapper mapper;
+    private final PrechargementFiches prechargement;
 
     public ProceduresInternesService(FicheMarcheRepository ficheRepository, FicheMarcheService fiches, ProceduresEnLigneService procedures,
             ParametresInternesService internes, CeremonieService ceremonies, SeanceRepository seances, OffreRepository offres,
-            InterimService interims, ParametreService parametres, ObjectMapper mapper) {
+            InterimService interims, ParametreService parametres, ObjectMapper mapper, PrechargementFiches prechargement) {
         this.ficheRepository = ficheRepository;
         this.fiches = fiches;
         this.procedures = procedures;
@@ -72,6 +73,7 @@ public class ProceduresInternesService {
         this.interims = interims;
         this.parametres = parametres;
         this.mapper = mapper;
+        this.prechargement = prechargement;
     }
 
     /** {@code GET /api/fiches-marche/en-ligne} : à traiter d'abord, puis par date limite croissante ; 403 pour un compte externe. */
@@ -100,14 +102,7 @@ public class ProceduresInternesService {
         List<FicheMarche> electroniques = ficheRepository.findDernieresVersions().stream()
                 .filter(f -> RemiseElectronique.electronique(cadrage(f))).toList();
         List<Long> ids = electroniques.stream().map(FicheMarche::getIdDmc).toList();
-        internes.precharger(ids);
-        ceremonies.precharger(ids);
-        for (Long id : ids) {
-            List<FicheMarche> versions = parDmc.getOrDefault(id, List.of()).stream()
-                    .sorted(Comparator.comparing(FicheMarche::getNumeroVersion)).toList();
-            MemoLecture.poser("versions:" + id, versions);
-            MemoLecture.poser("ficheDerniere:" + id, versions.isEmpty() ? Optional.empty() : Optional.of(versions.get(versions.size() - 1)));
-        }
+        prechargement.precharger(ids, parDmc);   // responsable, CAO, cérémonie, état des fiches et plan : en lot
         Map<Long, Seance> seancesLues = seances.findAllById(ids).stream().collect(Collectors.toMap(Seance::getIdDmc, x -> x));
         Map<Long, Long> nbOffres = offres.findByIdDmcIn(ids).stream()
                 .filter(o -> Offre.DEPOSEE.equals(o.getEtat()) || Offre.ECARTEE.equals(o.getEtat()))

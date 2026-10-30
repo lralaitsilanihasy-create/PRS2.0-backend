@@ -41,4 +41,13 @@ public interface MarchePrevisionRepository extends JpaRepository<MarchePrevision
 
     /** Vrai si la PK est déjà prise — la création réalloue alors la PK côté serveur (anti-collision). */
     boolean existsByIdPrevision(Integer idPrevision);
+
+    /** âš ï¸ 2026-10-30 (Â« performance Â», second chantier) â€” les prÃ©visions de plusieurs lignes, mÃªme ordre par ligne, en une requÃªte. */
+    @Query("select p from MarchePrevision p left join fetch p.capm c where p.idDetail in :idDetails order by p.idDetail, c.ordre asc")
+    List<MarchePrevision> findByMarchesOrdonnes(@Param("idDetails") java.util.Collection<Integer> idDetails);
+
+    /** âš ï¸ 2026-10-30 â€” les prÃ©visions d'une ligne, lues une fois par appel de liste ({@link MemoLecture}). */
+    default List<MarchePrevision> ordonneesLues(Integer idDetail) {
+        return MemoLecture.lire("previsions:" + idDetail, () -> findByMarcheOrdonne(idDetail));
+    }
 }

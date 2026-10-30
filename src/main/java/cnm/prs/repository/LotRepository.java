@@ -43,4 +43,7 @@ public interface LotRepository extends JpaRepository<Lot, Integer> {
      * Les identifiants viennent de {@code PerimetreDossier} ; {@code t_lot} porte {@code ID_DOSSIER}.
      */
     List<Lot> findByIdDossierIn(Collection<Integer> idsDossiers);
+
+    /** âš ï¸ 2026-10-30 (Â« performance Â», second chantier) â€” les lots de plusieurs lignes, en une requÃªte. */
+    List<Lot> findByIdDetailIn(java.util.Collection<Integer> idDetails);
 }

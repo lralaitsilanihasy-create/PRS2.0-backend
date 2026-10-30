@@ -14,4 +14,8 @@ public interface FicheArticleRepository extends JpaRepository<FicheArticle, Inte
 
     @Query("select a from FicheArticle a where a.idFiche = :idFiche order by coalesce(a.lot, 0), a.ordre, a.idArticle")
     List<FicheArticle> findParFiche(@Param("idFiche") Integer idFiche);
+
+    /** âš ï¸ 2026-10-30 (Â« performance Â», second chantier) â€” les articles de plusieurs versions, en une requÃªte (prÃ©chargement des listes). */
+    @Query("select a from FicheArticle a where a.idFiche in :idFiches order by a.idFiche, coalesce(a.lot, 0), a.ordre, a.idArticle")
+    List<FicheArticle> findParFiches(@Param("idFiches") java.util.Collection<Integer> idFiches);
 }

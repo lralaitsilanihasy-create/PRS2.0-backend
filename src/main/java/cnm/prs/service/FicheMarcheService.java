@@ -1529,7 +1529,7 @@ public class FicheMarcheService {
     private Contexte lireContexte(Long idDmc, boolean controlerPerimetre) {
         DossierMec dmc = dmcRepository.findById(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
-        Integer idDossier = marcheRepository.findIdDossierByIdDetail(dmc.getIdDetail()).orElse(null);
+        Integer idDossier = marcheRepository.idDossierDuDetail(dmc.getIdDetail()).orElse(null);
         if (controlerPerimetre) {
             // ⚠️ 2026-10-28 (« profil-responsable-procedure », §B2) — le compte dédié ne lit que les fiches dont il est le
             // responsable désigné : la désignation, pas la localité, fait son périmètre.
@@ -1955,7 +1955,7 @@ public class FicheMarcheService {
                 fiche.getNumeroVersion(), fiche.getStatut(), typeMarche, cadrage, valeurs, enLettres, valeursCadrage,
                 valeursPpmParCode, ppm.versionPpm(), bilan, fiche.getDateCreation(), fiche.getDateMaj(),
                 fiche.getDateValidation(), fiche.getValidePar(),
-                dossierRepository.findIdDossierByIdDmc(fiche.getIdDmc()).orElse(null),
+                dossierRepository.idDossierDuDmc(fiche.getIdDmc()).orElse(null),
                 fiche.getIdFiche() != null && StatutFicheMarche.BROUILLON.name().equals(fiche.getStatut()) && typeChange,
                 ctx.outille(), ctx.codeCategorie(), nbLots, LotsFiche.alloti(nbLots),
                 internes.responsableDto(idDmc), internes.estTitulaire(idDmc), internes.etat(idDmc).name(), champsCalcules,
