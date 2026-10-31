@@ -39,4 +39,7 @@ public interface DossierMecRepository extends JpaRepository<DossierMec, Long> {
              where d.idDetail = m.idDetail order by d.idDmc asc
             """)
     java.util.List<Object[]> findAvecOrigine();
+
+    /** ⚠️ 2026-10-31 (« filiation-dossier », §B1) — les fiches nées de plusieurs lignes de plan, en une requête. */
+    java.util.List<DossierMec> findByIdDetailIn(java.util.Collection<Integer> idDetails);
 }

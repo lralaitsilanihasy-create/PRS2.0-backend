@@ -10,4 +10,7 @@ import cnm.prs.entity.ReceptionCommande;
 public interface ReceptionCommandeRepository extends JpaRepository<ReceptionCommande, Long> {
 
     List<ReceptionCommande> findByIdBonOrderByIdAsc(Long idBon);
+
+    /** ⚠️ 2026-10-31 (« filiation-dossier », §B2) — les réceptions de plusieurs bons, en une requête. */
+    List<ReceptionCommande> findByIdBonInOrderByIdAsc(java.util.Collection<Long> idBons);
 }

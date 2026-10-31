@@ -73,6 +73,47 @@ class RechercheDossierIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-10-31 (« filiation-dossier », §B3) — la référence d'un PV ou d'une lettre de renvoi résout son dossier ; "
+            + "la PRMP ne résout que le PV signé")
+    void recherche_parReferenceDePvEtDeLettre() throws Exception {
+        Dossier d = dossierLoc(9410, "CLOTURE", "ANT", "PRMP001");
+        d.setRefeDossier("00002/DAOO-CC/CNM/2026");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(9410, 9410, "PRMP001"));
+        receptionRepository.save(reception(9410, 9410, "CTRCC1", true));
+        dispatchRepository.save(dispatch(9410, 9410, "CTRCC1", "CTRMEM", "CTRPRE"));
+        examenRepository.save(examen(9410, 9410, "CTRMEM"));
+        seedPvSigne(9410, 9410);
+        cnm.prs.entity.PvExamen pv = pvExamenRepository.findById(9410).orElseThrow();
+        pv.setRefePv("00002/DAOO-CC/CNM/PV/2026");
+        pvExamenRepository.save(pv);
+        cnm.prs.entity.LettreRenvoi l = new cnm.prs.entity.LettreRenvoi();
+        l.setIdExamen(9410);
+        l.setIdDossier(9410);
+        l.setObjetLettre("Renvoi");
+        l.setStatut("SIGNE");
+        l.setRefLettre("00002/DAOO-CC/CNM/LR/2026");
+        lettreRenvoiRepository.save(l);
+
+        for (String jeton : List.of(tokenPrmp, tokenPresident)) {
+            mvc.perform(get("/api/dossiers/recherche").header("Authorization", jeton).param("q", "00002/DAOO-CC/CNM/PV/2026"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1))).andExpect(jsonPath("$[0].idDossier").value(9410))
+                    .andExpect(jsonPath("$[0].reference").value("00002/DAOO-CC/CNM/2026"));
+            mvc.perform(get("/api/dossiers/recherche").header("Authorization", jeton).param("q", "cnm/lr/2026"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$[*].idDossier").value(org.hamcrest.Matchers.hasItem(9410)));
+        }
+        // Un PV encore en projet ne se résout pas pour la PRMP (elle ne voit que le PV signé).
+        pv.setStatutPv("PROJET");
+        pv.setDateSignatureMembre(null);
+        pv.setDateSignaturePresident(null);
+        pvExamenRepository.save(pv);
+        mvc.perform(get("/api/dossiers/recherche").header("Authorization", tokenPrmp).param("q", "00002/DAOO-CC/CNM/PV"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/dossiers/recherche").header("Authorization", tokenPresident).param("q", "00002/DAOO-CC/CNM/PV"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+    }
+
+    @Test
     @DisplayName("Lot D §6 — périmètre : une PRMP ne résout jamais la référence d'une autre")
     void recherche_perimetreRespecte() throws Exception {
         prmpRepository.save(prmp("PRMP940", "TMS"));

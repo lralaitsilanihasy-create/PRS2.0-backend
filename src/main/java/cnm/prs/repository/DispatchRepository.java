@@ -127,4 +127,9 @@ public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
     /** ⚠️ M5b (manuel de contrôle, §B6) — (Membre, Chef de commission) des dispatchs d'un dossier, le plus récent d'abord. */
     @Query("select d.imCtrlMembre, d.imCtrlCc from Dispatch d where d.reception.idDossier = :idDossier order by d.idDispatch desc")
     java.util.List<Object[]> findActeursParDossier(@Param("idDossier") Integer idDossier);
+
+    /** ⚠️ 2026-10-31 (demande front « filiation-dossier », §B2) — les dispatchs d'un dossier (par ses réceptions), en une requête. */
+    @org.springframework.data.jpa.repository.Query("select d from Dispatch d, Reception r where d.idReception = r.idReception "
+            + "and r.idDossier = :idDossier order by d.dateDispatch, d.idDispatch")
+    java.util.List<Dispatch> findParDossier(@org.springframework.data.repository.query.Param("idDossier") Integer idDossier);
 }

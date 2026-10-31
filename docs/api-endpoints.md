@@ -45,6 +45,26 @@
 - `GET /api/actualites` pagine aussi (`?page=&size=`, Administrateur) mais garde son **tri métier**
   (date de création décroissante) : pas de tri PK.
 
+### Filiation et historique d'un dossier (⚠️ 2026-10-31, demande front « filiation-dossier »)
+- **`GET /api/dossiers/{id}/filiation`** (B1) → `{ idDossierDemande, racine }` : l'arbre complet auquel appartient le dossier, quel
+  que soit le point d'entrée, la racine (première version du plan) en tête. Chaque nœud : `{ idDossier, refeDossier, idTypeDossier,
+  idSousType, statut, dateRef, lien, lot, ligne { idDetail, objet }, masque, enfants[] }`. `lien` : `RACINE`, `VERSION_SUIVANTE`
+  (`ID_DOSSIER_PARENT`), `MISE_EN_CONCURRENCE` (dossier né de la fiche d'une ligne, sous la version du plan qui porte la ligne ;
+  `ligne`), `MARCHE` (dossier de marché d'un lot, `t_attribution` ; `lot` — sous le plan, avec `ligne`, pour une procédure sans
+  dossier de mise en concurrence), `MODIFICATION` (dossier d'**acte de gestion**, famille DGC, `t_acte_gestion.ID_DOSSIER_MARCHE`).
+  **Pas de nœud** pour les marchés subséquents et bons de commande (sans numéro de dossier) ni pour un réexamen (même numéro) : ils
+  se lisent dans l'historique. **Périmètre** : 403 si le dossier demandé est hors périmètre ; un autre nœud hors périmètre est rendu
+  **masqué** (`masque: true`, `lien` et `enfants` seuls, le reste nul). Lu par niveaux, une requête par nature et par niveau.
+- **`GET /api/dossiers/{id}/historique`** (B2) → `HistoriqueDossierDto[]` triés par date (sans date en dernier) : `{ type, date, id,
+  reference, statut, avis, acteur, detail, lot, numero }`. Types — circuit : `RECEPTION`, `DISPATCH`, `EXAMEN`, `PV` (`reference`
+  du PV, `statut` `DEFINITIF` pour un PV signé, `avis`), `LETTRE_RENVOI`, `TRANSMISSION_SIGMP`, `SUSPENSION`, `RETRAIT`,
+  `VERSION_ARCHIVEE` (`numero`), `ACTE_GESTION` (`id` = le dossier DGC) ; procédure : `PUBLICATION_AGPM`, `PUBLICATION_AVIS`,
+  `SEANCE`, `EVALUATION`, `ATTRIBUTION` (`id` = dossier de marché, `lot`), `CONTRAT`, `BON_COMMANDE` (`numero`),
+  `RECEPTION_COMMANDE`. Un plan : sa publication de l'AGPM ; un dossier de mise en concurrence : toute sa procédure ; un dossier de
+  marché : la procédure restreinte à son lot. **Visibilité** : 403 hors périmètre ; pour la PRMP et l'UGPM, ni `DISPATCH` ni `EXAMEN`,
+  le PV seulement signé, la lettre seulement signée, `acteur` toujours nul. Une requête par nature, pour un dossier.
+- **Recherche** (B3) : voir `GET /api/dossiers/recherche?q=` ci-dessus.
+
 ### Performance des listes (⚠️ 2026-10-30, demande front « performance »)
 Aucun contrat ne change (mêmes routes, mêmes corps, mêmes codes) : seul le nombre de requêtes SQL par appel baisse.
 - **B1, listes de procédures** — `GET /api/fiches-marche/en-ligne`, `GET /api/dmcs/eligibles` et `GET /api/contrats-en-vigueur`
@@ -2077,7 +2097,9 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | GET | /api/dossiers/a-verifier | — | `DossierDto[]` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — EN_VERIFICATION + EN_ATTENTE_DECISION_PRMP + OBSERVATIONS_LEVEES |
 | GET | /api/dossiers/verifies | — | `Page<DossierDto>` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — DECISION_TRANSMISE_SIGMP + CLOTURE (PV signé) |
 | GET | /api/dossiers/en-attente-prmp | — | `DossierDto[]` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — lecture seule |
-| GET | /api/dossiers/recherche?q= | — | `RechercheDossierDto[]` | 200, 400 | Authentifié (scopé comme la liste) |
+| GET | /api/dossiers/recherche?q= | — | `RechercheDossierDto[]` | 200, 400 | Authentifié (scopé comme la liste) — ⚠️ **2026-10-31 (« filiation-dossier », §B3)** : `q` résout aussi la référence d'un **PV** (`refePv`, `referencePv`) ou d'une **lettre de renvoi** (`refLettre`) vers son dossier ; la PRMP, seulement un PV signé |
+| GET | /api/dossiers/{id}/filiation | — | `FiliationDossierDto` | 200, 403, 404 | ⚠️ **2026-10-31 (« filiation-dossier », §B1)** — périmètre du dossier demandé ; voir *Filiation et historique d'un dossier* |
+| GET | /api/dossiers/{id}/historique | — | `HistoriqueDossierDto[]` | 200, 403, 404 | ⚠️ **2026-10-31 (§B2)** — périmètre du dossier ; voir *Filiation et historique d'un dossier* |
 | GET | /api/dossiers/retirables | — | `DossierDto[]` | 200, 403 | **PRMP** — dossiers éligibles au retrait (§3.3, voir *Demandes de retrait*) |
 | GET | /api/dossiers/a-faire?delegations= | — | `AFaireDto` | 200, 401, 403 | ⚠️ **2026-09-15** — `PRESIDENT`, `CHEF_COMMISSION`, `SECRETAIRE`, `MEMBRE`, `VERIFICATEUR`, `ASSISTANT_CONTROLEUR`, `PRMP`, `UGPM` (titulaires du profil) ; **403** Administrateur et Chargé de publication — accueil « À faire », voir la section dédiée ci-dessous |
 | GET | /api/dossiers/{id} | — | `DossierDto` | 200, 403, 404 | Authentifié (filtré) |

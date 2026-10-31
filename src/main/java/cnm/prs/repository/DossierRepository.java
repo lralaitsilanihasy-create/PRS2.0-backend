@@ -56,12 +56,21 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
      *
      * <p>{@code escape '!'} : le motif est construit à partir d'une saisie libre, où {@code %} et
      * {@code _} ne doivent pas devenir des jokers.</p>
+     *
+     * <p>⚠️ 2026-10-31 (demande front « filiation-dossier », §B3) — la saisie résout aussi la référence d'un <strong>PV</strong>
+     * ({@code REFE_PV} ou {@code REFERENCE_PV}) ou d'une <strong>lettre de renvoi</strong> ({@code REF_LETTRE}) vers son dossier,
+     * dans les trois périmètres ; pour la PRMP, seul le PV signé (le seul qu'elle voit).</p>
      */
     @Query("""
             select d from Dossier d
             where lower(d.refeDossier) like :motif escape '!'
                or exists (select 1 from Ppm p
                           where p.idDossier = d.idDossier and lower(p.reference) like :motif escape '!')
+               or exists (select 1 from PvExamen pv
+                          where pv.examen.dispatch.reception.idDossier = d.idDossier
+                            and (lower(pv.refePv) like :motif escape '!' or lower(pv.referencePv) like :motif escape '!'))
+               or exists (select 1 from LettreRenvoi lr
+                          where lr.idDossier = d.idDossier and lower(lr.refLettre) like :motif escape '!')
             """)
     List<Dossier> rechercherParReference(@Param("motif") String motif, Pageable limite);
 
@@ -74,7 +83,12 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
             select d from Dossier d
             where (lower(d.refeDossier) like :motif escape '!'
                 or exists (select 1 from Ppm pr
-                           where pr.idDossier = d.idDossier and lower(pr.reference) like :motif escape '!'))
+                           where pr.idDossier = d.idDossier and lower(pr.reference) like :motif escape '!')
+                or exists (select 1 from PvExamen pv
+                           where pv.examen.dispatch.reception.idDossier = d.idDossier and pv.statutPv = 'SIGNE'
+                             and (lower(pv.refePv) like :motif escape '!' or lower(pv.referencePv) like :motif escape '!'))
+                or exists (select 1 from LettreRenvoi lr
+                           where lr.idDossier = d.idDossier and lower(lr.refLettre) like :motif escape '!'))
               and (
                 d.idPrmp = :idPrmp
                 or exists (select 1 from Ppm p where p.idDossier = d.idDossier and p.idPrmp = :idPrmp)
@@ -92,7 +106,12 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
             select d from Dossier d
             where (lower(d.refeDossier) like :motif escape '!'
                 or exists (select 1 from Ppm pr
-                           where pr.idDossier = d.idDossier and lower(pr.reference) like :motif escape '!'))
+                           where pr.idDossier = d.idDossier and lower(pr.reference) like :motif escape '!')
+                or exists (select 1 from PvExamen pv
+                           where pv.examen.dispatch.reception.idDossier = d.idDossier
+                             and (lower(pv.refePv) like :motif escape '!' or lower(pv.referencePv) like :motif escape '!'))
+                or exists (select 1 from LettreRenvoi lr
+                           where lr.idDossier = d.idDossier and lower(lr.refLettre) like :motif escape '!'))
               and (d.statut is null or d.statut <> 'BROUILLON')
               and (
                 d.idLocalite = :localite
@@ -630,4 +649,33 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     default Optional<Integer> idDossierDuDmc(Long idDmc) {
         return MemoLecture.lire("idDossierDmc:" + idDmc, () -> findIdDossierByIdDmc(idDmc));
     }
+
+    /** ⚠️ 2026-10-31 (demande front « filiation-dossier », §B1) — les versions suivantes de plusieurs dossiers, en une requête. */
+    List<Dossier> findByIdDossierParentIn(java.util.Collection<Integer> idParents);
+
+    /** ⚠️ 2026-10-31 (§B1) — les dossiers nés de plusieurs fiches, en une requête. */
+    List<Dossier> findByIdDmcIn(java.util.Collection<Long> idDmcs);
+
+    /** ⚠️ 2026-10-31 (§B1) — parmi ces dossiers, ceux que la PRMP voit (même prédicat que {@link #existsVisiblePourPrmp}). */
+    @Query("""
+            select d.idDossier from Dossier d where d.idDossier in :ids and (
+               d.idPrmp = :idPrmp
+               or exists (select 1 from Ppm p where p.idDossier = d.idDossier and p.idPrmp = :idPrmp)
+               or exists (select 1 from Marche m, Ppm p2
+                          where m.idDossier = d.idDossier and m.idPpm = p2.idPpm and p2.idPrmp = :idPrmp))
+            """)
+    List<Integer> idsVisiblesPourPrmp(@Param("ids") java.util.Collection<Integer> ids, @Param("idPrmp") String idPrmp);
+
+    /** ⚠️ 2026-10-31 (§B1) — parmi ces dossiers, ceux de la localité (même prédicat que {@link #existsDansLocalite}). */
+    @Query("""
+            select d.idDossier from Dossier d where d.idDossier in :ids
+            and (d.statut is null or d.statut <> 'BROUILLON')
+            and (
+                d.idLocalite = :localite
+             or exists (select 1 from Reception r
+                        where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :localite)
+             or exists (select 1 from Ppm p
+                        where p.idDossier = d.idDossier and p.idLocalite = :localite))
+            """)
+    List<Integer> idsDansLocalite(@Param("ids") java.util.Collection<Integer> ids, @Param("localite") String localite);
 }

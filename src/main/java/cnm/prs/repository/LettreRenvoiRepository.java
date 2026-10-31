@@ -108,4 +108,7 @@ public interface LettreRenvoiRepository extends JpaRepository<LettreRenvoi, Inte
             where l.idLettre = :id and l.examen.dispatch.reception.ctrlRecept.idLocalite = :loc
             """)
     boolean existsDansLocalite(@Param("id") Integer id, @Param("loc") String loc);
+
+    /** ⚠️ 2026-10-31 (« filiation-dossier », §B2) — toutes les lettres de renvoi d'un dossier. */
+    java.util.List<LettreRenvoi> findByIdDossierOrderByIdLettreAsc(Integer idDossier);
 }

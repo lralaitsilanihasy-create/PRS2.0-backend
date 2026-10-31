@@ -15,4 +15,7 @@ public interface ActeGestionRepository extends JpaRepository<ActeGestion, Intege
     Optional<ActeGestion> findByIdDossier(Integer idDossier);
 
     List<ActeGestion> findByIdDossierMarcheOrderByIdActeAsc(Integer idDossierMarche);
+
+    /** ⚠️ 2026-10-31 (« filiation-dossier », §B1) — les actes de gestion de plusieurs marchés, en une requête. */
+    List<ActeGestion> findByIdDossierMarcheInOrderByIdActeAsc(java.util.Collection<Integer> idDossiersMarche);
 }

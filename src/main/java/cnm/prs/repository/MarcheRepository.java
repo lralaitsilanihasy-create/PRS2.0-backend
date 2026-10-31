@@ -158,4 +158,7 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
     default Optional<Integer> idDossierDuDetail(Integer idDetail) {
         return MemoLecture.lire("idDossierDetail:" + idDetail, () -> findIdDossierByIdDetail(idDetail));
     }
+
+    /** ⚠️ 2026-10-31 (« filiation-dossier », §B1) — les lignes de plusieurs plans, en une requête. */
+    List<Marche> findByIdDossierIn(java.util.Collection<Integer> idDossiers);
 }

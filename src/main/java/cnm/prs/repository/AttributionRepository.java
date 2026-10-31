@@ -40,4 +40,7 @@ public interface AttributionRepository extends JpaRepository<Attribution, Attrib
              where d.idDossier = a.idDossier order by a.idDmc, a.lot
             """)
     List<Object[]> findDossiersMarche();
+
+    /** ⚠️ 2026-10-31 (« filiation-dossier », §B1) — les attributions de plusieurs procédures, en une requête. */
+    List<Attribution> findByIdDmcInOrderByIdDmcAscLotAsc(java.util.Collection<Long> idDmcs);
 }
