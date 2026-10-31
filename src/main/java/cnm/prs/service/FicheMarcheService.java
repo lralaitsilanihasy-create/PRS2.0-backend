@@ -216,7 +216,8 @@ public class FicheMarcheService {
             return Optional.empty();
         }
         Contexte ctx = contexte(idDmc, false);
-        FicheMarche fiche = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null);
+        // ⚠️ 2026-10-30 (« performance », reliquat) — la dernière version, ses valeurs et son dossier, préchargés par les listes.
+        FicheMarche fiche = derniereVersion(idDmc).orElse(null);
         FicheMarcheDto d = new FicheMarcheDto();
         d.setIdDmc(idDmc);
         d.setIdFiche(fiche == null ? null : fiche.getIdFiche());
@@ -227,10 +228,10 @@ public class FicheMarcheService {
         // ⚠️ 2026-10-18 (« dao-electronique », Q4) — les valeurs brutes : la règle de l'avis lit les frais du dossier (B04-DS-05).
         Map<String, String> valeurs = new LinkedHashMap<>();
         if (fiche != null) {
-            valeurRepository.findByIdFiche(fiche.getIdFiche()).forEach(v -> valeurs.put(v.getCodeChamp(), v.getValeur()));
+            valeurRepository.lues(fiche.getIdFiche()).forEach(v -> valeurs.put(v.getCodeChamp(), v.getValeur()));
         }
         d.setValeurs(valeurs);
-        d.setIdDossierSoumis(dossierRepository.findIdDossierByIdDmc(idDmc).orElse(null));
+        d.setIdDossierSoumis(dossierRepository.idDossierDuDmc(idDmc).orElse(null));
         d.setDesignationMarche(marcheRepository.findById(ctx.idDetail()).map(Marche::getDesignationMarche).orElse(null));
         return Optional.of(d);
     }
@@ -1940,8 +1941,9 @@ public class FicheMarcheService {
                                 + "leurs caractéristiques font le tableau des spécifications du DAO complet."));
             }
         } else if (CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
-            boolean pdf = fiche.getIdFiche() != null && specificationsRepository.findById(fiche.getIdFiche())
-                    .filter(s -> SpecificationsService.estPdf(s.getNomFichier())).isPresent();
+            // ⚠️ 2026-10-30 (« performance », reliquat de B1) — préchargées par les listes (MemoLecture).
+            boolean pdf = fiche.getIdFiche() != null && MemoLecture.lire("specifications:" + fiche.getIdFiche(),
+                    () -> specificationsRepository.findById(fiche.getIdFiche())).filter(s -> SpecificationsService.estPdf(s.getNomFichier())).isPresent();
             if (!pdf) {
                 bilan.avertissements().add(new BilanControlesDto.Controle("SPECIFICATIONS_ABSENTES", List.of(), "B14",
                         "Aucun devis descriptif ni plan n'est déposé : la pièce « " + DescriptifPlans.INTITULE + " » manquera au "

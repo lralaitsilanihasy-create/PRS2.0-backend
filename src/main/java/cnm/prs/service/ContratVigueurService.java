@@ -283,6 +283,7 @@ public class ContratVigueurService {
             if (prechargement != null) {   // ⚠️ second chantier — responsable, CAO, cérémonie, fiche et plan des procédures : en lot
                 prechargement.precharger(tous.stream().map(ContratVigueur::getIdDmc).distinct().toList(), null);
             }
+            prechargerContrats(tous);
             return tous.stream().map(this::dto).toList();
         }
     }
@@ -558,7 +559,7 @@ public class ContratVigueurService {
 
     /** La décision prise pour la période en cours (celle dont {@code finAvant} est la fin actuelle), ou {@code null}. */
     private ContratReconduction decisionPeriodeEnCours(ContratVigueur c) {
-        return reconductions.findByIdContratOrderByLeAscIdAsc(c.getId()).stream()
+        return reconductionsDe(c).stream()
                 .filter(x -> c.getDateFin().equals(x.getFinAvant()))   // reconduit, la période suivante n'a pas encore de décision
                 .reduce((x, y) -> y).orElse(null);
     }
@@ -594,12 +595,42 @@ public class ContratVigueurService {
             al.add(REMISE_A_LANCER);
         }
         // ⚠️ MS-3 (V126) — la consommation : minimum annuel du marché à commandes, valeur estimée du contrat-cadre.
-        al.addAll(BonCommandeService.alertes(c, bons.findByIdContratOrderByNumeroAsc(c.getId()), aujourdhui));
+        al.addAll(BonCommandeService.alertes(c, cnm.prs.repository.MemoLecture.lire("bons:" + c.getId(),
+                () -> bons.findByIdContratOrderByNumeroAsc(c.getId())), aujourdhui));
         return al;
     }
 
+    /** ⚠️ 2026-10-30 (« performance », reliquat) — les décisions de reconduction du contrat, lues une fois par appel de liste. */
+    private List<ContratReconduction> reconductionsDe(ContratVigueur c) {
+        return cnm.prs.repository.MemoLecture.lire("reconductions:" + c.getId(), () -> reconductions.findByIdContratOrderByLeAscIdAsc(c.getId()));
+    }
+
+    /**
+     * ⚠️ 2026-10-30 (« performance », reliquat ; contre-mesure du front : 52 requêtes, reconductions et offres lues par contrat) — les
+     * décisions, les bons, les titulaires et leurs offres de tous les contrats de la liste, en une requête chacun.
+     */
+    private void prechargerContrats(List<ContratVigueur> tous) {
+        if (tous.isEmpty()) {
+            return;
+        }
+        List<Long> ids = tous.stream().map(ContratVigueur::getId).toList();
+        List<Long> dmcs = tous.stream().map(ContratVigueur::getIdDmc).distinct().toList();
+        java.util.Map<Long, List<ContratReconduction>> r = reconductions.findByIdContratInOrderByIdContratAscLeAscIdAsc(ids).stream()
+                .collect(java.util.stream.Collectors.groupingBy(ContratReconduction::getIdContrat));
+        java.util.Map<Long, List<cnm.prs.entity.BonCommande>> b = bons.findByIdContratInOrderByIdContratAscNumeroAsc(ids).stream()
+                .collect(java.util.stream.Collectors.groupingBy(cnm.prs.entity.BonCommande::getIdContrat));
+        java.util.Map<String, List<AttributionTitulaire>> t = titulaires.findByIdDmcInOrderByIdDmcAscLotAscRangAscIdOffreAsc(dmcs).stream()
+                .collect(java.util.stream.Collectors.groupingBy(x -> x.getIdDmc() + "#" + x.getLot()));
+        offres.findByIdDmcIn(dmcs);   // gardées dans le contexte de persistance : les lectures par identifiant n'interrogent plus la base
+        for (ContratVigueur c : tous) {
+            cnm.prs.repository.MemoLecture.poser("reconductions:" + c.getId(), r.getOrDefault(c.getId(), List.of()));
+            cnm.prs.repository.MemoLecture.poser("bons:" + c.getId(), b.getOrDefault(c.getId(), List.of()));
+            cnm.prs.repository.MemoLecture.poser("titulaires:" + c.getIdDmc() + "#" + c.getLot(), t.getOrDefault(c.getIdDmc() + "#" + c.getLot(), List.of()));
+        }
+    }
+
     private ContratVigueurDto dto(ContratVigueur c) {
-        List<ContratVigueurDto.Decision> decisions = reconductions.findByIdContratOrderByLeAscIdAsc(c.getId()).stream()
+        List<ContratVigueurDto.Decision> decisions = reconductionsDe(c).stream()
                 .map(x -> new ContratVigueurDto.Decision(x.getId(), x.getDecision(), x.getReference(), x.getDateDecision(), x.getFinAvant(),
                         x.getNouvelleFin(), x.isHorsPreavis(), x.getLe(), x.getPar())).toList();
         FicheMarcheService.EtatVersion v = fiches.etatValide(c.getIdDmc()).orElse(null);
@@ -615,7 +646,8 @@ public class ContratVigueurService {
 
     /** Les titulaires : ceux de l'attribution non retirés, sinon l'attributaire du lot. */
     List<ContratVigueurDto.Titulaire> titulairesDto(ContratVigueur c) {
-        List<AttributionTitulaire> tit = titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(c.getIdDmc(), c.getLot()).stream()
+        List<AttributionTitulaire> tit = cnm.prs.repository.MemoLecture.<List<AttributionTitulaire>>lire("titulaires:" + c.getIdDmc() + "#" + c.getLot(),
+                () -> titulaires.findByIdDmcAndLotOrderByRangAscIdOffreAsc(c.getIdDmc(), c.getLot())).stream()
                 .filter(t -> t.getRetireLe() == null).toList();
         if (!tit.isEmpty()) {
             return tit.stream().map(t -> {

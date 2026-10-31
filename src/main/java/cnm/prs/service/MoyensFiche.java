@@ -49,7 +49,9 @@ public class MoyensFiche {
         if (idFiche == null) {
             return List.of();
         }
-        return materielRepository.findByIdFicheOrderByOrdreAsc(idFiche).stream().map(m -> new MaterielExigeDto(
+        // ⚠️ 2026-10-30 (« performance », reliquat de B1) — préchargé par les listes (MemoLecture).
+        return cnm.prs.repository.MemoLecture.lire("materiel:" + idFiche, () -> materielRepository.findByIdFicheOrderByOrdreAsc(idFiche))
+                .stream().map(m -> new MaterielExigeDto(
                 m.getIdMateriel(), m.getOrdre(), m.getDesignation(), m.getCaracteristique(), m.getNombre(),
                 m.getMinimumEnPropre(), m.isParLot())).toList();
     }
@@ -59,7 +61,8 @@ public class MoyensFiche {
         if (idFiche == null) {
             return List.of();
         }
-        return personnelRepository.findByIdFicheOrderByOrdreAsc(idFiche).stream().map(p -> new PersonnelExigeDto(
+        return cnm.prs.repository.MemoLecture.lire("personnel:" + idFiche, () -> personnelRepository.findByIdFicheOrderByOrdreAsc(idFiche))
+                .stream().map(p -> new PersonnelExigeDto(
                 p.getIdPersonnel(), p.getOrdre(), p.getPoste(), p.getNombre(), p.getDiplome(), p.getExperienceAnnees(),
                 p.getDomaineExperience(), p.getJustificatifs(), p.isParLot())).toList();
     }

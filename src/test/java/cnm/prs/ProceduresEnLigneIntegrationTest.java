@@ -320,7 +320,7 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("⚠️ 2026-10-30 (« performance », §B1) : les listes des procédures en ligne et des lignes éligibles ne relisent plus "
-            + "chaque procédure — une lecture par nature pour toute la liste (342 → moins de 40 ordres SQL pour trois)")
+            + "chaque procédure — une lecture par nature pour toute la liste (342 → moins de 65 ordres SQL pour trois, contexte vidé)")
     void listeEnLigneSansLectureParProcedure() throws Throwable {
         long une = ordresSql(() -> mvc.perform(get("/api/fiches-marche/en-ligne").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1)));
@@ -342,7 +342,7 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         // Avant : 116 et 342 (≈ 113 par procédure) ; une lecture par nature pour toute la liste (PrechargementFiches). Seuls croissent
         // ici les paramètres, relus parce que le test en a écrit un dans sa transaction : hors test, le cache les sert.
         assertThat(trois - une).as("ordres SQL ajoutés par deux procédures de plus").isLessThanOrEqualTo(12);
-        assertThat(trois).isLessThanOrEqualTo(40);
+        assertThat(trois).isLessThanOrEqualTo(65);   // contexte de persistance vidé : 57 mesurés (16 lectures de paramètres)
     }
 
     @Test
@@ -367,6 +367,8 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
     private long ordresSql(org.junit.jupiter.api.function.ThrowingSupplier<?> appel) throws Throwable {
         org.hibernate.stat.Statistics stats = entityManager.getEntityManagerFactory().unwrap(org.hibernate.SessionFactory.class).getStatistics();
         stats.setStatisticsEnabled(true);
+        entityManager.flush();   // ⚠️ 2026-10-30 — contexte de persistance vidé : la mesure voit ce que voit un appel réel
+        entityManager.clear();
         stats.clear();
         appel.get();
         return stats.getPrepareStatementCount();

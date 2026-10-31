@@ -1907,15 +1907,18 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         // chacune au terme de sa propre garantie ; la dernière vaut réception définitive du bon.
         int garantie = JsonPath.<Integer>read(mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", tokenPrmp))
                 .andReturn().getResponse().getContentAsString(), "$.garantieMois");
+        LocalDate receptionAncienne = aujourdhui.minusMonths(garantie).minusDays(1);
         for (long id : List.of(r1, r2)) {
             cnm.prs.entity.ReceptionCommande p = receptionCommandeRepository.findById(id).orElseThrow();
-            p.setDateReception(aujourdhui.minusMonths(garantie).minusDays(1));
+            p.setDateReception(receptionAncienne);
             receptionCommandeRepository.save(p);
         }
         String definitive = "/api/receptions-commandes/bons/" + idBon + "/definitive";
         mvc.perform(get("/api/receptions-commandes/bons/" + idBon).header("Authorization", tokenPrmp))
                 .andExpect(jsonPath("$.alertes").value(org.hamcrest.Matchers.hasItem("RECEPTION_DEFINITIVE_A_PRONONCER")))
-                .andExpect(jsonPath("$.receptions[0].garantieJusquau").value(aujourdhui.minusDays(1).toString()));
+                // ⚠️ 2026-10-31 — le terme attendu se calcule comme le serveur (réception + garantie) : un 31, reculer d'un mois tombe
+                // sur un mois de 30 jours, et « aujourd'hui − 1 jour » n'était plus l'aller-retour exact.
+                .andExpect(jsonPath("$.receptions[0].garantieJusquau").value(receptionAncienne.plusMonths(garantie).toString()));
         long d2 = JsonPath.<Number>read(mvc.perform(post(definitive).param("idReception", String.valueOf(r2)).header("Authorization", tokenPrmp))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.receptions[2].idProvisoire").value(r2)).andReturn().getResponse()
                 .getContentAsString(), "$.receptions[2].id").longValue();

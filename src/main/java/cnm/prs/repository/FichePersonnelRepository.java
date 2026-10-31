@@ -11,5 +11,8 @@ public interface FichePersonnelRepository extends JpaRepository<FichePersonnel, 
 
     List<FichePersonnel> findByIdFicheOrderByOrdreAsc(Integer idFiche);
 
+    /** ⚠️ 2026-10-30 (« performance », reliquat de B1) — ceux de plusieurs versions, en une requête (préchargement des listes). */
+    List<FichePersonnel> findByIdFicheInOrderByIdFicheAscOrdreAsc(java.util.Collection<Integer> idFiches);
+
     void deleteByIdFiche(Integer idFiche);
 }

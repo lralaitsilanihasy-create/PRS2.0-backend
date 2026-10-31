@@ -61,6 +61,11 @@ Aucun contrat ne change (mêmes routes, mêmes corps, mêmes codes) : seul le no
   plan remplacée dans la filiation) est lue à la demande. **Reste** proportionnel au nombre de procédures **en évaluation** le résumé
   de l'attribution de `eligibles` (vue de l'évaluation : offres, entreprises, exclusions) ; les décisions d'évaluation n'y sont plus
   lues qu'une fois par procédure.
+  ⚠️ **Reliquat (2026-10-31, contre-mesure du front sur `bd28809a`)** : le préchargement couvre aussi les **paramètres internes**, la
+  **CAO**, le **matériel**, le **personnel** et les **spécifications** (lus par le bilan des contrôles de la remise électronique) ; le
+  test mesure désormais avec le contexte de persistance vidé, comme un appel réel (le contexte d'un test masquait ces lectures par
+  identifiant). `contrats-en-vigueur` précharge les décisions de reconduction, les bons, les titulaires et leurs offres de tous les
+  contrats ; l'avis à imprimer de `GET /api/dossiers` lit la dernière version, ses valeurs, son dossier et les **PV signés** en lot.
 - **B2** — `GET /api/dossiers` : l'avis à imprimer passe par la même mémoire et le même préchargement. `pv-examens/definitifs`,
   `receptions`, `dispatchs` : inchangés.
 - **B6** — `GET /api/marche-previsions?dossier={idDossier}` : les prévisions de **toutes les lignes d'un plan**, triées par ligne puis

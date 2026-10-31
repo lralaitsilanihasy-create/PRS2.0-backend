@@ -153,6 +153,18 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
             """)
     List<PvExamen> findSignesParDossierRows(@Param("idDossier") Integer idDossier);
 
+    /** ⚠️ 2026-10-30 (« performance », reliquat) — {@code [idDossier, pv]} des PV signés de plusieurs dossiers, le plus récent d'abord. */
+    @Query("""
+            select pv.examen.dispatch.reception.idDossier, pv from PvExamen pv where pv.statutPv = 'SIGNE'
+              and pv.examen.dispatch.reception.idDossier in :idDossiers order by pv.idPv desc
+            """)
+    List<Object[]> findSignesParDossiersRows(@Param("idDossiers") java.util.Collection<Integer> idDossiers);
+
+    /** ⚠️ 2026-10-30 — {@link #findSignesParDossierRows}, lus une fois par appel de liste ({@link MemoLecture}). */
+    default List<PvExamen> signesLus(Integer idDossier) {
+        return MemoLecture.lire("pvSignes:" + idDossier, () -> findSignesParDossierRows(idDossier));
+    }
+
     /**
      * ⚠️ 2026-10-18 (demande front « avis-a-imprimer », §B2) — parmi les dossiers donnés, ceux qui ont un PV signé favorable
      * ({@code FAV} ou {@code FAVR}) : le seul cas où l'avis peut être imprimable, en une requête.

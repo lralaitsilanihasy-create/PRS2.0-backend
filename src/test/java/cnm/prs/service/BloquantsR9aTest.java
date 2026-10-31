@@ -91,11 +91,11 @@ class BloquantsR9aTest {
         cnm.prs.repository.DocumentFicheMarcheRepository documents = mock(cnm.prs.repository.DocumentFicheMarcheRepository.class);
         DaoCompletService dao = mock(DaoCompletService.class);
         AvisSpecifiqueService s = new AvisSpecifiqueService(null, fiches, null, null, null, null, null, null, null, documents, null, null, null, dao, null, null, null, null);
-        when(fiches.findByIdDmcOrderByNumeroVersionAsc(5L)).thenReturn(java.util.List.of());
+        when(fiches.versions(5L)).thenReturn(java.util.List.of());
         assertThat(s.etatDaoComplet(5L)).isNull();
         FicheMarche v = version(2);
         v.setStatut(cnm.prs.enums.StatutFicheMarche.VALIDEE.name());
-        when(fiches.findByIdDmcOrderByNumeroVersionAsc(5L)).thenReturn(java.util.List.of(v));
+        when(fiches.versions(5L)).thenReturn(java.util.List.of(v));
         when(documents.findByIdFicheOrderByIdDocumentAsc(7)).thenReturn(java.util.List.of());
         when(dao.actif()).thenReturn(false);
         assertThat(s.etatDaoComplet(5L)).isEqualTo("SANS_ASSEMBLAGE");

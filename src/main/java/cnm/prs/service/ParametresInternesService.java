@@ -179,6 +179,16 @@ public class ParametresInternesService {
     static final String CLE_RESPONSABLE = "responsable:";
     static final String CLE_MEMBRES_CAO = "caoMembres:";
 
+    /** ⚠️ 2026-10-30 (« performance », reliquat de B1) — les paramètres internes d'un DMC, préchargés par les listes (MemoLecture). */
+    private Optional<ParametreInterneProcedure> internesLus(Long idDmc) {
+        return MemoLecture.lire("internes:" + idDmc, () -> internesRepository.findById(idDmc));
+    }
+
+    /** ⚠️ 2026-10-30 (reliquat de B1) — la CAO d'un DMC, préchargée par les listes (MemoLecture). */
+    private Optional<cnm.prs.entity.Cao> caoLue(Long idDmc) {
+        return MemoLecture.lire("cao:" + idDmc, () -> caoRepository.findById(idDmc));
+    }
+
     /** Les membres de la CAO d'un DMC, rang croissant (préchargés par les listes). */
     private List<CaoMembre> membresLus(Long idDmc) {
         return MemoLecture.lire(CLE_MEMBRES_CAO + idDmc, () -> caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc));
@@ -200,7 +210,7 @@ public class ParametresInternesService {
     /** Les paramètres internes en lecture pure ({@code null} : jamais enregistrés). */
     @Transactional(readOnly = true)
     public RemiseElectronique.Internes internes(Long idDmc) {
-        ParametreInterneProcedure p = internesRepository.findById(idDmc).orElse(null);
+        ParametreInterneProcedure p = internesLus(idDmc).orElse(null);
         // ⚠️ V67 (lot 2a, §B3, Q11) — les membres sont DÉRIVÉS de la CAO (qualité MEMBRE, comptes K…) ; une CAO désignée sans
         // paramètres enregistrés donne des paramètres incomplets (quorum, date), plus « absents ».
         List<String> membres = membresCao(idDmc);
@@ -320,7 +330,7 @@ public class ParametresInternesService {
                     + "retirez-le des membres ou changez de responsable.", "MEMBRE_COMMISSION");
         }
 
-        ParametreInterneProcedure p = internesRepository.findById(idDmc).orElse(null);
+        ParametreInterneProcedure p = internesLus(idDmc).orElse(null);
         Integer avantQuorum = p == null ? null : p.getQuorum();
         LocalDateTime avantCeremonie = p == null ? null : p.getDateCeremonie();
         CeremonieDto.Depositaire avantDepositaire = depositaire(p);
@@ -399,7 +409,7 @@ public class ParametresInternesService {
     /** ⚠️ 2026-10-28 (§B2) — ce qui empêche la CAO d'être constituée, en clair ; vide = constituée. */
     @Transactional(readOnly = true)
     public List<String> caoManques(Long idDmc) {
-        return CaoRegles.manques(caoRepository.findById(idDmc).orElse(null), membresLus(idDmc))
+        return CaoRegles.manques(caoLue(idDmc).orElse(null), membresLus(idDmc))
                 .stream().map(CaoDto.Anomalie::message).toList();
     }
 
@@ -409,7 +419,7 @@ public class ParametresInternesService {
         if (!electronique) {
             return null;
         }
-        return CaoRegles.etat(caoRepository.findById(idDmc).orElse(null), membresLus(idDmc));
+        return CaoRegles.etat(caoLue(idDmc).orElse(null), membresLus(idDmc));
     }
 
     /** « NOM Prénom » d'un détenteur : un membre de CAO ({@code K…}), ou un contrôleur ; le matricule à défaut. */

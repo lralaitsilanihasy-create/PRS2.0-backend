@@ -64,13 +64,22 @@ public class PrechargementFiches {
     private final cnm.prs.repository.ResponsableProcedureRepository responsables;
     private final cnm.prs.repository.CaoMembreRepository membres;
     private final cnm.prs.repository.CeremonieClesRepository ceremonies;
+    private final cnm.prs.repository.ParametreInterneProcedureRepository internes;
+    private final cnm.prs.repository.CaoRepository caos;
+    private final cnm.prs.repository.SpecificationsFicheRepository specifications;
+    private final cnm.prs.repository.FicheMaterielRepository materiel;
+    private final cnm.prs.repository.FichePersonnelRepository personnel;
+    private final cnm.prs.repository.PvExamenRepository pvs;
 
     public PrechargementFiches(FicheMarcheRepository fiches, FicheMarcheValeurRepository valeurs, FicheArticleRepository articles,
             FicheCaracteristiqueRepository caracteristiques, FichePieceRepository pieces, DocumentFicheMarcheRepository documents,
             DossierRepository dossiers, DossierMecRepository dmcs, MarcheRepository marches, LotRepository lots,
             ServiceBeneficiaireRepository beneficiaires, MarchePrevisionRepository previsions,
             cnm.prs.repository.ResponsableProcedureRepository responsables, cnm.prs.repository.CaoMembreRepository membres,
-            cnm.prs.repository.CeremonieClesRepository ceremonies) {
+            cnm.prs.repository.CeremonieClesRepository ceremonies, cnm.prs.repository.ParametreInterneProcedureRepository internes,
+            cnm.prs.repository.CaoRepository caos, cnm.prs.repository.SpecificationsFicheRepository specifications,
+            cnm.prs.repository.FicheMaterielRepository materiel, cnm.prs.repository.FichePersonnelRepository personnel,
+            cnm.prs.repository.PvExamenRepository pvs) {
         this.fiches = fiches;
         this.valeurs = valeurs;
         this.articles = articles;
@@ -86,6 +95,12 @@ public class PrechargementFiches {
         this.responsables = responsables;
         this.membres = membres;
         this.ceremonies = ceremonies;
+        this.internes = internes;
+        this.caos = caos;
+        this.specifications = specifications;
+        this.materiel = materiel;
+        this.personnel = personnel;
+        this.pvs = pvs;
     }
 
     /**
@@ -115,6 +130,13 @@ public class PrechargementFiches {
         Map<Long, Integer> dossierParDmc = new HashMap<>();
         dossiers.findIdsDossierParDmc(idDmcs).forEach(r -> dossierParDmc.put((Long) r[0], (Integer) r[1]));
         idDmcs.forEach(id -> MemoLecture.poser("idDossierDmc:" + id, Optional.ofNullable(dossierParDmc.get(id))));
+        // ⚠️ 2026-10-30 (reliquat, §B2) — les PV signés de ces dossiers (l'avis à imprimer de la liste des dossiers).
+        if (!dossierParDmc.isEmpty()) {
+            Map<Integer, List<cnm.prs.entity.PvExamen>> pv = new HashMap<>();
+            pvs.findSignesParDossiersRows(dossierParDmc.values()).forEach(r -> pv.computeIfAbsent((Integer) r[0], k -> new ArrayList<>())
+                    .add((cnm.prs.entity.PvExamen) r[1]));
+            dossierParDmc.values().forEach(id -> MemoLecture.poser("pvSignes:" + id, pv.getOrDefault(id, List.of())));
+        }
         // Le plan : la ligne de chaque DMC (gardée dans le contexte de persistance pour les lectures par identifiant), ses lots,
         // bénéficiaires et prévisions.
         List<Integer> idDetails = dmcs.findAllById(idDmcs).stream().map(DossierMec::getIdDetail).filter(Objects::nonNull).distinct().toList();
@@ -130,7 +152,14 @@ public class PrechargementFiches {
                 .collect(Collectors.groupingBy(cnm.prs.entity.CaoMembre::getIdDmc));
         Map<Long, cnm.prs.entity.CeremonieCles> c = new HashMap<>();
         ceremonies.findAllById(idDmcs).forEach(x -> c.put(x.getIdDmc(), x));
+        // ⚠️ 2026-10-30 (reliquat de B1) — les paramètres internes et la CAO (bilan des contrôles de la remise électronique).
+        Map<Long, cnm.prs.entity.ParametreInterneProcedure> pi = new HashMap<>();
+        internes.findAllById(idDmcs).forEach(x -> pi.put(x.getIdDmc(), x));
+        Map<Long, cnm.prs.entity.Cao> cao = new HashMap<>();
+        caos.findAllById(idDmcs).forEach(x -> cao.put(x.getIdDmc(), x));
         for (Long id : idDmcs) {
+            MemoLecture.poser("internes:" + id, Optional.ofNullable(pi.get(id)));
+            MemoLecture.poser("cao:" + id, Optional.ofNullable(cao.get(id)));
             MemoLecture.poser(ParametresInternesService.CLE_RESPONSABLE + id, Optional.ofNullable(r.get(id)));
             MemoLecture.poser(ParametresInternesService.CLE_MEMBRES_CAO + id, m.getOrDefault(id, List.of()));
             MemoLecture.poser("ceremonie:" + id, Optional.ofNullable(c.get(id)));
@@ -152,7 +181,17 @@ public class PrechargementFiches {
                         .collect(Collectors.groupingBy(x -> ficheDeLArticle.get(x.getIdArticle())));
         Map<Integer, List<cnm.prs.entity.FichePiece>> p = pieces.findByIdFicheInOrderByIdFicheAscOrdreAsc(idFiches).stream()
                 .collect(Collectors.groupingBy(cnm.prs.entity.FichePiece::getIdFiche));
+        // ⚠️ 2026-10-30 (reliquat de B1, contre-mesure du front) — le matériel, le personnel et les spécifications de chaque version.
+        Map<Integer, List<cnm.prs.entity.FicheMateriel>> mat = materiel.findByIdFicheInOrderByIdFicheAscOrdreAsc(idFiches).stream()
+                .collect(Collectors.groupingBy(cnm.prs.entity.FicheMateriel::getIdFiche));
+        Map<Integer, List<cnm.prs.entity.FichePersonnel>> pers = personnel.findByIdFicheInOrderByIdFicheAscOrdreAsc(idFiches).stream()
+                .collect(Collectors.groupingBy(cnm.prs.entity.FichePersonnel::getIdFiche));
+        Map<Integer, cnm.prs.entity.SpecificationsFiche> spec = new HashMap<>();
+        specifications.findAllById(idFiches).forEach(s -> spec.put(s.getIdFiche(), s));
         for (Integer id : idFiches) {
+            MemoLecture.poser("materiel:" + id, mat.getOrDefault(id, List.of()));
+            MemoLecture.poser("personnel:" + id, pers.getOrDefault(id, List.of()));
+            MemoLecture.poser("specifications:" + id, Optional.ofNullable(spec.get(id)));
             MemoLecture.poser("valeurs:" + id, v.getOrDefault(id, List.of()));
             MemoLecture.poser("articles:" + id, a.getOrDefault(id, List.of()));
             // Même ordre que la lecture unitaire : par article (identifiant croissant), puis par ordre.

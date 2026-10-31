@@ -12,6 +12,9 @@ public interface BonCommandeRepository extends JpaRepository<BonCommande, Long> 
 
     List<BonCommande> findByIdContratOrderByNumeroAsc(Long idContrat);
 
+    /** ⚠️ 2026-10-30 (« performance », reliquat) — les bons de plusieurs contrats, en une requête (liste des contrats). */
+    List<BonCommande> findByIdContratInOrderByIdContratAscNumeroAsc(java.util.Collection<Long> idContrats);
+
     Optional<BonCommande> findFirstByIdContratOrderByNumeroDesc(Long idContrat);
 
     List<BonCommande> findByIdRemiseOrderByNumeroAsc(Long idRemise);

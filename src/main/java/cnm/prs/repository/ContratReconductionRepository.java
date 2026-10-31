@@ -10,4 +10,7 @@ import cnm.prs.entity.ContratReconduction;
 public interface ContratReconductionRepository extends JpaRepository<ContratReconduction, Long> {
 
     List<ContratReconduction> findByIdContratOrderByLeAscIdAsc(Long idContrat);
+
+    /** ⚠️ 2026-10-30 (« performance », reliquat) — les décisions de plusieurs contrats, en une requête (liste des contrats). */
+    List<ContratReconduction> findByIdContratInOrderByIdContratAscLeAscIdAsc(java.util.Collection<Long> idContrats);
 }

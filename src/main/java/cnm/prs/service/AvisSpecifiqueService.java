@@ -427,7 +427,7 @@ public class AvisSpecifiqueService {
             return new AvisDisponibiliteDto(false, SANS_DOSSIER, null, null, null, null);
         }
         String statutDossier = dossierRepository.findById(idDossier).map(Dossier::getStatut).orElse(null);
-        PvExamen pv = pvRepository.findSignesParDossierRows(idDossier).stream().findFirst().orElse(null);
+        PvExamen pv = pvRepository.signesLus(idDossier).stream().findFirst().orElse(null);   // ⚠️ 2026-10-30 (« performance »)
         if (pv == null) {
             return new AvisDisponibiliteDto(false, PV_NON_SIGNE, null, null, statutDossier, idDossier);
         }
@@ -473,7 +473,7 @@ public class AvisSpecifiqueService {
     }
 
     private FicheMarche derniereValideeOuNull(Long idDmc) {
-        return ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
+        return ficheRepository.versions(idDmc).stream()   // ⚠️ 2026-10-30 (« performance »)
                 .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut()))
                 .reduce((a, b) -> b).orElse(null);
     }

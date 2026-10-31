@@ -12,6 +12,9 @@ public interface AttributionTitulaireRepository extends JpaRepository<Attributio
     /** Les titulaires du lot, dans l'ordre du classement. */
     List<AttributionTitulaire> findByIdDmcAndLotOrderByRangAscIdOffreAsc(Long idDmc, Integer lot);
 
+    /** ⚠️ 2026-10-30 (« performance », reliquat) — les titulaires de plusieurs procédures, en une requête (liste des contrats). */
+    List<AttributionTitulaire> findByIdDmcInOrderByIdDmcAscLotAscRangAscIdOffreAsc(java.util.Collection<Long> idDmcs);
+
     /** ⚠️ MT-b2 — le titulaire d'une offre (une offre n'est titulaire que d'un lot). */
     List<AttributionTitulaire> findByIdOffre(String idOffre);
 }
