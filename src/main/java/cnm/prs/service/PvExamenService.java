@@ -149,13 +149,19 @@ public class PvExamenService {
      */
     @Transactional(readOnly = true)
     public List<PvExamenDto> definitifs() {
+        List<PvExamen> pvs;
         if (Visibilite.estPrmp()) {
             String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-            return idPrmp == null ? List.of()
-                    : repository.findDefinitifsPourPrmp(idPrmp).stream().map(this::toDtoLecture).toList();
+            pvs = idPrmp == null ? List.of() : repository.findDefinitifsPourPrmp(idPrmp);
+        } else {
+            pvs = Visibilite.filtrer(repository::findDefinitifs, repository::findDefinitifsParLocalite);
         }
-        return Visibilite.filtrer(repository::findDefinitifs, repository::findDefinitifsParLocalite)
-                .stream().map(this::toDtoLecture).toList();
+        // ⚠️ 2026-10-31 (demande front « performance », B9) — l'éligibilité au document de chaque PV lit son examen, son dossier et son
+        // plan : préchargés pour toute la liste, dans la mémoire de lecture de l'appel.
+        try (cnm.prs.repository.MemoLecture memo = cnm.prs.repository.MemoLecture.ouvrir()) {
+            pvDocumentService.prechargerChoix(pvs);
+            return pvs.stream().map(this::toDtoLecture).toList();
+        }
     }
 
     @Transactional(readOnly = true)

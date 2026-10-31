@@ -198,6 +198,46 @@ public class PvDocumentService {
      * ⚠️ 2026-10-20 (demande front « modeles-pv-integres-consultation », §B2) — la règle de {@link #modelePour}, qui dit aussi
      * <strong>pourquoi</strong> un PV n'a pas de document : la production et l'aperçu d'un modèle intégré la partagent.
      */
+    /**
+     * ⚠️ 2026-10-31 (demande front « performance », B9) — précharge dans la mémoire de lecture ouverte ce que {@link #choisirModele} lit
+     * pour chacun de ces PV : dossier et localité de l'examen, dossier, plan et ses lignes ; une requête par nature. La liste des PV
+     * définitifs relisait sinon la jointure examen ⋈ dispatch ⋈ réception deux fois par PV.
+     */
+    @Transactional(readOnly = true)
+    public void prechargerChoix(java.util.Collection<PvExamen> pvs) {
+        if (!cnm.prs.repository.MemoLecture.ouverte() || pvs.isEmpty()) {
+            return;
+        }
+        java.util.List<Integer> examens = pvs.stream().map(PvExamen::getIdExamen).filter(java.util.Objects::nonNull).distinct().toList();
+        if (examens.isEmpty()) {
+            return;
+        }
+        java.util.Map<Integer, Object[]> parExamen = new java.util.HashMap<>();
+        examenRepository.findDossierEtLocaliteParExamen(examens).forEach(x -> parExamen.put((Integer) x[0], x));
+        java.util.Set<Integer> dossiers = new java.util.HashSet<>();
+        for (Integer id : examens) {
+            Object[] x = parExamen.get(id);
+            cnm.prs.repository.MemoLecture.poser("dossierExamen:" + id, Optional.ofNullable(x == null ? null : (Integer) x[1]));
+            cnm.prs.repository.MemoLecture.poser("localiteExamen:" + id, Optional.ofNullable(x == null ? null : (String) x[2]));
+            if (x != null && x[1] != null) {
+                dossiers.add((Integer) x[1]);
+            }
+        }
+        if (dossiers.isEmpty()) {
+            return;
+        }
+        dossierRepository.findAllById(dossiers);   // gardés dans le contexte de persistance
+        java.util.Map<Integer, java.util.List<Ppm>> ppms = ppmRepository.findByIdDossierIn(dossiers).stream()
+                .collect(java.util.stream.Collectors.groupingBy(Ppm::getIdDossier));
+        dossiers.forEach(id -> cnm.prs.repository.MemoLecture.poser("ppms:" + id, ppms.getOrDefault(id, java.util.List.of())));
+        java.util.List<Integer> idPpms = ppms.values().stream().flatMap(java.util.List::stream).map(Ppm::getIdPpm).distinct().toList();
+        if (!idPpms.isEmpty()) {
+            java.util.Map<Integer, java.util.List<Marche>> lignes = marcheRepository.findByIdPpmIn(idPpms).stream()
+                    .collect(java.util.stream.Collectors.groupingBy(Marche::getIdPpm));
+            idPpms.forEach(id -> cnm.prs.repository.MemoLecture.poser("marchesPpm:" + id, lignes.getOrDefault(id, java.util.List.of())));
+        }
+    }
+
     @Transactional(readOnly = true)
     public ChoixModele choisirModele(PvExamen pv) {
         if (pv == null) {
@@ -210,11 +250,14 @@ public class PvDocumentService {
                     : "L'avis « " + pv.getIdAvis() + " » n'a pas de modèle : le PV n'a pas de document.");
         }
         Integer idExamen = pv.getIdExamen();
-        Integer idDossier = examenRepository.findIdDossierByExamen(idExamen).orElse(null);
+        // ⚠️ 2026-10-31 (« performance », B9) — examen, dossier, plan : préchargés par la liste des PV définitifs (prechargerChoix).
+        Integer idDossier = cnm.prs.repository.MemoLecture.<Optional<Integer>>lire("dossierExamen:" + idExamen,
+                () -> examenRepository.findIdDossierByExamen(idExamen)).orElse(null);
         Dossier dossier = idDossier == null ? null : dossierRepository.findById(idDossier).orElse(null);
         // Localité du circuit (réception), comme les lettres de renvoi : commande la variante
         // centrale / régionale (⚠️ 2026-08-04 — les 4 modèles régionaux sont désormais fournis).
-        String localite = examenRepository.findLocaliteByExamen(idExamen).orElse(null);
+        String localite = cnm.prs.repository.MemoLecture.<Optional<String>>lire("localiteExamen:" + idExamen,
+                () -> examenRepository.findLocaliteByExamen(idExamen)).orElse(null);
         if (dossier == null) {
             return new ChoixModele(null, "Le dossier du PV est introuvable.");
         }
@@ -222,7 +265,8 @@ public class PvDocumentService {
             return new ChoixModele(null, "La localité du circuit est inconnue (pas de réception) : le modèle central ou régional ne se "
                     + "choisit pas.");
         }
-        Ppm ppm = ppmRepository.findByIdDossier(idDossier).stream().findFirst().orElse(null);
+        Ppm ppm = cnm.prs.repository.MemoLecture.<java.util.List<Ppm>>lire("ppms:" + idDossier, () -> ppmRepository.findByIdDossier(idDossier))
+                .stream().findFirst().orElse(null);
         // L'éligibilité ne dépend PAS du mode de passation : on exige seulement que le PPM comporte au
         // moins une ligne de marché (PPM réel), quel que soit le mode (AOO, cotation, etc.).
         // ⚠️ 2026-08-05 — les lignes SUPPRIMÉES d'une version ne comptent pas : un plan dont toutes les
@@ -231,7 +275,8 @@ public class PvDocumentService {
             return new ChoixModele(null, "Le dossier ne porte pas de plan de passation (PPM) : les modèles intégrés ne couvrent que les "
                     + "PV du plan.");
         }
-        if (marcheRepository.findByIdPpm(ppm.getIdPpm()).stream().allMatch(Marche::getSupprimee)) {
+        if (cnm.prs.repository.MemoLecture.<java.util.List<Marche>>lire("marchesPpm:" + ppm.getIdPpm(), () -> marcheRepository.findByIdPpm(ppm.getIdPpm()))
+                .stream().allMatch(Marche::getSupprimee)) {
             return new ChoixModele(null, "Le plan de passation n'a plus aucune ligne de marché : le PV n'a pas de document.");
         }
         // Le sous-type (dérivé serveur des marchés déclencheurs) commande la mention AGPM du modèle.

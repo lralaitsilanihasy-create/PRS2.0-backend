@@ -75,8 +75,11 @@ public class ReceptionService {
 
     @Transactional(readOnly = true)
     public List<ReceptionDto> findAll() {
-        return Visibilite.filtrer(repository::findAll, repository::findVisiblesParLocalite)
-                .stream().map(this::toDtoComplet).toList();
+        List<Reception> rs = Visibilite.filtrer(repository::findAll, repository::findVisiblesParLocalite);
+        // ⚠️ 2026-10-31 (demande front « performance », B7) — les dossiers de toutes les réceptions en une requête (la liste lisait
+        // t_dossier une fois par réception) ; gardés dans le contexte de persistance, toDtoComplet les relit sans requête.
+        dossierRepository.findAllById(rs.stream().map(Reception::getIdDossier).filter(java.util.Objects::nonNull).distinct().toList());
+        return rs.stream().map(this::toDtoComplet).toList();
     }
 
     /**

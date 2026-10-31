@@ -66,6 +66,10 @@ Aucun contrat ne change (mêmes routes, mêmes corps, mêmes codes) : seul le no
   test mesure désormais avec le contexte de persistance vidé, comme un appel réel (le contexte d'un test masquait ces lectures par
   identifiant). `contrats-en-vigueur` précharge les décisions de reconduction, les bons, les titulaires et leurs offres de tous les
   contrats ; l'avis à imprimer de `GET /api/dossiers` lit la dernière version, ses valeurs, son dossier et les **PV signés** en lot.
+- ⚠️ **B7-B9 (2026-10-31, remesure du front sur `b576eef3`)** — `GET /api/receptions` lit les dossiers de toutes les réceptions en une
+  requête (B7) ; `GET /api/dispatchs` lit la réception de chaque dispatch et la dernière date de réception de chaque dossier en une
+  requête chacune (B8) ; `GET /api/pv-examens/definitifs` précharge ce que l'éligibilité au document lit pour chaque PV — dossier et
+  localité de l'examen, dossier, plan et ses lignes (B9, `PvDocumentService.prechargerChoix`). Contrats inchangés.
 - **B2** — `GET /api/dossiers` : l'avis à imprimer passe par la même mémoire et le même préchargement. `pv-examens/definitifs`,
   `receptions`, `dispatchs` : inchangés.
 - **B6** — `GET /api/marche-previsions?dossier={idDossier}` : les prévisions de **toutes les lignes d'un plan**, triées par ligne puis

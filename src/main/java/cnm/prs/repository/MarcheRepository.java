@@ -31,6 +31,9 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
     /** Lignes de marché d'un PPM (cascade applicative à la suppression du PPM). */
     List<Marche> findByIdPpm(Integer idPpm);
 
+    /** ⚠️ 2026-10-31 (« performance », B9) — les lignes de plusieurs PPM, en une requête. */
+    List<Marche> findByIdPpmIn(java.util.Collection<Integer> idPpms);
+
     /** Prochaine PK marché, allouée par la séquence serveur (Voie B — l'id client est ignoré). */
     @Query(value = "select nextval('seq_marche')", nativeQuery = true)
     Long nextIdMarche();

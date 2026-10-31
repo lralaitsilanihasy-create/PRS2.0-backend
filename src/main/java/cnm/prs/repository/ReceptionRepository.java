@@ -38,6 +38,10 @@ public interface ReceptionRepository extends JpaRepository<Reception, Integer> {
     @Query("select max(r.dateReception) from Reception r where r.idDossier = :idDossier")
     LocalDateTime findDerniereDateReceptionByDossier(@Param("idDossier") Integer idDossier);
 
+    /** ⚠️ 2026-10-31 (« performance », B8) — {@code [idDossier, max(dateReception)]} de plusieurs dossiers, en une requête. */
+    @Query("select r.idDossier, max(r.dateReception) from Reception r where r.idDossier in :idDossiers group by r.idDossier")
+    java.util.List<Object[]> findDernieresDatesReceptionParDossier(@Param("idDossiers") java.util.Collection<Integer> idDossiers);
+
     /** Nombre de réceptions d'une localité (via le contrôleur réceptionnaire) — compteur du Secrétaire. */
     @Query("select count(r) from Reception r where r.ctrlRecept.idLocalite = :loc")
     long countByLocalite(@Param("loc") String loc);

@@ -86,8 +86,26 @@ public class DispatchService {
     @Transactional(readOnly = true)
     public List<DispatchDto> findAll() {
         // ⚠️ Règle ajoutée — exclut les dossiers BROUILLON/RETIRE (jamais visibles à l'écran « Dispatch »).
-        return Visibilite.filtrer(repository::findVisibles, repository::findVisiblesParLocalite)
-                .stream().map(this::toDtoComplet).toList();
+        List<Dispatch> ds = Visibilite.filtrer(repository::findVisibles, repository::findVisiblesParLocalite);
+        // ⚠️ 2026-10-31 (demande front « performance », B8) — la réception de chaque dispatch et la dernière date de réception de chaque
+        // dossier : une requête chacune pour toute la liste (la liste les lisait une fois par dispatch).
+        java.util.Map<Integer, Integer> dossierDeLaReception = new java.util.HashMap<>();
+        receptionRepository.findAllById(ds.stream().map(Dispatch::getIdReception).filter(java.util.Objects::nonNull).distinct().toList())
+                .forEach(x -> dossierDeLaReception.put(x.getIdReception(), x.getIdDossier()));
+        java.util.Map<Integer, java.time.LocalDateTime> derniere = new java.util.HashMap<>();
+        java.util.List<Integer> dossiers = dossierDeLaReception.values().stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (!dossiers.isEmpty()) {
+            receptionRepository.findDernieresDatesReceptionParDossier(dossiers)
+                    .forEach(x -> derniere.put((Integer) x[0], (java.time.LocalDateTime) x[1]));
+        }
+        return ds.stream().map(e -> {
+            DispatchDto dto = DispatchMapper.toDto(e);
+            Integer idDossier = e.getIdReception() == null ? null : dossierDeLaReception.get(e.getIdReception());
+            if (idDossier != null) {
+                dto.setDatePredispatch(DispatchMapper.format(derniere.get(idDossier)));
+            }
+            return dto;
+        }).toList();
     }
 
     @Transactional(readOnly = true)
