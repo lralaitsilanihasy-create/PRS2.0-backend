@@ -180,7 +180,7 @@ class InstantaneIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Boolean>>read(apres, "$.ecrans[?(@.ecran=='PLAN')].identique")).containsExactly(false);
         assertThat(JsonPath.<List<String>>read(apres, "$.ecrans[?(@.ecran=='PLAN')].ecarts[?(@.chemin=='ligne.designationMarche')].libelle"))
-                .containsExactly("ligne — designation marche");
+                .containsExactly("Ligne du plan — Désignation du marché");
         assertThat(JsonPath.<List<String>>read(apres, "$.ecrans[?(@.ecran=='PLAN')].ecarts[?(@.chemin=='ligne.designationMarche')].soumis"))
                 .containsExactly("Fourniture de mobilier de bureau");
         assertThat(JsonPath.<List<String>>read(apres, "$.ecrans[?(@.ecran=='PLAN')].ecarts[?(@.chemin=='ligne.designationMarche')].actuel"))

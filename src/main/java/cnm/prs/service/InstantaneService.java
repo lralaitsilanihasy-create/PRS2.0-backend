@@ -151,6 +151,35 @@ public class InstantaneService {
         this.lecture.setReadOnly(true);
     }
 
+    /** ⚠️ 2026-11-01 (« ecarts-lisibles », §B1) — les référentiels dont les codes s'écrivent en libellés dans les écarts. */
+    private cnm.prs.repository.AvisRepository avisReferentiel;
+    private cnm.prs.repository.StatutMarcheRepository statutsMarche;
+    private cnm.prs.repository.NatureRepository natures;
+    private cnm.prs.repository.ModePassationRepository modes;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setReferentiels(cnm.prs.repository.AvisRepository avisReferentiel, cnm.prs.repository.StatutMarcheRepository statutsMarche,
+            cnm.prs.repository.NatureRepository natures, cnm.prs.repository.ModePassationRepository modes) {
+        this.avisReferentiel = avisReferentiel;
+        this.statutsMarche = statutsMarche;
+        this.natures = natures;
+        this.modes = modes;
+    }
+
+    /** Le dictionnaire des codes, lu une fois par appel : états des écrans, avis, statuts de marché, natures, modes. */
+    private EcartsInstantane.Dictionnaire dictionnaire() {
+        return lecture.execute(s -> {
+            Map<String, String> codes = EcartsInstantane.Dictionnaire.etats();
+            avisReferentiel.findAll().forEach(a -> codes.putIfAbsent(a.getIdAvis(), a.getLibelleAvis()));
+            statutsMarche.findAll().forEach(x -> codes.putIfAbsent(x.getCode(), x.getLibelle()));
+            Map<Integer, String> n = new java.util.HashMap<>();
+            natures.findAll().forEach(x -> n.put(x.getIdNature(), x.getLibelle()));
+            Map<Integer, String> m = new java.util.HashMap<>();
+            modes.findAll().forEach(x -> m.put(x.getIdMode(), x.getLibelle()));
+            return new EcartsInstantane.Dictionnaire(codes, n, m);
+        });
+    }
+
     // ------------------------------------------------------------------ figement
 
     /**
@@ -307,6 +336,7 @@ public class InstantaneService {
         Dossier d = dossiers.findById(idDossier).orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
         Long idDmc = idDmc(d);
         List<String> ordre = ecrans(d.getIdTypeDossier());
+        EcartsInstantane.Dictionnaire dico = dictionnaire();
         List<cnm.prs.dto.EcartsInstantanesDto.Ecran> out = new ArrayList<>();
         for (DossierInstantane i : figes.stream().sorted(java.util.Comparator.comparing((DossierInstantane x) -> ordre.indexOf(x.getEcran())))
                 .toList()) {
@@ -321,7 +351,7 @@ public class InstantaneService {
                 out.add(new cnm.prs.dto.EcartsInstantanesDto.Ecran(i.getEcran(), null, false, false, List.of()));
                 continue;
             }
-            EcartsInstantane.Resultat r = EcartsInstantane.comparer(mapper.readTree(i.getContenu()), actuel);
+            EcartsInstantane.Resultat r = EcartsInstantane.comparer(mapper.readTree(i.getContenu()), actuel, dico);
             out.add(new cnm.prs.dto.EcartsInstantanesDto.Ecran(i.getEcran(), r.ecarts().isEmpty(), true, r.tronque(), r.ecarts()));
         }
         return new cnm.prs.dto.EcartsInstantanesDto(numero, figes.get(0).getFigeLe(), out);

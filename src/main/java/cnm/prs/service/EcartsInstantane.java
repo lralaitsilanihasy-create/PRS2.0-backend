@@ -3,7 +3,10 @@ package cnm.prs.service;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,10 +25,13 @@ import tools.jackson.databind.JsonNode;
  *       serveur, champ que seul le lecteur voit) n'est pas un écart ; un champ disparu en est un ;</li>
  *   <li>les <strong>champs volatils</strong> sont écartés ({@link #VOLATILS} : états recalculés à l'horloge, alertes, gestes et droits
  *       de l'appelant, et tout champ {@code peut…}) ;</li>
- *   <li>les éléments d'une liste sont appariés par leur <strong>identité</strong> ({@link #IDENTITES} : {@code idOffre}, {@code numero},
- *       {@code lot}…), à défaut par leur rang, et nommés en clair (« Lot 1 », « Offre n° 2 ») ;</li>
+ *   <li>les éléments d'une liste sont appariés par leur <strong>identité</strong> ({@link #IDENTITES}), à défaut par leur rang, et
+ *       nommés en clair (« Lot 1 », « Offre n° 2 ») ;</li>
  *   <li>les valeurs sont rendues telles qu'on les lit : montant « 2 939 941 765 Ar », date jj/mm/aaaa, oui/non.</li>
  * </ul>
+ * ⚠️ 2026-11-01 (demande front « ecarts-lisibles ») — B1 : un code connu est servi par son libellé ({@link Dictionnaire} : états des
+ * écrans, et référentiels avis, statut de marché, nature, mode) ; B2 : les noms de champ des écrans figés en français, majuscule
+ * initiale ({@link #LIBELLES}) ; B3 : un objet ajouté ou retiré résumé en une phrase ({@link #resume}), sans identifiant technique.
  * Au plus {@link #PLAFOND} écarts par écran.
  */
 public final class EcartsInstantane {
@@ -46,16 +52,76 @@ public final class EcartsInstantane {
             Map.entry("membres", "Membre"), Map.entry("titulaires", "Titulaire"), Map.entry("documents", "Document"),
             Map.entry("pieces", "Pièce"), Map.entry("articles", "Article"), Map.entry("decisions", "Décision"),
             Map.entry("criteres", "Critère"), Map.entry("candidats", "Candidat"), Map.entry("projets", "Projet"),
-            Map.entry("lignes", "Ligne"), Map.entry("etapes", "Étape"), Map.entry("demandes", "Demande"));
+            Map.entry("lignes", "Ligne"), Map.entry("etapes", "Étape"), Map.entry("demandes", "Demande"),
+            Map.entry("piecesAttributaire", "Pièce"), Map.entry("suiviTitulaires", "Titulaire"), Map.entry("recours", "Recours"),
+            Map.entry("lettres", "Lettre"), Map.entry("signataires", "Signataire"));
 
-    /** Libellés de champs courants ; à défaut, le nom découpé en mots. */
+    /** Libellés des noms de champ des écrans figés (B2) ; à défaut, le nom découpé en mots. */
     private static final Map<String, String> LIBELLES = Map.ofEntries(Map.entry("montant", "montant"),
             Map.entry("montantEvalue", "montant évalué"), Map.entry("montantHt", "montant HT"), Map.entry("montantTtc", "montant TTC"),
-            Map.entry("montantLu", "montant lu"), Map.entry("etat", "état"), Map.entry("statut", "statut"), Map.entry("avis", "avis"),
-            Map.entry("objet", "objet"), Map.entry("designation", "désignation"), Map.entry("rang", "rang"), Map.entry("delai", "délai"),
-            Map.entry("note", "note"), Map.entry("score", "score"), Map.entry("raisonSociale", "raison sociale"),
-            Map.entry("nom", "nom"), Map.entry("prenom", "prénom"), Map.entry("qualite", "qualité"), Map.entry("motif", "motif"),
-            Map.entry("evaluation", "évaluation"), Map.entry("proposition", "proposition"), Map.entry("conforme", "conforme"));
+            Map.entry("montantLu", "montant lu"), Map.entry("montantCorrige", "montant corrigé"), Map.entry("etat", "état"),
+            Map.entry("statut", "statut"), Map.entry("avis", "avis"), Map.entry("objet", "objet"), Map.entry("designation", "désignation"),
+            Map.entry("designationMarche", "désignation du marché"), Map.entry("rang", "rang"), Map.entry("delai", "délai"),
+            Map.entry("note", "note"), Map.entry("score", "score"), Map.entry("raisonSociale", "raison sociale"), Map.entry("nom", "nom"),
+            Map.entry("prenom", "prénom"), Map.entry("qualite", "qualité"), Map.entry("motif", "motif"), Map.entry("evaluation", "évaluation"),
+            Map.entry("proposition", "proposition"), Map.entry("conforme", "conforme"), Map.entry("dossierMarche", "dossier de marché"),
+            Map.entry("delaiAttente", "délai d'attente"), Map.entry("information", "information des soumissionnaires"),
+            Map.entry("piecesAttributaire", "pièces de l'attributaire"), Map.entry("avisAttribution", "avis d'attribution"),
+            Map.entry("suiviTitulaires", "suivi des titulaires"), Map.entry("attributaire", "attributaire"),
+            Map.entry("titulaires", "titulaires"), Map.entry("signature", "signature"), Map.entry("enregistrement", "enregistrement"),
+            Map.entry("approbation", "approbation"), Map.entry("notification", "notification"), Map.entry("visa", "visa du contrôleur financier"),
+            Map.entry("decision", "décision"), Map.entry("recours", "recours"), Map.entry("candidat", "candidat"), Map.entry("nif", "NIF"),
+            Map.entry("ligne", "ligne du plan"), Map.entry("valeurs", "valeurs"), Map.entry("dates", "dates"),
+            Map.entry("versionPpm", "version du plan"), Map.entry("lettres", "lettres d'invitation"), Map.entry("documents", "documents"),
+            Map.entry("projets", "projets"), Map.entry("membres", "membres"), Map.entry("president", "président"),
+            Map.entry("dateCreation", "date de création"), Map.entry("dateSoumission", "date de soumission"),
+            Map.entry("idDossierSoumis", "dossier soumis"), Map.entry("referenceEnregistrement", "référence d'enregistrement"),
+            Map.entry("modeRemise", "mode de remise"), Map.entry("seance", "séance"), Map.entry("ouverteLe", "ouverte le"),
+            Map.entry("closeLe", "close le"), Map.entry("signeLe", "signé le"), Map.entry("notifieLe", "notifié le"),
+            Map.entry("attribueLe", "attribué le"), Map.entry("idMode", "mode de passation"), Map.entry("idNature", "nature"),
+            Map.entry("statutMarche", "statut du marché"), Map.entry("formeMarche", "forme du marché"), Map.entry("categorie", "catégorie"),
+            Map.entry("typeMarche", "forme du marché"), Map.entry("montEstim", "montant estimatif"), Map.entry("financement", "financement"));
+
+    /**
+     * B1 — les libellés des codes : {@code codes} (états des écrans, avis, statut de marché, formes, catégories), {@code natures} et
+     * {@code modes} (référentiels par identifiant, lus pour les champs {@code idNature} et {@code idMode}).
+     */
+    public record Dictionnaire(Map<String, String> codes, Map<Integer, String> natures, Map<Integer, String> modes) {
+
+        public static final Dictionnaire VIDE = new Dictionnaire(Map.of(), Map.of(), Map.of());
+
+        /** Les états des écrans (dossier, attribution, PV, séance, évaluation, cérémonie, retrait, fiche, procédure) et les formes. */
+        public static Map<String, String> etats() {
+            Map<String, String> m = new HashMap<>();
+            String[][] t = { { "BROUILLON", "Brouillon" }, { "SOUMIS", "Soumis" }, { "PRET_DISPATCH", "Prêt au dispatch" },
+                    { "DISPATCHE", "Dispatché" }, { "EXAMINE", "Examiné" }, { "PV_SIGNE", "PV signé" }, { "EN_VERIFICATION", "En vérification" },
+                    { "EN_ATTENTE_DECISION_PRMP", "En attente de la décision de la PRMP" }, { "OBSERVATIONS_LEVEES", "Observations levées" },
+                    { "DECISION_TRANSMISE_SIGMP", "Décision transmise au SIGMP" }, { "EN_ATTENTE_PIECES", "En attente de pièces" },
+                    { "A_REEXAMINER", "À réexaminer" }, { "EN_ATTENTE_COMPLEMENTS_DEPOT", "En attente de compléments" }, { "RETIRE", "Retiré" },
+                    { "CLOTURE", "Clôturé" }, { "REMPLACE", "Remplacé" }, { "AU_CONTROLE", "Au contrôle" }, { "ATTRIBUE", "Attribué" },
+                    { "INFORME", "Soumissionnaires informés" }, { "SIGNE", "Signé" }, { "NOTIFIE", "Notifié" }, { "PUBLIE", "Publié" },
+                    { "INFRUCTUEUX", "Infructueux" }, { "PROJET_SOUMIS", "Projet soumis" }, { "EN_RECTIFICATION", "En rectification" },
+                    { "PROJET_ACCEPTE", "Projet accepté" }, { "A_VENIR", "À venir" }, { "OUVERTE", "Ouverte" }, { "DECHIFFREE", "Déchiffrée" },
+                    { "PV_A_SIGNER", "PV à signer" }, { "ILLISIBLE", "Illisible" }, { "CLOSE", "Close" }, { "EN_COURS", "En cours" },
+                    { "RAPPORT_A_SIGNER", "Rapport à signer" }, { "A_REFAIRE", "À refaire" }, { "EN_ATTENTE", "En attente" },
+                    { "ACCEPTEE", "Acceptée" }, { "REFUSEE", "Refusée" }, { "VALIDEE", "Validée" }, { "A_PREPARER", "À préparer" },
+                    { "PAPIER", "Papier" }, { "ELECTRONIQUE", "Électronique" }, { "COMPLETE", "Complète" }, { "INCOMPLETE", "Incomplète" },
+                    { "ABSENTE", "Absente" } };
+            for (String[] x : t) {
+                m.put(x[0], x[1]);
+            }
+            for (cnm.prs.enums.FormeMarche f : cnm.prs.enums.FormeMarche.values()) {
+                m.putIfAbsent(f.name(), f.libelle());
+            }
+            for (cnm.prs.enums.CategorieDao c : cnm.prs.enums.CategorieDao.values()) {
+                m.putIfAbsent(c.name(), c.libelle());
+            }
+            m.putIfAbsent("QUANTITE_FIXE", "Quantité fixe");
+            m.putIfAbsent("A_COMMANDE", "À commandes");
+            m.putIfAbsent("CONTRAT_CADRE", "Contrat-cadre");
+            return m;
+        }
+    }
 
     private EcartsInstantane() {
     }
@@ -64,85 +130,222 @@ public final class EcartsInstantane {
     public record Resultat(List<Ecart> ecarts, boolean tronque) {
     }
 
-    /** Compare {@code soumis} (l'écran figé) à {@code actuel} (recalculé ; {@code null} : l'écran n'existe plus). */
+    /** Compare sans dictionnaire de codes. */
     public static Resultat comparer(JsonNode soumis, JsonNode actuel) {
+        return comparer(soumis, actuel, Dictionnaire.VIDE);
+    }
+
+    /** Compare {@code soumis} (l'écran figé) à {@code actuel} (recalculé ; {@code null} : l'écran n'existe plus). */
+    public static Resultat comparer(JsonNode soumis, JsonNode actuel, Dictionnaire dico) {
         List<Ecart> ecarts = new ArrayList<>();
         int[] total = { 0 };
         if (actuel == null || actuel.isNull()) {
             return new Resultat(List.of(new Ecart("", "Écran supprimé depuis la soumission", "présent", null)), false);
         }
-        comparer("", new ArrayList<>(), null, soumis, actuel, ecarts, total);
+        new Comparaison(dico, ecarts, total).comparer("", new ArrayList<>(), null, soumis, actuel);
         return new Resultat(ecarts, total[0] > PLAFOND);
     }
 
-    private static void comparer(String chemin, List<String> contexte, String cle, JsonNode a, JsonNode b, List<Ecart> ecarts, int[] total) {
-        if (a == null || a.isNull()) {
-            if (b != null && !b.isNull() && !b.isMissingNode()) {
-                ajouter(chemin, contexte, cle, null, b.isContainer() ? resume(b) : valeur(cle, b), ecarts, total);
+    private record Comparaison(Dictionnaire dico, List<Ecart> ecarts, int[] total) {
+
+        void comparer(String chemin, List<String> contexte, String cle, JsonNode a, JsonNode b) {
+            if (a == null || a.isNull()) {
+                if (b != null && !b.isNull() && !b.isMissingNode()) {
+                    ajouter(chemin, contexte, null, b.isContainer() ? resume(b) : valeur(cle, b));
+                }
+                return;
             }
-            return;
+            if (b == null || b.isMissingNode()) {
+                ajouter(chemin, contexte, a.isContainer() ? resume(a) : valeur(cle, a), null);
+                return;
+            }
+            if (a.isObject() && b.isObject()) {
+                Iterator<String> noms = a.propertyNames().iterator();
+                while (noms.hasNext()) {
+                    String nom = noms.next();
+                    if (volatil(nom)) {
+                        continue;
+                    }
+                    JsonNode vb = b.has(nom) ? b.get(nom) : null;
+                    List<String> ctx = new ArrayList<>(contexte);
+                    ctx.add(libelleChamp(nom));
+                    comparer(chemin.isEmpty() ? nom : chemin + "." + nom, ctx, nom, a.get(nom),
+                            vb == null ? tools.jackson.databind.node.MissingNode.getInstance() : vb);
+                }
+                return;
+            }
+            if (a.isArray() && b.isArray()) {
+                comparerListes(chemin, contexte, cle, a, b);
+                return;
+            }
+            String va = valeur(cle, a);
+            String vb = valeur(cle, b);
+            if (!java.util.Objects.equals(va, vb)) {
+                ajouter(chemin, contexte, va, vb);
+            }
         }
-        if (b == null || b.isMissingNode()) {
-            ajouter(chemin, contexte, cle, a.isContainer() ? "présent" : valeur(cle, a), null, ecarts, total);
-            return;
+
+        void comparerListes(String chemin, List<String> contexte, String cle, JsonNode a, JsonNode b) {
+            String id = identite(a, b);
+            String element = ELEMENTS.getOrDefault(cle, cle == null ? "Élément" : libelleChamp(cle));
+            // Le dernier libellé du contexte est le nom de la liste : l'élément le remplace (« Lot 1 » plutôt que « Lots — Lot 1 »).
+            List<String> base = contexte.isEmpty() ? new ArrayList<>() : new ArrayList<>(contexte.subList(0, contexte.size() - 1));
+            Map<String, JsonNode> parB = new LinkedHashMap<>();
+            for (int i = 0; i < b.size(); i++) {
+                parB.put(cleElement(b.get(i), id, i), b.get(i));
+            }
+            java.util.Set<String> vus = new java.util.HashSet<>();
+            for (int i = 0; i < a.size(); i++) {
+                String k = cleElement(a.get(i), id, i);
+                vus.add(k);
+                List<String> ctx = new ArrayList<>(base);
+                ctx.add(element + " " + nomElement(a.get(i), id, k, i));
+                JsonNode eb = parB.get(k);
+                String c = chemin + "[" + i + "]";
+                if (eb == null) {
+                    ajouter(c, ctx, resume(a.get(i)), null);
+                } else {
+                    comparer(c, ctx, null, a.get(i), eb);
+                }
+            }
+            int j = 0;
+            for (Map.Entry<String, JsonNode> e : parB.entrySet()) {
+                if (!vus.contains(e.getKey())) {
+                    List<String> ctx = new ArrayList<>(base);
+                    ctx.add(element + " " + nomElement(e.getValue(), id, e.getKey(), j) + " (ajouté)");
+                    ajouter(chemin + "[+" + j + "]", ctx, null, resume(e.getValue()));
+                }
+                j++;
+            }
         }
-        if (a.isObject() && b.isObject()) {
-            Iterator<String> noms = a.propertyNames().iterator();
+
+        void ajouter(String chemin, List<String> contexte, String soumis, String actuel) {
+            total[0]++;
+            if (ecarts.size() < PLAFOND) {
+                ecarts.add(new Ecart(chemin, contexte.isEmpty() ? chemin : String.join(" — ", contexte), soumis, actuel));
+            }
+        }
+
+        /** Une valeur telle qu'on la lit : libellé d'un code connu (B1), montant en Ar, date jj/mm/aaaa (et heure), oui/non. */
+        String valeur(String cle, JsonNode n) {
+            if (n == null || n.isNull() || n.isMissingNode()) {
+                return null;
+            }
+            if (n.isBoolean()) {
+                return n.asBoolean() ? "oui" : "non";
+            }
+            if (n.isNumber()) {
+                if ("idNature".equals(cle) && dico.natures().containsKey(n.asInt())) {
+                    return dico.natures().get(n.asInt());
+                }
+                if ("idMode".equals(cle) && dico.modes().containsKey(n.asInt())) {
+                    return dico.modes().get(n.asInt());
+                }
+                BigDecimal v = n.decimalValue();
+                return cle != null && montant(cle) ? montant(v) : v.stripTrailingZeros().toPlainString();
+            }
+            if (n.isContainer()) {
+                return resume(n);
+            }
+            String s = n.asString();
+            String code = dico.codes().get(s);
+            if (code != null) {
+                return code;
+            }
+            if (s.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                return date(s);
+            }
+            if (s.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}.*")) {
+                return date(s) + " " + s.substring(11, 16);
+            }
+            if (cle != null && montant(cle) && s.matches("-?\\d+(\\.\\d+)?")) {
+                return montant(new BigDecimal(s));
+            }
+            return s;
+        }
+
+        /**
+         * B3 — un objet ajouté ou retiré, résumé en une phrase par ce qui l'identifie à l'écran : offre (candidat — offre n° — montant),
+         * acte daté (le … par … — référence), membre (nom prénom — qualité), document (fichier — date), délai (du … au … (n jours)) ;
+         * à défaut, le texte compact sans les champs {@code id…} ; une liste, ses éléments résumés.
+         */
+        String resume(JsonNode n) {
+            if (n.isArray()) {
+                List<String> parts = new ArrayList<>();
+                n.forEach(x -> parts.add(x.isContainer() ? resume(x) : valeur(null, x)));
+                return couper(String.join(" ; ", parts));
+            }
+            if (!n.isObject()) {
+                return valeur(null, n);
+            }
+            String candidat = texte(n, "candidat", "raisonSociale", "soumissionnaire");
+            if (candidat != null) {
+                List<String> p = new ArrayList<>(List.of(candidat));
+                if (n.hasNonNull("numero")) {
+                    p.add("offre n° " + n.get("numero").asString());
+                }
+                String m = premierMontant(n);
+                if (m != null) {
+                    p.add(m);
+                }
+                return couper(String.join(" — ", p));
+            }
+            if (n.hasNonNull("debut") && n.hasNonNull("fin") || n.hasNonNull("du") && n.hasNonNull("au")) {
+                String d1 = n.hasNonNull("debut") ? n.get("debut").asString() : n.get("du").asString();
+                String d2 = n.hasNonNull("fin") ? n.get("fin").asString() : n.get("au").asString();
+                String jours = "";
+                try {
+                    jours = " (" + ChronoUnit.DAYS.between(LocalDate.parse(d1.substring(0, 10)), LocalDate.parse(d2.substring(0, 10))) + " jours)";
+                } catch (RuntimeException e) {
+                    // dates illisibles : sans le nombre de jours
+                }
+                return "du " + date(d1) + " au " + date(d2) + jours;
+            }
+            String le = texte(n, "le", "date", "dateSignature", "signeLe");
+            if (le != null && le.matches("\\d{4}-\\d{2}-\\d{2}.*")) {
+                StringBuilder sb = new StringBuilder("le ").append(date(le));
+                String par = texte(n, "par", "auteur", "signePar");
+                if (par != null) {
+                    sb.append(" par ").append(par);
+                }
+                String ref = texte(n, "reference", "autorite", "referenceEnregistrement", "approbationAutorite");
+                if (ref != null) {
+                    sb.append(" — ").append(ref);
+                }
+                return couper(sb.toString());
+            }
+            String nom = texte(n, "nom");
+            if (nom != null && (n.hasNonNull("prenom") || n.hasNonNull("qualite") || n.hasNonNull("prenoms"))) {
+                String prenom = texte(n, "prenom", "prenoms");
+                String qualite = texte(n, "qualite");
+                return couper(nom + (prenom == null ? "" : " " + prenom) + (qualite == null ? "" : " — " + valeur("qualite", n.get("qualite"))));
+            }
+            String fichier = texte(n, "nomFichier", "fichier");
+            if (fichier != null) {
+                String d = texte(n, "dateGeneration", "dateUpload", "deposeLe", "date");
+                return couper(fichier + (d == null || !d.matches("\\d{4}-\\d{2}-\\d{2}.*") ? "" : " — " + date(d)));
+            }
+            // À défaut : le texte compact, sans les identifiants techniques.
+            List<String> parts = new ArrayList<>();
+            Iterator<String> noms = n.propertyNames().iterator();
             while (noms.hasNext()) {
-                String nom = noms.next();
-                if (volatil(nom)) {
+                String k = noms.next();
+                JsonNode v = n.get(k);
+                if (k.startsWith("id") || v == null || v.isNull() || volatil(k)) {
                     continue;
                 }
-                JsonNode vb = b.has(nom) ? b.get(nom) : null;
-                List<String> ctx = new ArrayList<>(contexte);
-                ctx.add(libelleChamp(nom));
-                comparer(chemin.isEmpty() ? nom : chemin + "." + nom, ctx, nom, a.get(nom), vb == null ? missing() : vb, ecarts, total);
+                parts.add(libelleChamp(k).toLowerCase(Locale.ROOT) + " : " + (v.isContainer() ? resume(v) : valeur(k, v)));
             }
-            return;
+            return couper(String.join(", ", parts));
         }
-        if (a.isArray() && b.isArray()) {
-            comparerListes(chemin, contexte, cle, a, b, ecarts, total);
-            return;
-        }
-        String va = valeur(cle, a);
-        String vb = valeur(cle, b);
-        if (!java.util.Objects.equals(va, vb)) {
-            ajouter(chemin, contexte, cle, va, vb, ecarts, total);
-        }
-    }
 
-    private static void comparerListes(String chemin, List<String> contexte, String cle, JsonNode a, JsonNode b, List<Ecart> ecarts,
-            int[] total) {
-        String id = identite(a, b);
-        String element = ELEMENTS.getOrDefault(cle, cle == null ? "Élément" : libelleChamp(cle));
-        // Le dernier libellé du contexte est le nom de la liste : l'élément le remplace (« Lot 1 » plutôt que « lots — Lot 1 »).
-        List<String> base = contexte.isEmpty() ? new ArrayList<>() : new ArrayList<>(contexte.subList(0, contexte.size() - 1));
-        Map<String, JsonNode> parB = new LinkedHashMap<>();
-        for (int i = 0; i < b.size(); i++) {
-            parB.put(cle(b.get(i), id, i), b.get(i));
-        }
-        java.util.Set<String> vus = new java.util.HashSet<>();
-        for (int i = 0; i < a.size(); i++) {
-            String k = cle(a.get(i), id, i);
-            vus.add(k);
-            List<String> ctx = new ArrayList<>(base);
-            ctx.add(element + " " + (id == null ? String.valueOf(i + 1) : k));
-            JsonNode eb = parB.get(k);
-            String c = chemin + "[" + i + "]";
-            if (eb == null) {
-                ajouter(c, ctx, null, resume(a.get(i)), null, ecarts, total);
-            } else {
-                comparer(c, ctx, null, a.get(i), eb, ecarts, total);
+        private String premierMontant(JsonNode n) {
+            for (String k : List.of("montant", "montantTtc", "montantHt", "montantEvalue", "montantLu")) {
+                if (n.hasNonNull(k)) {
+                    return valeur(k, n.get(k));
+                }
             }
-        }
-        int j = 0;
-        for (Map.Entry<String, JsonNode> e : parB.entrySet()) {
-            if (!vus.contains(e.getKey())) {
-                List<String> ctx = new ArrayList<>(base);
-                ctx.add(element + " " + (id == null ? String.valueOf(j + 1) : e.getKey()) + " (ajouté)");
-                ajouter(chemin + "[+" + j + "]", ctx, null, null, resume(e.getValue()), ecarts, total);
-            }
-            j++;
+            return null;
         }
     }
 
@@ -162,64 +365,56 @@ public final class EcartsInstantane {
         return null;
     }
 
-    private static String cle(JsonNode n, String id, int rang) {
-        return id == null ? String.valueOf(rang) : n.get(id).asString();
+    /**
+     * Le nom d'un élément : sa clé d'identité quand elle est parlante ({@code numero}, {@code lot}, {@code code}…) ; derrière un
+     * identifiant technique ({@code id…}), son numéro, à défaut son rang, son lot, son nom, son candidat, son fichier, sa position (« les identifiants techniques ne
+     * s'affichent pas »).
+     */
+    private static String nomElement(JsonNode n, String id, String cle, int position) {
+        if (id != null && !id.startsWith("id")) {
+            return cle;
+        }
+        for (String k : List.of("numero", "rang", "lot", "nom", "candidat", "nomFichier", "code")) {
+            if (n != null && n.isObject() && n.hasNonNull(k) && !n.get(k).isContainer()) {
+                return n.get(k).asString();
+            }
+        }
+        return String.valueOf(position + 1);
     }
 
-    private static void ajouter(String chemin, List<String> contexte, String cle, String soumis, String actuel, List<Ecart> ecarts,
-            int[] total) {
-        total[0]++;
-        if (ecarts.size() < PLAFOND) {
-            ecarts.add(new Ecart(chemin, contexte.isEmpty() ? chemin : String.join(" — ", contexte), soumis, actuel));
-        }
+    private static String cleElement(JsonNode n, String id, int rang) {
+        return id == null ? String.valueOf(rang) : n.get(id).asString();
     }
 
     private static boolean volatil(String nom) {
         return VOLATILS.contains(nom) || nom.startsWith("peut") && nom.length() > 4 && Character.isUpperCase(nom.charAt(4));
     }
 
-    private static JsonNode missing() {
-        return tools.jackson.databind.node.MissingNode.getInstance();
+    private static boolean montant(String cle) {
+        return cle.toLowerCase(Locale.ROOT).contains("montant") || "montEstim".equals(cle);
     }
 
-    /** Le libellé d'un champ : le dictionnaire, à défaut le nom découpé en mots. */
+    /** Le libellé d'un champ (B2) : le dictionnaire, à défaut le nom découpé en mots ; majuscule initiale. */
     static String libelleChamp(String nom) {
         String l = LIBELLES.get(nom);
-        if (l != null) {
-            return l;
+        if (l == null) {
+            l = nom.replaceAll("([a-z0-9])([A-Z])", "$1 $2").toLowerCase(Locale.ROOT);
         }
-        return nom.replaceAll("([a-z0-9])([A-Z])", "$1 $2").toLowerCase(Locale.ROOT);
+        return l.isEmpty() ? l : Character.toUpperCase(l.charAt(0)) + l.substring(1);
     }
 
-    /** Une valeur telle qu'on la lit : montant en Ar, date jj/mm/aaaa (et heure), oui/non ; {@code null} pour une valeur nulle. */
-    static String valeur(String cle, JsonNode n) {
-        if (n == null || n.isNull() || n.isMissingNode()) {
-            return null;
-        }
-        if (n.isBoolean()) {
-            return n.asBoolean() ? "oui" : "non";
-        }
-        if (n.isNumber()) {
-            BigDecimal v = n.decimalValue();
-            if (cle != null && cle.toLowerCase(Locale.ROOT).contains("montant")) {
-                return montant(v);
+    /** La première valeur textuelle non vide parmi ces champs. */
+    private static String texte(JsonNode n, String... cles) {
+        for (String k : cles) {
+            if (n.hasNonNull(k) && !n.get(k).isContainer() && !n.get(k).asString().isBlank()) {
+                return n.get(k).asString();
             }
-            return v.stripTrailingZeros().toPlainString();
         }
-        if (n.isContainer()) {
-            return resume(n);
-        }
-        String s = n.asString();
-        if (s.matches("\\d{4}-\\d{2}-\\d{2}")) {
-            return s.substring(8, 10) + "/" + s.substring(5, 7) + "/" + s.substring(0, 4);
-        }
-        if (s.matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}.*")) {
-            return s.substring(8, 10) + "/" + s.substring(5, 7) + "/" + s.substring(0, 4) + " " + s.substring(11, 16);
-        }
-        if (cle != null && cle.toLowerCase(Locale.ROOT).contains("montant") && s.matches("-?\\d+(\\.\\d+)?")) {
-            return montant(new BigDecimal(s));
-        }
-        return s;
+        return null;
+    }
+
+    private static String date(String s) {
+        return s.length() >= 10 ? s.substring(8, 10) + "/" + s.substring(5, 7) + "/" + s.substring(0, 4) : s;
     }
 
     private static String montant(BigDecimal v) {
@@ -229,9 +424,7 @@ public final class EcartsInstantane {
         return new DecimalFormat("#,##0.##", sy).format(v) + " Ar";
     }
 
-    /** Un élément entier, résumé (ajout ou retrait) : son texte compact, au plus 120 caractères. */
-    private static String resume(JsonNode n) {
-        String s = n.toString();
-        return s.length() > 120 ? s.substring(0, 117) + "…" : s;
+    private static String couper(String s) {
+        return s.length() > 200 ? s.substring(0, 197) + "…" : s;
     }
 }

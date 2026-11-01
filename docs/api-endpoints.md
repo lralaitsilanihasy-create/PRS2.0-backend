@@ -10043,6 +10043,16 @@ hors de cette coquille interne.
     `tronque: true` au-delà ;
   - **`comparable: false`** (et `identique` nul, sans écart) quand l'écran ne se relit pas pour l'appelant (écran calculé pour un
     périmètre : l'avis et les lettres pour la PRMP, la séance pour ses lecteurs…) — ni faux écart ni erreur.
+  - ⚠️ **2026-11-01 (demande front « ecarts-lisibles »)** — **B1** : une valeur qui est un code connu est servie par son **libellé** :
+    états des écrans (statuts de dossier, états d'attribution, de PV, de séance, d'évaluation, de cérémonie, de retrait, formes et
+    catégories — dictionnaire du serveur), **avis** (`tr_avis`), **statut de marché** (`tr_statut_marche`), et pour les champs
+    `idNature` / `idMode` la nature et le mode (`tr_nature`, `tr_mode_passation`) ; un code sans libellé connu reste tel quel. **B2** :
+    les noms de champ des écrans figés en français (« Dossier de marché », « Délai d'attente », « Information des soumissionnaires »,
+    « Pièces de l'attributaire », « Avis d'attribution », « Suivi des titulaires »…), **majuscule initiale** ; repli inchangé. Un
+    élément de liste apparié par un identifiant technique (`id…`) est nommé par son numéro, à défaut son rang, son lot, son nom, son
+    candidat ou son fichier. **B3** : un objet ajouté ou retiré est **résumé en une phrase** — offre ou titulaire « candidat — offre n° —
+    montant », acte daté « le jj/mm/aaaa par … — référence », membre « nom prénom — qualité », document « fichier — date », délai « du …
+    au … (n jours) » ; à défaut, « champ : valeur » sans les champs `id…` ; une liste, ses éléments résumés séparés par « ; ».
 
 
 ### Le manuel révisé pour l'application, lot 1, tranche R5 : le socle des contrôles automatiques — V105 ⚠️ 2026-10-13
