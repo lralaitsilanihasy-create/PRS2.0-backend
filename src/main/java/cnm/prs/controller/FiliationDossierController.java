@@ -21,6 +21,15 @@ public class FiliationDossierController {
         this.historique = historique;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private cnm.prs.service.EssentielDossierService essentiel;
+
+    /** ⚠️ 2026-11-01 (« essentiel-dossier », §B1) — l'avis, l'attributaire de chaque lot, le contrat, les suites ; 404 ; 403. */
+    @GetMapping("/api/dossiers/{idDossier}/essentiel")
+    public cnm.prs.dto.EssentielDossierDto essentiel(@PathVariable Integer idDossier) {
+        return essentiel.essentiel(idDossier);
+    }
+
     /** ⚠️ 2026-10-31 (§B2) — l'historique d'un dossier : ses objets rattachés, triés par date ; 404 inconnu ; 403 hors périmètre. */
     @GetMapping("/api/dossiers/{idDossier}/historique")
     public java.util.List<cnm.prs.dto.HistoriqueDossierDto> historique(@PathVariable Integer idDossier) {

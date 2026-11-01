@@ -32,6 +32,7 @@ class FiliationDossierIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private cnm.prs.repository.AttributionRepository attributionRepository;
     @Autowired private cnm.prs.repository.ActeGestionRepository acteRepository;
     @Autowired private cnm.prs.repository.ContratVigueurRepository contratRepository;
+    @Autowired private cnm.prs.repository.TacheDossierRepository tacheRepository;
 
     private Long idDmc;
 
@@ -180,6 +181,65 @@ class FiliationDossierIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<Object>>read(prmp, "$[*].acteur")).containsOnlyNulls();
         mvc.perform(get("/api/dossiers/9510/historique").header("Authorization",
                 bearer("PRMP002", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP002", "ANT"))).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-11-01 (« essentiel-dossier ») — B1 : l'avis du dernier PV, l'attributaire du lot, le contrat, les suites ; "
+            + "un plan n'a que l'avis ; B2 : un dispatch sans date prend celle du passage DISPATCH du chronométrage")
+    void essentielEtDateDuDispatch() throws Exception {
+        receptionRepository.save(reception(9520, 9520, "CTRCC1", true));
+        dispatchRepository.save(dispatch(9520, 9520, "CTRCC1", "CTRMEM", "CTRPRE"));
+        examenRepository.save(examen(9520, 9520, "CTRMEM"));
+        seedPvSigne(9520, 9520);
+        cnm.prs.entity.PvExamen pv = pvExamenRepository.findById(9520).orElseThrow();
+        pv.setRefePv("00009/MAOO-CC/CNM/PV/2026");
+        pvExamenRepository.save(pv);
+        cnm.prs.entity.Attribution a = attributionRepository.findFirstByIdDossier(9520).orElseThrow();
+        a.setAttribueLe(LocalDateTime.now().minusDays(20));
+        a.setSigneLe(LocalDateTime.of(2026, 9, 14, 10, 0));
+        a.setMontant(new java.math.BigDecimal("11279883606"));
+        attributionRepository.save(a);
+        cnm.prs.entity.ContratVigueur c = new cnm.prs.entity.ContratVigueur();
+        c.setIdDmc(idDmc);
+        c.setLot(1);
+        c.setTypeMarche("CONTRAT_CADRE");
+        c.setDateEffet(java.time.LocalDate.of(2026, 9, 16));
+        c.setPeriodeMois(12);
+        c.setDateFin(java.time.LocalDate.of(2027, 9, 16));
+        c.setCreeLe(LocalDateTime.now());
+        contratRepository.save(c);
+
+        mvc.perform(get("/api/dossiers/9520/essentiel").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.avis.code").value("FAV")).andExpect(jsonPath("$.avis.definitif").value(true))
+                .andExpect(jsonPath("$.avis.refePv").value("00009/MAOO-CC/CNM/PV/2026")).andExpect(jsonPath("$.avis.idPv").value(9520))
+                .andExpect(jsonPath("$.attributions[0].lot").value(1)).andExpect(jsonPath("$.attributions[0].montant").value(11279883606L))
+                .andExpect(jsonPath("$.attributions[0].idDossierMarche").value(9520))
+                .andExpect(jsonPath("$.contrat.forme").value("CONTRAT_CADRE")).andExpect(jsonPath("$.contrat.signeLe").value("2026-09-14"))
+                .andExpect(jsonPath("$.contrat.finLe").value("2027-09-16")).andExpect(jsonPath("$.suites.actesGestion").value(1))
+                .andExpect(jsonPath("$.suites.bonsCommande").value(0));
+        // Le dossier de mise en concurrence voit l'attribution de chaque lot ; le plan, l'avis seul (ici aucun PV : tout nul).
+        mvc.perform(get("/api/dossiers/9510/essentiel").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.attributions[0].idDossierMarche").value(9520));
+        mvc.perform(get("/api/dossiers/9500/essentiel").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.avis").doesNotExist()).andExpect(jsonPath("$.attributions").doesNotExist())
+                .andExpect(jsonPath("$.contrat").doesNotExist());
+
+        // B2 — un dispatch sans date ni affectation datée : la fin du passage DISPATCH du chronométrage.
+        cnm.prs.entity.Dispatch d = dispatchRepository.findById(9520).orElseThrow();
+        d.setDateDispatch(null);
+        d.setDateCtrlAssigne(null);
+        dispatchRepository.save(d);
+        cnm.prs.entity.TacheDossier t = new cnm.prs.entity.TacheDossier();
+        t.setIdTache(tacheRepository.nextId());
+        t.setIdDossier(9520);
+        t.setEtape("DISPATCH");
+        t.setOccurrence(1);
+        t.setImActeur("CTRPRE");
+        t.setDateFin(LocalDateTime.of(2026, 8, 25, 9, 30));
+        tacheRepository.save(t);
+        String hist = mvc.perform(get("/api/dossiers/9520/historique").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(hist, "$[?(@.type=='DISPATCH')].date")).containsExactly("2026-08-25T09:30:00");
     }
 
     @Test

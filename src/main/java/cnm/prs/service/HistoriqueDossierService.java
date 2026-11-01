@@ -70,6 +70,13 @@ public class HistoriqueDossierService {
     private final cnm.prs.repository.ContratVigueurRepository contrats;
     private final cnm.prs.repository.BonCommandeRepository bons;
     private final cnm.prs.repository.ReceptionCommandeRepository receptionsCommande;
+    /** ⚠️ 2026-11-01 (« essentiel-dossier », §B2) — les passages du chronométrage (date du dispatch). */
+    private cnm.prs.repository.TacheDossierRepository taches;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setTaches(cnm.prs.repository.TacheDossierRepository taches) {
+        this.taches = taches;
+    }
 
     public HistoriqueDossierService(DossierRepository dossiers, DossierService dossierService, ReceptionRepository receptions,
             DispatchRepository dispatchs, ExamenRepository examens, PvExamenRepository pvs, LettreRenvoiRepository lettres,
@@ -113,8 +120,18 @@ public class HistoriqueDossierService {
                 null, prmp ? null : r.getImCtrlRecept(), "Passage " + (r.getNumPassage() == null ? "" : r.getNumPassage() + " ")
                         + Objects.toString(r.getTypePassage(), "").trim(), null, r.getNumPassage())));
         if (!prmp) {
-            for (Dispatch d : dispatchs.findParDossier(idDossier)) {
-                out.add(new HistoriqueDossierDto(HistoriqueDossierDto.DISPATCH, d.getDateDispatch(), d.getIdDispatch(), null, null, null,
+            // ⚠️ 2026-11-01 (demande front « essentiel-dossier », §B2) — la date du dispatch : la sienne, à défaut celle de l'affectation
+            // au Membre, à défaut la fin du passage DISPATCH du chronométrage (celle de la frise, datesEtapes), le k-ième dispatch
+            // appariant le k-ième passage.
+            List<LocalDateTime> passages = taches.findParDossier(idDossier).stream()
+                    .filter(t -> cnm.prs.enums.EtapeCircuit.DISPATCH.name().equals(t.getEtape()) && t.getDateFin() != null)
+                    .map(cnm.prs.entity.TacheDossier::getDateFin).sorted().toList();
+            List<Dispatch> ds = dispatchs.findParDossier(idDossier).stream().sorted(Comparator.comparing(Dispatch::getIdDispatch)).toList();
+            for (int k = 0; k < ds.size(); k++) {
+                Dispatch d = ds.get(k);
+                LocalDateTime date = d.getDateDispatch() != null ? d.getDateDispatch() : d.getDateCtrlAssigne() != null
+                        ? debut(d.getDateCtrlAssigne()) : passages.isEmpty() ? null : passages.get(Math.min(k, passages.size() - 1));
+                out.add(new HistoriqueDossierDto(HistoriqueDossierDto.DISPATCH, date, d.getIdDispatch(), null, null, null,
                         d.getImCtrlDispatch(), d.getImCtrlMembre() == null ? null : "attribué à " + d.getImCtrlMembre(), null, null));
             }
             examens.findParDossierRecents(idDossier).forEach(e -> out.add(new HistoriqueDossierDto(HistoriqueDossierDto.EXAMEN,

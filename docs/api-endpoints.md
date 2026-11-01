@@ -64,6 +64,16 @@
   marché : la procédure restreinte à son lot. **Visibilité** : 403 hors périmètre ; pour la PRMP et l'UGPM, ni `DISPATCH` ni `EXAMEN`,
   le PV seulement signé, la lettre seulement signée, `acteur` toujours nul. Une requête par nature, pour un dossier.
 - **Recherche** (B3) : voir `GET /api/dossiers/recherche?q=` ci-dessus.
+- ⚠️ **2026-11-01 (demande front « essentiel-dossier »)** — **`GET /api/dossiers/{id}/essentiel`** (B1), mêmes lecteurs que
+  `GET /api/dossiers/{id}` (403, 404) → `{ avis, attributions, contrat, suites }`, chaque bloc `null` tant qu'il n'existe pas :
+  `avis { code, libelle (tr_avis), refePv, definitif, idPv }` du dernier PV du dossier (pour la PRMP et l'UGPM, du dernier PV
+  **signé**) ; `attributions[{ lot, attributaire, numeroOffre, montant (numérique, Ar), idDossierMarche }]` — le lot d'un dossier de
+  marché, chaque lot **attribué** (et non retiré) de la procédure d'un dossier de mise en concurrence ; l'offre attribuée, à défaut le
+  titulaire de rang 1 ; `contrat { forme, libelleForme, signeLe, finLe }` — le contrat en vigueur du lot (premier lot pour un dossier
+  de mise en concurrence), `signeLe` = signature du marché, à défaut prise d'effet du contrat ; `suites { bonsCommande, dernierBon
+  { numero, date }, actesGestion }` — `null` sans bon ni acte. Un plan n'a que `avis`. Aucun nom de contrôleur.
+  **B2** : l'élément `DISPATCH` de l'historique est daté — date du dispatch, à défaut de l'affectation au Membre, à défaut fin du
+  passage `DISPATCH` du chronométrage (la date de la frise, `datesEtapes`), le k-ième dispatch appariant le k-ième passage.
 
 ### Performance des listes (⚠️ 2026-10-30, demande front « performance »)
 Aucun contrat ne change (mêmes routes, mêmes corps, mêmes codes) : seul le nombre de requêtes SQL par appel baisse.
