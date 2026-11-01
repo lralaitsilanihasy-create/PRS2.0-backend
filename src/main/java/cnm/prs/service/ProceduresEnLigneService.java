@@ -362,7 +362,32 @@ public class ProceduresEnLigneService {
                 frais,
                 compte == null || compte.numeroCompte() == null ? null
                         : new ProcedureEnLigneDto.CompteDao(compte.banque(), compte.titulaire(), compte.numeroCompte()),
-                payant);
+                payant,
+                avisPublic(avis).map(d -> new ProcedureEnLigneDto.AvisSpecifique(d.dateGeneration(), d.version(), d.tailleOctets()))
+                        .orElse(null));
+    }
+
+    // ------------------------------------------------------------------ ⚠️ 2026-11-01 — l'avis spécifique publié
+
+    /** Le PDF de l'avis spécifique imprimé le plus récent (Q1 : le dernier seul) ; vide sans avis (consultation restreinte comprise). */
+    private static Optional<DocumentFicheDto> avisPublic(List<DocumentFicheDto> avis) {
+        return avis.stream().filter(d -> DocumentsFicheMarcheService.TYPE_AVIS.equals(d.type()) && "pdf".equalsIgnoreCase(d.extension()))
+                .max(java.util.Comparator.comparing(DocumentFicheDto::idDocument));
+    }
+
+    /**
+     * ⚠️ 2026-11-01 (demande front « avis-specifique-public », §B1) — le PDF de l'avis spécifique publié, <strong>public</strong> : aux
+     * critères de {@link #procedure(Long)} (close comprise), la dernière impression (jamais le .docx ni le projet) ; 404 hors critères,
+     * pour une consultation restreinte ou tant qu'aucun avis n'est imprimé, sans dire pourquoi. Ce n'est pas un retrait du DAO : rien
+     * n'est inscrit au registre, aucun reçu n'est exigé.
+     */
+    @Transactional(readOnly = true)
+    public DocumentFicheMarche avisSpecifique(Long idDmc) {
+        Lue l = trouver(idDmc).filter(x -> !restreinte(x)).orElse(null);
+        Integer id = l == null ? null : avisPublic(documents.listerAvis(ficheRepository.versions(idDmc))).map(DocumentFicheDto::idDocument)
+                .orElse(null);
+        return (id == null ? Optional.<DocumentFicheMarche>empty() : documentRepository.findById(id))
+                .orElseThrow(() -> new ResourceNotFoundException("Avis spécifique introuvable."));
     }
 
 

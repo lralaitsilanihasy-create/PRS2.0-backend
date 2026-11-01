@@ -709,6 +709,45 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         pieceJointeDossierRepository.save(p);
     }
 
+    @Test
+    @DisplayName("⚠️ 2026-11-01 (« avis-specifique-public ») : l'avis publié se lit sans compte (le PDF de la dernière impression, jamais "
+            + "le .docx), hors registre des retraits ; avisSpecifique sur la procédure ; 404 avant l'impression")
+    void avisSpecifiquePublic() throws Exception {
+        String url = "/api/procedures-en-ligne/" + idDmc + "/avis-specifique";
+        mvc.perform(get(url)).andExpect(status().isNotFound());
+        poserAvis();
+        DocumentFicheMarche word = new DocumentFicheMarche();
+        word.setIdFiche(idFiche);
+        word.setType("AVIS");
+        word.setExtension("docx");
+        word.setNomFichier("AVIS_test_v1_01.docx");
+        word.setTailleOctets(2L);
+        word.setEmpreinte("1".repeat(64));
+        word.setDateGeneration(LocalDateTime.now());
+        word.setContenu("PK".getBytes());
+        documentRepository.save(word);
+        DocumentFicheMarche reimprime = new DocumentFicheMarche();
+        reimprime.setIdFiche(idFiche);
+        reimprime.setType("AVIS");
+        reimprime.setExtension("pdf");
+        reimprime.setNomFichier("AVIS_test_v1_02.pdf");
+        reimprime.setTailleOctets(9L);
+        reimprime.setEmpreinte("2".repeat(64));
+        reimprime.setDateGeneration(LocalDateTime.now());
+        reimprime.setContenu("%PDF-1.4 2".getBytes());
+        documentRepository.save(reimprime);
+        byte[] pdf = mvc.perform(get(url)).andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Type", "application/pdf"))
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(pdf)).isEqualTo("%PDF-1.4 2");   // la dernière impression
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.avisSpecifique.taille").value(9)).andExpect(jsonPath("$.avisSpecifique.imprimeLe").exists());
+        String liste = mvc.perform(get("/api/procedures-en-ligne")).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(liste, "$[?(@.idDmc==" + idDmc + ")].avisSpecifique.taille")).containsExactly(9);
+        assertThat(retraitRepository.findByIdDmcOrderByDateRetraitAscIdRetraitAsc(idDmc)).isEmpty();
+        mvc.perform(get("/api/procedures-en-ligne/999999/avis-specifique")).andExpect(status().isNotFound());
+    }
+
     private void poserAvis() {
         DocumentFicheMarche d = new DocumentFicheMarche();
         d.setIdFiche(idFiche);

@@ -28,7 +28,17 @@ public record ProcedureEnLigneDto(Long idDmc, String reference, String objet, St
          * ⚠️ §B4, H2 — le retrait exige un reçu validé : un dossier payant dont l'avis est imprimé pour la première fois à partir
          * de la livraison ({@code RETRAIT_PAYANT_DEPUIS}) ; faux pour un dossier gratuit ou une procédure lancée avant.
          */
-        boolean retraitPayant) {
+        boolean retraitPayant,
+        /**
+         * ⚠️ 2026-11-01 (demande front « avis-specifique-public », §B2) — l'avis spécifique imprimé, lisible sans compte par
+         * {@code GET /api/procedures-en-ligne/{idDmc}/avis-specifique} : la dernière impression (Q1) ; {@code null} sans avis
+         * imprimé, et pour une consultation restreinte (lettres d'invitation).
+         */
+        AvisSpecifique avisSpecifique) {
+
+    /** ⚠️ 2026-11-01 (§B2) — l'avis publié : date d'impression, version de la fiche imprimée, taille du PDF. */
+    public record AvisSpecifique(java.time.LocalDateTime imprimeLe, Integer version, Long taille) {
+    }
 
     /** Les frais d'un lot ({@code lot = null} : marché non alloti). */
     public record Frais(Integer lot, java.math.BigDecimal montant) {

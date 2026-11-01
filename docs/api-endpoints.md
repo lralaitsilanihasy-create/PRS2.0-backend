@@ -7495,6 +7495,7 @@ abscisse non nulle) et sur sa cohérence (deux détenteurs n'apportent pas la m�
 | GET | /api/fiches-marche/{idDmc}/seance/pv | — | le PDF | 200, 403, 404 | responsable, membres, PRMP, UGPM |
 | POST | /api/fiches-marche/{idDmc}/seance/constater-illisible | `{ motif }` | `SeanceDto` (`ILLISIBLE`) | 200, 400, 403, 409 `QUORUM_POSSIBLE` / `SEANCE_NON_OUVERTE` | responsable |
 | GET | /api/procedures-en-ligne/{idDmc}/pv | — | le PDF publié (⚠️ V70 : une fois signé) | 200, 404 | public |
+| GET | /api/procedures-en-ligne/{idDmc}/avis-specifique | — | ⚠️ **2026-11-01 (« avis-specifique-public », §B1)** — le PDF de l'avis spécifique imprimé, **la dernière impression** (Q1 : le dernier seul ; jamais le .docx ni le projet) ; `Content-Disposition` avec le nom enregistré. **Pas un retrait du DAO** : rien au registre, aucun reçu exigé | 200, 404 (hors critères de `GET …/{idDmc}`, consultation restreinte, ou aucun avis imprimé — sans dire pourquoi) | public |
 
 - **`SeanceDto`** = `{ idDmc, etat, heureOuverture, ouverteLe, ouverteDans, quorum, membres: [{ im, nom, president, present,
   partsApportees }], autres: [{ nom, qualite }], secoursEmploye, offres: [{ numero, lot, etat, partsRecues }], dechiffreeLe, pv: {
@@ -11133,6 +11134,10 @@ plateforme n'encaisse rien : le paiement reste un versement sur le compte de l'A
 - **`retraitPayant`** : le retrait exige un reçu validé — dossier payant **et** avis imprimé pour la première fois à partir de
   `RETRAIT_PAYANT_DEPUIS` (posé à l'application de V72 : **H2**, une procédure déjà lancée garde le retrait libre jusqu'à sa
   clôture, l'indicateur se déduit de la date d'impression du premier avis, figée).
+- ⚠️ **2026-11-01 (« avis-specifique-public », §B2) — `avisSpecifique`** (dernier champ de `ProcedureEnLigneDto`, liste et détail) :
+  `{ imprimeLe, version, taille }` du PDF de l'avis spécifique imprimé le plus récent (lisible par `GET …/{idDmc}/avis-specifique`) ;
+  `null` sans avis imprimé et pour une consultation restreinte (lettres d'invitation). Q2 (journal et numéro du Journal des marchés
+  publics) : **non requis**, arbitrage du pilote du 01/11.
 
 **§B2 — Le reçu, déposé par le candidat** (`RecusDaoService`) :
 - **Par entreprise** (Q1) : la clé est le **NIF** de l'entreprise déclarée par le compte ; deux comptes de la même entreprise le

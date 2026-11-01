@@ -146,6 +146,17 @@ public class ProceduresEnLigneController {
                 .contentType(org.springframework.http.MediaType.APPLICATION_PDF).body(seance.pvPublic(idDmc));
     }
 
+    /**
+     * ⚠️ 2026-11-01 (demande front « avis-specifique-public », §B1) — le PDF de l'avis spécifique publié (dernière impression), sans
+     * compte ; 404 hors critères de la procédure, pour une consultation restreinte ou sans avis imprimé. Pas un retrait du DAO.
+     */
+    @GetMapping("/{idDmc}/avis-specifique")
+    public ResponseEntity<byte[]> avisSpecifique(@PathVariable Long idDmc) {
+        DocumentFicheMarche d = service.avisSpecifique(idDmc);
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition(d.getNomFichier()))
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF).body(d.getContenu());
+    }
+
     @GetMapping("/{idDmc}/cles")
     public cnm.prs.dto.CeremonieDto.ClesPubliques cles(@PathVariable Long idDmc) {
         return ceremonie.clesPubliques(idDmc);
