@@ -33,6 +33,15 @@ public class InstantaneController {
         return service.lister(idDossier);
     }
 
+    /**
+     * ⚠️ 2026-11-01 (« ecarts-ecrans-figes », §B1) — les écarts entre les écrans figés de la soumission {@code ?soumission=n} (à défaut
+     * la dernière) et leur état actuel ; 404 sans écran figé. Déclarée avant {@code /{ecran}}, qu'elle précède par son chemin littéral.
+     */
+    @GetMapping("/ecarts")
+    public cnm.prs.dto.EcartsInstantanesDto ecarts(@PathVariable Integer idDossier, @RequestParam(required = false) Integer soumission) {
+        return service.ecarts(idDossier, soumission);
+    }
+
     /** Le JSON figé d'un écran : de la soumission {@code ?soumission=n}, ou de la dernière. 400 {@code ECRAN_INCONNU} ; 404. */
     @GetMapping("/{ecran}")
     public JsonNode contenu(@PathVariable Integer idDossier, @PathVariable String ecran, @RequestParam(required = false) Integer soumission) {

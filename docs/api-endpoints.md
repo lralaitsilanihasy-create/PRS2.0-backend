@@ -10024,6 +10024,25 @@ hors de cette coquille interne.
 - `…/{ecran}/pdf` : l'export PDF (`INSTANTANE_<ecran>_<dossier>_s<n>.pdf`, moteur `DocumentLibre`) pour l'archivage avec le PV :
   rendu générique du JSON (objets en « libellé : valeur », listes d'objets en tableaux), titre, référence du dossier, pied avec le
   numéro, la date et l'empreinte.
+- ⚠️ **2026-11-01 (demande front « ecarts-ecrans-figes », §B1) — `GET …/instantanes/ecarts[?soumission=n]`** (à défaut la dernière),
+  mêmes lecteurs ; **404** sans écran figé. → `{ soumission, figeLe, ecrans[{ ecran, identique, comparable, tronque, ecarts[{ chemin,
+  libelle, soumis, actuel }] }] }`, écrans dans l'ordre de la famille. Chaque écran est recalculé comme au figement
+  (`InstantaneService.contenu`), sans rien enregistrer, dans sa propre transaction de lecture, puis comparé au JSON figé
+  (`EcartsInstantane`) :
+  - **seuls les champs présents dans l'écran figé sont comparés** (un champ apparu depuis — nouvelle version du serveur, champ que seul
+    le lecteur voit — n'est pas un écart ; un champ disparu en est un) ;
+  - **champs volatils écartés**, à tout niveau : `alertes`, `gestes`, `droits`, `actions`, `maintenant`, `aujourdhui`, `horloge`,
+    `joursRestants`, `delaiRestant`, `tempsRestant`, `enRetard`, `retard`, `depasse`, `echu`, `proche`, `aTraiter`, `disponible`,
+    `raison`, `dejaImprime`, `editable`, `modifiable`, `lecteur`, `moi`, et tout champ `peut…` ;
+  - éléments d'une liste appariés par **identité** (`numero`, `idOffre`, `idMembre`, `idDocument`, `idPiece`, `idArticle`,
+    `idCritere`, `idDecision`, `lot`, `code`, `im`, `idCompte`, `id` — la première présente partout), à défaut par rang ;
+  - **`libelle`** en clair : éléments nommés (« Lot 1 », « Offre n° 2 », « Membre … », « … (ajouté) »), champs par un dictionnaire des
+    noms courants, à défaut le nom découpé en mots, joints par « — » ; **`soumis` / `actuel`** formatés (montant « 2 939 941 765 Ar »,
+    date jj/mm/aaaa, oui/non ; un élément ajouté ou retiré résumé en texte compact), `null` pour une valeur absente ;
+  - **écran disparu** : `identique: false`, un écart « Écran supprimé depuis la soumission » ; **plafond** de 50 écarts par écran,
+    `tronque: true` au-delà ;
+  - **`comparable: false`** (et `identique` nul, sans écart) quand l'écran ne se relit pas pour l'appelant (écran calculé pour un
+    périmètre : l'avis et les lettres pour la PRMP, la séance pour ses lecteurs…) — ni faux écart ni erreur.
 
 
 ### Le manuel révisé pour l'application, lot 1, tranche R5 : le socle des contrôles automatiques — V105 ⚠️ 2026-10-13

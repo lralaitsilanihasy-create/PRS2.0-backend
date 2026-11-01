@@ -142,6 +142,15 @@ public class InstantaneService {
         this.actesGestion = actesGestion;
     }
 
+    /** ⚠️ 2026-11-01 (« ecarts-ecrans-figes ») — une transaction de lecture par écran recalculé (voir {@link #ecarts}). */
+    private org.springframework.transaction.support.TransactionTemplate lecture;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setTransactions(org.springframework.transaction.PlatformTransactionManager transactions) {
+        this.lecture = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        this.lecture.setReadOnly(true);
+    }
+
     // ------------------------------------------------------------------ figement
 
     /**
@@ -273,6 +282,49 @@ public class InstantaneService {
     @Transactional(readOnly = true)
     public JsonNode contenu(Integer idDossier, String ecran, Integer soumission) {
         return mapper.readTree(instantane(idDossier, ecran, soumission).getContenu());
+    }
+
+    /**
+     * ⚠️ 2026-11-01 (demande front « ecarts-ecrans-figes », §B1) — les écarts entre les écrans figés de la soumission {@code soumission}
+     * (à défaut la dernière) et leur état actuel, recalculé par {@link #contenu(String, Dossier, Long)} sans rien enregistrer et comparé
+     * par {@link EcartsInstantane}. Mêmes lecteurs que {@link #lister} ; 404 sans instantané. Un écran que l'appelant ne peut pas
+     * relire (écran calculé pour un périmètre) est rendu {@code comparable = false}.
+     * <p>
+     * <strong>Sans transaction englobante</strong> : un recalcul refusé lève une exception à travers un service transactionnel, ce qui
+     * marquerait une transaction englobante pour l'annulation (500) ; chaque écran est donc recalculé (et converti en JSON, pour ses
+     * lectures paresseuses) dans sa propre transaction de lecture ({@link #lecture}).
+     */
+    public cnm.prs.dto.EcartsInstantanesDto ecarts(Integer idDossier, Integer soumission) {
+        exigerDossierVisible(idDossier);
+        Integer numero = soumission != null ? soumission : repository.maxNumero(idDossier);
+        List<DossierInstantane> figes = numero == null ? List.of()
+                : repository.findByIdDossierOrderByNumeroSoumissionAscEcranAsc(idDossier).stream()
+                        .filter(i -> numero.equals(i.getNumeroSoumission())).toList();
+        if (figes.isEmpty()) {
+            throw new ResourceNotFoundException("Aucun écran figé pour le dossier " + idDossier
+                    + (soumission == null ? "" : " à la soumission n° " + soumission) + ".");
+        }
+        Dossier d = dossiers.findById(idDossier).orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
+        Long idDmc = idDmc(d);
+        List<String> ordre = ecrans(d.getIdTypeDossier());
+        List<cnm.prs.dto.EcartsInstantanesDto.Ecran> out = new ArrayList<>();
+        for (DossierInstantane i : figes.stream().sorted(java.util.Comparator.comparing((DossierInstantane x) -> ordre.indexOf(x.getEcran())))
+                .toList()) {
+            JsonNode actuel;
+            try {
+                actuel = lecture.execute(s -> {
+                    Object c = contenu(i.getEcran(), d, idDmc);
+                    return c == null ? null : (JsonNode) mapper.valueToTree(c);
+                });
+            } catch (RuntimeException e) {
+                log.debug("[INSTANTANE] écart non comparable dossier={} écran={} : {}", idDossier, i.getEcran(), e.getMessage());
+                out.add(new cnm.prs.dto.EcartsInstantanesDto.Ecran(i.getEcran(), null, false, false, List.of()));
+                continue;
+            }
+            EcartsInstantane.Resultat r = EcartsInstantane.comparer(mapper.readTree(i.getContenu()), actuel);
+            out.add(new cnm.prs.dto.EcartsInstantanesDto.Ecran(i.getEcran(), r.ecarts().isEmpty(), true, r.tronque(), r.ecarts()));
+        }
+        return new cnm.prs.dto.EcartsInstantanesDto(numero, figes.get(0).getFigeLe(), out);
     }
 
     /** L'export PDF d'un écran figé, pour l'archivage avec le PV. */

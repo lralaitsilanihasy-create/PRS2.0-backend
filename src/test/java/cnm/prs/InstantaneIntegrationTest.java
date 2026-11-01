@@ -150,6 +150,44 @@ class InstantaneIntegrationTest extends CnmIntegrationTestSupport {
                 .isInstanceOf(DataAccessException.class).hasMessageContaining("immuable");
     }
 
+    @Test
+    @DisplayName("⚠️ 2026-11-01 (« ecarts-ecrans-figes ») : écarts de la dernière soumission — PLAN identique juste après la soumission, "
+            + "puis un écart en clair (valeur soumise → actuelle) quand la ligne change ; soumission inconnue → 404")
+    void ecarts() throws Exception {
+        String cree = mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDossier = JsonPath.read(cree, "$.idDossier");
+        String url = "/api/dossiers/" + idDossier + "/instantanes/ecarts";
+        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isNotFound());   // brouillon : rien de figé
+        mvc.perform(post("/api/dossiers/" + idDossier + "/soumettre").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+
+        String avant = mvc.perform(get(url).header("Authorization", tokenMembre)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.soumission").value(1)).andExpect(jsonPath("$.figeLe").exists())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(avant, "$.ecrans[*].ecran")).containsExactly("PLAN", "AVIS", "CAO");
+        assertThat(JsonPath.<List<Boolean>>read(avant, "$.ecrans[?(@.ecran=='PLAN')].identique")).containsExactly(true);
+        // L'écran AVIS se recalcule pour la PRMP seule : non comparable pour le Membre (ni faux écart ni erreur), comparable pour elle.
+        assertThat(JsonPath.<List<Boolean>>read(avant, "$.ecrans[?(@.ecran=='AVIS')].comparable")).containsExactly(false);
+        assertThat(JsonPath.<List<Object>>read(avant, "$.ecrans[?(@.ecran=='AVIS')].identique")).containsOnlyNulls();
+        String prmp = mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(prmp, "$.ecrans[?(@.ecran=='AVIS')].comparable")).containsExactly(true);
+
+        cnm.prs.entity.Marche l = marcheRepository.findById(9901).orElseThrow();
+        l.setDesignationMarche("Fourniture de mobilier scolaire");
+        marcheRepository.saveAndFlush(l);
+        String apres = mvc.perform(get(url).param("soumission", "1").header("Authorization", tokenMembre)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(apres, "$.ecrans[?(@.ecran=='PLAN')].identique")).containsExactly(false);
+        assertThat(JsonPath.<List<String>>read(apres, "$.ecrans[?(@.ecran=='PLAN')].ecarts[?(@.chemin=='ligne.designationMarche')].libelle"))
+                .containsExactly("ligne — designation marche");
+        assertThat(JsonPath.<List<String>>read(apres, "$.ecrans[?(@.ecran=='PLAN')].ecarts[?(@.chemin=='ligne.designationMarche')].soumis"))
+                .containsExactly("Fourniture de mobilier de bureau");
+        assertThat(JsonPath.<List<String>>read(apres, "$.ecrans[?(@.ecran=='PLAN')].ecarts[?(@.chemin=='ligne.designationMarche')].actuel"))
+                .containsExactly("Fourniture de mobilier scolaire");
+        mvc.perform(get(url).param("soumission", "9").header("Authorization", tokenMembre)).andExpect(status().isNotFound());
+    }
+
     private void valider() throws Exception {
         besoinDeTest(idDmc);
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp)).andExpect(status().isOk());
