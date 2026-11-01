@@ -71,6 +71,28 @@ public class AvisEnDonneesService {
                 m.documentComplet(), m.mentions());
     }
 
+    /**
+     * ⚠️ 2026-11-01 (demande front « avis-specifique-public-donnees », §B1) — les mentions de l'avis <strong>publié</strong>, lues sur la
+     * version {@code version} de la fiche (celle de la dernière impression, fournie par l'appelant), pour l'espace candidat : même calcul
+     * que {@link #lire} ({@link MentionsPublication#verifier}), sans les contrôles de la Commission ; le numéro imprimé à l'avis
+     * ({@link DaoCompletService#numero}). Sans garde (l'appelant applique les critères publics) ; 404 sans version validée ou sans
+     * modèle d'avis (consultation restreinte : des lettres d'invitation, pas d'avis).
+     */
+    public cnm.prs.dto.AvisPublicDto publique(Long idDmc, Integer version) {
+        FicheMarcheService.EtatVersion ev = fiches.versionPresentee(idDmc, version).map(FicheMarcheService.VersionPresentee::etat)
+                .orElseThrow(() -> new ResourceNotFoundException("Avis spécifique introuvable."));
+        FicheMarcheDto etat = ev.etat();
+        boolean restreint = etat.getIdDetail() != null && valeursPpm.modeRestreint(etat.getIdDetail());
+        String sigle = ModelesDao.sigleAvis(ev.categorie(), restreint);
+        if (sigle == null) {
+            throw new ResourceNotFoundException("Avis spécifique introuvable.");
+        }
+        MentionsDto m = MentionsPublication.verifier(sigle, documents.modele(sigle), documents.rendrePublication(etat, sigle, false), etat);
+        return new cnm.prs.dto.AvisPublicDto(idDmc, ev.version(), sigle, DaoCompletService.numero(etat), valeur(ev, "B01-AC-01"),
+                m.mentions().stream().map(x -> new cnm.prs.dto.AvisPublicDto.Mention(x.code(), x.libelle(), x.sansObjet(),
+                        x.valeur() == null || x.valeur().isBlank() ? null : x.valeur())).toList());
+    }
+
     /** La valeur de la fiche, à défaut celle du plan (l'autorité contractante et la référence sont reprises du PPM). */
     private static String valeur(FicheMarcheService.EtatVersion ev, String code) {
         String v = FichePresentationService.premier(ev, code);

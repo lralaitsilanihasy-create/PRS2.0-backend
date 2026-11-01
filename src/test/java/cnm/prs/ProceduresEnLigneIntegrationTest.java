@@ -715,7 +715,14 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
     void avisSpecifiquePublic() throws Exception {
         String url = "/api/procedures-en-ligne/" + idDmc + "/avis-specifique";
         mvc.perform(get(url)).andExpect(status().isNotFound());
+        mvc.perform(get(url + "/donnees")).andExpect(status().isNotFound());
         poserAvis();
+        // ⚠️ 2026-11-01 (« avis-specifique-public-donnees ») — les mentions de l'avis publié, sans compte, sur la version imprimée.
+        String donnees = mvc.perform(get(url + "/donnees")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.gabarit").value("AVIS-F")).andExpect(jsonPath("$.numero").value("AOO 0001/MESupReS/2026"))
+                .andExpect(jsonPath("$.versionFiche").isNumber()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(donnees, "$.mentions[*].code")).isNotEmpty().contains("OBJET");
+        assertThat(donnees).doesNotContain("presenteAuGabarit").doesNotContain("renseignee").doesNotContain("documentComplet");
         DocumentFicheMarche word = new DocumentFicheMarche();
         word.setIdFiche(idFiche);
         word.setType("AVIS");

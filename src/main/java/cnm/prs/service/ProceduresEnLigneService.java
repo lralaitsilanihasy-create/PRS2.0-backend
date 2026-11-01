@@ -383,10 +383,23 @@ public class ProceduresEnLigneService {
      */
     @Transactional(readOnly = true)
     public DocumentFicheMarche avisSpecifique(Long idDmc) {
+        Integer id = avisPublicDe(idDmc).idDocument();
+        return documentRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Avis spécifique introuvable."));
+    }
+
+    /**
+     * ⚠️ 2026-11-01 (« avis-specifique-public-donnees », §B1) — la version de la fiche de la dernière impression de l'avis public, aux
+     * mêmes critères et avec les mêmes 404 que {@link #avisSpecifique(Long)}.
+     */
+    @Transactional(readOnly = true)
+    public Integer versionAvisSpecifique(Long idDmc) {
+        return avisPublicDe(idDmc).version();
+    }
+
+    /** Le dernier avis imprimé d'une procédure publique (consultation restreinte exclue) ; 404 sinon, sans dire pourquoi. */
+    private DocumentFicheDto avisPublicDe(Long idDmc) {
         Lue l = trouver(idDmc).filter(x -> !restreinte(x)).orElse(null);
-        Integer id = l == null ? null : avisPublic(documents.listerAvis(ficheRepository.versions(idDmc))).map(DocumentFicheDto::idDocument)
-                .orElse(null);
-        return (id == null ? Optional.<DocumentFicheMarche>empty() : documentRepository.findById(id))
+        return (l == null ? Optional.<DocumentFicheDto>empty() : avisPublic(documents.listerAvis(ficheRepository.versions(idDmc))))
                 .orElseThrow(() -> new ResourceNotFoundException("Avis spécifique introuvable."));
     }
 

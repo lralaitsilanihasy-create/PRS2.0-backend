@@ -35,9 +35,14 @@ public class ProceduresEnLigneController {
     /** ⚠️ R7 (V109) — les questions des candidats. */
     private final cnm.prs.service.QuestionsCandidatService questions;
 
+    /** ⚠️ 2026-11-01 (« avis-specifique-public-donnees ») — les mentions de l'avis publié. */
+    private final cnm.prs.service.AvisEnDonneesService avisEnDonnees;
+
     public ProceduresEnLigneController(ProceduresEnLigneService service, cnm.prs.service.CeremonieService ceremonie,
             cnm.prs.service.SeanceService seance, cnm.prs.service.FormulairesEnLigne formulaires, cnm.prs.service.RecusDaoService recus,
-            tools.jackson.databind.ObjectMapper mapper, cnm.prs.service.QuestionsCandidatService questions) {
+            tools.jackson.databind.ObjectMapper mapper, cnm.prs.service.QuestionsCandidatService questions,
+            cnm.prs.service.AvisEnDonneesService avisEnDonnees) {
+        this.avisEnDonnees = avisEnDonnees;
         this.questions = questions;
         this.recus = recus;
         this.mapper = mapper;
@@ -155,6 +160,15 @@ public class ProceduresEnLigneController {
         DocumentFicheMarche d = service.avisSpecifique(idDmc);
         return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition(d.getNomFichier()))
                 .contentType(org.springframework.http.MediaType.APPLICATION_PDF).body(d.getContenu());
+    }
+
+    /**
+     * ⚠️ 2026-11-01 (« avis-specifique-public-donnees », §B1) — les mentions de l'avis publié (version de la dernière impression), sans
+     * compte ; mêmes critères et 404 que le PDF. Pas un retrait du DAO.
+     */
+    @GetMapping("/{idDmc}/avis-specifique/donnees")
+    public cnm.prs.dto.AvisPublicDto avisSpecifiqueDonnees(@PathVariable Long idDmc) {
+        return avisEnDonnees.publique(idDmc, service.versionAvisSpecifique(idDmc));
     }
 
     @GetMapping("/{idDmc}/cles")
