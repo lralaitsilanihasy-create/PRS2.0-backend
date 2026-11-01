@@ -10053,6 +10053,9 @@ hors de cette coquille interne.
     candidat ou son fichier. **B3** : un objet ajouté ou retiré est **résumé en une phrase** — offre ou titulaire « candidat — offre n° —
     montant », acte daté « le jj/mm/aaaa par … — référence », membre « nom prénom — qualité », document « fichier — date », délai « du …
     au … (n jours) » ; à défaut, « champ : valeur » sans les champs `id…` ; une liste, ses éléments résumés séparés par « ; ».
+    ⚠️ **Complément (B4, B5)** : le repli « champ : valeur » passe par le dictionnaire des champs (« Départ », « Échéance », « Délai
+    dépassé ») ; un nom découpé en mots est accentué mot à mot ; le nom d'une liste est gardé devant l'élément quand il n'en est pas
+    le simple pluriel (« Suivi des titulaires — Titulaire 1 », mais « Lot 1 »).
 
 
 ### Le manuel révisé pour l'application, lot 1, tranche R5 : le socle des contrôles automatiques — V105 ⚠️ 2026-10-13

@@ -80,7 +80,11 @@ public final class EcartsInstantane {
             Map.entry("closeLe", "close le"), Map.entry("signeLe", "signé le"), Map.entry("notifieLe", "notifié le"),
             Map.entry("attribueLe", "attribué le"), Map.entry("idMode", "mode de passation"), Map.entry("idNature", "nature"),
             Map.entry("statutMarche", "statut du marché"), Map.entry("formeMarche", "forme du marché"), Map.entry("categorie", "catégorie"),
-            Map.entry("typeMarche", "forme du marché"), Map.entry("montEstim", "montant estimatif"), Map.entry("financement", "financement"));
+            Map.entry("typeMarche", "forme du marché"), Map.entry("montEstim", "montant estimatif"), Map.entry("financement", "financement"),
+            // ⚠️ 2026-11-01 (« ecarts-lisibles », B4)
+            Map.entry("dateDelivrance", "date de délivrance"), Map.entry("dateExpiration", "date d'expiration"),
+            Map.entry("dateEcheance", "date d'échéance"), Map.entry("delaiDepasse", "délai dépassé"), Map.entry("depart", "départ"),
+            Map.entry("echeance", "échéance"));
 
     /**
      * B1 — les libellés des codes : {@code codes} (états des écrans, avis, statut de marché, formes, catégories), {@code natures} et
@@ -188,8 +192,12 @@ public final class EcartsInstantane {
         void comparerListes(String chemin, List<String> contexte, String cle, JsonNode a, JsonNode b) {
             String id = identite(a, b);
             String element = ELEMENTS.getOrDefault(cle, cle == null ? "Élément" : libelleChamp(cle));
-            // Le dernier libellé du contexte est le nom de la liste : l'élément le remplace (« Lot 1 » plutôt que « Lots — Lot 1 »).
-            List<String> base = contexte.isEmpty() ? new ArrayList<>() : new ArrayList<>(contexte.subList(0, contexte.size() - 1));
+            // Le dernier libellé du contexte est le nom de la liste : l'élément le remplace quand il n'en est que le pluriel (« Lot 1 »
+            // plutôt que « Lots — Lot 1 ») ; ⚠️ 2026-11-01 (« ecarts-lisibles », B5) un nom de liste qui dit autre chose est gardé
+            // (« Suivi des titulaires — Titulaire 1 », distinct de « Titulaire 1 » de la liste titulaires).
+            boolean pluriel = !contexte.isEmpty()
+                    && contexte.get(contexte.size() - 1).equalsIgnoreCase(element.split(" ")[0] + "s");
+            List<String> base = pluriel ? new ArrayList<>(contexte.subList(0, contexte.size() - 1)) : new ArrayList<>(contexte);
             Map<String, JsonNode> parB = new LinkedHashMap<>();
             for (int i = 0; i < b.size(); i++) {
                 parB.put(cleElement(b.get(i), id, i), b.get(i));
@@ -334,7 +342,8 @@ public final class EcartsInstantane {
                 if (k.startsWith("id") || v == null || v.isNull() || volatil(k)) {
                     continue;
                 }
-                parts.add(libelleChamp(k).toLowerCase(Locale.ROOT) + " : " + (v.isContainer() ? resume(v) : valeur(k, v)));
+                // ⚠️ 2026-11-01 (« ecarts-lisibles », B4) — le nom par le dictionnaire de B2 (accents, majuscule), comme les libellés.
+                parts.add(libelleChamp(k) + " : " + (v.isContainer() ? resume(v) : valeur(k, v)));
             }
             return couper(String.join(", ", parts));
         }
@@ -394,14 +403,42 @@ public final class EcartsInstantane {
         return cle.toLowerCase(Locale.ROOT).contains("montant") || "montEstim".equals(cle);
     }
 
-    /** Le libellé d'un champ (B2) : le dictionnaire, à défaut le nom découpé en mots ; majuscule initiale. */
+    /**
+     * Le libellé d'un champ (B2) : le dictionnaire, à défaut le nom découpé en mots, ⚠️ 2026-11-01 (B4) chaque mot accentué par
+     * {@link #MOTS} ; majuscule initiale.
+     */
     static String libelleChamp(String nom) {
         String l = LIBELLES.get(nom);
         if (l == null) {
-            l = nom.replaceAll("([a-z0-9])([A-Z])", "$1 $2").toLowerCase(Locale.ROOT);
+            List<String> mots = new ArrayList<>();
+            for (String m : nom.replaceAll("([a-z0-9])([A-Z])", "$1 $2").toLowerCase(Locale.ROOT).split(" ")) {
+                mots.add(MOTS.getOrDefault(m, m));
+            }
+            l = String.join(" ", mots);
         }
         return l.isEmpty() ? l : Character.toUpperCase(l.charAt(0)) + l.substring(1);
     }
+
+    /** ⚠️ 2026-11-01 (« ecarts-lisibles », B4) — l'orthographe des mots d'un nom de champ découpé (accents). */
+    private static final Map<String, String> MOTS = Map.ofEntries(Map.entry("delai", "délai"), Map.entry("depasse", "dépassé"),
+            Map.entry("echeance", "échéance"), Map.entry("depart", "départ"), Map.entry("delivrance", "délivrance"),
+            Map.entry("cree", "créé"), Map.entry("creee", "créée"), Map.entry("creation", "création"), Map.entry("reference", "référence"),
+            Map.entry("recu", "reçu"), Map.entry("recue", "reçue"), Map.entry("depot", "dépôt"), Map.entry("depose", "déposé"),
+            Map.entry("deposee", "déposée"), Map.entry("valide", "validé"), Map.entry("validee", "validée"), Map.entry("publie", "publié"),
+            Map.entry("publiee", "publiée"), Map.entry("signe", "signé"), Map.entry("signee", "signée"), Map.entry("notifie", "notifié"),
+            Map.entry("notifiee", "notifiée"), Map.entry("numero", "numéro"), Map.entry("evaluation", "évaluation"),
+            Map.entry("decision", "décision"), Map.entry("beneficiaire", "bénéficiaire"), Map.entry("periode", "période"),
+            Map.entry("debut", "début"), Map.entry("etat", "état"), Map.entry("telephone", "téléphone"), Map.entry("eligible", "éligible"),
+            Map.entry("selectionne", "sélectionné"), Map.entry("delivre", "délivré"), Map.entry("delivree", "délivrée"),
+            Map.entry("prevu", "prévu"), Map.entry("prevue", "prévue"), Map.entry("arrete", "arrêté"), Map.entry("arretee", "arrêtée"),
+            Map.entry("annule", "annulé"), Map.entry("annulee", "annulée"), Map.entry("leve", "levé"), Map.entry("levee", "levée"),
+            Map.entry("cloture", "clôture"), Map.entry("cloturee", "clôturée"), Map.entry("presente", "présenté"),
+            Map.entry("presentee", "présentée"), Map.entry("rejete", "rejeté"), Map.entry("rejetee", "rejetée"), Map.entry("verifie", "vérifié"),
+            Map.entry("verifiee", "vérifiée"), Map.entry("genere", "généré"), Map.entry("generee", "générée"), Map.entry("modele", "modèle"),
+            Map.entry("piece", "pièce"), Map.entry("pieces", "pièces"), Map.entry("reception", "réception"), Map.entry("resultat", "résultat"),
+            Map.entry("societe", "société"), Map.entry("qualite", "qualité"), Map.entry("duree", "durée"), Map.entry("quantite", "quantité"),
+            Map.entry("electronique", "électronique"), Map.entry("seance", "séance"), Map.entry("demarre", "démarré"),
+            Map.entry("termine", "terminé"), Map.entry("terminee", "terminée"), Map.entry("accorde", "accordé"), Map.entry("accordee", "accordée"));
 
     /** La première valeur textuelle non vide parmi ces champs. */
     private static String texte(JsonNode n, String... cles) {

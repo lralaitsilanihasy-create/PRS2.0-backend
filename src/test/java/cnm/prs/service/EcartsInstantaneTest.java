@@ -60,7 +60,15 @@ class EcartsInstantaneTest {
         assertThat(parLibelle.get("Lot 1 — Titulaire 1 (ajouté)").actuel()).isEqualTo("SAVA Routes et Ouvrages SA — 1 127 980 000 Ar");
         // À défaut de règle : le texte compact, sans les champs id….
         Ecart autre = EcartsInstantane.comparer(json("{'x':null}"), json("{'x':{'idTruc':'abc','libre':'oui','idOffre':'u'}}")).ecarts().get(0);
-        assertThat(autre.actuel()).isEqualTo("libre : oui").doesNotContain("abc");
+        assertThat(autre.actuel()).isEqualTo("Libre : oui").doesNotContain("abc");
+        // ⚠️ B4 — le repli passe par le dictionnaire (accents) ; B5 — un nom de liste qui n'est pas le pluriel de l'élément est gardé.
+        Ecart avis = EcartsInstantane.comparer(json("{'avisAttribution':null}"),
+                json("{'avisAttribution':{'depart':'2026-09-17','echeance':'2026-10-17','delaiDepasse':true}}")).ecarts().get(0);
+        assertThat(avis.actuel()).isEqualTo("Départ : 17/09/2026, Échéance : 17/10/2026, Délai dépassé : oui");
+        assertThat(EcartsInstantane.libelleChamp("dateDepotOffre")).isEqualTo("Date dépôt offre");
+        java.util.List<String> libelles = EcartsInstantane.comparer(json("{'titulaires':[],'suiviTitulaires':[]}"),
+                json("{'titulaires':[{'rang':1}],'suiviTitulaires':[{'rang':1}]}")).ecarts().stream().map(Ecart::libelle).toList();
+        assertThat(libelles).containsExactlyInAnyOrder("Titulaire 1 (ajouté)", "Suivi des titulaires — Titulaire 1 (ajouté)");
     }
 
     @Test
