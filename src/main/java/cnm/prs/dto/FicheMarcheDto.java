@@ -176,4 +176,13 @@ public class FicheMarcheDto {
      * version validée.
      */
     private DaoCompletEtatDto daoComplet;
+
+    /**
+     * ⚠️ V155 (2026-11-02, demande front « appel-offres-restreint », §B2) — la ligne du plan est en mode restreint (DAOR, DAORI) : le
+     * motif du recours est alors exigé au bilan ({@code MOTIF_RESTREINT}).
+     */
+    private boolean modeRestreint;
+
+    /** ⚠️ V155 (§B2) — le motif du recours de cette version, {@code null} tant qu'il n'est pas saisi. */
+    private MotifRestreintDto motifRestreint;
 }

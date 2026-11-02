@@ -1604,6 +1604,13 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > intellectuelles, les lettres d'invitation avec accusé). Une pièce que l'application fournit ne se dépose plus à la main, sur aucun
 > dossier.
 >
+> ⚠️ **2026-11-02 — le motif du recours à l'appel d'offres restreint (demande front « appel-offres-restreint », §B2 ; loi n° 2016-055,
+> art. 38-IV ; décret n° 2019-1310, art. 10 ; V155).** La fiche d'une ligne du plan en mode restreint (dossier `DAOR` ou `DAORI`) dit le
+> **motif du recours**, l'un des quatre cas de la loi (urgence avérée, caractère confidentiel, défaillance du prestataire, petit nombre
+> de prestataires), et sa **justification** : sans eux, la fiche ne se valide pas (contrôle bloquant `MOTIF_RESTREINT`). Le motif suit
+> la version (figé à la validation, recopié à la révision) et figure à la fiche de présentation (« Justification (si DAOR) »). Les pièces
+> justificatives se joignent au dossier, facultatives (`JUSTIFICATIF_AOR`). Les prestations intellectuelles n'y sont pas soumises.
+>
 > ⚠️ **2026-10-30 — le contrat-cadre par appel d'offres restreint (décision du pilote « suivre les textes en vigueur » ; décret
 > n° 2019-1064, art. 7 ; V152).** Un appel d'offres **restreint** en contrat-cadre produit un « Dossier d'appel d'offres restreint —
 > contrat-cadre » (`DAOR-CC`), puis à l'attribution un « Marché sur appel d'offres restreint — contrat-cadre » (`MAOR-CC`). Leurs pièces

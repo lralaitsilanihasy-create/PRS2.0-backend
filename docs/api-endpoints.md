@@ -8284,6 +8284,32 @@ méthodes de classement, négociation, rapport, suite du lot 2). Migration **V84
     restreint)`). L'offre d'un AOR reste en **une seule enveloppe** : les deux enveloppes sont propres aux prestations intellectuelles
     (`ProceduresEnLigneService.pi`). Auparavant, un AOR lancé par ses seules lettres n'était pas reconnu comme lancé.
 
+### Le motif du recours à l'appel d'offres restreint — V155 ⚠️ 2026-11-02
+
+Demande front `demande-backend-2026-11-02-appel-offres-restreint.md`, §B2 (loi n° 2016-055, art. 38-IV ; décret n° 2019-1310,
+art. 10 ; ligne « Justification (si DAOR) » de la fiche de présentation du manuel). Migration **V155** (`t_fiche_motif_restreint`,
+pièce `JUSTIFICATIF_AOR`). Aucune dépendance ajoutée.
+
+| Méthode | URL | Corps / réponse | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/motif-restreint | `MotifRestreintDto`, vide sans motif | 200, 403, 404 | lecteurs de la fiche |
+| PUT | /api/fiches-marche/{idDmc}/motif-restreint | `{ motif, justification }` → `MotifRestreintDto` | 200 ; 400 `motif`, `justification` ; 409 `FICHE_VALIDEE`, `MOTIF_HORS_RESTREINT` | écriture de la fiche (PRMP, UGPM) |
+
+- `MotifRestreintDto` = `{ motif, libelle, justification, saisiLe }`. `motif` est l'un des quatre cas : `URGENCE_AVEREE` (« Urgence
+  avérée »), `CONFIDENTIEL` (« Caractère confidentiel »), `PRESTATAIRE_DEFAILLANT` (« Défaillance du prestataire »), `PETIT_NOMBRE`
+  (« Petit nombre de prestataires ») ; casse ignorée à l'écriture. `justification` : texte libre obligatoire, 4 000 caractères au plus.
+- **Par version**, comme les sous-critères : écrit sur le brouillon, figé à la validation, recopié à la révision.
+- **Mode restreint** : la ligne du plan produit un dossier `DAOR` ou `DAORI` (prestations intellectuelles exclues). `FicheMarcheDto`
+  sert en fin d'objet **`modeRestreint`** (booléen) et **`motifRestreint`** (`MotifRestreintDto` ou `null`). Hors de ce mode, l'écriture
+  répond 409 `MOTIF_HORS_RESTREINT`.
+- **Au bilan** : `MOTIF_RESTREINT` (bloquant ; champs `motif`, `justification`, bloc `null`), passé en `ok` quand le motif est saisi. La
+  validation est donc refusée sans lui (409 `CONTROLES_BLOQUANTS`).
+- **Repris** : par la fiche de présentation (`GET /api/dossiers/{id}/fiche-presentation`, section `PROCEDURE`, lignes
+  `MOTIF_RESTREINT` et `JUSTIFICATION_RESTREINT` « Justification (si DAOR) ») ; par les jetons d'impression
+  `{{MOTIF_RESTREINT.motif}}` (libellé) et `{{MOTIF_RESTREINT.justification}}`.
+- **Pièces justificatives** : un type de pièce `JUSTIFICATIF_AOR` (« Pièces justificatives du recours à l'appel d'offres restreint »),
+  **facultatif**, ajouté aux listes `DAOR` et `DAORI` au rang du PV de validation de la liste restreinte ; plusieurs fichiers admis.
+
 ### L'évaluation des prestations intellectuelles, lot 3, tranche PI-b : deux enveloppes, séance technique — V86 ⚠️ 2026-10-08
 
 Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B2, §B3 ; arbitrage du pilote Q1 : deux enveloppes pour toutes les

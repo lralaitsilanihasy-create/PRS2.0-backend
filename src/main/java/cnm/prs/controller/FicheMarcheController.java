@@ -285,6 +285,22 @@ public class FicheMarcheController {
         return service.remplacerSousCriteres(idDmc, corps == null ? null : corps.sousCriteres());
     }
 
+    /** ⚠️ V155 (2026-11-02, « appel-offres-restreint », §B2) — le motif du recours au restreint de la version courante ; vide sans motif. */
+    @GetMapping("/{idDmc}/motif-restreint")
+    public cnm.prs.dto.MotifRestreintDto motifRestreint(@PathVariable Long idDmc) {
+        return service.motifRestreint(idDmc);
+    }
+
+    /**
+     * ⚠️ V155 — corps {@code {"motif", "justification"}} ; 400 nominatif ; 409 {@code FICHE_VALIDEE} /
+     * {@code MOTIF_HORS_RESTREINT}.
+     */
+    @PutMapping("/{idDmc}/motif-restreint")
+    public cnm.prs.dto.MotifRestreintDto ecrireMotifRestreint(@PathVariable Long idDmc,
+            @RequestBody(required = false) cnm.prs.dto.MotifRestreintDto corps) {
+        return service.ecrireMotifRestreint(idDmc, corps);
+    }
+
     /** ⚠️ V61 (2026-10-03, §B1.1) — les pièces exigées de la version courante (travaux), dans l'ordre. */
     @GetMapping("/{idDmc}/pieces")
     public List<cnm.prs.dto.PieceExigeeDto> pieces(@PathVariable Long idDmc) {

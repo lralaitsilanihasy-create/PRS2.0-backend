@@ -812,6 +812,57 @@ public class FicheMarcheService {
         return pieces.pieces(fiche.getIdFiche());
     }
 
+    // ------------------------------------------------------------------ ⚠️ V155 — le motif du recours à l'appel d'offres restreint
+
+    /** Le contrôle du bilan : motif et justification exigés d'une ligne en mode restreint. */
+    public static final String MOTIF_RESTREINT = "MOTIF_RESTREINT";
+
+    private MotifRestreintFiche motifRestreint;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMotifRestreint(MotifRestreintFiche motifRestreint) {
+        this.motifRestreint = motifRestreint;
+    }
+
+    /**
+     * ⚠️ V155 (2026-11-02, « appel-offres-restreint », §B2) — la ligne du plan est en mode restreint (dossier DAOR ou DAORI) ; jamais
+     * pour les prestations intellectuelles, dont la consultation restreinte a ses propres règles.
+     */
+    private static boolean modeRestreint(Contexte ctx, Map<String, String> valeursPpm) {
+        if (CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(ctx.codeCategorie())) {
+            return false;
+        }
+        String sousType = SousTypesDossier.dossierMiseEnConcurrence(valeursPpm.get("MODE"), false);
+        return SousTypesDossier.DAOR.equals(sousType) || SousTypesDossier.DAORI.equals(sousType);
+    }
+
+    /** ⚠️ V155 (§B2) — le motif du recours de la version courante ; {@code null} tant qu'il n'est pas saisi. */
+    @Transactional(readOnly = true)
+    public cnm.prs.dto.MotifRestreintDto motifRestreint(Long idDmc) {
+        contexte(idDmc);
+        return motifRestreint.lire(idFicheCourante(idDmc)).orElse(null);
+    }
+
+    /**
+     * ⚠️ V155 (§B2) — écrit le motif du recours et sa justification sur le brouillon (gardes d'écriture de la fiche) : ligne hors du mode
+     * restreint → 409 {@code MOTIF_HORS_RESTREINT} ; fiche validée → 409 {@code FICHE_VALIDEE} ; 400 nominatif {@code motif},
+     * {@code justification}.
+     */
+    public cnm.prs.dto.MotifRestreintDto ecrireMotifRestreint(Long idDmc, cnm.prs.dto.MotifRestreintDto recu) {
+        Contexte ctx = contexteEcriture(idDmc);
+        if (!modeRestreint(ctx, valeursPpm.lire(ctx.idDetail()).valeurs())) {
+            throw new BusinessRuleException("Le motif du recours vaut pour une ligne du plan en mode d'appel d'offres restreint.",
+                    "MOTIF_HORS_RESTREINT");
+        }
+        cnm.prs.dto.MotifRestreintDto valide = MotifRestreintFiche.valider(recu);
+        FicheMarche fiche = brouillonOuNouvelle(ctx);
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
+        cnm.prs.dto.MotifRestreintDto ecrit = motifRestreint.ecrire(fiche.getIdFiche(), valide, maintenant, CurrentUser.ref().orElse(null));
+        fiche.setDateMaj(maintenant);
+        ficheRepository.save(fiche);
+        return ecrit;
+    }
+
     /** ⚠️ V84 (2026-10-08, lot 3 PI, Q3) — les sous-critères techniques de la version courante ; vide pour une fiche virtuelle. */
     @Transactional(readOnly = true)
     public List<cnm.prs.dto.SousCritereDto> sousCriteres(Long idDmc) {
@@ -854,6 +905,9 @@ public class FicheMarcheService {
         Map<String, String> m = new LinkedHashMap<>(MoyensFiche.jetons(moyens.materiel(idFiche), moyens.personnel(idFiche)));
         m.putAll(PiecesFiche.jetons(pieces.pieces(idFiche)));
         m.putAll(SousCriteresFiche.jetons(sousCriteres.lister(idFiche)));   // ⚠️ V84
+        if (motifRestreint != null) {
+            m.putAll(MotifRestreintFiche.jetons(motifRestreint.lire(idFiche)));   // ⚠️ V155
+        }
         return m;
     }
 
@@ -1427,6 +1481,9 @@ public class FicheMarcheService {
         moyens.copier(source.getIdFiche(), suivante.getIdFiche());   // ⚠️ V60 — le matériel et le personnel aussi
         pieces.copier(source.getIdFiche(), suivante.getIdFiche());   // ⚠️ V61 — les pièces de l'offre aussi
         sousCriteres.copier(source.getIdFiche(), suivante.getIdFiche());   // ⚠️ V84 — les sous-critères techniques aussi
+        if (motifRestreint != null) {
+            motifRestreint.copier(source.getIdFiche(), suivante.getIdFiche());   // ⚠️ V155 — le motif du recours au restreint aussi
+        }
         // ⚠️ 2026-10-06 (DAO complet, §B2) — les spécifications techniques suivent la version, comme le besoin.
         Integer idSuivante = suivante.getIdFiche();
         // ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf ») — sauf ce que la catégorie n'admet plus (un Word en fournitures ou en
@@ -1894,6 +1951,16 @@ public class FicheMarcheService {
         // ⚠️ R6a (manuel révisé, lot 2, §B1 ; arbitrage Q6) — le délai de publicité de la loi (30 / 45 / 10 jours, bloquant) ou du
         // paramètre (signalé), entre la date de publication prévue (B04-SE-17, sinon la prévision LANCEMENT) et la date limite.
         delaisPublicite.auBilan(valeurs, ppm, ctx.codeCategorie(), typeOuverture, bilan);
+        // ⚠️ V155 (2026-11-02, « appel-offres-restreint », §B2) — une ligne en mode restreint dit le motif du recours et sa
+        // justification (loi, art. 38-IV ; décret, art. 10) : bloquant sans eux.
+        boolean restreint = modeRestreint(ctx, ppm.valeurs());
+        Optional<cnm.prs.dto.MotifRestreintDto> motif = motifRestreint == null ? Optional.empty() : motifRestreint.lire(fiche.getIdFiche());
+        if (restreint) {
+            (motif.isPresent() ? bilan.ok() : bilan.bloquants()).add(new BilanControlesDto.Controle(MOTIF_RESTREINT,
+                    List.of("motif", "justification"), null, motif.isPresent() ? "Le motif du recours à l'appel d'offres restreint est "
+                            + "justifié (" + motif.get().libelle() + ")." : "L'appel d'offres restreint exige le motif du recours (urgence "
+                            + "avérée, caractère confidentiel, défaillance du prestataire ou petit nombre de prestataires) et sa justification."));
+        }
         // ⚠️ V116 (2026-10-14, Q11, §B2) — chaque article a son prix unitaire estimé, et le total de chaque lot égale le montant du lot
         // au plan (bloquants).
         List<cnm.prs.dto.EstimationLotDto> estimations = besoinBilan == null ? null : EstimationFiche.parLot(besoinBilan.articles(),
@@ -1969,7 +2036,8 @@ public class FicheMarcheService {
                 // ⚠️ R8 (§B3 ; V110) — le mode figé et la migration portée par cette version.
                 fige.isPresent(), fige.orElse(null), fiche.getModeMigreLe(), fiche.getModeMigrePar(), fiche.getModeMigreMotif(),
                 estimations,   // ⚠️ V116 (Q11)
-                null);   // ⚠️ 2026-10-28 (Q3) : daoComplet, posé par lire() et valider()
+                null,   // ⚠️ 2026-10-28 (Q3) : daoComplet, posé par lire() et valider()
+                restreint, motif.orElse(null));   // ⚠️ V155 (« appel-offres-restreint », §B2)
     }
 
     // ------------------------------------------------------------------ ⚠️ R8 (manuel révisé, lot 2, §B3 ; V110) — le mode figé

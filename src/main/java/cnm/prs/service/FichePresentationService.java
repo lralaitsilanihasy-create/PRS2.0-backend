@@ -141,6 +141,11 @@ public class FichePresentationService {
                 ligne("COMPTE", "Compte budgétaire", p.get("COMPTES")))));
         List<Ligne> procedure = new ArrayList<>(lignes(
                 ligne("NUMERO_DAO", "Numéro du dossier d'appel d'offres", premier(ev, "B02-OB-03")),
+                // ⚠️ V155 (2026-11-02, « appel-offres-restreint », §B2) — la ligne « Justification (si DAOR) » du manuel.
+                ligne("MOTIF_RESTREINT", "Motif du recours à l'appel d'offres restreint",
+                        ev.etat().getMotifRestreint() == null ? null : ev.etat().getMotifRestreint().libelle()),
+                ligne("JUSTIFICATION_RESTREINT", "Justification (si DAOR)",
+                        ev.etat().getMotifRestreint() == null ? null : ev.etat().getMotifRestreint().justification()),
                 ligne("MODE_REMISE", "Mode de remise des offres", premier(ev, "B04-SE-01")),
                 ligne("PLATEFORME", "Plateforme de dépôt", premier(ev, "B04-SE-02")),
                 ligne("DATE_LIMITE", "Date et heure limites de remise",

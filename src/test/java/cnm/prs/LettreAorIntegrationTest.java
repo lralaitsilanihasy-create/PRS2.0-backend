@@ -69,7 +69,55 @@ class LettreAorIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"cadrage\":{\"garantieSoumission\":\"NON\",\"alloti\":\"NON\",\"typePrix\":\"UNITAIRES\"}}")).andExpect(status().isOk());
         besoinDeTest(idDmc);
+        // ⚠️ V155 (« appel-offres-restreint », §B2) — sans motif du recours, la fiche ne se valide pas.
+        mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.modeRestreint").value(true))
+                .andExpect(jsonPath("$.bilanControles.bloquants[?(@.regle=='MOTIF_RESTREINT')]").isNotEmpty());
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.code").value("CONTROLES_BLOQUANTS"));
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/motif-restreint").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(MOTIF)).andExpect(status().isOk()).andExpect(jsonPath("$.libelle").value("Urgence avérée"));
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+    }
+
+    private static final String MOTIF = "{\"motif\":\"urgence_averee\",\"justification\":\"Rupture du stock de mobilier avant la rentrée.\"}";
+
+    @Test
+    @DisplayName("⚠️ V155 (« appel-offres-restreint », §B2) — le motif du recours : 400 nominatif (motif inconnu, justification vide), "
+            + "servi avec la version et au bilan (ok), figé (409 FICHE_VALIDEE), copié à la révision, repris par la fiche de présentation ; "
+            + "une ligne hors du mode restreint → 409 MOTIF_HORS_RESTREINT")
+    void motifDuRecours() throws Exception {
+        mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.motifRestreint.motif").value("URGENCE_AVEREE"))
+                .andExpect(jsonPath("$.motifRestreint.justification").value("Rupture du stock de mobilier avant la rentrée."))
+                .andExpect(jsonPath("$.bilanControles.ok[?(@.regle=='MOTIF_RESTREINT')]").isNotEmpty());
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/motif-restreint").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(MOTIF)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FICHE_VALIDEE"));
+
+        int idDossier = creerDossier();
+        String presentation = mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(presentation, "$.sections[*].lignes[?(@.code=='MOTIF_RESTREINT')].valeur"))
+                .containsExactly("Urgence avérée");
+        assertThat(JsonPath.<List<String>>read(presentation, "$.sections[*].lignes[?(@.code=='JUSTIFICATION_RESTREINT')].valeur"))
+                .containsExactly("Rupture du stock de mobilier avant la rentrée.");
+
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(2)).andExpect(jsonPath("$.motifRestreint.motif").value("URGENCE_AVEREE"));
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/motif-restreint").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"AUTRE\",\"justification\":\" \"}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='motif')]").isNotEmpty())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='justification')]").isNotEmpty());
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/motif-restreint").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"PETIT_NOMBRE\",\"justification\":\"Trois fabricants agréés.\"}")).andExpect(status().isOk());
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/motif-restreint").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.motif").value("PETIT_NOMBRE"));
+
+        ModePassation m93 = modePassationRepository.findById(93).orElseThrow();
+        m93.setLibelle("Appel d'offres ouvert");
+        modePassationRepository.save(m93);
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/motif-restreint").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(MOTIF)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MOTIF_HORS_RESTREINT"));
     }
 
     @Test
