@@ -1619,6 +1619,12 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > d'un appel public à candidatures ne se saisit pas : elle viendra de l'appel en ligne. Le PV de validation de la liste par la CAO reste
 > une pièce jointe par la PRMP.
 >
+> ⚠️ **2026-11-02 — les délais de l'appel d'offres restreint (même demande, §B6 ; décret n° 2019-1310, art. 14 ; V157).** Entre
+> l'envoi des lettres d'invitation et la remise des offres : **20 jours** au moins, **10** quand le motif du recours est l'urgence
+> avérée. Ce sont des paramètres administrables (`PUBLICITE_AOR`, `PUBLICITE_AOR_URGENCE`), **signalés et non bloquants** comme les
+> autres délais hors la loi (arbitrage Q6 du pilote) ; leur passage en délai bloquant est une question posée au pilote. Au bilan, le
+> départ reste la date de publication prévue (à défaut le lancement du plan).
+>
 > ⚠️ **2026-10-30 — le contrat-cadre par appel d'offres restreint (décision du pilote « suivre les textes en vigueur » ; décret
 > n° 2019-1064, art. 7 ; V152).** Un appel d'offres **restreint** en contrat-cadre produit un « Dossier d'appel d'offres restreint —
 > contrat-cadre » (`DAOR-CC`), puis à l'attribution un « Marché sur appel d'offres restreint — contrat-cadre » (`MAOR-CC`). Leurs pièces

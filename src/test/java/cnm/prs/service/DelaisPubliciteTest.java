@@ -74,6 +74,24 @@ class DelaisPubliciteTest {
     }
 
     @Test
+    @DisplayName("⚠️ V157 (« appel-offres-restreint », §B6) : l'urgence avérée réduit le délai du restreint (PUBLICITE_AOR_URGENCE) ; "
+            + "paramètre d'urgence inactif → PUBLICITE_AOR ; l'urgence est sans effet hors du restreint")
+    void urgenceDuRestreint() {
+        when(repo.findById("PUBLICITE_AOR")).thenReturn(Optional.of(new DelaiParametre("PUBLICITE_AOR", 20, "JOURS", "AOR", true, null, null)));
+        when(repo.findById("PUBLICITE_AOR_URGENCE")).thenReturn(Optional.of(new DelaiParametre("PUBLICITE_AOR_URGENCE", 10, "JOURS", "AOR urgence",
+                true, null, null)));
+        assertThat(delais.exigence("Appel d'offres restreint", false, "TRAVAUX", "QUANTITE_FIXE").requis()).isEqualTo(20);
+        DelaisPublicite.Exigence urgence = delais.exigence("Appel d'offres restreint", false, "TRAVAUX", "QUANTITE_FIXE", true);
+        assertThat(urgence.code()).isEqualTo("PUBLICITE_AOR_URGENCE");
+        assertThat(urgence.requis()).isEqualTo(10);
+        assertThat(urgence.bloquant()).isFalse();
+        assertThat(delais.exigence("Appel d'offres ouvert", false, "TRAVAUX", "QUANTITE_FIXE", true).requis()).isEqualTo(30);
+        when(repo.findById("PUBLICITE_AOR_URGENCE")).thenReturn(Optional.of(new DelaiParametre("PUBLICITE_AOR_URGENCE", 10, "JOURS", "AOR urgence",
+                false, null, null)));
+        assertThat(delais.exigence("Appel d'offres restreint", false, "TRAVAUX", "QUANTITE_FIXE", true).code()).isEqualTo("PUBLICITE_AOR");
+    }
+
+    @Test
     @DisplayName("Constat : le jour de départ n'est pas compté — 30 jours requis : limite au 31e jour conforme, au 30e non ; une date "
             + "absente : non évaluable")
     void constat() {

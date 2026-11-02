@@ -1993,13 +1993,15 @@ public class FicheMarcheService {
         ControlesFicheMarche.signatureEnLigne(ouverts, valeurs, cadrage, bilan);
         // ⚠️ R6a (manuel révisé, lot 2, §B1 ; arbitrage Q6) — le délai de publicité de la loi (30 / 45 / 10 jours, bloquant) ou du
         // paramètre (signalé), entre la date de publication prévue (B04-SE-17, sinon la prévision LANCEMENT) et la date limite.
-        delaisPublicite.auBilan(valeurs, ppm, ctx.codeCategorie(), typeOuverture, bilan);
         // ⚠️ V155 (2026-11-02, « appel-offres-restreint », §B2) — une ligne en mode restreint dit le motif du recours et sa
         // justification (loi, art. 38-IV ; décret, art. 10) : bloquant sans eux.
         boolean restreint = modeRestreint(ctx, ppm.valeurs());
         // Lus pour le seul mode restreint : une liste de procédures ne paie pas deux lectures par fiche (« performance », §B1).
         Optional<cnm.prs.dto.MotifRestreintDto> motif = !restreint || motifRestreint == null ? Optional.empty()
                 : motifRestreint.lire(fiche.getIdFiche());
+        // ⚠️ V157 (§B6) — l'urgence avérée réduit le délai de l'appel d'offres restreint (décret, art. 14 : 10 jours au lieu de 20).
+        delaisPublicite.auBilan(valeurs, ppm, ctx.codeCategorie(), typeOuverture,
+                motif.map(m -> MotifRestreintFiche.URGENCE_AVEREE.equals(m.motif())).orElse(false), bilan);
         if (restreint) {
             (motif.isPresent() ? bilan.ok() : bilan.bloquants()).add(new BilanControlesDto.Controle(MOTIF_RESTREINT,
                     List.of("motif", "justification"), null, motif.isPresent() ? "Le motif du recours à l'appel d'offres restreint est "

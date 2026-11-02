@@ -65,6 +65,15 @@ public class DelaisPublicite {
      * @param typeMarche             la forme ({@code CONTRAT_CADRE}…)
      */
     public Exigence exigence(String modeLibelle, boolean delaiAmenageJustifie, String categorie, String typeMarche) {
+        return exigence(modeLibelle, delaiAmenageJustifie, categorie, typeMarche, false);
+    }
+
+    /**
+     * ⚠️ V157 (2026-11-02, « appel-offres-restreint », §B6) — {@code urgence} : le motif du recours au restreint est l'urgence avérée ;
+     * l'appel d'offres restreint lit alors {@code PUBLICITE_AOR_URGENCE} (10 jours ; décret n° 2019-1310, art. 14), à défaut (paramètre
+     * inactif) {@code PUBLICITE_AOR} (20 jours).
+     */
+    public Exigence exigence(String modeLibelle, boolean delaiAmenageJustifie, String categorie, String typeMarche, boolean urgence) {
         String m = SousTypesDossier.normaliser(modeLibelle);
         if (m.contains("gre a gre") || m.contains("achat direct")) {
             return null;
@@ -82,7 +91,8 @@ public class DelaisPublicite {
             return parametre("PUBLICITE_AMI");
         }
         if (m.contains("restreint")) {
-            return parametre("PUBLICITE_AOR");
+            Exigence e = urgence ? parametre("PUBLICITE_AOR_URGENCE") : null;
+            return e != null ? e : parametre("PUBLICITE_AOR");
         }
         if (m.contains("qualification")) {
             return parametre("PUBLICITE_PREQUALIFICATION");
@@ -148,12 +158,18 @@ public class DelaisPublicite {
      */
     public void auBilan(Map<String, String> valeurs, ValeursPpmService.ValeursPpm ppm, String categorie, String typeMarche,
             BilanControlesDto bilan) {
+        auBilan(valeurs, ppm, categorie, typeMarche, false, bilan);
+    }
+
+    /** ⚠️ V157 (§B6) — le même contrôle, l'urgence avérée du restreint prise en compte. */
+    public void auBilan(Map<String, String> valeurs, ValeursPpmService.ValeursPpm ppm, String categorie, String typeMarche,
+            boolean urgence, BilanControlesDto bilan) {
         String champ = champLimite(valeurs);
         LocalDate limite = champ == null ? null : ControlesFicheMarche.date(valeurs.get(champ));
         LocalDate prevue = ControlesFicheMarche.date(valeurs.get(PUBLICATION_PREVUE));
         LocalDate depart = prevue != null ? prevue : ppm == null || ppm.dates() == null ? null : ppm.dates().get(PPM_LANCEMENT);
         Exigence e = exigence(ppm == null || ppm.valeurs() == null ? null : ppm.valeurs().get("MODE"), delaiAmenageJustifie(ppm), categorie,
-                typeMarche);
+                typeMarche, urgence);
         Constat c = constater(e, depart, limite);
         if (c == null) {
             return;

@@ -10224,6 +10224,9 @@ l'**Administrateur** : `{ valeur, unite, texte, actif }`, un champ absent garde 
 évalué. `FICHE_SE_DELAI_MIN_REMISE_JOURS` (V50, mode électronique, règle `SE_OUVERTURE_DEPOTS`) subsiste ; la règle de la loi prime.
 ⚠️ **V121 (2026-10-15)** : `PUBLICITE_CONTRAT_CADRE` est **désactivé**, remplacé par les délais légaux n° 10 et 11 ; il reste
 listé pour l'historique et n'est plus lu.
+⚠️ **V157 (2026-11-02, demande front « appel-offres-restreint », §B6)** : `PUBLICITE_AOR` passe à **20 j** (décret 2019-1310, art. 14 ;
+seulement s'il n'avait jamais été modifié par l'Administrateur) ; nouveau **`PUBLICITE_AOR_URGENCE`** **10 j**, lu quand le motif du
+recours de la fiche (V155) est `URGENCE_AVEREE` — à défaut (inactif), `PUBLICITE_AOR`. Tous deux restent des paramètres **signalés**.
 
 #### Le délai de publicité (règles 1-2 et 4)
 

@@ -80,7 +80,10 @@ class DelaisLegauxIntegrationTest extends CnmIntegrationTestSupport {
         String parametres = mvc.perform(get("/api/delais-parametres").header("Authorization", tokenMembre)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(parametres, "$[*].code")).contains("PUBLICITE_AOR", "PUBLICITE_DC_PI", "PUBLICITE_AMI",
-                "PUBLICITE_CONTRAT_CADRE", "PUBLICITE_PREQUALIFICATION", "DELAI_AMENAGE");
+                "PUBLICITE_CONTRAT_CADRE", "PUBLICITE_PREQUALIFICATION", "DELAI_AMENAGE", "PUBLICITE_AOR_URGENCE");
+        // ⚠️ V157 (« appel-offres-restreint », §B6) — décret 2019-1310, art. 14 : 20 jours, 10 en urgence avérée.
+        assertThat(JsonPath.<List<Integer>>read(parametres, "$[?(@.code=='PUBLICITE_AOR')].valeur")).containsExactly(20);
+        assertThat(JsonPath.<List<Integer>>read(parametres, "$[?(@.code=='PUBLICITE_AOR_URGENCE')].valeur")).containsExactly(10);
         // ⚠️ V121 (15/10) — le paramètre du contrat-cadre est désactivé : le décret 2019-1064 (art. 10) l'a remplacé.
         assertThat(JsonPath.<List<Boolean>>read(parametres, "$[?(@.code=='PUBLICITE_CONTRAT_CADRE')].actif")).containsExactly(false);
         assertThat(JsonPath.<List<Boolean>>read(parametres, "$[?(@.code!='PUBLICITE_CONTRAT_CADRE')].actif")).containsOnly(true);
@@ -125,9 +128,17 @@ class DelaisLegauxIntegrationTest extends CnmIntegrationTestSupport {
         bilan = controler(restreint);
         assertThat(JsonPath.<List<String>>read(bilan, "$.bloquants[*].regle")).doesNotContain("DELAI_PUBLICITE");
         assertThat(JsonPath.<List<String>>read(bilan, "$.avertissements[?(@.regle=='DELAI_PUBLICITE')].message").get(0))
-                .contains("5 jour(s)", "15 jour(s) requis", "à confirmer par le pilote");
+                .contains("5 jour(s)", "20 jour(s) requis", "art. 14", "à confirmer par le pilote");   // ⚠️ V157 (§B6) : 20 jours
+        // ⚠️ V157 (« appel-offres-restreint », §B6) — l'urgence avérée (motif du recours, V155) : 10 jours.
+        mvc.perform(put("/api/fiches-marche/" + restreint + "/motif-restreint").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"URGENCE_AVEREE\",\"justification\":\"Sinistre\"}")).andExpect(status().isOk());
+        bilan = controler(restreint);
+        assertThat(JsonPath.<List<String>>read(bilan, "$.avertissements[?(@.regle=='DELAI_PUBLICITE')].message").get(0))
+                .contains("5 jour(s)", "10 jour(s) requis", "urgence avérée");
         mvc.perform(put("/api/delais-parametres/PUBLICITE_AOR").header("Authorization", tokenAdmin).contentType(JSON).content("{\"actif\":false}"))
                 .andExpect(status().isOk());
+        mvc.perform(put("/api/delais-parametres/PUBLICITE_AOR_URGENCE").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"actif\":false}")).andExpect(status().isOk());
         bilan = controler(restreint);
         assertThat(JsonPath.<List<String>>read(bilan, "$.avertissements[*].regle")).doesNotContain("DELAI_PUBLICITE");
         assertThat(JsonPath.<List<String>>read(bilan, "$.ok[*].regle")).doesNotContain("DELAI_PUBLICITE");
