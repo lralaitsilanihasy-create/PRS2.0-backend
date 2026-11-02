@@ -712,7 +712,7 @@ public class OffreService {
     /** ⚠️ V86 (PI-b) — l'enveloppe exigée d'une consultation restreinte (PI), interdite ailleurs : 400 {@code ENVELOPPE_OBLIGATOIRE}, {@code ENVELOPPE_INVALIDE}, {@code ENVELOPPE_HORS_PI}. */
     private static String enveloppe(ProceduresEnLigneService.Lue lue, String saisie) {
         String e = saisie == null || saisie.isBlank() ? null : saisie.trim().toUpperCase(java.util.Locale.ROOT);
-        boolean pi = ProceduresEnLigneService.restreinte(lue);
+        boolean pi = ProceduresEnLigneService.pi(lue);   // ⚠️ 2026-11-02 — deux enveloppes : prestations intellectuelles seules
         if (!pi) {
             if (e != null) {
                 throw new BadRequestException("Seules les propositions de prestations intellectuelles se déposent en deux enveloppes.", "ENVELOPPE_HORS_PI");

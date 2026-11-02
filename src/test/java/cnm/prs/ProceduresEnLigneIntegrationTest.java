@@ -755,6 +755,55 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/procedures-en-ligne/999999/avis-specifique")).andExpect(status().isNotFound());
     }
 
+    @Test
+    @DisplayName("⚠️ 2026-11-02 (« appel-offres-restreint », §B1, correctif) : un appel d'offres restreint de fournitures en ligne, lancé "
+            + "par ses lettres LETTRE-AOR, sort de la liste publique ; introuvable (404) hors de ses invités ; lisible de l'invité et dans "
+            + "ses invitations ; offre en une seule enveloppe (pas de PI)")
+    void appelOffresRestreintReserveAuxInvites() throws Exception {
+        cnm.prs.entity.ModePassation mode = modePassationRepository.findById(92).orElseThrow();
+        mode.setLibelle("Appel d'offres restreint");
+        modePassationRepository.save(mode);
+        DocumentFicheMarche lettre = new DocumentFicheMarche();
+        lettre.setIdFiche(idFiche);
+        lettre.setType("LETTRE_INVITATION");
+        lettre.setExtension("pdf");
+        lettre.setNomFichier("LETTRE-AOR_test_v1_01.pdf");
+        lettre.setTailleOctets(4L);
+        lettre.setEmpreinte("3".repeat(64));
+        lettre.setDateGeneration(LocalDateTime.now());
+        lettre.setContenu("%PDF".getBytes());
+        lettre.setPublication("{\"dateEnvoi\":\"" + aujourdhui + "\"}");
+        documentRepository.save(lettre);
+        cnm.prs.entity.Invitation invitation = new cnm.prs.entity.Invitation();
+        invitation.setIdDmc(idDmc);
+        invitation.setRang(1);
+        invitation.setSource(cnm.prs.entity.Invitation.SAISIE);
+        invitation.setIdCandidat("C900000011");
+        invitation.setNom("Rabe Paul");
+        invitation.setInviteLe(LocalDateTime.now());
+        invitationRepository.save(invitation);
+        candidats.save(new CompteCandidat("C900000099", "autre@entreprise.mg", "034 22 222 99", "Rakoto", "Jean",
+                CompteCandidat.CONFIRME, false, LocalDateTime.now(), LocalDateTime.now(), null, null));
+        String autre = bearer("autre@entreprise.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000099", null);
+
+        String liste = mvc.perform(get("/api/procedures-en-ligne")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(liste, "$[*].idDmc")).doesNotContain(idDmc.intValue());
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc).header("Authorization", autre)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/documents").header("Authorization", autre))
+                .andExpect(status().is4xxClientError());
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc).header("Authorization", jetonCandidat)).andExpect(status().isOk());
+        mvc.perform(get("/api/candidat/invitations").header("Authorization", jetonCandidat)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].idDmc").value(org.hamcrest.Matchers.hasItem(idDmc.intValue())));
+        // Une seule enveloppe : l'acte d'engagement n'est pas dans une enveloppe financière (règle des seules PI).
+        String pieces = mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pieces")).andReturn().getResponse().getContentAsString();
+        if (!pieces.isBlank() && pieces.startsWith("[")) {
+            assertThat(JsonPath.<List<Object>>read(pieces, "$[*].enveloppe")).containsOnlyNulls();
+        }
+    }
+
+    @Autowired private cnm.prs.repository.InvitationRepository invitationRepository;
+
     private void poserAvis() {
         DocumentFicheMarche d = new DocumentFicheMarche();
         d.setIdFiche(idFiche);

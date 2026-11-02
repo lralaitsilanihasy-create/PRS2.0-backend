@@ -86,6 +86,14 @@ public class ProceduresEnLigneService {
     /** ⚠️ 2026-10-08 (lot 3 PI, PI-a, §B1) — la consultation restreinte : la procédure n'est visible que de ses invités. */
     private final InvitationsService invitations;
 
+    /** ⚠️ 2026-11-02 (« appel-offres-restreint », §B1) — le mode du plan (restreint) ; absent dans les tests unitaires. */
+    private ValeursPpmService valeursPpm;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setValeursPpm(ValeursPpmService valeursPpm) {
+        this.valeursPpm = valeursPpm;
+    }
+
     public ProceduresEnLigneService(FicheMarcheRepository ficheRepository, FicheMarcheService fiches,
             DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository, LotRepository lotRepository,
             RetraitDaoRepository retraitRepository, CompteCandidatRepository compteRepository,
@@ -109,7 +117,8 @@ public class ProceduresEnLigneService {
     }
 
     /** La procédure lue, et sa fiche validée. */
-    record Lue(ProcedureEnLigneDto dto, FicheMarche fiche, FicheMarcheService.EtatVersion etat) {
+    /** ⚠️ 2026-11-02 (« appel-offres-restreint », §B1) — {@code restreinte} : visible et ouverte aux seuls invités (PI ou mode restreint). */
+    record Lue(ProcedureEnLigneDto dto, FicheMarche fiche, FicheMarcheService.EtatVersion etat, boolean restreinte) {
     }
 
     // ------------------------------------------------------------------ public
@@ -140,8 +149,17 @@ public class ProceduresEnLigneService {
 
     // ------------------------------------------------------------------ ⚠️ PI-a (§B1) : la consultation restreinte
 
-    /** Une procédure de prestations intellectuelles : une consultation restreinte, visible de ses seuls invités. */
+    /**
+     * Une consultation sur invitation, visible et ouverte à ses seuls invités : prestations intellectuelles, ⚠️ 2026-11-02 (demande front
+     * « appel-offres-restreint », §B1, correctif) ou appel d'offres restreint de fournitures ou de travaux (mode du plan) — qui était
+     * listé, retirable et déposable par tous.
+     */
     static boolean restreinte(Lue l) {
+        return l.restreinte();
+    }
+
+    /** ⚠️ 2026-11-02 — une consultation de prestations intellectuelles : l'offre en deux enveloppes (technique, financière). */
+    static boolean pi(Lue l) {
         return ModelesDao.sigleLettre(l.etat().categorie()) != null;
     }
 
@@ -281,10 +299,15 @@ public class ProceduresEnLigneService {
             return Optional.empty();   // Q5 : Avancée ou Qualifiée, pas encore
         }
         List<FicheMarche> versions = ficheRepository.versions(idDmc);
-        // ⚠️ PI-a (§B1) — une consultation restreinte n'a pas d'avis : ses lettres d'invitation la lancent.
-        boolean pi = ModelesDao.sigleLettre(etat.categorie()) != null;
+        // ⚠️ PI-a (§B1) — une consultation restreinte n'a pas d'avis : ses lettres d'invitation la lancent. ⚠️ 2026-11-02 (demande front
+        // « appel-offres-restreint », §B1) — l'appel d'offres restreint de fournitures ou de travaux aussi (LETTRE-AOR) : la règle est
+        // celle du modèle de lettre, catégorie et mode du plan (ModelesDao.sigleLettre(categorie, restreint)).
+        Integer idDetail = etat.etat().getIdDetail();
+        boolean restreinte = ModelesDao.sigleLettre(etat.categorie(), idDetail != null && valeursPpm != null
+                && valeursPpm.modeRestreint(idDetail)) != null;
         List<DocumentFicheDto> avis = documents.listerAvis(versions).stream()
-                .filter(d -> DocumentsFicheMarcheService.TYPE_AVIS.equals(d.type()) || pi && DocumentsFicheMarcheService.TYPE_LETTRE.equals(d.type()))
+                .filter(d -> DocumentsFicheMarcheService.TYPE_AVIS.equals(d.type())
+                        || restreinte && DocumentsFicheMarcheService.TYPE_LETTRE.equals(d.type()))
                 .toList();
         if (avis.isEmpty()) {
             return Optional.empty();   // pas lancée
@@ -293,7 +316,7 @@ public class ProceduresEnLigneService {
         if (fiche == null) {
             return Optional.empty();
         }
-        return Optional.of(new Lue(construire(idDmc, etat, avis, maintenant), fiche, etat));
+        return Optional.of(new Lue(construire(idDmc, etat, avis, maintenant), fiche, etat, restreinte));
     }
 
     /**
@@ -513,7 +536,7 @@ public class ProceduresEnLigneService {
         boolean alloti = l.dto().lots().size() > 1;
         // ⚠️ 2026-10-08 (lot 3 PI, H-PI-1 du front) — une consultation PI : chaque pièce porte son enveloppe ; l'acte d'engagement
         // (la soumission financière) et les formulaires PF vont dans la financière, tout le reste dans la technique.
-        boolean pi = restreinte(l);
+        boolean pi = pi(l);   // ⚠️ 2026-11-02 — les enveloppes restent celles des seules prestations intellectuelles
         String technique = pi ? cnm.prs.entity.Offre.TECHNIQUE : null;
         List<cnm.prs.dto.OffreDto.PieceAttendue> out = new ArrayList<>();
         out.add(new cnm.prs.dto.OffreDto.PieceAttendue("AE", PiecesFiche.OFFRE, null, "Acte d'engagement signé", "Original signé",

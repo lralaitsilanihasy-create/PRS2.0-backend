@@ -8277,6 +8277,12 @@ méthodes de classement, négociation, rapport, suite du lot 2). Migration **V84
     (« créez votre compte avec cette adresse ») ;
   - `InvitationDto` = `{ idDmc, reference, objet, autoriteContractante, rang, source (AMI | SAISIE), inviteLe, etatProcedure, dateLimite,
     lettreDisponible }`.
+  - ⚠️ **2026-11-02 (demande front « appel-offres-restreint », §B1, correctif)** — la même règle vaut pour l'**appel d'offres
+    restreint** de fournitures ou de travaux (mode du plan « restreint », lettres `LETTRE-AOR`) : il devient une procédure en ligne à
+    l'impression de ses lettres, n'apparaît pas dans la liste publique, répond 404 hors de ses invités, 403 `NON_INVITE` au retrait et
+    au dépôt, et paraît dans `GET /api/candidat/invitations`. La règle est celle du modèle de lettre (`ModelesDao.sigleLettre(catégorie,
+    restreint)`). L'offre d'un AOR reste en **une seule enveloppe** : les deux enveloppes sont propres aux prestations intellectuelles
+    (`ProceduresEnLigneService.pi`). Auparavant, un AOR lancé par ses seules lettres n'était pas reconnu comme lancé.
 
 ### L'évaluation des prestations intellectuelles, lot 3, tranche PI-b : deux enveloppes, séance technique — V86 ⚠️ 2026-10-08
 
