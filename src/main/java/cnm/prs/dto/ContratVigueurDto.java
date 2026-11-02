@@ -27,7 +27,17 @@ public record ContratVigueurDto(Long id, Long idDmc, Integer lot, String typeMar
         Integer reconductionsMax, int reconductions, Integer preavisMois, LocalDate dateLimiteDecision, BigDecimal montantEstime,
         BigDecimal montantMinimum, BigDecimal montantMaximum, String formeSubsequents, String rythme, String calendrier,
         List<Titulaire> titulaires, List<Decision> decisions, List<String> alertes, Integer periodiciteMois, LocalDate premiereRemise,
-        LocalDate prochaineRemise) {
+        LocalDate prochaineRemise,
+        /**
+         * ⚠️ 2026-11-01 (demande front « contrats-vigueur-liste », §B1) — le dossier de marché (DDM) du lot du contrat, sa référence ;
+         * {@code null} s'il n'existe pas.
+         */
+        Integer idDossierMarche, String refeDossierMarche,
+        /**
+         * ⚠️ 2026-11-01 (§B2) — la consommation : le cumul HT des bons émis (annulés exclus, comme {@code cumulHt} de
+         * {@code /bons-commande}), leur nombre, et ceux dont l'accusé de réception n'est pas encore reçu.
+         */
+        BigDecimal commandeHt, int bonsEmis, int bonsSansAccuse) {
 
     /** Un titulaire : son offre, son candidat et son offre indicative. */
     public record Titulaire(String idOffre, Integer numero, String candidat, String nif, BigDecimal montant, String delai, Integer rang) {

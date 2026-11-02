@@ -8554,6 +8554,11 @@ n° 2016-055, art. 30). Tables **`t_contrat_vigueur`** (un contrat par lot notif
 | POST | /api/contrats-en-vigueur/{id}/relecture ⚠️ 2026-10-29 | — | 200 ; 403 ; 404 ; 409 `CONTRAT_ECHU`, `FICHE_NON_VALIDEE`, `FORME_CHANGEE` | PRMP de la fiche |
 | POST | /api/contrats-en-vigueur/{id}/reconduction | `{ decision, reference, dateDecision }` | 200 ; 400 `DECISION_INVALIDE`, `DECISION_OBLIGATOIRE`, `DATE_INVALIDE` ; 403 ; 409 `CONTRAT_ECHU`, `NON_RECONDUCTIBLE`, `RECONDUCTIONS_EPUISEES`, `DUREE_MAX_ATTEINTE` (`details.finMaximale`), `DEJA_DECIDE` | PRMP de la fiche |
 
+- ⚠️ **2026-11-01 (demande front « contrats-vigueur-liste »)** — `ContratVigueurDto` gagne, en fin d'objet (liste et détail) :
+  **`idDossierMarche`, `refeDossierMarche`** (§B1) — le dossier de marché (DDM) du lot (`t_attribution.ID_DOSSIER`), `null` s'il
+  n'existe pas ; **`commandeHt`, `bonsEmis`, `bonsSansAccuse`** (§B2) — le cumul HT des bons **émis** (annulés exclus, comme `cumulHt`
+  de `…/bons-commande`), leur nombre, et ceux sans accusé de réception. Sur la liste, bons, attributions et dossiers sont lus **en
+  une requête chacun** pour tous les contrats.
 - **Création** : à la **notification** du lot (`POST …/attribution/lots/{lot}/notification`), quand la fiche validée est un
   **contrat-cadre** ou un **marché à commandes**. Il n'y en a pas pour une autre forme, ni de doublon. Journal
   `CONTRAT_EN_VIGUEUR`. Ce qui le régit est **figé** depuis la dernière version validée de la fiche, valeur du lot d'abord

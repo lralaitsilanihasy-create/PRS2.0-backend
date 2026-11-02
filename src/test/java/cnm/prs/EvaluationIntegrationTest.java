@@ -1448,6 +1448,26 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
             c.setCreeLe(LocalDateTime.now());
             ids[lot - 1] = contratRepository.save(c).getId();
         }
+        // ⚠️ 2026-11-01 (« contrats-vigueur-liste », §B2) — la consommation sur la liste : cumul HT des bons émis (annulé exclu), nombre,
+        // sans accusé.
+        for (String[] bn : List.of(new String[] { "EMIS", "1000000" }, new String[] { "ANNULE", "500000" })) {
+            cnm.prs.entity.BonCommande bon = new cnm.prs.entity.BonCommande();
+            bon.setIdContrat(ids[0]);
+            bon.setNumero("EMIS".equals(bn[0]) ? 1 : 2);
+            bon.setIdOffre(a);
+            bon.setEtat(bn[0]);
+            bon.setObjet("Fournitures");
+            bon.setDelaiLivraison("30 jours");
+            bon.setMontantHt(new java.math.BigDecimal(bn[1]));
+            bon.setEmisLe(LocalDateTime.now().minusDays(2));
+            bonRepository.save(bon);
+        }
+        String contrats = mvc.perform(get("/api/contrats-en-vigueur").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Number>>read(contrats, "$[?(@.id==" + ids[0] + ")].commandeHt")).extracting(Number::intValue).containsExactly(1000000);
+        assertThat(JsonPath.<List<Integer>>read(contrats, "$[?(@.id==" + ids[0] + ")].bonsEmis")).containsExactly(1);
+        assertThat(JsonPath.<List<Integer>>read(contrats, "$[?(@.id==" + ids[0] + ")].bonsSansAccuse")).containsExactly(1);
+        bonRepository.deleteAll(bonRepository.findByIdContratOrderByNumeroAsc(ids[0]));
         String echeance = LocalDateTime.now().plusDays(5).withNano(0).withSecond(0).toString();
         String corps = "{\"objet\":\"Fournitures du trimestre\",\"specifications\":\"Selon le cahier des charges\",\"delaiExecution\":\"30 jours\","
                 + "\"echeance\":\"" + echeance + "\"}";

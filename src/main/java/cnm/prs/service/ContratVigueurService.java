@@ -622,6 +622,21 @@ public class ContratVigueurService {
         java.util.Map<String, List<AttributionTitulaire>> t = titulaires.findByIdDmcInOrderByIdDmcAscLotAscRangAscIdOffreAsc(dmcs).stream()
                 .collect(java.util.stream.Collectors.groupingBy(x -> x.getIdDmc() + "#" + x.getLot()));
         offres.findByIdDmcIn(dmcs);   // gardées dans le contexte de persistance : les lectures par identifiant n'interrogent plus la base
+        // ⚠️ 2026-11-01 (« contrats-vigueur-liste », §B1) — les attributions des lots et leurs dossiers de marché, en une requête chacun.
+        java.util.Map<String, Attribution> parLot = new java.util.HashMap<>();
+        attributions.findByIdDmcInOrderByIdDmcAscLotAsc(dmcs).forEach(a -> parLot.put(a.getIdDmc() + "#" + a.getLot(), a));
+        List<Integer> ddm = parLot.values().stream().map(Attribution::getIdDossier).filter(java.util.Objects::nonNull).distinct().toList();
+        java.util.Map<Integer, cnm.prs.entity.Dossier> parId = new java.util.HashMap<>();
+        if (dossiers != null && !ddm.isEmpty()) {
+            dossiers.findAllById(ddm).forEach(d -> parId.put(d.getIdDossier(), d));
+        }
+        for (ContratVigueur c : tous) {
+            Attribution a = parLot.get(c.getIdDmc() + "#" + c.getLot());
+            cnm.prs.repository.MemoLecture.poser("attribution:" + c.getIdDmc() + "#" + c.getLot(), java.util.Optional.ofNullable(a));
+            if (a != null && a.getIdDossier() != null) {
+                cnm.prs.repository.MemoLecture.poser("dossier:" + a.getIdDossier(), java.util.Optional.ofNullable(parId.get(a.getIdDossier())));
+            }
+        }
         for (ContratVigueur c : tous) {
             cnm.prs.repository.MemoLecture.poser("reconductions:" + c.getId(), r.getOrDefault(c.getId(), List.of()));
             cnm.prs.repository.MemoLecture.poser("bons:" + c.getId(), b.getOrDefault(c.getId(), List.of()));
@@ -637,11 +652,29 @@ public class ContratVigueurService {
         String objet = v == null ? null : v.etat().getDesignationMarche();
         DossierMec dmc = dmcRepository.findById(c.getIdDmc()).orElse(null);
         String acheteur = dmc == null || dmc.getIdDetail() == null ? null : valeursPpm.lire(dmc.getIdDetail()).valeurs().get("ENTITE");
+        // ⚠️ 2026-11-01 (« contrats-vigueur-liste », §B1) — le dossier de marché du lot ; §B2 — la consommation des bons.
+        Integer idDdm = cnm.prs.repository.MemoLecture.<java.util.Optional<Attribution>>lire("attribution:" + c.getIdDmc() + "#" + c.getLot(),
+                () -> attributions.findById(new Attribution.Cle(c.getIdDmc(), c.getLot()))).map(Attribution::getIdDossier).orElse(null);
+        String refeDdm = idDdm == null || dossiers == null ? null
+                : cnm.prs.repository.MemoLecture.<java.util.Optional<cnm.prs.entity.Dossier>>lire("dossier:" + idDdm, () -> dossiers.findById(idDdm))
+                        .map(cnm.prs.entity.Dossier::getRefeDossier).orElse(null);
+        List<cnm.prs.entity.BonCommande> bs = cnm.prs.repository.MemoLecture.lire("bons:" + c.getId(),
+                () -> bons.findByIdContratOrderByNumeroAsc(c.getId()));
+        List<cnm.prs.entity.BonCommande> emis = bs.stream().filter(b -> cnm.prs.entity.BonCommande.EMIS.equals(b.getEtat())).toList();
         return new ContratVigueurDto(c.getId(), c.getIdDmc(), c.getLot(), c.getTypeMarche(), objet, acheteur,
                 aujourdhui().isAfter(c.getDateFin()) ? ECHU : EN_VIGUEUR, c.getDateEffet(), c.getDateFin(), c.getPeriodeMois(),
                 c.getDureeMaxMois(), finMaximale(c), c.isReconductible(), c.getReconductionsMax(), c.getReconductions(), c.getPreavisMois(),
                 dateLimiteDecision(c), c.getMontantEstime(), c.getMontantMinimum(), c.getMontantMaximum(), c.getFormeSubsequents(), c.getRythme(),
-                c.getCalendrier(), titulairesDto(c), decisions, alertes(c), c.getPeriodiciteMois(), c.getPremiereRemise(), prochaineRemise(c));
+                c.getCalendrier(), titulairesDto(c), decisions, alertes(c), c.getPeriodiciteMois(), c.getPremiereRemise(), prochaineRemise(c),
+                idDdm, refeDdm, BonCommandeService.cumul(bs), emis.size(), (int) emis.stream().filter(b -> b.getAccuseLe() == null).count());
+    }
+
+    /** ⚠️ 2026-11-01 (« contrats-vigueur-liste ») — la référence du dossier de marché ; absent dans les tests unitaires. */
+    private cnm.prs.repository.DossierRepository dossiers;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDossiers(cnm.prs.repository.DossierRepository dossiers) {
+        this.dossiers = dossiers;
     }
 
     /** Les titulaires : ceux de l'attribution non retirés, sinon l'attributaire du lot. */

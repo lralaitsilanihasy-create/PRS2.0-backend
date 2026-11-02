@@ -217,6 +217,11 @@ class FiliationDossierIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.contrat.forme").value("CONTRAT_CADRE")).andExpect(jsonPath("$.contrat.signeLe").value("2026-09-14"))
                 .andExpect(jsonPath("$.contrat.finLe").value("2027-09-16")).andExpect(jsonPath("$.suites.actesGestion").value(1))
                 .andExpect(jsonPath("$.suites.bonsCommande").value(0));
+        // ⚠️ 2026-11-01 (« contrats-vigueur-liste », §B1) — le contrat porte la référence de son dossier de marché.
+        mvc.perform(get("/api/contrats-en-vigueur").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].idDossierMarche").value(org.hamcrest.Matchers.hasItem(9520)))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].refeDossierMarche").value(org.hamcrest.Matchers.hasItem("00009/MAOO-CC/CNM/2026")))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].bonsEmis").value(org.hamcrest.Matchers.hasItem(0)));
         // Le dossier de mise en concurrence voit l'attribution de chaque lot ; le plan, l'avis seul (ici aucun PV : tout nul).
         mvc.perform(get("/api/dossiers/9510/essentiel").header("Authorization", tokenPresident)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.attributions[0].idDossierMarche").value(9520));
