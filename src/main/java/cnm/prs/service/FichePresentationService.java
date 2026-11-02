@@ -146,6 +146,11 @@ public class FichePresentationService {
                         ev.etat().getMotifRestreint() == null ? null : ev.etat().getMotifRestreint().libelle()),
                 ligne("JUSTIFICATION_RESTREINT", "Justification (si DAOR)",
                         ev.etat().getMotifRestreint() == null ? null : ev.etat().getMotifRestreint().justification()),
+                // ⚠️ V156 (§B3) — la liste restreinte : sa source et ses candidats, dans l'ordre.
+                ligne("LISTE_RESTREINTE", "Liste restreinte", ev.etat().getListeRestreinte() == null ? null
+                        : ev.etat().getListeRestreinte().candidats().size() + " candidats (" + ev.etat().getListeRestreinte().libelleSource()
+                                + ") : " + String.join(" ; ", ev.etat().getListeRestreinte().candidats().stream()
+                                        .map(cnm.prs.dto.ListeRestreinteDto.Candidat::nom).toList())),
                 ligne("MODE_REMISE", "Mode de remise des offres", premier(ev, "B04-SE-01")),
                 ligne("PLATEFORME", "Plateforme de dépôt", premier(ev, "B04-SE-02")),
                 ligne("DATE_LIMITE", "Date et heure limites de remise",

@@ -301,6 +301,22 @@ public class FicheMarcheController {
         return service.ecrireMotifRestreint(idDmc, corps);
     }
 
+    /** ⚠️ V156 (2026-11-02, « appel-offres-restreint », §B3) — la liste restreinte de la version courante ; vide sans liste. */
+    @GetMapping("/{idDmc}/liste-restreinte")
+    public cnm.prs.dto.ListeRestreinteDto listeRestreinte(@PathVariable Long idDmc) {
+        return service.listeRestreinte(idDmc);
+    }
+
+    /**
+     * ⚠️ V156 — remplacement de toute la liste, corps {@code {"source", "candidats":[{nom, adresse, email, idCandidat, nif}]}} ; 400
+     * nominatif ; 409 {@code FICHE_VALIDEE} / {@code LISTE_HORS_RESTREINT}.
+     */
+    @PutMapping("/{idDmc}/liste-restreinte")
+    public cnm.prs.dto.ListeRestreinteDto ecrireListeRestreinte(@PathVariable Long idDmc,
+            @RequestBody(required = false) cnm.prs.dto.ListeRestreinteDto corps) {
+        return service.ecrireListeRestreinte(idDmc, corps);
+    }
+
     /** ⚠️ V61 (2026-10-03, §B1.1) — les pièces exigées de la version courante (travaux), dans l'ordre. */
     @GetMapping("/{idDmc}/pieces")
     public List<cnm.prs.dto.PieceExigeeDto> pieces(@PathVariable Long idDmc) {

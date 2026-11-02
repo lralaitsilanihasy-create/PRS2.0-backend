@@ -8310,6 +8310,37 @@ pièce `JUSTIFICATIF_AOR`). Aucune dépendance ajoutée.
 - **Pièces justificatives** : un type de pièce `JUSTIFICATIF_AOR` (« Pièces justificatives du recours à l'appel d'offres restreint »),
   **facultatif**, ajouté aux listes `DAOR` et `DAORI` au rang du PV de validation de la liste restreinte ; plusieurs fichiers admis.
 
+### La liste restreinte saisie de l'appel d'offres restreint — V156 ⚠️ 2026-11-02
+
+Même demande, §B3 (décret n° 2019-1310, art. 11-2 et 13 ; loi n° 2016-055, art. 38-II). Migration **V156**
+(`t_fiche_liste_restreinte`, `t_fiche_candidat_restreint`). Aucune dépendance ajoutée.
+
+| Méthode | URL | Corps / réponse | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/liste-restreinte | `ListeRestreinteDto`, vide sans liste | 200, 403, 404 | lecteurs de la fiche |
+| PUT | /api/fiches-marche/{idDmc}/liste-restreinte | `{ source, candidats[{ nom, adresse, email, idCandidat, nif }] }` → `ListeRestreinteDto` | 200 ; 400 `source`, `candidats`, `candidats[i].nom / adresse / email / idCandidat / nif` ; 409 `FICHE_VALIDEE`, `LISTE_HORS_RESTREINT` | écriture de la fiche (PRMP, UGPM) |
+
+- `ListeRestreinteDto` = `{ source, libelleSource, candidats[{ rang, nom, adresse, email, idCandidat, nif }], saisiLe }` ; le rang est la
+  position (servi, ignoré en entrée).
+- `source` (casse ignorée) : `BASE_AUTORITE` (« Base de données de l'autorité contractante »), `PREMIER_APPEL_OFFRES` (« Candidats
+  qualifiés du premier appel d'offres »), `REGISTRE_ARMP` (« Registre de l'ARMP »), `ORGANISME_PROFESSIONNEL` (« Organisme
+  professionnel »). `APPEL_CANDIDATURES` (« Appel public à candidatures ») est réservée à la liste qu'arrêtera l'appel à candidatures en
+  ligne (§B4) : la saisie la refuse (400 `source`).
+- **Trois candidats au moins** (400 `candidats`). Par candidat : `nom` (≤ 255) et `adresse` (≤ 1 000, plusieurs lignes) obligatoires ;
+  `email` facultatif et valide ; `idCandidat` facultatif, compte candidat existant ; `nif` facultatif (≤ 30). Pas de doublon de nom
+  (casse ignorée), d'adresse électronique ni de compte.
+- **Par version**, comme le motif du recours : remplacée en bloc sur le brouillon, figée à la validation, recopiée à la révision.
+  `FicheMarcheDto` la sert en fin d'objet (**`listeRestreinte`**, `null` sans liste). Hors du mode restreint : 409
+  `LISTE_HORS_RESTREINT`.
+- **Au bilan** : `LISTE_RESTREINTE` (bloquant ; champs `source`, `candidats`), en `ok` quand la liste est saisie.
+- **La lettre `LETTRE-AOR` la reprend** : `POST /api/fiches-marche/{idDmc}/lettres-invitation` imprime une lettre par candidat de la
+  liste de la **dernière version validée**, dans son ordre ; `candidats` du corps est alors **ignoré** (seuls `dateEnvoi` et `lieu`
+  restent saisis), comme avec la liste définitive de l'AMI. Les invités sont écrits à l'impression : un candidat qui porte `idCandidat`
+  est rattaché d'emblée à son compte et reçoit la notification `LETTRE_INVITATION` ; sinon son adresse électronique, comme avant.
+- **Repris** par la fiche de présentation (section `PROCEDURE`, ligne `LISTE_RESTREINTE` : « 3 candidats (Registre de l'ARMP) : A ; B ;
+  C »).
+- Le **PV de validation de la liste par la CAO** reste la pièce `PV_LISTE_RESTREINTE`, jointe par la PRMP.
+
 ### L'évaluation des prestations intellectuelles, lot 3, tranche PI-b : deux enveloppes, séance technique — V86 ⚠️ 2026-10-08
 
 Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B2, §B3 ; arbitrage du pilote Q1 : deux enveloppes pour toutes les

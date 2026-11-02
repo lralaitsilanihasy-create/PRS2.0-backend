@@ -77,7 +77,63 @@ class LettreAorIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("CONTROLES_BLOQUANTS"));
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/motif-restreint").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(MOTIF)).andExpect(status().isOk()).andExpect(jsonPath("$.libelle").value("Urgence avérée"));
+        // ⚠️ V156 (§B3) — ni sans sa liste restreinte.
+        mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.bilanControles.bloquants[?(@.regle=='LISTE_RESTREINTE')]").isNotEmpty());
+        candidatRepository.save(new cnm.prs.entity.CompteCandidat("C900000077", "groupement.c@entreprise.mg", "034 22 222 77", "Rabe", "Paul",
+                cnm.prs.entity.CompteCandidat.CONFIRME, false, java.time.LocalDateTime.now(), java.time.LocalDateTime.now(), null, null));
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/liste-restreinte").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(LISTE)).andExpect(status().isOk()).andExpect(jsonPath("$.libelleSource").value("Registre de l'ARMP"))
+                .andExpect(jsonPath("$.candidats[2].rang").value(3)).andExpect(jsonPath("$.candidats[2].idCandidat").value("C900000077"));
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+    }
+
+    private static final String LISTE = "{\"source\":\"registre_armp\",\"candidats\":["
+            + "{\"nom\":\"Société A\",\"adresse\":\"Lot II A 12\\nAntananarivo\",\"nif\":\"4000123456\"},"
+            + "{\"nom\":\"Entreprise B\",\"adresse\":\"Toamasina\",\"email\":\"entreprise.b@exemple.mg\"},"
+            + "{\"nom\":\"Groupement C\",\"adresse\":\"Fianarantsoa\",\"idCandidat\":\"C900000077\"}]}";
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private cnm.prs.repository.CompteCandidatRepository candidatRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private cnm.prs.repository.InvitationRepository invitationRepository;
+
+    @Test
+    @DisplayName("⚠️ V156 (« appel-offres-restreint », §B3) — la liste restreinte saisie : 400 nominatif (moins de trois, source inconnue "
+            + "ou APPEL_CANDIDATURES, doublon, compte inconnu, adresse manquante), servie avec la version, figée (409), copiée à la "
+            + "révision, reprise par la fiche de présentation ; hors du mode restreint → 409 LISTE_HORS_RESTREINT")
+    void listeRestreinte() throws Exception {
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/liste-restreinte").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.source").value("REGISTRE_ARMP")).andExpect(jsonPath("$.candidats.length()").value(3));
+        mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.listeRestreinte.candidats[0].nif").value("4000123456"))
+                .andExpect(jsonPath("$.bilanControles.ok[?(@.regle=='LISTE_RESTREINTE')]").isNotEmpty());
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/liste-restreinte").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(LISTE)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FICHE_VALIDEE"));
+
+        int idDossier = creerDossier();
+        String presentation = mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(presentation, "$.sections[*].lignes[?(@.code=='LISTE_RESTREINTE')].valeur"))
+                .containsExactly("3 candidats (Registre de l'ARMP) : Société A ; Entreprise B ; Groupement C");
+
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.listeRestreinte.candidats.length()").value(3));
+        String erreurs = mvc.perform(put("/api/fiches-marche/" + idDmc + "/liste-restreinte").header("Authorization", tokenPrmp)
+                .contentType(JSON).content("{\"source\":\"APPEL_CANDIDATURES\",\"candidats\":[{\"nom\":\"Société A\",\"adresse\":\"X\"},"
+                        + "{\"nom\":\"société a\",\"adresse\":\" \",\"idCandidat\":\"C999999999\"}]}"))
+                .andExpect(status().isBadRequest()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(erreurs, "$.erreurs[*].champ")).contains("source", "candidats", "candidats[1].nom",
+                "candidats[1].adresse", "candidats[1].idCandidat");
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/liste-restreinte").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"source\":\"INCONNUE\",\"candidats\":[]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='source')]").isNotEmpty());
+
+        ModePassation m93 = modePassationRepository.findById(93).orElseThrow();
+        m93.setLibelle("Appel d'offres ouvert");
+        modePassationRepository.save(m93);
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/liste-restreinte").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(LISTE)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LISTE_HORS_RESTREINT"));
     }
 
     private static final String MOTIF = "{\"motif\":\"urgence_averee\",\"justification\":\"Rupture du stock de mobilier avant la rentrée.\"}";
@@ -154,23 +210,28 @@ class LettreAorIntegrationTest extends CnmIntegrationTestSupport {
 
         String produits = mvc.perform(post("/api/fiches-marche/" + idDmc + "/lettres-invitation").header("Authorization", tokenPrmp)
                 .contentType(JSON).content(CORPS)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(produits, "$[*].type")).hasSize(4).containsOnly("LETTRE_INVITATION");
+        // ⚠️ V156 (§B3) — la liste restreinte de la fiche fait foi : trois lettres, les deux candidats du corps sont ignorés.
+        assertThat(JsonPath.<List<String>>read(produits, "$[*].type")).hasSize(6).containsOnly("LETTRE_INVITATION");
+        assertThat(invitationRepository.findByIdDmcOrderByRangAsc(idDmc)).extracting(cnm.prs.entity.Invitation::getIdCandidat)
+                .containsExactly(null, null, "C900000077");
         int idDocx = JsonPath.<List<Integer>>read(produits, "$[?(@.extension=='docx')].idDocument").get(0);
         byte[] docx = mvc.perform(get("/api/fiches-marche/documents/" + idDocx + "/contenu").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         String texte = texteDuDocx(docx).replace(' ', ' ').replace(' ', ' ');
         assertThat(texte).contains("LETTRE D’INVITATION À SOUMISSIONNER", "liste restreinte", "article 38", "- Société A", "- Entreprise B",
+                "- Groupement C",
                 "Fourniture de mobilier de bureau", "au plus tard le", "La garantie de soumission n’est pas requise.", "Antananarivo, 05/10/2026")
                 .doesNotContain("{{", "proposition", "Dossier de Consultation");
         mvc.perform(get("/api/marches/9901").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.statut").value("LANCE"));
         String journal = mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenPresident))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(journal, "$[?(@.typeAction=='LETTRES_INVITATION_IMPRIMEES')].detail"))
-                .singleElement().asString().startsWith("2 lettre(s) d'invitation imprimée(s)");
+                .singleElement().asString().startsWith("3 lettre(s) d'invitation imprimée(s)");
 
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/lettres-invitation").header("Authorization", tokenPrmp).contentType(JSON)
-                .content("{\"dateEnvoi\":\"2026-10-05\",\"lieu\":\"Antananarivo\"}")).andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.erreurs[?(@.champ=='candidats')]").isNotEmpty());
+                .content("{\"lieu\":\"Antananarivo\"}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='dateEnvoi')]").isNotEmpty())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='candidats')]").isEmpty());
     }
 
     // ------------------------------------------------------------------ outils

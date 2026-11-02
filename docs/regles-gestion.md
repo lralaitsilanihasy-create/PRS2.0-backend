@@ -1611,6 +1611,14 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > la version (figé à la validation, recopié à la révision) et figure à la fiche de présentation (« Justification (si DAOR) »). Les pièces
 > justificatives se joignent au dossier, facultatives (`JUSTIFICATIF_AOR`). Les prestations intellectuelles n'y sont pas soumises.
 >
+> ⚠️ **2026-11-02 — la liste restreinte saisie (même demande, §B3 ; décret, art. 11-2 et 13 ; loi, art. 38-II ; V156).** La même
+> fiche porte sa **liste restreinte** : sa source (base de l'autorité contractante, candidats qualifiés du premier appel d'offres,
+> registre de l'ARMP, organisme professionnel) et **au moins trois candidats** (nom, adresse ; adresse électronique, compte candidat et
+> NIF facultatifs). Sans elle, la fiche ne se valide pas (contrôle bloquant `LISTE_RESTREINTE`). Elle suit la version, figure à la fiche
+> de présentation, et **les lettres d'invitation la reprennent** : plus de seconde saisie des candidats à l'impression. La liste issue
+> d'un appel public à candidatures ne se saisit pas : elle viendra de l'appel en ligne. Le PV de validation de la liste par la CAO reste
+> une pièce jointe par la PRMP.
+>
 > ⚠️ **2026-10-30 — le contrat-cadre par appel d'offres restreint (décision du pilote « suivre les textes en vigueur » ; décret
 > n° 2019-1064, art. 7 ; V152).** Un appel d'offres **restreint** en contrat-cadre produit un « Dossier d'appel d'offres restreint —
 > contrat-cadre » (`DAOR-CC`), puis à l'attribution un « Marché sur appel d'offres restreint — contrat-cadre » (`MAOR-CC`). Leurs pièces

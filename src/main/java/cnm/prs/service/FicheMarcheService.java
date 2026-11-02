@@ -863,6 +863,46 @@ public class FicheMarcheService {
         return ecrit;
     }
 
+    // ------------------------------------------------------------------ ⚠️ V156 — la liste restreinte saisie
+
+    /** Le contrôle du bilan : la liste restreinte exigée d'une ligne en mode restreint. */
+    public static final String LISTE_RESTREINTE = "LISTE_RESTREINTE";
+
+    private ListeRestreinteFiche listeRestreinte;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setListeRestreinte(ListeRestreinteFiche listeRestreinte) {
+        this.listeRestreinte = listeRestreinte;
+    }
+
+    /** ⚠️ V156 (2026-11-02, « appel-offres-restreint », §B3) — la liste restreinte de la version courante ; {@code null} sans liste. */
+    @Transactional(readOnly = true)
+    public cnm.prs.dto.ListeRestreinteDto listeRestreinte(Long idDmc) {
+        contexte(idDmc);
+        return listeRestreinte.lire(idFicheCourante(idDmc)).orElse(null);
+    }
+
+    /**
+     * ⚠️ V156 (§B3) — remplace la liste restreinte du brouillon (gardes d'écriture de la fiche) : ligne hors du mode restreint → 409
+     * {@code LISTE_HORS_RESTREINT} ; fiche validée → 409 {@code FICHE_VALIDEE} ; 400 nominatif ({@code source}, {@code candidats},
+     * {@code candidats[i].…}).
+     */
+    public cnm.prs.dto.ListeRestreinteDto ecrireListeRestreinte(Long idDmc, cnm.prs.dto.ListeRestreinteDto recue) {
+        Contexte ctx = contexteEcriture(idDmc);
+        if (!modeRestreint(ctx, valeursPpm.lire(ctx.idDetail()).valeurs())) {
+            throw new BusinessRuleException("La liste restreinte saisie vaut pour une ligne du plan en mode d'appel d'offres restreint.",
+                    "LISTE_HORS_RESTREINT");
+        }
+        cnm.prs.dto.ListeRestreinteDto valide = listeRestreinte.valider(recue);
+        FicheMarche fiche = brouillonOuNouvelle(ctx);
+        LocalDateTime maintenant = LocalDateTime.now(HorlogeRecette.HORLOGE);
+        cnm.prs.dto.ListeRestreinteDto ecrite = listeRestreinte.remplacer(fiche.getIdFiche(), valide, maintenant,
+                CurrentUser.ref().orElse(null));
+        fiche.setDateMaj(maintenant);
+        ficheRepository.save(fiche);
+        return ecrite;
+    }
+
     /** ⚠️ V84 (2026-10-08, lot 3 PI, Q3) — les sous-critères techniques de la version courante ; vide pour une fiche virtuelle. */
     @Transactional(readOnly = true)
     public List<cnm.prs.dto.SousCritereDto> sousCriteres(Long idDmc) {
@@ -1484,6 +1524,9 @@ public class FicheMarcheService {
         if (motifRestreint != null) {
             motifRestreint.copier(source.getIdFiche(), suivante.getIdFiche());   // ⚠️ V155 — le motif du recours au restreint aussi
         }
+        if (listeRestreinte != null) {
+            listeRestreinte.copier(source.getIdFiche(), suivante.getIdFiche());   // ⚠️ V156 — la liste restreinte aussi
+        }
         // ⚠️ 2026-10-06 (DAO complet, §B2) — les spécifications techniques suivent la version, comme le besoin.
         Integer idSuivante = suivante.getIdFiche();
         // ⚠️ 2026-10-17 (« specifications-donnees-et-plans-pdf ») — sauf ce que la catégorie n'admet plus (un Word en fournitures ou en
@@ -1954,12 +1997,23 @@ public class FicheMarcheService {
         // ⚠️ V155 (2026-11-02, « appel-offres-restreint », §B2) — une ligne en mode restreint dit le motif du recours et sa
         // justification (loi, art. 38-IV ; décret, art. 10) : bloquant sans eux.
         boolean restreint = modeRestreint(ctx, ppm.valeurs());
-        Optional<cnm.prs.dto.MotifRestreintDto> motif = motifRestreint == null ? Optional.empty() : motifRestreint.lire(fiche.getIdFiche());
+        // Lus pour le seul mode restreint : une liste de procédures ne paie pas deux lectures par fiche (« performance », §B1).
+        Optional<cnm.prs.dto.MotifRestreintDto> motif = !restreint || motifRestreint == null ? Optional.empty()
+                : motifRestreint.lire(fiche.getIdFiche());
         if (restreint) {
             (motif.isPresent() ? bilan.ok() : bilan.bloquants()).add(new BilanControlesDto.Controle(MOTIF_RESTREINT,
                     List.of("motif", "justification"), null, motif.isPresent() ? "Le motif du recours à l'appel d'offres restreint est "
                             + "justifié (" + motif.get().libelle() + ")." : "L'appel d'offres restreint exige le motif du recours (urgence "
                             + "avérée, caractère confidentiel, défaillance du prestataire ou petit nombre de prestataires) et sa justification."));
+        }
+        // ⚠️ V156 (§B3) — et sa liste restreinte, trois candidats au moins (loi, art. 38-II) : la lettre d'invitation la reprend.
+        Optional<cnm.prs.dto.ListeRestreinteDto> liste = !restreint || listeRestreinte == null ? Optional.empty()
+                : listeRestreinte.lire(fiche.getIdFiche());
+        if (restreint) {
+            (liste.isPresent() ? bilan.ok() : bilan.bloquants()).add(new BilanControlesDto.Controle(LISTE_RESTREINTE,
+                    List.of("source", "candidats"), null, liste.isPresent() ? "La liste restreinte compte " + liste.get().candidats().size()
+                            + " candidats (" + liste.get().libelleSource() + ")." : "L'appel d'offres restreint exige sa liste restreinte : "
+                            + "sa source et au moins " + ListeRestreinteFiche.MINIMUM + " candidats."));
         }
         // ⚠️ V116 (2026-10-14, Q11, §B2) — chaque article a son prix unitaire estimé, et le total de chaque lot égale le montant du lot
         // au plan (bloquants).
@@ -2037,7 +2091,8 @@ public class FicheMarcheService {
                 fige.isPresent(), fige.orElse(null), fiche.getModeMigreLe(), fiche.getModeMigrePar(), fiche.getModeMigreMotif(),
                 estimations,   // ⚠️ V116 (Q11)
                 null,   // ⚠️ 2026-10-28 (Q3) : daoComplet, posé par lire() et valider()
-                restreint, motif.orElse(null));   // ⚠️ V155 (« appel-offres-restreint », §B2)
+                restreint, motif.orElse(null),   // ⚠️ V155 (« appel-offres-restreint », §B2)
+                liste.orElse(null));   // ⚠️ V156 (§B3)
     }
 
     // ------------------------------------------------------------------ ⚠️ R8 (manuel révisé, lot 2, §B3 ; V110) — le mode figé

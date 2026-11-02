@@ -101,10 +101,16 @@ public class LettreInvitationService {
         // ⚠️ AMI-b (§B4) — avec une liste restreinte définitive, les candidats sont les siens (comptes, adresses déclarées) : la saisie
         // des candidats est alors ignorée.
         java.util.Optional<List<cnm.prs.entity.AmiListe>> listeAmi = preselection.listeDefinitive(idDmc);
-        Saisie saisie = saisie(corps, listeAmi.isPresent());
+        // ⚠️ V156 (2026-11-02, « appel-offres-restreint », §B3) — l'appel d'offres restreint : la liste restreinte de la version validée
+        // fait foi, comme la liste de l'AMI ; la saisie des candidats est alors ignorée (plus de seconde saisie).
+        java.util.Optional<cnm.prs.dto.ListeRestreinteDto> listeFiche = listeAmi.isPresent() ? java.util.Optional.empty()
+                : fiches.etatValide(idDmc).map(ev -> ev.etat().getListeRestreinte());
+        Saisie saisie = saisie(corps, listeAmi.isPresent() || listeFiche.isPresent());
         List<LettreInvitationRequest.Candidat> invites = listeAmi.map(l -> l.stream()
                 .map(x -> new LettreInvitationRequest.Candidat(x.getRaisonSociale(), preselection.adresse(x.getIdCandidat()))).toList())
-                .orElse(saisie.candidats());
+                .orElseGet(() -> listeFiche.map(l -> l.candidats().stream()
+                        .map(c -> new LettreInvitationRequest.Candidat(c.nom(), c.adresse(), c.email())).toList())
+                        .orElse(saisie.candidats()));
         FicheMarcheDto courante = fiches.lire(idDmc);
         AvisDisponibiliteDto dispo = avis.evaluer(idDmc, courante, true);
         if (!dispo.disponible()) {
@@ -154,11 +160,19 @@ public class LettreInvitationService {
         for (int i = 0; i < invites.size(); i++) {
             int rang = i + 1;
             LettreInvitationRequest.Candidat c = invites.get(i);
+            // ⚠️ V156 — un candidat de la liste saisie peut porter son compte : l'invitation lui est rattachée d'emblée.
+            String compte = listeFiche.map(l -> l.candidats().get(rang - 1).idCandidat()).orElse(null);
             aInviter.add(listeAmi.isPresent()
                     ? new InvitationsService.Invite(cnm.prs.entity.Invitation.AMI, listeAmi.get().get(i).getIdCandidat(), null, c.nom(), rang,
                             pdfParRang.get(rang))
-                    : new InvitationsService.Invite(cnm.prs.entity.Invitation.SAISIE, null, c.email(), c.nom(), rang, pdfParRang.get(rang)));
-            if (listeAmi.isEmpty() && c.email() != null) {
+                    : new InvitationsService.Invite(cnm.prs.entity.Invitation.SAISIE, compte, c.email(), c.nom(), rang, pdfParRang.get(rang)));
+            if (compte != null) {
+                cnm.prs.entity.CompteCandidat k = candidatsRepository.findById(compte).orElse(null);
+                notifications.emettreCandidat(cnm.prs.enums.TypeNotification.LETTRE_INVITATION, compte, k == null ? null : k.getEmail(),
+                        idDmc.intValue(), cnm.prs.enums.TypeObjet.PROCEDURE, "Invitation à remettre " + quoi, "Vous êtes invité, au rang "
+                                + rang + " de la liste restreinte, à remettre " + quoi + " pour « " + etat.getDesignationMarche()
+                                + " » ; la lettre d'invitation (envoi du " + saisie.date() + ") est disponible sur la plateforme.");
+            } else if (listeAmi.isEmpty() && c.email() != null) {
                 notifications.emettre(null, cnm.prs.enums.TypeNotification.LETTRE_INVITATION, null, c.email(), "Invitation à remettre " + quoi,
                         "Vous êtes invité à remettre " + quoi + " pour « " + etat.getDesignationMarche() + " » (lettre d'invitation du "
                                 + saisie.date() + "). Créez votre compte sur la plateforme avec cette adresse électronique : la procédure et la "

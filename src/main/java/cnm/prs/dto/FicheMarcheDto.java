@@ -185,4 +185,7 @@ public class FicheMarcheDto {
 
     /** ⚠️ V155 (§B2) — le motif du recours de cette version, {@code null} tant qu'il n'est pas saisi. */
     private MotifRestreintDto motifRestreint;
+
+    /** ⚠️ V156 (§B3) — la liste restreinte saisie de cette version (source, candidats), {@code null} tant qu'elle n'est pas saisie. */
+    private ListeRestreinteDto listeRestreinte;
 }
