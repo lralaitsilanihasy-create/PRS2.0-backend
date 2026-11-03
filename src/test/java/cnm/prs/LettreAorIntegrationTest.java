@@ -114,6 +114,9 @@ class LettreAorIntegrationTest extends CnmIntegrationTestSupport {
         int idDossier = creerDossier();
         String presentation = mvc.perform(get("/api/dossiers/" + idDossier + "/fiche-presentation").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        // ⚠️ 2026-11-03 (« titre-donnees-particulieres ») — fournitures, quantité fixe : DPAO.
+        assertThat(JsonPath.<List<String>>read(presentation, "$.sections[?(@.code=='PROCEDURE')].titre"))
+                .containsExactly("Données particulières (DPAO)");
         assertThat(JsonPath.<List<String>>read(presentation, "$.sections[*].lignes[?(@.code=='LISTE_RESTREINTE')].valeur"))
                 .containsExactly("3 candidats (Registre de l'ARMP) : Société A ; Entreprise B ; Groupement C");
 

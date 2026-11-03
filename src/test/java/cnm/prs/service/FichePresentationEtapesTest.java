@@ -13,6 +13,19 @@ import cnm.prs.dto.FichePresentationDto.Ligne;
 class FichePresentationEtapesTest {
 
     @Test
+    @DisplayName("⚠️ 2026-11-03 (« titre-donnees-particulieres », B1) — le titre de la section PROCEDURE : DPAC pour un contrat-cadre (même "
+            + "en prestations intellectuelles), DPIC pour les prestations intellectuelles, DPAO sinon (et sans version)")
+    void titreDonneesParticulieres() {
+        assertThat(FichePresentationService.titreDonneesParticulieres(new FicheMarcheService.EtatVersion(1, null, null, "CONTRAT_CADRE",
+                "PRESTATIONS_INTELLECTUELLES"))).isEqualTo("Données particulières (DPAC)");
+        assertThat(FichePresentationService.titreDonneesParticulieres(new FicheMarcheService.EtatVersion(1, null, null, "QUANTITE_FIXE",
+                "PRESTATIONS_INTELLECTUELLES"))).isEqualTo("Données particulières (DPIC)");
+        assertThat(FichePresentationService.titreDonneesParticulieres(new FicheMarcheService.EtatVersion(1, null, null, "A_COMMANDE",
+                "TRAVAUX"))).isEqualTo("Données particulières (DPAO)");
+        assertThat(FichePresentationService.titreDonneesParticulieres(null)).isEqualTo("Données particulières (DPAO)");
+    }
+
+    @Test
     @DisplayName("Établissement, transmission, lancement, remise, ouverture : la première étape de chaque préfixe, libellé court, dates jj/mm/aaaa")
     void etapesDuDao() {
         String dates = "Détermination des besoins : recueil et centralisation des besoins : 2026-01-05 ; "

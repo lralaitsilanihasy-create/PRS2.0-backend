@@ -9156,6 +9156,10 @@ sous-type). Aucune dépendance ajoutée.
 - **`GET /api/dossiers/{id}/fiche-presentation`** rend la fiche de présentation : `FichePresentationDto { idDossier, idDmc,
   versionFiche, sections: [{ code, titre, lignes: [{ code, libelle, valeur }] }] }`.
   - **`GET …/fiche-presentation/pdf`** la rend en PDF, pour l'impression.
+  - ⚠️ **2026-11-03 (demande front « titre-donnees-particulieres », B1 ; décision du pilote)** — la section `PROCEDURE` (dossier né d'une
+    fiche comme dossier de marché) a pour **titre** le document de données particulières de la fiche : « Données particulières (DPAC) »
+    pour un contrat-cadre, sinon « Données particulières (DPIC) » en prestations intellectuelles, sinon « Données particulières
+    (DPAO) ». Son code et ses lignes ne changent pas ; le PDF porte le même titre.
   - **Garde** : celle de la lecture du dossier.
   - **Refus** : 404, et 409 **`FICHE_PRESENTATION_INDISPONIBLE`** pour un dossier sans fiche validée.
   - **Le contenu** : la dernière version validée de la fiche, et la ligne du plan en vigueur. Une section sans ligne et une ligne sans valeur ne sont pas

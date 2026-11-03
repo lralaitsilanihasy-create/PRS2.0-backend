@@ -177,7 +177,7 @@ public class FichePresentationService {
                 procedure.add(ligne(code, ev.libelle(code), ev.valeur(code)));
             }
         }
-        sections.add(section("PROCEDURE", "Procédure", procedure));
+        sections.add(section("PROCEDURE", titreDonneesParticulieres(ev), procedure));
         // ⚠️ Recette du 17/10 (remarque 3) — du calendrier du plan (B01-AC-18, une trentaine d'étapes), les seules étapes du DAO, une
         // ligne chacune.
         sections.add(section("CALENDRIER_PLAN", "Calendrier prévisionnel du plan (étapes du DAO)",
@@ -232,7 +232,7 @@ public class FichePresentationService {
                 ligne("DATE_LIMITE", "Date et heure limites de remise", avecHeure(limite, premier(ev, "B04-LR-04"))),
                 ligne("DELAI_REMISE", "Délai de remise effectif", publication == null || dateLimite == null ? null
                         : ChronoUnit.DAYS.between(publication, dateLimite) + " jour(s), de la première publication à la date limite"))));
-        out.add(section("PROCEDURE", "Procédure", procedure.stream().filter(l -> l == null || !"DATE_LIMITE".equals(l.code())).toList()));
+        out.add(section("PROCEDURE", titreDonneesParticulieres(ev), procedure.stream().filter(l -> l == null || !"DATE_LIMITE".equals(l.code())).toList()));
         // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P2) — une procédure papier : séance et évaluation hors de l'application, leurs
         // pièces sont jointes par la PRMP ; la fiche n'en présente rien.
         if (!a.isRemisePapier()) {
@@ -418,6 +418,17 @@ public class FichePresentationService {
     }
 
     // ------------------------------------------------------------------ outils
+
+    /**
+     * ⚠️ 2026-11-03 (demande front « titre-donnees-particulieres », B1 ; décision du pilote) — le titre de la section {@code PROCEDURE} :
+     * le document de données particulières que produit la fiche — contrat-cadre d'abord (DPAC), puis prestations intellectuelles (DPIC),
+     * sinon DPAO. Le code de la section et ses lignes ne changent pas.
+     */
+    static String titreDonneesParticulieres(FicheMarcheService.EtatVersion ev) {
+        String document = ev != null && cnm.prs.enums.TypeMarcheDao.CONTRAT_CADRE.name().equals(ev.type()) ? "DPAC"
+                : ev != null && cnm.prs.enums.CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(ev.categorie()) ? "DPIC" : "DPAO";
+        return "Données particulières (" + document + ")";
+    }
 
     private static Section section(String code, String titre, List<Ligne> lignes) {
         return new Section(code, titre, lignes.stream().filter(java.util.Objects::nonNull).toList());
