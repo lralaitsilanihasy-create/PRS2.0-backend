@@ -116,6 +116,35 @@ class FiliationDossierIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-11-03 (« jalons-reels », B1) — les dates réelles des jalons d'un plan, déduites des faits : réception (106) et "
+            + "signature du PV (109) du dossier de mise en concurrence, attribution (123, et l'ancien processus 4) et signature (125) du lot, "
+            + "la source en clair ; rien sans fait ; 409 PAS_UN_PLAN sur un autre dossier")
+    void jalonsReels() throws Exception {
+        receptionRepository.save(reception(9511, 9510, "CTRCC1", true));
+        dispatchRepository.save(dispatch(9511, 9511, "CTRCC1", "CTRMEM"));
+        examenRepository.save(examen(9511, 9511, "CTRMEM"));
+        seedPvSigne(9511, 9511);
+        cnm.prs.entity.Attribution a = attributionRepository.findByIdDmcOrderByLotAsc(idDmc).get(0);
+        a.setAttribueLe(LocalDateTime.of(2026, 8, 1, 9, 0));
+        a.setDateSignature(java.time.LocalDate.of(2026, 8, 15));
+        attributionRepository.save(a);
+
+        String corps = mvc.perform(get("/api/dossiers/9500/jalons-reels").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(corps, "$[*].idDetail")).containsOnly(9501);
+        assertThat(JsonPath.<List<Integer>>read(corps, "$[*].idCapm")).contains(106, 109, 123, 4, 125).doesNotContain(101, 104, 113);
+        assertThat(JsonPath.<List<String>>read(corps, "$[?(@.idCapm==106)].dateReelle")).containsExactly("2026-06-02");
+        assertThat(JsonPath.<List<String>>read(corps, "$[?(@.idCapm==106)].source")).singleElement().asString()
+                .contains("Réception du dossier 00002/DAOO-CC/CNM/2026", "le 02/06/2026");
+        assertThat(JsonPath.<List<String>>read(corps, "$[?(@.idCapm==109)].dateReelle")).containsExactly(java.time.LocalDate.now().toString());
+        assertThat(JsonPath.<List<String>>read(corps, "$[?(@.idCapm==123)].source")).singleElement().asString().contains("(lot 1)");
+        assertThat(JsonPath.<List<String>>read(corps, "$[?(@.idCapm==4)].dateReelle")).containsExactly("2026-08-01");
+        assertThat(JsonPath.<List<String>>read(corps, "$[?(@.idCapm==125)].dateReelle")).containsExactly("2026-08-15");
+        mvc.perform(get("/api/dossiers/9510/jalons-reels").header("Authorization", tokenPresident)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PAS_UN_PLAN"));
+    }
+
+    @Test
     @DisplayName("⚠️ V163 (« chaine-par-ligne », B1, B2) — le nœud ligne porte idLigneOrigine ; un rapport justificatif et un marché de gré à "
             + "gré créés hors fiche et rattachés à une ligne entrent dans la filiation (RJ sous le plan, MGG sous le RJ) ; ligne inconnue, "
             + "hors des plans de la PRMP ou déjà rattachée à un dossier de la même famille → 400 idDetailOrigine")

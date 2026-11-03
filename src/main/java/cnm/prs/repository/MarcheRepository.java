@@ -161,4 +161,7 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
 
     /** ⚠️ 2026-10-31 (« filiation-dossier », §B1) — les lignes de plusieurs plans, en une requête. */
     List<Marche> findByIdDossierIn(java.util.Collection<Integer> idDossiers);
+
+    /** ⚠️ 2026-11-03 (« jalons-reels », B1) — les copies d'une ligne dans les versions du plan (même ligne d'origine). */
+    List<Marche> findByIdLigneOrigineIn(java.util.Collection<Integer> idLignesOrigine);
 }

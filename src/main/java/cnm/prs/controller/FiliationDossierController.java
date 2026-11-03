@@ -24,6 +24,18 @@ public class FiliationDossierController {
     @org.springframework.beans.factory.annotation.Autowired
     private cnm.prs.service.EssentielDossierService essentiel;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private cnm.prs.service.JalonsReelsService jalons;
+
+    /**
+     * ⚠️ 2026-11-03 (demande front « jalons-reels », B1) — les dates réelles des jalons des lignes d'un plan, déduites des faits enregistrés ;
+     * 404 inconnu ; 403 hors périmètre ; 409 {@code PAS_UN_PLAN}.
+     */
+    @GetMapping("/api/dossiers/{idDossier}/jalons-reels")
+    public java.util.List<cnm.prs.dto.JalonReelDto> jalonsReels(@PathVariable Integer idDossier) {
+        return jalons.jalons(idDossier);
+    }
+
     /** ⚠️ 2026-11-01 (« essentiel-dossier », §B1) — l'avis, l'attributaire de chaque lot, le contrat, les suites ; 404 ; 403. */
     @GetMapping("/api/dossiers/{idDossier}/essentiel")
     public cnm.prs.dto.EssentielDossierDto essentiel(@PathVariable Integer idDossier) {

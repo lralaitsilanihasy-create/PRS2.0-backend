@@ -72,4 +72,7 @@ public interface ReceptionRepository extends JpaRepository<Reception, Integer> {
 
     /** Supprime les réceptions d'un dossier (cascade à la suppression du dossier brouillon ; feuilles sans dispatch). */
     void deleteByIdDossier(Integer idDossier);
+
+    /** ⚠️ 2026-11-03 (demande front « jalons-reels », B1) — les réceptions de ces dossiers, en une requête. */
+    List<Reception> findByIdDossierIn(java.util.Collection<Integer> idDossiers);
 }

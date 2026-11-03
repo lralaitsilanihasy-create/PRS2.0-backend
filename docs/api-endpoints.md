@@ -60,6 +60,27 @@
   un dossier créé **hors fiche** et rattaché à une ligne (`idDetailOrigine`, V163, voir `POST /api/saisies/dossier`) entre dans l'arbre
   sous la version du plan qui porte la ligne : un **DMC** (rapport justificatif…) en nœud `MISE_EN_CONCURRENCE`, un **DDM** (marché de
   gré à gré…) en nœud `MARCHE` sous le DMC rattaché à la même ligne, à défaut sous le plan ; chacun porte `ligne`.
+- ⚠️ **`GET /api/dossiers/{idPlan}/jalons-reels`** (2026-11-03, demande front « jalons-reels », B1) → `JalonReelDto[]` =
+  `[{ idDetail, idCapm, dateReelle, source }]` : les dates réelles des jalons des lignes d'un **plan**, **calculées à la lecture** à
+  partir des faits enregistrés (aucun stockage). Une entrée par ligne et par processus CAPM dont un fait est connu ; rien pour les
+  autres (Q2). `source` dit le fait et sa date, en clair (« Réception du dossier 00002/DAOO-CC/CNM/2026, le 02/06/2026 »). Une ligne à
+  plusieurs lots prend la **première** date atteinte (le lot dans `source`) ; les faits des copies de la ligne dans les autres versions
+  du plan comptent (même `idLigneOrigine`). **Périmètre** de la filiation (404, 403) ; 409 **`PAS_UN_PLAN`** hors famille DDP. Une
+  requête par nature de fait pour tout le plan. Le rapprochement :
+
+  | Processus (`t_capm`) | Fait |
+  |---|---|
+  | 102 avis général | publication de l'AGPM sur le plan ou une version antérieure (date de parution) |
+  | 106 transmission du DAO/DC | première réception du dossier de mise en concurrence (né de la fiche, ou rattaché hors fiche, V163) |
+  | 107 / 108 / 109 examen, PV, signature | date du PV (avis) ; soumission du PV à la signature, à défaut sa date ; signature (Président ou Chef de commission) |
+  | 111 lancement (et l'ancien 1) | première impression de l'avis spécifique ou des lettres d'invitation |
+  | 112 remise des offres | date limite de la dernière version validée de la fiche, une fois passée |
+  | 113 ouverture (et l'ancien 3) / 115 PV d'ouverture | séance : ouverture ; signature du PV d'ouverture |
+  | 114 évaluation | signature du rapport d'évaluation |
+  | 117 / 118 / 119 / 120 | le dossier de marché d'un lot (ou le marché rattaché) : réception, avis, soumission, signature du PV |
+  | 123 (et l'ancien 4) à 129 | l'attribution du lot : décision, information des non-retenus, signature, visa du contrôleur financier, approbation, enregistrement, notification |
+
+  Sans fait : 101, 103, 104, 105, 110, 116, 121, 122, 130. **`t_echeance`** reste aux alertes J-7 / J-1 (Q1) : rien n'y est écrit de plus.
 - **`GET /api/dossiers/{id}/historique`** (B2) → `HistoriqueDossierDto[]` triés par date (sans date en dernier) : `{ type, date, id,
   reference, statut, avis, acteur, detail, lot, numero }`. Types — circuit : `RECEPTION`, `DISPATCH`, `EXAMEN`, `PV` (`reference`
   du PV, `statut` `DEFINITIF` pour un PV signé, `avis`), `LETTRE_RENVOI`, `TRANSMISSION_SIGMP`, `SUSPENSION`, `RETRAIT`,

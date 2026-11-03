@@ -275,4 +275,12 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
     @Query("select pv from PvExamen pv where pv.examen.dispatch.reception.idDossier = :idDossier "
             + "order by pv.idPv asc")
     List<PvExamen> findTousParDossier(@Param("idDossier") Integer idDossier);
+
+    /**
+     * ⚠️ 2026-11-03 (« jalons-reels », B1) — les dates des PV de ces dossiers, en une requête : {dossier, datePv, soumission initiale,
+     * signature du Président, signature du Chef de commission, statut}, le plus ancien d'abord.
+     */
+    @Query("select pv.examen.dispatch.reception.idDossier, pv.datePv, pv.dateSoumissionInitiale, pv.dateSignaturePresident, "
+            + "pv.dateSignatureCc, pv.statutPv from PvExamen pv where pv.examen.dispatch.reception.idDossier in :ids order by pv.idPv asc")
+    List<Object[]> datesPvParDossiers(@Param("ids") java.util.Collection<Integer> ids);
 }
