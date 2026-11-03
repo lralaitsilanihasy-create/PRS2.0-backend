@@ -1253,6 +1253,9 @@ sont réglés — une offre sans reçu validé est **signalée** à la commissio
 lancée avant cette règle gardent le retrait libre. Le fichier du reçu suit la conservation des offres. ⚠️ 2026-10-06 (« A ») : sans
 reçu validé, le candidat ne lit pas non plus le besoin du dossier (les formulaires pré-remplis), et ne peut pas déposer d'offre
 pour un lot que son reçu ne couvre pas.
+⚠️ 2026-11-03 (demande front « recu-dao-dossier-gratuit ») : un dossier **déclaré gratuit**, dont les frais sont saisis à **0** pour
+chaque lot, ne demande plus de reçu dans l'offre. Des frais **non saisis** ne prouvent pas la gratuité : le reçu reste alors exigé.
+Question posée au pilote : confirmer qu'un dossier gratuit se déclare par des frais à 0.
 Contrat : `docs/api-endpoints.md`, § *Le retrait du DAO après paiement des frais — V72*.
 
 ⚠️ **2026-10-06 — la liste des procédures en ligne.** L'Administrateur dispose de la liste de toutes les fiches en remise

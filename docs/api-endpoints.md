@@ -11393,6 +11393,10 @@ inscrit au registre en cas de refus. Un agent : 403 comme avant.
   candidat connecté a un reçu validé. Pour un retrait payant, `RECU-DAO` passe à `obligatoire = false`. `GET …/pieces` reste public
   et devient relatif au candidat connecté (Q3 : pas de route à part) ; sans session, `dejaFourni = false`. Un dossier **sans frais
   renseignés** garde `RECU-DAO` obligatoire comme avant : l'absence de `B04-DS-05` ne prouve pas qu'il est gratuit.
+  ⚠️ **2026-11-03 (demande front « recu-dao-dossier-gratuit », B1 ; option retenue par l'utilisateur)** — un dossier **déclaré
+  gratuit**, dont chaque lot porte des frais **saisis à 0** (`B04-DS-05`, `B04-DK-04`, valeur du lot d'abord), **n'attend plus
+  `RECU-DAO`** : la pièce n'est pas servie, ni sur `GET …/pieces`, ni à la lecture interne (séance, évaluation). Des frais vides le
+  gardent exigé, comme avant.
 - `LectureDto.offres[]` gagne **`fraisDossier`** = `{ regle, dateValidation, referencePaiement }` (retrait payant ; `null` sinon), lu
   par le serveur ; **alerte `FRAIS_NON_REGLES`** sans reçu validé couvrant le lot de l'offre — jamais un refus.
 

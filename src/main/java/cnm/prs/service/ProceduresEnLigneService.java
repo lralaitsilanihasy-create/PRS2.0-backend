@@ -463,6 +463,37 @@ public class ProceduresEnLigneService {
         return payant ? out : null;
     }
 
+    /**
+     * ⚠️ 2026-11-03 (demande front « recu-dao-dossier-gratuit », B1 ; option retenue par l'utilisateur) — un dossier
+     * <strong>déclaré gratuit</strong> : chaque lot porte un montant de frais <strong>saisi à 0</strong>. Un champ vide ne prouve pas la
+     * gratuité (règle du 06/10) : le reçu reste alors exigé.
+     */
+    static boolean gratuit(FicheMarcheService.EtatVersion etat, List<ProcedureEnLigneDto.Lot> lots) {
+        List<ProcedureEnLigneDto.Frais> parLot = new ArrayList<>();
+        Map<String, String> v = etat.etat().getValeurs() == null ? Map.of() : etat.etat().getValeurs();
+        List<Integer> numeros = new ArrayList<>();
+        if (lots.size() > 1) {
+            lots.forEach(l -> numeros.add(l.numero()));
+        } else {
+            numeros.add(null);
+        }
+        for (Integer n : numeros) {
+            java.math.BigDecimal montant = null;
+            for (String code : CHAMPS_FRAIS) {
+                String x = n == null ? null : v.get(code + LotsFiche.SEPARATEUR + n);
+                if (x == null || x.isBlank()) {
+                    x = v.get(code);
+                }
+                montant = x == null || x.isBlank() ? null : SeanceService.montant(x);
+                if (montant != null) {
+                    break;
+                }
+            }
+            parLot.add(new ProcedureEnLigneDto.Frais(n, montant));
+        }
+        return !parLot.isEmpty() && parLot.stream().allMatch(f -> f.montant() != null && f.montant().signum() == 0);
+    }
+
     private boolean apresBascule(LocalDateTime premierAvis) {
         String b = parametres.texte(RETRAIT_PAYANT_DEPUIS);
         LocalDateTime bascule;
@@ -546,8 +577,12 @@ public class ProceduresEnLigneService {
         boolean payant = l.dto().retraitPayant();
         Boolean dejaFourni = payant ? recuValide(idDmc, CurrentUser.ref().filter(x -> cnm.prs.enums.TypeActeur.CANDIDAT.name()
                 .equals(CurrentUser.acteurType().orElse(null))).map(this::nifDe).orElse(null), null).isPresent() : null;
-        out.add(new cnm.prs.dto.OffreDto.PieceAttendue("RECU-DAO", PiecesFiche.OFFRE, null, "Reçu du paiement des frais de dossier",
-                "Copie", null, false, null, !payant, null, dejaFourni, technique));
+        // ⚠️ 2026-11-03 (« recu-dao-dossier-gratuit », B1) — un dossier déclaré gratuit (frais saisis à 0 pour chaque lot) n'attend pas
+        // de reçu ; des frais vides le gardent exigé (rien ne prouve la gratuité).
+        if (!gratuit(l.etat(), l.dto().lots())) {
+            out.add(new cnm.prs.dto.OffreDto.PieceAttendue("RECU-DAO", PiecesFiche.OFFRE, null, "Reçu du paiement des frais de dossier",
+                    "Copie", null, false, null, !payant, null, dejaFourni, technique));
+        }
         Map<String, Object> cadrage = l.etat().etat().getCadrage();
         if (cadrage != null && "OUI".equalsIgnoreCase(String.valueOf(cadrage.get("garantieSoumission")))) {
             out.add(new cnm.prs.dto.OffreDto.PieceAttendue("GARANTIE", PiecesFiche.OFFRE, null,

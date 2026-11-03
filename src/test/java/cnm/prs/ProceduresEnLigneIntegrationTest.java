@@ -871,6 +871,22 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
                 .header("Authorization", jetonCandidat)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("RETIREE"));
     }
 
+    @Test
+    @DisplayName("⚠️ 2026-11-03 (« recu-dao-dossier-gratuit », B1) — frais vides : RECU-DAO reste exigé (rien ne prouve la gratuité) ; frais "
+            + "saisis à 0 : dossier déclaré gratuit, RECU-DAO n'est plus attendu (lectures publique et interne)")
+    void recuDaoDossierGratuit() throws Exception {
+        poserAvis();
+        String url = "/api/procedures-en-ligne/" + idDmc + "/pieces";
+        String pieces = mvc.perform(get(url)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(pieces, "$[?(@.code=='RECU-DAO')].obligatoire")).containsExactly(true);
+        valeurRepository.save(new FicheMarcheValeur(null, idFiche, "B04-DS-05", "0"));
+        pieces = mvc.perform(get(url)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(pieces, "$[*].code")).contains("AE").doesNotContain("RECU-DAO");
+        assertThat(procedures.piecesAttenduesInternes(idDmc)).extracting(cnm.prs.dto.OffreDto.PieceAttendue::code).doesNotContain("RECU-DAO");
+    }
+
+    @Autowired private cnm.prs.service.ProceduresEnLigneService procedures;
+
     /** L'appel d'offres restreint de fournitures (mode 92 « restreint »), lancé par une lettre ; C900000011 invité. */
     private void rendreRestreinte() {
         changer("B04-SE-03", aujourdhui.minusDays(1) + "T08:00");   // dépôts ouverts
