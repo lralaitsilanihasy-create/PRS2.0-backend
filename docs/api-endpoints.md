@@ -8367,7 +8367,8 @@ Même demande, §B4 (arbitrage Q2 du pilote ; décret n° 2019-1310, art. 11-1 e
 (`t_ami.NATURE`). **Aucune route nouvelle** : l'appel à candidatures emprunte celles de l'AMI en ligne (`/api/fiches-marche/{idDmc}/ami`,
 `…/preselection`, `…/rapport`, `/api/amis-en-ligne`, `/api/candidat/amis/{idDmc}/expression`). Aucune dépendance ajoutée.
 
-- **La nature** : `AmiDto` et `AmiPublic` servent en fin d'objet **`nature`** — `AMI` (prestations intellectuelles, inchangé) ou
+- **La nature** : `AmiDto`, `AmiPublic` et ⚠️ **`PreselectionDto`** (`GET …/ami/preselection` et les réponses des gestes de la
+  présélection ; 2026-11-03, demande front « nature-preselection ») servent en fin d'objet **`nature`** — `AMI` (prestations intellectuelles, inchangé) ou
   **`APPEL_CANDIDATURES`**, fixée à la création selon la catégorie de la fiche. L'appel à candidatures vaut pour une fiche de
   fournitures ou de travaux dont la ligne est en **mode restreint** (sinon 409 `CATEGORIE_SANS_AMI`, comme avant).
 - **L'avis** (projet puis signé) : « Avis d'appel à candidatures » — objet, critères **de qualification**, pièces à joindre à la

@@ -11,7 +11,9 @@ import java.util.List;
  */
 public record PreselectionDto(Long idDmc, String etat, List<Declaration> declarations, List<Expression> expressions, List<Retenu> liste,
         Integer nombreRetenus, BigDecimal noteMinimale, String motifNombre, String observations, Rapport rapport, int nombreRelances,
-        String motifInfructueux) {
+        String motifInfructueux,
+        /** ⚠️ 2026-11-03 (demande front « nature-preselection », B1 ; V161) — {@code AMI} ou {@code APPEL_CANDIDATURES}, lue sur l'AMI. */
+        String nature) {
 
     public record Declaration(String membre, String nom, boolean president, LocalDateTime signeeLe, Boolean conflit, String precision) {
     }

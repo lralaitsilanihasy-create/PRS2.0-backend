@@ -235,6 +235,7 @@ class AmiIntegrationTest extends CnmIntegrationTestSupport {
         String c = deposer(jetonC);
         String pre = base + "/preselection";
         mvc.perform(get(pre).header("Authorization", jetonM1)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("EN_ATTENTE"))
+                .andExpect(jsonPath("$.nature").value("AMI"))   // ⚠️ « nature-preselection » (B1)
                 .andExpect(jsonPath("$.expressions.length()").value(0));
         cnm.prs.entity.Ami ami = amiRepository.findById(idDmc).orElseThrow();
         ami.setDateLimite(LocalDateTime.now().minusMinutes(1));
@@ -458,7 +459,7 @@ class AmiIntegrationTest extends CnmIntegrationTestSupport {
         ami.setDateLimite(LocalDateTime.now().minusMinutes(1));
         amiRepository.save(ami);
         mvc.perform(post(base + "/preselection/declaration").header("Authorization", m[0]).contentType(JSON).content("{\"conflit\":false}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.nature").value("APPEL_CANDIDATURES"));   // « nature-preselection » (B1)
         for (String x : List.of(a, b, c)) {
             mvc.perform(put(base + "/expressions/" + x + "/notes").header("Authorization", m[0]).contentType(JSON).content("{\"notes\":["
                     + "{\"code\":\"C1\",\"note\":25,\"motif\":\"a\"},{\"code\":\"C2\",\"note\":35,\"motif\":\"b\"},{\"code\":\"C3\",\"note\":25,\"motif\":\"c\"}]}"))

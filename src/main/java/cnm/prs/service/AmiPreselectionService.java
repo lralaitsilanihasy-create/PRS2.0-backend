@@ -751,7 +751,7 @@ public class AmiPreselectionService {
         String etat = Ami.INFRUCTUEUX.equals(a.getEtat()) ? Ami.INFRUCTUEUX : a.getListeDefinitiveLe() != null ? DEFINITIVE
                 : a.getListeArreteeLe() != null ? LISTE_ARRETEE : lisible ? NOTATION : EN_ATTENTE;
         return new PreselectionDto(idDmc, etat, decl, exprs, liste, a.getNombreRetenus(), a.getNoteMinimale(), a.getMotifNombre(), a.getObservations(),
-                rapport, a.getNombreRelances(), a.getMotifInfructueux());
+                rapport, a.getNombreRelances(), a.getMotifInfructueux(), a.getNature());   // ⚠️ « nature-preselection » (B1)
     }
 
     /** Les membres appelés à signer : ceux de la commission, hors ceux qui ont déclaré un conflit. */
