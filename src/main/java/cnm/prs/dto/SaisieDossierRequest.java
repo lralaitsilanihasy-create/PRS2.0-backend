@@ -26,5 +26,16 @@ public record SaisieDossierRequest(
         String idTypeDossier,
 
         @NotNull
-        Integer idEntiteContract) {
+        Integer idEntiteContract,
+
+        /**
+         * ⚠️ V163 (2026-11-03, demande front « chaine-par-ligne », B2) — facultatif : la ligne du plan ({@code idDetail}) que le dossier
+         * réalise (rapport justificatif, marché de gré à gré…). Ligne d'un plan de la PRMP, pas déjà rattachée à un dossier de la même
+         * famille : 400 {@code idDetailOrigine} sinon.
+         */
+        Integer idDetailOrigine) {
+
+    public SaisieDossierRequest(String idSousType, String idTypeDossier, Integer idEntiteContract) {
+        this(idSousType, idTypeDossier, idEntiteContract, null);
+    }
 }

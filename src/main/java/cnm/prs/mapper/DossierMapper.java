@@ -39,6 +39,7 @@ public final class DossierMapper {
         // ⚠️ 2026-09-23 (fiche marché, lot 1b) — colonne de l'entité, servie partout ; le bloc ficheMarche, lui,
         // n'est résolu que sur la lecture unitaire (DossierService). Lecture seule : toEntity ne la reprend pas.
         dto.setIdDmc(entity.getIdDmc());
+        dto.setIdDetailOrigine(entity.getIdDetailOrigine());   // ⚠️ V163
         dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)
         return dto;
     }

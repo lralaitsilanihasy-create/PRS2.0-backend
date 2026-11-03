@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -58,6 +59,9 @@ public class FiliationDossierService {
     private final AttributionRepository attributions;
     private final ActeGestionRepository actes;
     private final DossierService dossierService;
+
+    /** ⚠️ V163 (« chaine-par-ligne », B2) — la famille des dossiers de mise en concurrence. */
+    private static final String FAMILLE_DMC = DossierIntegriteService.FAMILLE_DMC;
 
     public FiliationDossierService(DossierRepository dossiers, DossierMecRepository dmcs, MarcheRepository marches,
             AttributionRepository attributions, ActeGestionRepository actes, DossierService dossierService) {
@@ -119,6 +123,18 @@ public class FiliationDossierService {
         if (d.getIdDmc() != null) {
             return planDeLaProcedure(d.getIdDmc());
         }
+        // ⚠️ V163 (« chaine-par-ligne », B2) — un dossier créé hors fiche rattaché à une ligne : le DMC de la même ligne (pour un DDM),
+        // à défaut le plan qui porte la ligne.
+        if (d.getIdDetailOrigine() != null) {
+            if (!FAMILLE_DMC.equals(d.getIdTypeDossier())) {
+                Optional<Dossier> dmc = dossiers.findByIdDetailOrigineIn(List.of(d.getIdDetailOrigine())).stream()
+                        .filter(x -> FAMILLE_DMC.equals(x.getIdTypeDossier())).min(Comparator.comparing(Dossier::getIdDossier));
+                if (dmc.isPresent()) {
+                    return dmc.get();
+                }
+            }
+            return marches.findById(d.getIdDetailOrigine()).map(Marche::getIdDossier).flatMap(dossiers::findById).orElse(null);
+        }
         return d.getIdDossierParent() == null ? null : dossiers.findById(d.getIdDossierParent()).orElse(null);
     }
 
@@ -177,7 +193,7 @@ public class FiliationDossierService {
                         Marche l = lignes.get(parDmc.get(mec.getIdDmc()).getIdDetail());
                         avecDossier.add(mec.getIdDmc());
                         if (rattacher(l.getIdDossier(), mec, FiliationDossierDto.MISE_EN_CONCURRENCE)) {
-                            ligne.put(mec.getIdDossier(), new Ligne(l.getIdDetail(), l.getDesignationMarche()));
+                            ligne.put(mec.getIdDossier(), new Ligne(l.getIdDetail(), l.getIdLigneOrigine(), l.getDesignationMarche()));
                             suivant.add(mec);
                         }
                     }
@@ -185,6 +201,27 @@ public class FiliationDossierService {
                     List<Long> sans = parDmc.keySet().stream().filter(x -> !avecDossier.contains(x)).toList();
                     if (!sans.isEmpty()) {
                         suivant.addAll(marchesDe(sans, x -> lignes.get(parDmc.get(x).getIdDetail())));
+                    }
+                }
+                // ⚠️ V163 (2026-11-03, « chaine-par-ligne », B2) — les dossiers créés hors fiche rattachés à une ligne : un DMC (rapport
+                // justificatif…) sous le plan, nœud MISE_EN_CONCURRENCE ; un DDM (marché de gré à gré…) sous le DMC de la même ligne, à
+                // défaut sous le plan, nœud MARCHE ; chacun porte sa ligne.
+                if (!lignes.isEmpty()) {
+                    List<Dossier> horsFiche = dossiers.findByIdDetailOrigineIn(lignes.keySet()).stream()
+                            .sorted(Comparator.comparing((Dossier x) -> !FAMILLE_DMC.equals(x.getIdTypeDossier())).thenComparing(Dossier::getIdDossier))
+                            .toList();
+                    Map<Integer, Integer> dmcParLigne = new HashMap<>();
+                    for (Dossier h : horsFiche) {
+                        Marche l = lignes.get(h.getIdDetailOrigine());
+                        boolean dmc = FAMILLE_DMC.equals(h.getIdTypeDossier());
+                        Integer parent = dmc ? l.getIdDossier() : dmcParLigne.getOrDefault(l.getIdDetail(), l.getIdDossier());
+                        if (rattacher(parent, h, dmc ? FiliationDossierDto.MISE_EN_CONCURRENCE : FiliationDossierDto.MARCHE)) {
+                            ligne.put(h.getIdDossier(), new Ligne(l.getIdDetail(), l.getIdLigneOrigine(), l.getDesignationMarche()));
+                            suivant.add(h);
+                            if (dmc) {
+                                dmcParLigne.putIfAbsent(l.getIdDetail(), h.getIdDossier());
+                            }
+                        }
                     }
                 }
             }
@@ -243,7 +280,7 @@ public class FiliationDossierService {
                     lot.put(d.getIdDossier(), a.getLot());
                     Marche m = lignes == null ? null : lignes.get(a.getIdDmc());
                     if (m != null) {
-                        ligne.put(d.getIdDossier(), new Ligne(m.getIdDetail(), m.getDesignationMarche()));
+                        ligne.put(d.getIdDossier(), new Ligne(m.getIdDetail(), m.getIdLigneOrigine(), m.getDesignationMarche()));
                     }
                     ajoutes.add(d);
                 }

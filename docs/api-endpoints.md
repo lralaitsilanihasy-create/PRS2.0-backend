@@ -55,6 +55,11 @@
   **Pas de nœud** pour les marchés subséquents et bons de commande (sans numéro de dossier) ni pour un réexamen (même numéro) : ils
   se lisent dans l'historique. **Périmètre** : 403 si le dossier demandé est hors périmètre ; un autre nœud hors périmètre est rendu
   **masqué** (`masque: true`, `lien` et `enfants` seuls, le reste nul). Lu par niveaux, une requête par nature et par niveau.
+  ⚠️ **2026-11-03 (demande front « chaine-par-ligne »)** — **B1** : `ligne` = `{ idDetail, idLigneOrigine, objet }` ; `idLigneOrigine`
+  est l'identité de la ligne à travers les versions du plan (celle de `MarcheDto`, l'`idDetail` de sa première apparition). **B2** :
+  un dossier créé **hors fiche** et rattaché à une ligne (`idDetailOrigine`, V163, voir `POST /api/saisies/dossier`) entre dans l'arbre
+  sous la version du plan qui porte la ligne : un **DMC** (rapport justificatif…) en nœud `MISE_EN_CONCURRENCE`, un **DDM** (marché de
+  gré à gré…) en nœud `MARCHE` sous le DMC rattaché à la même ligne, à défaut sous le plan ; chacun porte `ligne`.
 - **`GET /api/dossiers/{id}/historique`** (B2) → `HistoriqueDossierDto[]` triés par date (sans date en dernier) : `{ type, date, id,
   reference, statut, avis, acteur, detail, lot, numero }`. Types — circuit : `RECEPTION`, `DISPATCH`, `EXAMEN`, `PV` (`reference`
   du PV, `statut` `DEFINITIF` pour un PV signé, `avis`), `LETTRE_RENVOI`, `TRANSMISSION_SIGMP`, `SUSPENSION`, `RETRAIT`,
@@ -2905,7 +2910,7 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 |---|---|---|---|---|---|
 | POST | /api/saisies/ppm | `SaisiePpmRequest` (JSON) | `DossierDto` (le dossier créé) | 201, 400, 403 | **PRMP** |
 | POST | /api/saisies/ppm | `multipart/form-data` (PPM **+ pièces jointes**) | `DossierDto` | 201, 400, 403 | **PRMP** |
-| POST | /api/saisies/dossier | `SaisieDossierRequest` | `DossierDto` | 201, 400, 403, 409 | **PRMP** |
+| POST | /api/saisies/dossier | `SaisieDossierRequest` (⚠️ 2026-11-03, « chaine-par-ligne », B2 : `idDetailOrigine` facultatif — la ligne du plan que le dossier réalise ; 400 `idDetailOrigine` si elle est inconnue, retirée du plan, hors des plans de la PRMP, ou déjà rattachée à un dossier de la même famille ; servie par `DossierDto.idDetailOrigine`) | `DossierDto` | 201, 400, 403, 409 | **PRMP** |
 | POST | /api/saisies/ppm/import | `multipart/form-data` (part `fichier` = PPM **PDF**) | `SaisiePpmImportResult` | 200, 400, 403 | **PRMP** |
 | POST | /api/saisies/ppm/import-xlsx | `multipart/form-data` (part `fichier` = **tableur .xlsx**) | `SaisiePpmImportResult` | 200, 400, 403 | **PRMP** |
 | GET | /api/saisies/ppm/import-xlsx/gabarit | — | **`.xlsx`** (gabarit à remplir) | 200, 403 | **PRMP** |

@@ -185,6 +185,9 @@ public class DossierDto {
      */
     private Long idDmc;
 
+    /** ⚠️ V163 (2026-11-03, « chaine-par-ligne », B2) — la ligne du plan d'un dossier créé hors fiche ; nulle sinon. */
+    private Integer idDetailOrigine;
+
     /**
      * ⚠️ Fiche marché (2026-09-23, §B1) — l'état de la fiche liée, de quoi l'afficher sans second appel.
      * Servi sur la <strong>lecture unitaire</strong> ({@code GET /api/dossiers/{id}} et les réponses des gestes

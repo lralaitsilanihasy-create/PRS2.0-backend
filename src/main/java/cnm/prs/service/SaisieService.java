@@ -891,10 +891,45 @@ public class SaisieService {
         SousTypesDossier.exigerHorsFiche(sousType.getIdSousType());   // ⚠️ 2026-10-15 (dossier-par-fiche, §B1)
         SousTypesDossier.exigerHorsProcedure(sousType.getIdSousType());   // ⚠️ 2026-10-27 (« dossier-marche-remise-papier », P3)
         String idPrmp = prmpCourante();
+        Integer ligne = exigerLigneOrigine(req.idDetailOrigine(), sousType.getIdTypeDossier(), idPrmp);   // ⚠️ V163 (B2)
         String localite = dossierIntegrite.localiteDeLEntiteDeLaPrmp(req.idEntiteContract(), idPrmp);
         Dossier d = creerDossier(sousType.getIdTypeDossier(), sousType.getIdSousType(),
                 localite, idPrmp, req.idEntiteContract());
+        if (ligne != null) {
+            d.setIdDetailOrigine(ligne);
+            d = dossierRepository.save(d);
+            journalDossier.tracer(d, JournalDossierService.CREATION, "Rattaché à la ligne " + ligne + " du plan de passation");
+        }
         return DossierMapper.toDto(d);
+    }
+
+    /**
+     * ⚠️ V163 (2026-11-03, demande front « chaine-par-ligne », B2) — la ligne du plan d'un dossier créé hors fiche : une ligne connue
+     * d'un plan de la PRMP, pas encore rattachée à un dossier de la même famille ; 400 nominatif {@code idDetailOrigine} sinon ; nulle
+     * si rien n'est demandé.
+     */
+    private Integer exigerLigneOrigine(Integer idDetail, String famille, String idPrmp) {
+        if (idDetail == null) {
+            return null;
+        }
+        Marche m = marcheRepository.findById(idDetail).orElse(null);
+        String erreur = null;
+        if (m == null) {
+            erreur = "Ligne du plan introuvable : " + idDetail + ".";
+        } else if (Boolean.TRUE.equals(m.getSupprimee())) {
+            erreur = "La ligne " + idDetail + " est retirée du plan.";
+        } else {
+            Dossier plan = m.getIdDossier() == null ? null : dossierRepository.findById(m.getIdDossier()).orElse(null);
+            if (plan == null || !FAMILLE_DDP.equals(plan.getIdTypeDossier()) || idPrmp == null || !idPrmp.equals(plan.getIdPrmp())) {
+                erreur = "La ligne " + idDetail + " n'appartient pas à l'un de vos plans de passation.";
+            } else if (dossierRepository.existsByIdDetailOrigineAndIdTypeDossier(idDetail, famille)) {
+                erreur = "La ligne " + idDetail + " est déjà rattachée à un dossier de cette famille (" + famille + ").";
+            }
+        }
+        if (erreur != null) {
+            throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError("idDetailOrigine", erreur)));
+        }
+        return idDetail;
     }
 
     /**

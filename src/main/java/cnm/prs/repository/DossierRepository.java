@@ -656,6 +656,11 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     /** ⚠️ 2026-10-31 (§B1) — les dossiers nés de plusieurs fiches, en une requête. */
     List<Dossier> findByIdDmcIn(java.util.Collection<Long> idDmcs);
 
+    /** ⚠️ V163 (« chaine-par-ligne », B2) — les dossiers créés hors fiche rattachés à ces lignes du plan. */
+    List<Dossier> findByIdDetailOrigineIn(java.util.Collection<Integer> idDetails);
+
+    boolean existsByIdDetailOrigineAndIdTypeDossier(Integer idDetail, String idTypeDossier);
+
     /** ⚠️ 2026-10-31 (§B1) — parmi ces dossiers, ceux que la PRMP voit (même prédicat que {@link #existsVisiblePourPrmp}). */
     @Query("""
             select d.idDossier from Dossier d where d.idDossier in :ids and (

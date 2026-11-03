@@ -25,7 +25,10 @@ public record FiliationDossierDto(Integer idDossierDemande, Noeud racine) {
             String lien, Integer lot, Ligne ligne, boolean masque, List<Noeud> enfants) {
     }
 
-    /** La ligne du plan : son identifiant et son objet. */
-    public record Ligne(Integer idDetail, String objet) {
+    /**
+     * La ligne du plan : son identifiant (dans sa version), ⚠️ 2026-11-03 (demande front « chaine-par-ligne », B1) son identité à
+     * travers les versions ({@code idLigneOrigine}, celui de {@code MarcheDto}), et son objet.
+     */
+    public record Ligne(Integer idDetail, Integer idLigneOrigine, String objet) {
     }
 }

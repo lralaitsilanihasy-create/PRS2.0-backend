@@ -124,6 +124,13 @@ public class Dossier {
     private Long idDmc;
 
     /**
+     * ⚠️ V163 (2026-11-03, demande front « chaine-par-ligne », B2) — la ligne du plan ({@code t_marche.ID_DETAIL}) d'un dossier DMC ou DDM
+     * créé hors fiche (rapport justificatif, marché de gré à gré…) : posée à la création seulement ; le place dans la filiation du plan.
+     */
+    @Column(name = "ID_DETAIL_ORIGINE")
+    private Integer idDetailOrigine;
+
+    /**
      * ⚠️ Lot C (V49, 2026-09-27, §B1) — la version de la fiche marché que ce dossier a <strong>soumise</strong> : posée à
      * la soumission, avancée à chaque resoumission / transmission de compléments. C'est la référence de la garde
      * {@code FICHE_NON_REVISEE} ; {@code null} tant que le dossier est brouillon, ou sans fiche.

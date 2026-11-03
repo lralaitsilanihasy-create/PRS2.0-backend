@@ -2,6 +2,7 @@ package cnm.prs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 
 import com.jayway.jsonpath.JsonPath;
 
@@ -111,6 +113,59 @@ class FiliationDossierIntegrationTest extends CnmIntegrationTestSupport {
             assertThat(JsonPath.<String>read(corps, "$.racine.enfants[1].enfants[0].enfants[0].lien")).isEqualTo("MODIFICATION");
         }
         mvc.perform(get("/api/dossiers/999999/filiation").header("Authorization", tokenPresident)).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("⚠️ V163 (« chaine-par-ligne », B1, B2) — le nœud ligne porte idLigneOrigine ; un rapport justificatif et un marché de gré à "
+            + "gré créés hors fiche et rattachés à une ligne entrent dans la filiation (RJ sous le plan, MGG sous le RJ) ; ligne inconnue, "
+            + "hors des plans de la PRMP ou déjà rattachée à un dossier de la même famille → 400 idDetailOrigine")
+    void dossiersHorsFicheRattachesALaLigne() throws Exception {
+        for (String[] st : List.of(new String[] { "RJ", "DMC" }, new String[] { "MGG", "DDM" })) {
+            if (!sousTypeDossierRepository.existsById(st[0])) {
+                sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier(st[0], "Sous-type " + st[0], st[1]));
+            }
+        }
+        Marche l = marche(9502, 9500, 9500);
+        l.setDesignationMarche("entretien des groupes électrogènes");
+        marcheRepository.save(l);
+        String rj = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"RJ\",\"idEntiteContract\":1,\"idDetailOrigine\":9502}")).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idDetailOrigine").value(9502)).andReturn().getResponse().getContentAsString();
+        int idRj = JsonPath.read(rj, "$.idDossier");
+        String mgg = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"MGG\",\"idEntiteContract\":1,\"idDetailOrigine\":9502}")).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        int idMgg = JsonPath.read(mgg, "$.idDossier");
+        mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"RJ\",\"idEntiteContract\":1,\"idDetailOrigine\":9502}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("idDetailOrigine"));
+        mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"RJ\",\"idEntiteContract\":1,\"idDetailOrigine\":999999}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("idDetailOrigine"));
+        cnm.prs.entity.Prmp autrePrmp = prmp("PRMP002", null);
+        autrePrmp.setCin("202022223333");
+        autrePrmp.setEmailPrmp("prmp2@min.mg");
+        prmpRepository.save(autrePrmp);
+        Dossier autrePlan = dossierLoc(9600, "CLOTURE", "ANT", "PRMP002");
+        autrePlan.setIdTypeDossier("DDP");
+        dossierRepository.save(autrePlan);
+        marcheRepository.save(marche(9601, 9600, 9500));
+        mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"RJ\",\"idEntiteContract\":1,\"idDetailOrigine\":9601}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("idDetailOrigine"));
+
+        for (int entree : List.of(9500, idRj, idMgg)) {
+            String corps = mvc.perform(get("/api/dossiers/" + entree + "/filiation").header("Authorization", tokenPrmp))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertThat(JsonPath.<Integer>read(corps, "$.racine.idDossier")).isEqualTo(9500);
+            assertThat(JsonPath.<List<Integer>>read(corps, "$.racine.enfants[?(@.lien=='MISE_EN_CONCURRENCE')].ligne.idLigneOrigine"))
+                    .contains(9501, 9502);   // sans origine propre, la ligne est sa propre origine
+            assertThat(JsonPath.<List<Integer>>read(corps, "$.racine.enfants[?(@.idDossier==" + idRj + ")].ligne.idDetail")).containsExactly(9502);
+            assertThat(JsonPath.<List<Integer>>read(corps, "$.racine.enfants[?(@.idDossier==" + idRj + ")].enfants[*].idDossier"))
+                    .containsExactly(idMgg);
+            assertThat(JsonPath.<List<String>>read(corps, "$.racine.enfants[?(@.idDossier==" + idRj + ")].enfants[*].lien"))
+                    .containsExactly("MARCHE");
+        }
     }
 
     @Test
