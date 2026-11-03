@@ -1638,6 +1638,15 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > la nouvelle date d'ouverture, notifiée aux invités et à la Commission : la séance s'ouvre à cette date, et son PV mentionne
 > l'anticipation et les consentements.
 >
+> ⚠️ **2026-11-03 — une seule offre reçue (même demande, §B8 ; arbitrage Q1 du pilote : circulaire de régulation 2024).** Une offre
+> unique **ne rend pas d'office** l'appel d'offres (restreint ou non) infructueux : elle suit l'évaluation normale, et elle est proposée à
+> l'attribution si elle est conforme, qualifiée et acceptable. Vérifié dans le serveur le 03/11 : la séance ne constate la **carence**
+> qu'en l'absence de toute offre ; l'évaluation ne propose l'infructuosité que si **aucune** offre n'est qualifiée ; la PRMP ne déclare
+> un lot infructueux que sur cette proposition du rapport, ou après un avis défavorable de la Commission. Seule nuance, propre au
+> **contrat-cadre à plusieurs titulaires** : s'il ne reste qu'un titulaire qualifié, le rapport le constate et la PRMP *peut* déclarer
+> l'infructuosité (décret n° 2019-1064, art. 17) — une faculté, pas une règle d'office. **Écart assumé avec la loi n° 2016-055, art.
+> 56-I c)**, retenu par le pilote, **à valider par le juriste**.
+>
 > ⚠️ **2026-10-30 — le contrat-cadre par appel d'offres restreint (décision du pilote « suivre les textes en vigueur » ; décret
 > n° 2019-1064, art. 7 ; V152).** Un appel d'offres **restreint** en contrat-cadre produit un « Dossier d'appel d'offres restreint —
 > contrat-cadre » (`DAOR-CC`), puis à l'attribution un « Marché sur appel d'offres restreint — contrat-cadre » (`MAOR-CC`). Leurs pièces
