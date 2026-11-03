@@ -74,6 +74,26 @@ public class PointsCtrl {
     @Column(name = "FORME", length = 20)
     private String forme;
 
+    /**
+     * ⚠️ V162 (2026-11-03, demande front « grille-marche-aoo », B1) — les sous-types, séparés par des virgules, où ce point hérité par la
+     * grille de base ne s'applique pas (« Publicité effective de l'avis » du MAOO : écarté des MAOR, MAORI, MAOR-CC) ; nul : partout.
+     */
+    @Column(name = "SOUS_TYPES_EXCLUS", length = 200)
+    private String sousTypesExclus;
+
+    /** ⚠️ V162 — le point est-il écarté de l'un de ces sous-types (la chaîne d'héritage du sous-type demandé) ? */
+    public boolean exclu(java.util.Collection<String> sousTypes) {
+        if (sousTypesExclus == null || sousTypesExclus.isBlank()) {
+            return false;
+        }
+        for (String s : sousTypesExclus.split(",")) {
+            if (sousTypes.contains(s.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_TYPE_DOSSIER", insertable = false, updatable = false)
     @JsonIgnore

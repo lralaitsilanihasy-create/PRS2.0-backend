@@ -11988,6 +11988,17 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > inconnu ; sous-type hors de la famille (`?typeDossier=` + `?sousType=` incohérents, ou POST/PUT dont
 > `idSousType` n'appartient pas à `idTypeDossier`). **Écran admin** : le dropdown sous-type se remplit via
 > `GET /api/sous-type-dossiers/par-famille/{famille}` selon la famille choisie.
+>
+> ⚠️ **2026-11-03 (demande front « grille-marche-aoo », V162 ; manuel de contrôle a priori, ch. 2, III.C).** Trois points du `MAOO`,
+> obligatoires, hérités par ses dérivés (`MAOO-CC`, `MAOOI`, `MAOOPREQUAL`, `MAOR`, `MAOR-CC`…) : **« Offre retenue acceptable »** (CMP,
+> art. 1), **« Publicité effective de l'avis »** (décret 2019-1310, art. 2.1) et **« Offres anormales : processus et seuils »** (basses
+> et hautes, selon les DPAO ; le point commun « Offres anormales : justification demandée » reste tel quel). Semés en fin de grille.
+> Un point peut désormais être **écarté** d'un sous-type de la chaîne d'héritage (`tr_points_ctrl.SOUS_TYPES_EXCLUS`, liste séparée
+> par des virgules) : la publicité de l'avis l'est des `MAOR`, `MAORI` et `MAOR-CC`, dont les lettres d'invitation ont leur propre
+> point. Trois descriptions précisées : « Montant évalué conforme au DAO » (+ variantes techniques), « Rapport signé de tous les
+> membres » (signé **et paraphé**), « Conformité des documents essentiels » (+ offre complète, bordereau des prix ou DQE entier et non
+> modifié) — remplacées seulement si elles étaient encore celles d'origine. Une grille se lit vivante : un PV rendu garde les points
+> évalués ; un examen en cours devra statuer sur les nouveaux points à sa soumission.
 
 **Champs `PointsCtrlDto`**
 

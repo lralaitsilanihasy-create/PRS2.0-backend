@@ -78,4 +78,41 @@ class GrilleParSousTypeIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(points.findAll()).filteredOn(p -> "DAOO".equals(p.getIdSousType()) && "CONTRAT_CADRE".equals(p.getForme())).hasSize(5);
         assertThat(points.findAll()).allMatch(p -> p.getDecriptPointCtrl() == null || p.getDecriptPointCtrl().length() <= 255);
     }
+
+    @Test
+    @DisplayName("⚠️ V162 (« grille-marche-aoo ») — trois points du MAOO hérités par ses dérivés ; « Publicité effective de l'avis » écarté "
+            + "du MAOR (et du MAORI qui en hérite), gardé au MAOOI ; « offre complète » au point des documents essentiels")
+    void grilleDuMarcheSurAppelOffres() throws Exception {
+        if (!typeDossierRepository.existsById("DDM")) {
+            typeDossierRepository.save(new cnm.prs.entity.TypeDossier("DDM", "Dossier de marché"));
+        }
+        for (String st : List.of("MAOO", "MAOR", "MAORI", "MAOOI")) {
+            if (!sousTypeDossierRepository.existsById(st)) {
+                sousTypeDossierRepository.save(new SousTypeDossier(st, "Marché " + st, "DDM"));
+            }
+        }
+        for (String[] base : List.of(new String[] { "MAOR", "MAOO" }, new String[] { "MAORI", "MAOR" }, new String[] { "MAOOI", "MAOO" })) {
+            SousTypeDossier st = sousTypeDossierRepository.findById(base[0]).orElseThrow();
+            st.setGrilleBase(base[1]);
+            sousTypeDossierRepository.save(st);
+        }
+        seeder.semer();
+        java.util.function.Function<String, List<String>> libelles = sousType -> {
+            try {
+                return JsonPath.read(mvc.perform(get("/api/points-ctrls").param("sousType", sousType).header("Authorization", tokenMembre))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$[*].libelPointCtrl");
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        };
+        List<String> nouveaux = List.of("Offre retenue acceptable", "Publicité effective de l'avis", "Offres anormales : processus et seuils");
+        assertThat(libelles.apply("MAOO")).containsAll(nouveaux);
+        assertThat(libelles.apply("MAOOI")).containsAll(nouveaux);
+        assertThat(libelles.apply("MAOR")).contains("Offre retenue acceptable", "Offres anormales : processus et seuils")
+                .doesNotContain("Publicité effective de l'avis");
+        assertThat(libelles.apply("MAORI")).contains("Offre retenue acceptable").doesNotContain("Publicité effective de l'avis");
+        assertThat(points.findAll()).filteredOn(p -> "MAOO".equals(p.getIdSousType()) && "Conformité des documents essentiels".equals(p.getLibelPointCtrl()))
+                .singleElement().extracting(p -> p.getDecriptPointCtrl()).asString().contains("offre complète");
+        assertThat(points.findAll()).filteredOn(p -> nouveaux.contains(p.getLibelPointCtrl())).allMatch(p -> Boolean.TRUE.equals(p.getObligatoire()));
+    }
 }

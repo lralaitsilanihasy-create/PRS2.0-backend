@@ -39,8 +39,9 @@ public class PointsCtrlDossierMarcheSeeder implements CommandLineRunner {
                     "Le PV d'ouverture est-il signé et publié ? Les plis hors délai ont-ils été écartés sans ouverture ?" },
             new String[] { "Rejets motivés par le DAO", "Chaque rejet d'offre est-il motivé par une clause du DAO ?" },
             new String[] { "Montant évalué conforme au DAO",
+                    // ⚠️ V162 (2026-11-03, « grille-marche-aoo », B2) — et les variantes techniques (manuel, p. 51).
                     "Les erreurs arithmétiques sont-elles corrigées selon les IC, et le montant évalué n'inclut-il que le rabais, la "
-                            + "préférence et les critères prévus par le DAO ?" },
+                            + "préférence, les critères et les variantes techniques prévus par le DAO ?" },
             new String[] { "Offres anormales : justification demandée",
                     "Aucune offre anormalement basse n'a-t-elle été rejetée sans demande écrite de justification ?" },
             new String[] { "Classement et attributaire proposé",
@@ -48,7 +49,7 @@ public class PointsCtrlDossierMarcheSeeder implements CommandLineRunner {
             new String[] { "Post-qualification sur les seuls critères du DAO",
                     "La post-qualification n'a-t-elle retenu que les critères du DAO ?" },
             new String[] { "Rapport signé de tous les membres",
-                    "Le rapport d'évaluation est-il signé de tous les membres, observations de désaccord comprises ?" },
+                    "Le rapport d'évaluation est-il signé et paraphé de tous les membres, observations de désaccord comprises ?" },   // ⚠️ V162 (B2)
             new String[] { "Projet de marché conforme à l'offre retenue",
                     "Le projet de marché reprend-il l'offre retenue sans modification substantielle ?" });
 

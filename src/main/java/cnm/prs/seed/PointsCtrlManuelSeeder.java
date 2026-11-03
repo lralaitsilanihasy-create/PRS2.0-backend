@@ -37,7 +37,13 @@ public class PointsCtrlManuelSeeder implements CommandLineRunner {
     private static final String CC = "CONTRAT_CADRE";
 
     /** Un point du manuel : famille, sous-type (nul : commun à la famille), portée, libellé, question, catégorie, forme. */
-    record Graine(String famille, String sousType, PorteePointCtrl portee, String libelle, String question, String categorie, String forme) {
+    record Graine(String famille, String sousType, PorteePointCtrl portee, String libelle, String question, String categorie, String forme,
+            /** ⚠️ V162 — les sous-types où le point hérité ne s'applique pas (séparés par des virgules) ; nul : partout. */
+            String exclus) {
+
+        Graine(String famille, String sousType, PorteePointCtrl portee, String libelle, String question, String categorie, String forme) {
+            this(famille, sousType, portee, libelle, question, categorie, forme, null);
+        }
     }
 
     private static Graine d(String famille, String sousType, String libelle, String question) {
@@ -120,12 +126,18 @@ public class PointsCtrlManuelSeeder implements CommandLineRunner {
             d("DDM", "MAOO", "Délai de remise des offres", "Décompté de la 1re publication de l'avis (journal ou site de l'ARMP) : suffisant ? Date de 1re publication clairement établie ?"),
             d("DDM", "MAOO", "PV d'ouverture : date et heure", "Cohérentes avec l'avis ? (Le PV ne se modifie jamais ; une erreur de transcription se prouve par le registre et une déclaration des membres.)"),
             d("DDM", "MAOO", "PV d'ouverture : quorum et signataires", "Président de la CAO ou son représentant, membres désignés, candidats présents ?"),
-            d("DDM", "MAOO", "Conformité des documents essentiels", "AE daté et signé, validité de l'offre, délai, garantie de soumission (montant, forme, validité), attestation du fabricant (fournitures), certificat de visite (travaux) ?"),
+            // ⚠️ V162 (2026-11-03, « grille-marche-aoo », B2) — « offre complète » ajouté (manuel, p. 53).
+            d("DDM", "MAOO", "Conformité des documents essentiels", "AE daté et signé, validité de l'offre, délai, garantie de soumission (montant, forme, validité), attestation du fabricant (fournitures), certificat de visite (travaux) ; offre complète : bordereau des prix ou DQE entier et non modifié ?"),
             d("DDM", "MAOO", "Spécifications techniques", "Les spécifications proposées sont-elles conformes, sans réserve, divergence ni omission substantielle ?"),
             d("DDM", "MAOO", "Moralité des prix", "Le rapport mentionne-t-il expressément la vérification de la moralité des prix unitaires par la CAO (circulaire, point XII-2) ?"),
             d("DDM", "MAOO", "Qualification : activités et critères", "Activités du candidat (NIF, STAT) couvrant l'objet ; seuls critères du DAO validé appliqués (fiches de renseignement ignorées hors qualifications particulières) ?"),
             d("DDM", "MAOO", "PV de validation cohérent", "Les résultats du PV sont-ils ceux du rapport ; quorum et signataires ?"),
             d("DDM", "MAOO", "Validité de l'offre retenue", "L'offre de l'attributaire est-elle encore valide, ou sa prorogation obtenue avant expiration ?"),
+            // ⚠️ V162 (2026-11-03, demande front « grille-marche-aoo », B1 ; manuel de contrôle a priori, ch. 2, III.C) — trois points du MAOO,
+            // hérités par ses dérivés ; la publicité de l'avis est écartée du restreint (ses lettres ont leur propre point).
+            d("DDM", "MAOO", "Offre retenue acceptable", "L'offre de l'attributaire n'est-elle ni trop chère au regard de l'estimation, ni au-delà des crédits alloués, ni contraire à la législation (fiscale, douanière), ni assortie de conditions d'exécution irrégulières (CMP, art. 1) ?"),
+            new Graine("DDM", "MAOO", PorteePointCtrl.DOSSIER, "Publicité effective de l'avis", "L'avis a-t-il paru sous les formes obligatoires (affichage, JMP, journal, site de l'ARMP) et les preuves sont-elles jointes : journal, ou reçu ou facture « service fait » (radio, télévision) (décret 2019-1310, art. 2.1) ?", null, null, "MAOR,MAORI,MAOR-CC"),
+            d("DDM", "MAOO", "Offres anormales : processus et seuils", "La détection des offres anormalement basses et hautes a-t-elle suivi le processus et les pourcentages fixés dans les DPAO ?"),
             d("DDM", "MAOOI", "Publicité internationale de l'avis", "L'avis a-t-il été publié dans un journal national et dans un journal de portée internationale (décret 2019-1310, art. 2.1) ?"),
             // ---------------------------------------------------------------- MAOR (ch. 2-III-D) : grille MAOO, plus
             d("DDM", "MAOR", "Décision autorisant l'AO restreint", "Jointe et signée de l'Autorité contractante ?"),
@@ -212,6 +224,7 @@ public class PointsCtrlManuelSeeder implements CommandLineRunner {
             point.setPortee(g.portee());
             point.setCategorie(g.categorie());
             point.setForme(g.forme());
+            point.setSousTypesExclus(g.exclus());   // ⚠️ V162
             pointsCtrlRepository.save(point);
             existants.add(point);
             crees++;

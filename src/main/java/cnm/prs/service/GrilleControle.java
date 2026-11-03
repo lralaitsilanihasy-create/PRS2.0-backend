@@ -60,8 +60,10 @@ public class GrilleControle {
             points.findByIdTypeDossierOrderByOrdrePointCtrlAsc(famille).stream().filter(p -> p.getIdSousType() == null)
                     .forEach(p -> grille.putIfAbsent(p.getIdPointCtrl(), p));
         }
-        for (String s : chaine(sousType)) {
-            points.findGrilleEffective(famille, s).stream().filter(p -> s.equals(p.getIdSousType()))
+        List<String> chaine = chaine(sousType);
+        for (String s : chaine) {
+            // ⚠️ V162 (« grille-marche-aoo », B1) — un point hérité peut être écarté d'un sous-type de la chaîne (SOUS_TYPES_EXCLUS).
+            points.findGrilleEffective(famille, s).stream().filter(p -> s.equals(p.getIdSousType()) && !p.exclu(chaine))
                     .forEach(p -> grille.putIfAbsent(p.getIdPointCtrl(), p));
         }
         return grille.values().stream().sorted(Comparator.comparing((PointsCtrl p) -> p.getOrdrePointCtrl() == null ? Integer.MAX_VALUE
