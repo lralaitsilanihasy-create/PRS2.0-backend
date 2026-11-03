@@ -519,6 +519,7 @@ public class OffreService {
             throw new BusinessRuleException("Les dépôts ne sont pas encore ouverts (ouverture le " + lue.dto().dateOuvertureDepots() + ").",
                     "PROCEDURE_FERMEE");
         }
+        exigerOffresLibres(idDmc);   // ⚠️ §B7 — création et remplacement
         return lue;
     }
 
@@ -535,9 +536,24 @@ public class OffreService {
         }
     }
 
+    /** ⚠️ 2026-11-03 (« appel-offres-restreint », §B7 ; V160) — l'ouverture anticipée fige les offres ; absente dans les tests unitaires. */
+    private OuvertureAnticipeeService anticipation;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAnticipation(@org.springframework.context.annotation.Lazy OuvertureAnticipeeService anticipation) {
+        this.anticipation = anticipation;
+    }
+
+    private void exigerOffresLibres(Long idDmc) {
+        if (anticipation != null) {
+            anticipation.exigerOffresLibres(idDmc);
+        }
+    }
+
     private ProceduresEnLigneService.Lue exigerAvantLimite(Long idDmc) {
         ProceduresEnLigneService.Lue lue = procedures.trouver(idDmc).orElseThrow(() -> new BusinessRuleException(
                 "Cette procédure n'est plus ouverte au dépôt en ligne.", "PROCEDURE_FERMEE"));
+        exigerOffresLibres(idDmc);   // ⚠️ §B7 — morceau, scellement, retrait
         LocalDateTime limite = ProceduresEnLigneService.dateLimite(lue.etat());
         if (limite != null && !maintenant().isBefore(limite)) {
             throw new BusinessRuleException("La date limite de remise des offres est passée (" + RemiseElectronique.isoMinute(limite)

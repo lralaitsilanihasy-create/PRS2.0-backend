@@ -1631,6 +1631,13 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > marché. La copie des **lettres d'invitation avec accusé**, déposée une fois sur la procédure, tient lieu de publication de l'avis et
 > est fournie au marché. Le texte du modèle est provisoire, à relire par le pilote.
 >
+> ⚠️ **2026-11-03 — l'ouverture anticipée des plis (même demande, §B7 ; arbitrage Q4 du pilote ; loi, art. 38-VI ; V160).** Quand
+> **tous les invités** d'un appel d'offres restreint en ligne ont remis leur offre avant la date limite, la PRMP peut demander leur
+> consentement à une ouverture anticipée ; les offres sont alors figées. Chaque invité **consent ou refuse par écrit** depuis son espace
+> (geste horodaté, au journal). **Un refus** maintient la date initiale et libère les offres. Quand **tous** ont consenti, la PRMP fixe
+> la nouvelle date d'ouverture, notifiée aux invités et à la Commission : la séance s'ouvre à cette date, et son PV mentionne
+> l'anticipation et les consentements.
+>
 > ⚠️ **2026-10-30 — le contrat-cadre par appel d'offres restreint (décision du pilote « suivre les textes en vigueur » ; décret
 > n° 2019-1064, art. 7 ; V152).** Un appel d'offres **restreint** en contrat-cadre produit un « Dossier d'appel d'offres restreint —
 > contrat-cadre » (`DAOR-CC`), puis à l'attribution un « Marché sur appel d'offres restreint — contrat-cadre » (`MAOR-CC`). Leurs pièces

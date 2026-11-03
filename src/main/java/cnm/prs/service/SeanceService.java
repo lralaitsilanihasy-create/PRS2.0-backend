@@ -194,7 +194,10 @@ public class SeanceService {
                     "SEANCE_PREMATUREE", null, Map.of("heureOuverture", RemiseElectronique.isoMinute(heure)));
         }
         LocalDateTime limite = dateLimite(idDmc);
-        if (limite == null || maintenant.isBefore(limite)) {
+        // ⚠️ 2026-11-03 (« appel-offres-restreint », §B7) — une ouverture anticipée fixée ouvre la séance à sa date, avant la date limite :
+        // tous les invités ont déposé et consenti, leurs offres sont figées.
+        boolean anticipee = anticipation != null && anticipation.heureFixee(idDmc).isPresent();
+        if (!anticipee && (limite == null || maintenant.isBefore(limite))) {
             throw new BusinessRuleException("La date limite de remise des offres n'est pas passée : les dépôts ne sont pas clos.",
                     "DEPOTS_NON_CLOS");
         }
@@ -1205,6 +1208,16 @@ public class SeanceService {
         references.avisCommission(idDmc).ifPresent(x -> el.add(para(x)));
         references.lignePublication(idDmc).ifPresent(x -> el.add(para(x)));
         el.add(para("Séance ouverte le " + s.getOuverteLe().format(HORODATAGE) + " (heure du serveur)."));
+        // ⚠️ 2026-11-03 (« appel-offres-restreint », §B7 ; loi, art. 38-VI) — l'ouverture anticipée et les consentements écrits des invités.
+        if (anticipation != null) {
+            anticipation.fixee(idDmc).ifPresent(a -> {
+                el.add(para("Ouverture anticipée des plis (loi n° 2016-055, art. 38-VI) : tous les invités ayant remis leur offre et consenti "
+                        + "par écrit, la séance initialement prévue le " + (a.ouvertureInitiale() == null ? "—" : a.ouvertureInitiale().format(HORODATAGE))
+                        + " a été avancée au " + a.nouvelleOuverture().format(HORODATAGE) + "."));
+                a.consentements().forEach(c -> el.add(para("Consentement écrit de " + c.nom() + " le "
+                        + (c.reponduLe() == null ? "—" : c.reponduLe().format(HORODATAGE)) + ".")));
+            });
+        }
         SeanceDto d = dto(idDmc);
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Présents"));
         el.add(para("Responsable de la procédure : " + internes.responsable(idDmc).map(r -> r.getNomResponsable()).orElse("—")));
@@ -1572,7 +1585,22 @@ public class SeanceService {
         return i == null ? null : i.quorum();
     }
 
+    /** ⚠️ 2026-11-03 (« appel-offres-restreint », §B7 ; V160) — l'ouverture anticipée des plis ; absente dans les tests unitaires. */
+    private OuvertureAnticipeeService anticipation;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAnticipation(@org.springframework.context.annotation.Lazy OuvertureAnticipeeService anticipation) {
+        this.anticipation = anticipation;
+    }
+
+    /** L'heure d'ouverture : ⚠️ §B7 celle d'une ouverture anticipée fixée, sinon {@code B04-OP-02} + {@code B04-OP-03}. */
     private LocalDateTime heureOuverture(Long idDmc) {
+        if (anticipation != null) {
+            Optional<LocalDateTime> fixee = anticipation.heureFixee(idDmc);
+            if (fixee.isPresent()) {
+                return fixee.get();
+            }
+        }
         try {
             return fiches.etatValide(idDmc).map(e -> {
                 Map<String, String> v = e.etat().getValeurs();

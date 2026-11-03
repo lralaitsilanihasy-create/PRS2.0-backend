@@ -8361,6 +8361,35 @@ Migrations **V158** (pièces) et **V159** (type de document). Aucune route nouve
   pièce **`LETTRES_ACCUSE`** (MAOR, MAORI, MAOR-CC, MPI) est alors **fournie** par ce dépôt unique (`…/publication-avis/contenu`), comme
   `PUBLICATION_AVIS`.
 
+### L'ouverture anticipée des plis de l'appel d'offres restreint — V160 ⚠️ 2026-11-03
+
+Même demande, §B7 (arbitrage Q4 du pilote ; loi n° 2016-055, art. 38-VI ; décret n° 2019-1310, art. 14 ; guide de la CAO, § 4.5.1).
+Migration **V160** (`t_ouverture_anticipee`, `t_consentement_anticipation`). Aucune dépendance ajoutée.
+
+| Méthode | URL | Corps / réponse | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/ouverture-anticipee | `OuvertureAnticipeeDto`, vide sans demande | 200, 403 | lecteurs de la fiche |
+| POST | /api/fiches-marche/{idDmc}/ouverture-anticipee | — → `OuvertureAnticipeeDto` | 201 ; 403 ; 404 ; 409 `HORS_RESTREINT`, `DEPOTS_CLOS`, `SEANCE_DEJA_OUVERTE`, `DEJA_DEMANDEE`, `DEPOTS_INCOMPLETS` (`details.manquants`) | PRMP de la fiche |
+| PUT | /api/fiches-marche/{idDmc}/ouverture-anticipee/date | `{ nouvelleOuverture: "AAAA-MM-JJTHH:MM" }` → `OuvertureAnticipeeDto` | 200 ; 400 `nouvelleOuverture` ; 403 ; 404 ; 409 `CONSENTEMENTS_INCOMPLETS`, `ANTICIPATION_REFUSEE`, `SEANCE_DEJA_OUVERTE` | PRMP de la fiche |
+| GET | /api/candidat/invitations/{idDmc}/ouverture-anticipee | `OuvertureAnticipeeDto` (son seul consentement), vide sans demande | 200, 404 hors invités | candidat invité |
+| POST | /api/candidat/invitations/{idDmc}/ouverture-anticipee/consentement | `{ accord: true \| false }` → `OuvertureAnticipeeDto` | 200 ; 400 `accord` ; 403 `NON_INVITE` ; 404 ; 409 `ANTICIPATION_CLOSE` | candidat invité sollicité |
+
+- `OuvertureAnticipeeDto` = `{ idDmc, etat, ouvertureInitiale, nouvelleOuverture, demandeeLe, demandeePar, fixeeLe, fixeePar,
+  consentements[{ idCandidat, nom, accord, reponduLe }] }` ; `etat` : `DEMANDEE` → `ACCORDEE` (tous ont consenti) → `FIXEE` (date fixée),
+  ou `REFUSEE` (un refus : la date initiale demeure, la demande est close ; pas de nouvelle demande).
+- **Demande** : un appel d'offres restreint en ligne (prestations intellectuelles exclues), dépôts ouverts (avant la date limite), séance
+  non ouverte, et **chaque invité** a une offre déposée (par son compte, ou par l'adresse électronique de son invitation). Chaque invité
+  est sollicité (notification `OUVERTURE_ANTICIPEE`).
+- **Offres figées** dès la demande, tant qu'elle n'est pas refusée : création, remplacement, morceaux, scellement et retrait répondent
+  409 **`OUVERTURE_ANTICIPEE`**.
+- **Consentement** : la réponse écrite de l'invité, horodatée et nominative, portée au journal de la séance (`CONSENTEMENT`,
+  `REFUS_ANTICIPATION`, `ANTICIPATION_*`).
+- **Fixation** : après maintenant et avant l'heure d'ouverture initiale ; une date fixée se change tant que la séance n'est pas ouverte.
+  Notifiée aux invités et à la Commission (dépositaire compris).
+- **La séance** (`POST …/seance/ouverture`) s'ouvre à l'heure fixée, **avant la date limite** (plus de `DEPOTS_NON_CLOS`) ; son
+  `heureOuverture` et ses rappels (veille, une heure avant) suivent la nouvelle date ; le **PV d'ouverture** mentionne l'ouverture
+  anticipée et le consentement écrit de chaque invité.
+
 ### L'évaluation des prestations intellectuelles, lot 3, tranche PI-b : deux enveloppes, séance technique — V86 ⚠️ 2026-10-08
 
 Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B2, §B3 ; arbitrage du pilote Q1 : deux enveloppes pour toutes les

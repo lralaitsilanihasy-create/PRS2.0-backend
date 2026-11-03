@@ -803,6 +803,125 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Autowired private cnm.prs.repository.InvitationRepository invitationRepository;
+    @Autowired private cnm.prs.repository.OffreRepository offreRepository;
+    @Autowired private cnm.prs.repository.EntrepriseRepository entrepriseRepository;
+
+    @Test
+    @DisplayName("⚠️ V160 (« appel-offres-restreint », §B7) — l'ouverture anticipée : sans offre de tous les invités → 409 DEPOTS_INCOMPLETS ; "
+            + "demandée par la PRMP (consentement sollicité, offres figées : 409 OUVERTURE_ANTICIPEE au dépôt) ; date avant les consentements → "
+            + "409 ; l'invité consent par écrit (ACCORDEE, DEJA_REPONDU) ; date passée ou après l'heure initiale → 400 ; fixée (FIXEE)")
+    void ouvertureAnticipee() throws Exception {
+        rendreRestreinte();
+        String url = "/api/fiches-marche/" + idDmc + "/ouverture-anticipee";
+        mvc.perform(get(url).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(result -> assertThat(result.getResponse().getContentAsString()).isEmpty());
+        mvc.perform(post(url).header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DEPOTS_INCOMPLETS")).andExpect(jsonPath("$.details.manquants[0]").value("Rabe Paul"));
+        String idOffre = offreDeposee("C900000011");
+        mvc.perform(post(url).header("Authorization", jetonCandidat)).andExpect(status().isForbidden());
+        mvc.perform(post(url).header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.etat").value("DEMANDEE")).andExpect(jsonPath("$.consentements[0].idCandidat").value("C900000011"))
+                .andExpect(jsonPath("$.consentements[0].accord").doesNotExist());
+        mvc.perform(post(url).header("Authorization", tokenPrmp)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_DEMANDEE"));
+        // Les offres sont figées : ni nouveau dépôt, ni remplacement, ni retrait.
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/candidat/offres/" + idOffre)
+                .header("Authorization", jetonCandidat)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("OUVERTURE_ANTICIPEE"));
+        mvc.perform(put(url + "/date").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"nouvelleOuverture\":\"" + aujourdhui.plusDays(1) + "T09:00\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONSENTEMENTS_INCOMPLETS"));
+
+        String candidat = "/api/candidat/invitations/" + idDmc + "/ouverture-anticipee";
+        mvc.perform(get(candidat).header("Authorization", jetonCandidat)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("DEMANDEE"));
+        mvc.perform(post(candidat + "/consentement").header("Authorization", jetonCandidat).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("accord"));
+        mvc.perform(post(candidat + "/consentement").header("Authorization", jetonCandidat).contentType(JSON).content("{\"accord\":true}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("ACCORDEE"))
+                .andExpect(jsonPath("$.consentements[0].accord").value(true)).andExpect(jsonPath("$.consentements[0].reponduLe").isNotEmpty());
+        mvc.perform(post(candidat + "/consentement").header("Authorization", jetonCandidat).contentType(JSON).content("{\"accord\":true}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ANTICIPATION_CLOSE"));
+
+        mvc.perform(put(url + "/date").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"nouvelleOuverture\":\"" + aujourdhui.minusDays(1) + "T09:00\"}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("nouvelleOuverture"));
+        mvc.perform(put(url + "/date").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"nouvelleOuverture\":\"" + aujourdhui.plusYears(1) + "T09:00\"}")).andExpect(status().isBadRequest());
+        String fixee = mvc.perform(put(url + "/date").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"nouvelleOuverture\":\"" + aujourdhui.plusDays(1) + "T09:00\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("FIXEE")).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(fixee, "$.nouvelleOuverture")).startsWith(aujourdhui.plusDays(1) + "T09:00");
+    }
+
+    @Test
+    @DisplayName("⚠️ V160 (§B7) — un refus écrit clôt la demande (REFUSEE) : la date initiale demeure (409 ANTICIPATION_REFUSEE à la "
+            + "fixation), les offres redeviennent libres ; hors du restreint → 409 HORS_RESTREINT")
+    void ouvertureAnticipeeRefusee() throws Exception {
+        String url = "/api/fiches-marche/" + idDmc + "/ouverture-anticipee";
+        poserAvis();
+        changer("B04-SE-03", aujourdhui.minusDays(1) + "T08:00");
+        mvc.perform(post(url).header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("HORS_RESTREINT"));
+        rendreRestreinte();
+        String idOffre = offreDeposee("C900000011");
+        mvc.perform(post(url).header("Authorization", tokenPrmp)).andExpect(status().isCreated());
+        mvc.perform(post("/api/candidat/invitations/" + idDmc + "/ouverture-anticipee/consentement").header("Authorization", jetonCandidat)
+                .contentType(JSON).content("{\"accord\":false}")).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("REFUSEE"));
+        mvc.perform(put(url + "/date").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"nouvelleOuverture\":\"" + aujourdhui.plusDays(1) + "T09:00\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ANTICIPATION_REFUSEE"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/candidat/offres/" + idOffre)
+                .header("Authorization", jetonCandidat)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("RETIREE"));
+    }
+
+    /** L'appel d'offres restreint de fournitures (mode 92 « restreint »), lancé par une lettre ; C900000011 invité. */
+    private void rendreRestreinte() {
+        changer("B04-SE-03", aujourdhui.minusDays(1) + "T08:00");   // dépôts ouverts
+        cnm.prs.entity.ModePassation mode = modePassationRepository.findById(92).orElseThrow();
+        mode.setLibelle("Appel d'offres restreint");
+        modePassationRepository.save(mode);
+        DocumentFicheMarche lettre = new DocumentFicheMarche();
+        lettre.setIdFiche(idFiche);
+        lettre.setType("LETTRE_INVITATION");
+        lettre.setExtension("pdf");
+        lettre.setNomFichier("LETTRE-AOR_test_v1_01.pdf");
+        lettre.setTailleOctets(4L);
+        lettre.setEmpreinte("3".repeat(64));
+        lettre.setDateGeneration(LocalDateTime.now());
+        lettre.setContenu("%PDF".getBytes());
+        lettre.setPublication("{\"dateEnvoi\":\"" + aujourdhui + "\"}");
+        documentRepository.save(lettre);
+        cnm.prs.entity.Invitation invitation = new cnm.prs.entity.Invitation();
+        invitation.setIdDmc(idDmc);
+        invitation.setRang(1);
+        invitation.setSource(cnm.prs.entity.Invitation.SAISIE);
+        invitation.setIdCandidat("C900000011");
+        invitation.setNom("Rabe Paul");
+        invitation.setInviteLe(LocalDateTime.now());
+        invitationRepository.save(invitation);
+    }
+
+    private String offreDeposee(String idCandidat) throws Exception {
+        mvc.perform(put("/api/candidat/entreprise").header("Authorization", jetonCandidat).contentType(JSON).content("{\"raisonSociale\":"
+                + "\"Info Plus\",\"nif\":\"3000111222\",\"adresse\":\"Lot 1\",\"representant\":{\"nom\":\"Rabe\",\"prenom\":\"Paul\"}}"))
+                .andExpect(status().isOk());
+        cnm.prs.entity.Offre o = new cnm.prs.entity.Offre();
+        o.setIdOffre(java.util.UUID.randomUUID().toString());
+        o.setIdDmc(idDmc);
+        o.setIdCandidat(idCandidat);
+        o.setIdEntreprise(entrepriseRepository.findByIdCandidat(idCandidat).orElseThrow().getIdEntreprise());
+        o.setNif("3000111222");
+        o.setRaisonSociale("Info Plus");
+        o.setEtat(cnm.prs.entity.Offre.DEPOSEE);
+        o.setDateCreation(LocalDateTime.now().minusHours(2));
+        o.setDateDepot(LocalDateTime.now().minusHours(1));
+        o.setNumero(1);
+        o.setEnTete("{}");
+        o.setNombreMorceaux(1);
+        o.setTailleMorceau(1);
+        o.setQuorum(2);
+        o.setN(3);
+        o.setEmpreintesDetenteurs("x");
+        offreRepository.save(o);
+        return o.getIdOffre();
+    }
 
     private void poserAvis() {
         DocumentFicheMarche d = new DocumentFicheMarche();

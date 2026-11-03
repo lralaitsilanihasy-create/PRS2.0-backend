@@ -285,6 +285,11 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-29 (§B4) — une révision validée change la date limite de remise des offres. */
     PROCEDURE_DATES,
     /**
+     * ⚠️ 2026-11-03 (demande front « appel-offres-restreint », §B7 ; V160) — l'ouverture anticipée des plis : consentement sollicité,
+     * nouvelle date fixée (vers les invités) ; date avancée (vers la Commission et le dépositaire).
+     */
+    OUVERTURE_ANTICIPEE,
+    /**
      * ⚠️ 2026-10-29 (demande front « contrat-cadre-4a », §B2 ; V147) — la décision de reconduire un contrat-cadre approche (30 jours
      * avant sa date limite) : vers la PRMP de la fiche et ses UGPM, une fois par période, objet {@code PROCEDURE} = {@code idDmc}.
      */
