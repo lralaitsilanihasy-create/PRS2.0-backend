@@ -189,6 +189,16 @@ public class DossierDto {
     private Integer idDetailOrigine;
 
     /**
+     * ⚠️ 2026-11-03 (demande front « objet-dossier-liste », B1) — la désignation de la ligne du plan que le dossier réalise : la ligne de
+     * sa fiche (mise en concurrence), sa ligne d'origine (hors fiche, V163), la ligne de sa procédure (marché), la ligne de son marché
+     * (acte de gestion) ; nulle pour un plan ou sans ligne connue. Servie sur les listes, résolue en lot.
+     */
+    private String objetMarche;
+
+    /** ⚠️ 2026-11-03 (« objet-dossier-liste », B1) — le lot d'un dossier de marché ; nul sinon. */
+    private Integer lot;
+
+    /**
      * ⚠️ Fiche marché (2026-09-23, §B1) — l'état de la fiche liée, de quoi l'afficher sans second appel.
      * Servi sur la <strong>lecture unitaire</strong> ({@code GET /api/dossiers/{id}} et les réponses des gestes
      * sur un dossier) ; absent si {@link #idDmc} est nul, et sur les listes (qui portent {@code idDmc} seul :

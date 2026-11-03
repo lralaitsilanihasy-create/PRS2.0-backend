@@ -31,6 +31,9 @@ public interface AttributionRepository extends JpaRepository<Attribution, Attrib
     /** ⚠️ M2 — le lot dont un dossier est le dossier de marché (la catégorie de sa fiche décide de certaines pièces). */
     java.util.Optional<Attribution> findFirstByIdDossier(Integer idDossier);
 
+    /** ⚠️ 2026-11-03 (demande front « objet-dossier-liste », B1) — les attributions de ces dossiers de marché, en une requête. */
+    List<Attribution> findByIdDossierIn(java.util.Collection<Integer> idDossiers);
+
     /**
      * ⚠️ 2026-10-19 (demande front « dossier-marche-lecture », §B2) — les dossiers de marché de toutes les fiches, en une requête :
      * {@code [idDmc, lot, idDossier, refeDossier, statut]}, par fiche et par lot.

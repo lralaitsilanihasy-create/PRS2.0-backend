@@ -14,6 +14,9 @@ public interface ActeGestionRepository extends JpaRepository<ActeGestion, Intege
 
     Optional<ActeGestion> findByIdDossier(Integer idDossier);
 
+    /** ⚠️ 2026-11-03 (« objet-dossier-liste », B1) — les actes de ces dossiers de gestion contractuelle, en une requête. */
+    List<ActeGestion> findByIdDossierIn(java.util.Collection<Integer> idDossiers);
+
     List<ActeGestion> findByIdDossierMarcheOrderByIdActeAsc(Integer idDossierMarche);
 
     /** ⚠️ 2026-10-31 (« filiation-dossier », §B1) — les actes de gestion de plusieurs marchés, en une requête. */

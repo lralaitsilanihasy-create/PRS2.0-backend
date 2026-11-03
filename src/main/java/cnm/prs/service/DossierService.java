@@ -635,6 +635,7 @@ public class DossierService {
             }
         }
         enrichirCibles(dtos);
+        enrichirObjet(dtos);   // ⚠️ 2026-11-03 (« objet-dossier-liste », B1)
         masquerActeursInternesPourPrmp(dtos);
         // ⚠️ 2026-10-30 (demande front « performance », §B2) — l'avis à imprimer lit la fiche et le plan de chaque dossier : les lectures
         // répétées pour un même DMC passent par la mémoire de lecture de l'appel.
@@ -648,6 +649,98 @@ public class DossierService {
      * ⚠️ 2026-10-18 (demande front « avis-a-imprimer », §B2) — {@code impressionAvis} sur les dossiers nés d'une fiche, pour la PRMP
      * et l'UGPM seulement (la liste leur est déjà bornée à leur périmètre). En lot ({@link AvisAImprimer#etats}).
      */
+    // ------------------------------------------------------------------ ⚠️ 2026-11-03 (« objet-dossier-liste », B1)
+
+    private cnm.prs.repository.DossierMecRepository dmcRepository;
+    private cnm.prs.repository.AttributionRepository attributionRepository;
+    private cnm.prs.repository.ActeGestionRepository acteGestionRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setObjetMarche(cnm.prs.repository.DossierMecRepository dmcs, cnm.prs.repository.AttributionRepository attributions,
+            cnm.prs.repository.ActeGestionRepository actes) {
+        this.dmcRepository = dmcs;
+        this.attributionRepository = attributions;
+        this.acteGestionRepository = actes;
+    }
+
+    /**
+     * L'objet du marché ({@code objetMarche}) et le lot de chaque dossier, <strong>en lot</strong> : les actes de gestion → leur marché ;
+     * les dossiers de marché → leur attribution (procédure, lot) ; les procédures → leur ligne ; les lignes d'origine (hors fiche) ;
+     * enfin les désignations — une requête par nature pour toute la liste. Un plan, ou un dossier sans ligne connue : {@code null}.
+     */
+    private void enrichirObjet(List<DossierDto> dtos) {
+        if (dmcRepository == null || dtos.isEmpty()) {
+            return;
+        }
+        // Les actes de gestion : le dossier de marché qu'ils modifient.
+        Map<Integer, Integer> marcheDeLActe = new HashMap<>();
+        List<Integer> actes = dtos.stream().filter(d -> "DGC".equals(d.getIdTypeDossier())).map(DossierDto::getIdDossier).toList();
+        if (!actes.isEmpty()) {
+            acteGestionRepository.findByIdDossierIn(actes).forEach(a -> marcheDeLActe.put(a.getIdDossier(), a.getIdDossierMarche()));
+        }
+        // Les dossiers de marché (de la liste, et ceux des actes) : leur attribution, à défaut leur ligne d'origine (marché hors fiche).
+        Set<Integer> marchesIds = new HashSet<>(marcheDeLActe.values());
+        dtos.stream().filter(d -> "DDM".equals(d.getIdTypeDossier())).forEach(d -> marchesIds.add(d.getIdDossier()));
+        Map<Integer, cnm.prs.entity.Attribution> attribution = new HashMap<>();
+        Map<Integer, Integer> origineDuMarche = new HashMap<>();
+        if (!marchesIds.isEmpty()) {
+            attributionRepository.findByIdDossierIn(marchesIds).forEach(a -> attribution.putIfAbsent(a.getIdDossier(), a));
+            Set<Integer> sansAttribution = new HashSet<>(marchesIds);
+            sansAttribution.removeAll(attribution.keySet());
+            dtos.stream().filter(d -> sansAttribution.contains(d.getIdDossier()) && d.getIdDetailOrigine() != null)
+                    .forEach(d -> origineDuMarche.put(d.getIdDossier(), d.getIdDetailOrigine()));
+            sansAttribution.removeAll(origineDuMarche.keySet());
+            if (!sansAttribution.isEmpty()) {
+                repository.findAllById(sansAttribution).stream().filter(x -> x.getIdDetailOrigine() != null)
+                        .forEach(x -> origineDuMarche.put(x.getIdDossier(), x.getIdDetailOrigine()));
+            }
+        }
+        // Les procédures → leur ligne.
+        Set<Long> procedures = new HashSet<>();
+        dtos.stream().map(DossierDto::getIdDmc).filter(java.util.Objects::nonNull).forEach(procedures::add);
+        attribution.values().forEach(a -> procedures.add(a.getIdDmc()));
+        Map<Long, Integer> ligneDeLaProcedure = new HashMap<>();
+        if (!procedures.isEmpty()) {
+            dmcRepository.findAllById(procedures).forEach(m -> ligneDeLaProcedure.put(m.getIdDmc(), m.getIdDetail()));
+        }
+        // La ligne de chaque dossier, puis les désignations en une requête.
+        Map<Integer, Integer> ligne = new HashMap<>();
+        Map<Integer, Integer> lot = new HashMap<>();
+        java.util.function.Function<Integer, Integer> ligneDuMarche = id -> {
+            cnm.prs.entity.Attribution a = attribution.get(id);
+            return a != null ? ligneDeLaProcedure.get(a.getIdDmc()) : origineDuMarche.get(id);
+        };
+        for (DossierDto d : dtos) {
+            Integer id = d.getIdDossier();
+            Integer l = null;
+            if ("DGC".equals(d.getIdTypeDossier())) {
+                Integer m = marcheDeLActe.get(id);
+                l = m == null ? null : ligneDuMarche.apply(m);
+            } else if ("DDM".equals(d.getIdTypeDossier())) {
+                l = ligneDuMarche.apply(id);
+                cnm.prs.entity.Attribution a = attribution.get(id);
+                if (a != null) {
+                    lot.put(id, a.getLot());
+                }
+            } else if (!"DDP".equals(d.getIdTypeDossier())) {
+                l = d.getIdDmc() != null ? ligneDeLaProcedure.get(d.getIdDmc()) : d.getIdDetailOrigine();
+            }
+            if (l != null) {
+                ligne.put(id, l);
+            }
+        }
+        Map<Integer, String> designation = new HashMap<>();
+        if (!ligne.isEmpty()) {
+            marcheRepository.findAllById(new HashSet<>(ligne.values()))
+                    .forEach(m -> designation.put(m.getIdDetail(), m.getDesignationMarche()));
+        }
+        for (DossierDto d : dtos) {
+            Integer l = ligne.get(d.getIdDossier());
+            d.setObjetMarche(l == null ? null : designation.get(l));
+            d.setLot(lot.get(d.getIdDossier()));
+        }
+    }
+
     /** ⚠️ 2026-10-30 (« performance », §B2) — le préchargement des procédures de la liste (facultatif). */
     private PrechargementFiches prechargement;
 

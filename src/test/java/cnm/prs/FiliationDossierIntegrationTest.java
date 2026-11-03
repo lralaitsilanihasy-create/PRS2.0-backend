@@ -116,6 +116,24 @@ class FiliationDossierIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-11-03 (« objet-dossier-liste », B1) — objetMarche et lot : la ligne de la fiche (mise en concurrence), de la "
+            + "procédure (marché, avec son lot), du marché (acte de gestion) ; nul pour un plan ; servis aussi sur la liste")
+    void objetDuMarche() throws Exception {
+        mvc.perform(get("/api/dossiers/9510").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.objetMarche").value("articles de bureau")).andExpect(jsonPath("$.lot").doesNotExist());
+        mvc.perform(get("/api/dossiers/9520").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.objetMarche").value("articles de bureau")).andExpect(jsonPath("$.lot").value(1));
+        mvc.perform(get("/api/dossiers/9530").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.objetMarche").value("articles de bureau"));
+        mvc.perform(get("/api/dossiers/9500").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.objetMarche").doesNotExist());
+        String liste = mvc.perform(get("/api/dossiers").param("type", "DDM").header("Authorization", tokenPresident))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(liste, "$[?(@.idDossier==9520)].objetMarche")).containsExactly("articles de bureau");
+        assertThat(JsonPath.<List<Integer>>read(liste, "$[?(@.idDossier==9520)].lot")).containsExactly(1);
+    }
+
+    @Test
     @DisplayName("⚠️ 2026-11-03 (« jalons-reels », B1) — les dates réelles des jalons d'un plan, déduites des faits : réception (106) et "
             + "signature du PV (109) du dossier de mise en concurrence, attribution (123, et l'ancien processus 4) et signature (125) du lot, "
             + "la source en clair ; rien sans fait ; 409 PAS_UN_PLAN sur un autre dossier")
@@ -161,6 +179,8 @@ class FiliationDossierIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"idSousType\":\"RJ\",\"idEntiteContract\":1,\"idDetailOrigine\":9502}")).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idDetailOrigine").value(9502)).andReturn().getResponse().getContentAsString();
         int idRj = JsonPath.read(rj, "$.idDossier");
+        mvc.perform(get("/api/dossiers/" + idRj).header("Authorization", tokenPrmp)).andExpect(status().isOk())   // « objet-dossier-liste »
+                .andExpect(jsonPath("$.objetMarche").value("entretien des groupes électrogènes"));
         String mgg = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idSousType\":\"MGG\",\"idEntiteContract\":1,\"idDetailOrigine\":9502}")).andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
