@@ -14,7 +14,9 @@ import java.util.List;
 public record AmiDto(Long idDmc, String etat, String objet, String autoriteContractante, String reference, LocalDateTime dateLimite,
         List<Critere> criteres, List<String> pieces, BigDecimal noteMinimale, Integer nombreRetenus, String motifDispense,
         List<Publication> publications, boolean avisDisponible, LocalDateTime publieLe, String publiePar, boolean lectureOuverte,
-        long nombreExpressions) {
+        long nombreExpressions,
+        /** ⚠️ V161 (2026-11-03, « appel-offres-restreint », §B4) — {@code AMI} ou {@code APPEL_CANDIDATURES} (appel d'offres restreint). */
+        String nature) {
 
     /** Un critère de sélection (art. 42-II : aptitude, références, expérience) : {@code poids} en points sur 100. */
     public record Critere(String code, String libelle, BigDecimal poids, String description) {
@@ -42,7 +44,9 @@ public record AmiDto(Long idDmc, String etat, String objet, String autoriteContr
             List<Critere> criteres, List<String> pieces, Integer nombreRetenus, List<Publication> publications, LocalDateTime publieLe,
             boolean ouvert,
             /** ⚠️ AMI-b (Q5) — la liste restreinte définitive, publiée ; vide avant. */
-            List<Retenu> liste) {
+            List<Retenu> liste,
+            /** ⚠️ V161 (§B4) — {@code AMI} ou {@code APPEL_CANDIDATURES}. */
+            String nature) {
     }
 
     /** Un candidat de la liste restreinte publiée. */

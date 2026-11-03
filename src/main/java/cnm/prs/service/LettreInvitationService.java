@@ -184,9 +184,10 @@ public class LettreInvitationService {
         listeAmi.ifPresent(l -> l.forEach(x -> {
             cnm.prs.entity.CompteCandidat c = candidatsRepository.findById(x.getIdCandidat()).orElse(null);
             notifications.emettreCandidat(cnm.prs.enums.TypeNotification.LETTRE_INVITATION, x.getIdCandidat(), c == null ? null : c.getEmail(),
-                    idDmc.intValue(), cnm.prs.enums.TypeObjet.PROCEDURE, "Invitation à remettre une proposition", "Vous êtes invité, au rang "
-                            + x.getRang() + " de la liste restreinte, à remettre une proposition pour « " + etat.getDesignationMarche()
-                            + " » ; la lettre d'invitation (envoi du " + saisie.date() + ") et la demande de propositions sont disponibles sur la plateforme.");
+                    idDmc.intValue(), cnm.prs.enums.TypeObjet.PROCEDURE, "Invitation à remettre " + quoi, "Vous êtes invité, au rang "
+                            + x.getRang() + " de la liste restreinte, à remettre " + quoi + " pour « " + etat.getDesignationMarche()
+                            + " » ; la lettre d'invitation (envoi du " + saisie.date() + ") et le dossier sont disponibles sur la plateforme.");
+                    // ⚠️ V161 (§B4) — « une offre » pour la liste d'un appel à candidatures (appel d'offres restreint).
         }));
         avis.lancerLigne(ligne, origine, premiereImpression, n + " lettre(s) d'invitation imprimée(s) (envoi du " + saisie.date() + ")");
         if (premiereImpression) {   // ⚠️ 2026-10-29 (« notifications-espaces-externes », §B4)

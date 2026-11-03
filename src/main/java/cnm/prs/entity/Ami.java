@@ -121,4 +121,18 @@ public class Ami {
 
     @Column(name = "MOTIF_INFRUCTUEUX")
     private String motifInfructueux;
+
+    /** ⚠️ V161 (2026-11-03, « appel-offres-restreint », §B4) — un AMI de prestations intellectuelles. */
+    public static final String NATURE_AMI = "AMI";
+    /** ⚠️ V161 — l'appel à candidatures d'un appel d'offres restreint (décret n° 2019-1310, art. 11-1). */
+    public static final String APPEL_CANDIDATURES = "APPEL_CANDIDATURES";
+
+    /** ⚠️ V161 — {@link #NATURE_AMI} ou {@link #APPEL_CANDIDATURES}, fixée à la création selon la catégorie de la fiche. */
+    @Column(name = "NATURE", nullable = false, length = 20)
+    private String nature = NATURE_AMI;
+
+    /** ⚠️ V161 — l'appel à candidatures d'un appel d'offres restreint. */
+    public boolean appelCandidatures() {
+        return APPEL_CANDIDATURES.equals(nature);
+    }
 }

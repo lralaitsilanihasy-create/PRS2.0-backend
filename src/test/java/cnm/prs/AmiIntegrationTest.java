@@ -405,6 +405,88 @@ class AmiIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.objet").value("Étude d'impact environnemental"));
     }
 
+    @Test
+    @DisplayName("⚠️ V161 (« appel-offres-restreint », §B4) — l'appel à candidatures d'un appel d'offres restreint de fournitures : nature "
+            + "APPEL_CANDIDATURES, avis « d'appel à candidatures » ; dispensé par le petit nombre (409) ; publié, il satisfait le contrôle "
+            + "LISTE_RESTREINTE de la fiche et interdit la saisie de la liste (409) ; moins de trois candidatures qualifiées : la liste ne "
+            + "s'arrête pas (409 MOINS_DE_TROIS_CANDIDATS)")
+    void appelCandidaturesDuRestreint() throws Exception {
+        TypeDmc dao = typeDmcRepository.findByCode("DAO").orElseThrow();
+        ModePassation m93 = new ModePassation(93, "Appel d'offres restreint", null, null, null, null);
+        m93.setIdTypeDmc(dao.getIdTypeDmc());
+        modePassationRepository.save(m93);
+        Marche f = marcheRepository.findById(9902).orElseThrow();
+        f.setIdMode(93);
+        marcheRepository.save(f);
+        idDmc = fournitures;
+        base = "/api/fiches-marche/" + idDmc + "/ami";
+        mvc.perform(put(base).header("Authorization", tokenPrmp).contentType(JSON).content("{" + CRITERES + ",\"noteMinimale\":50,"
+                + "\"dateLimite\":\"" + LocalDateTime.now().plusDays(15).withNano(0) + "\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.nature").value("APPEL_CANDIDATURES"));
+        String projet = texteDuPdf(mvc.perform(get(base + "/avis").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(projet).contains("PROJET D'AVIS D'APPEL À CANDIDATURES", "faire acte de candidature", "au moins trois candidats",
+                "Critères de qualification", "Les candidatures sont déposées en ligne").doesNotContain("manifestation d'intérêt");
+
+        String publication = "{\"publications\":[{\"support\":\"Journal national\",\"date\":\"" + LocalDate.now() + "\"}]}";
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/motif-restreint").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"PETIT_NOMBRE\",\"justification\":\"Trois fabricants agréés\"}")).andExpect(status().isOk());
+        mvc.perform(post(base + "/publier").header("Authorization", tokenPrmp).contentType(JSON).content(publication))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("APPEL_CANDIDATURES_DISPENSE"));
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/motif-restreint").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"URGENCE_AVEREE\",\"justification\":\"Rentrée scolaire\"}")).andExpect(status().isOk());
+        mvc.perform(post(base + "/publier").header("Authorization", tokenPrmp).contentType(JSON).content(publication)).andExpect(status().isOk());
+        mvc.perform(get("/api/amis-en-ligne/" + idDmc)).andExpect(status().isOk()).andExpect(jsonPath("$.nature").value("APPEL_CANDIDATURES"));
+        mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.bilanControles.ok[?(@.regle=='LISTE_RESTREINTE')].message")
+                        .value(org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.containsString("appel à candidatures publié"))));
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/liste-restreinte").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"source\":\"REGISTRE_ARMP\",\"candidats\":[{\"nom\":\"A\",\"adresse\":\"x\"},{\"nom\":\"B\",\"adresse\":\"x\"},"
+                        + "{\"nom\":\"C\",\"adresse\":\"x\"}]}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("LISTE_PAR_APPEL_CANDIDATURES"));
+
+        String[] m = commission();
+        declarer(jetonB, "2222000222", "Bureau Beta");
+        String jetonC = bearer("c@ami.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000063", null);
+        candidats.save(new CompteCandidat("C900000063", "c@ami.mg", "034 63 633 63", "Rakoto", "Fara", CompteCandidat.CONFIRME, false,
+                LocalDateTime.now(), LocalDateTime.now(), null, null));
+        declarer(jetonC, "3333000333", "Conseil Gamma");
+        String a = deposer(jetonA);
+        String b = deposer(jetonB);
+        String c = deposer(jetonC);
+        cnm.prs.entity.Ami ami = amiRepository.findById(idDmc).orElseThrow();
+        ami.setDateLimite(LocalDateTime.now().minusMinutes(1));
+        amiRepository.save(ami);
+        mvc.perform(post(base + "/preselection/declaration").header("Authorization", m[0]).contentType(JSON).content("{\"conflit\":false}"))
+                .andExpect(status().isOk());
+        for (String x : List.of(a, b, c)) {
+            mvc.perform(put(base + "/expressions/" + x + "/notes").header("Authorization", m[0]).contentType(JSON).content("{\"notes\":["
+                    + "{\"code\":\"C1\",\"note\":25,\"motif\":\"a\"},{\"code\":\"C2\",\"note\":35,\"motif\":\"b\"},{\"code\":\"C3\",\"note\":25,\"motif\":\"c\"}]}"))
+                    .andExpect(status().isOk());
+        }
+        mvc.perform(post(base + "/expressions/" + c + "/ecartement").header("Authorization", m[0]).contentType(JSON)
+                .content("{\"ecartee\":true,\"motif\":\"Attestation fiscale périmée\"}")).andExpect(status().isOk());
+        mvc.perform(post(base + "/preselection/arreter").header("Authorization", m[0]).contentType(JSON)
+                .content("{\"motifNombre\":\"Deux candidatures seulement\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MOINS_DE_TROIS_CANDIDATS")).andExpect(jsonPath("$.details.qualifiees").value(2));
+        mvc.perform(post(base + "/expressions/" + c + "/ecartement").header("Authorization", m[0]).contentType(JSON)
+                .content("{\"ecartee\":false,\"motif\":\"Attestation régularisée\"}")).andExpect(status().isOk());
+        mvc.perform(post(base + "/preselection/arreter").header("Authorization", m[0]).contentType(JSON)
+                .content("{\"motifNombre\":\"Trois candidatures qualifiées\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.liste.length()").value(3));
+        mvc.perform(post(base + "/rapport/signer").header("Authorization", m[0]).contentType(JSON).content("{}")).andExpect(status().isOk());
+        mvc.perform(post(base + "/rapport/signer").header("Authorization", m[1]).contentType(JSON).content("{}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("DEFINITIVE"));
+        assertThat(texteDuPdf(mvc.perform(get(base + "/rapport").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " "))
+                .contains("PROCÈS-VERBAL DE VALIDATION DE LA LISTE RESTREINTE", "1. L'appel à candidatures");
+        // La liste arrêtée alimente la liste restreinte de la fiche (B3), source APPEL_CANDIDATURES, avec les comptes.
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/liste-restreinte").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.source").value("APPEL_CANDIDATURES")).andExpect(jsonPath("$.candidats.length()").value(3))
+                .andExpect(jsonPath("$.candidats[*].idCandidat").value(org.hamcrest.Matchers.containsInAnyOrder("C900000061", "C900000062",
+                        "C900000063")));
+    }
+
     /** Une CAO de deux membres (le premier préside), un responsable ; les jetons des deux membres. */
     private String[] commission() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");

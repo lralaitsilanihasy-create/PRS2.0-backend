@@ -161,6 +161,7 @@ public class AmiService {
             a.setEtat(Ami.BROUILLON);
             a.setCreeLe(maintenant);
             a.setCreePar(acteur());
+            a.setNature(nature(fiche));   // ⚠️ V161 (§B4)
         }
         a.setObjet(fiche.getDesignationMarche());
         a.setDateLimite(r.dateLimite());
@@ -213,6 +214,15 @@ public class AmiService {
         if (a.getDateLimite() == null || !a.getDateLimite().isAfter(maintenant())) {
             throw new BadRequestException("L'AMI se publie avec une date limite à venir.", "DATE_LIMITE_INVALIDE");
         }
+        // ⚠️ V161 (§B4 ; décret n° 2019-1310, art. 13) — le petit nombre de prestataires dispense de l'appel à candidatures : la liste se
+        // constitue auprès des organismes professionnels et se saisit (B3).
+        if (a.appelCandidatures()) {
+            cnm.prs.dto.MotifRestreintDto motif = fiches.lire(idDmc).getMotifRestreint();
+            if (motif != null && "PETIT_NOMBRE".equals(motif.motif())) {
+                throw new BusinessRuleException("Le petit nombre de prestataires dispense de l'appel à candidatures (art. 13) : saisissez la liste "
+                        + "restreinte de la fiche.", "APPEL_CANDIDATURES_DISPENSE");
+            }
+        }
         a.setPublications(mapper.writeValueAsString(pubs));
         a.setPublieLe(maintenant());
         a.setPubliePar(acteur());
@@ -234,7 +244,8 @@ public class AmiService {
      */
     public AmiDto dispenser(Long idDmc, AmiDto.DispenseRequest r) {
         exigerPrmp(idDmc);
-        exigerCategorie(fiches.lire(idDmc));
+        FicheMarcheDto fiche = fiches.lire(idDmc);
+        exigerCategorie(fiche);
         String motif = r == null ? null : nettoyer(r.motif());
         if (motif == null) {
             throw new BadRequestException("La dispense de publicité exige son motif.", "MOTIF_OBLIGATOIRE");
@@ -247,6 +258,7 @@ public class AmiService {
             a.setIdDmc(idDmc);
             a.setCreeLe(maintenant());
             a.setCreePar(acteur());
+            a.setNature(nature(fiche));   // ⚠️ V161 (§B4)
         }
         a.setEtat(Ami.DISPENSE);
         a.setMotifDispense(motif);
@@ -451,17 +463,28 @@ public class AmiService {
         String reference = reference(a.getIdDmc());
         List<DocumentLibre.Element> el = new ArrayList<>();
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, plan.get("MINISTERE") == null ? autorite : plan.get("MINISTERE") + " — " + autorite));
-        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, signataire == null ? "PROJET D'AVIS À MANIFESTATION D'INTÉRÊT"
-                : "AVIS À MANIFESTATION D'INTÉRÊT"));
+        // ⚠️ V161 (2026-11-03, « appel-offres-restreint », §B4 ; décret n° 2019-1310, art. 11-1) — l'avis d'appel à candidatures : la nature
+        // et l'objet de la prestation, la date et le lieu de remise des candidatures, les critères de qualification.
+        boolean candidatures = a.appelCandidatures();
+        String titre = candidatures ? "AVIS D'APPEL À CANDIDATURES" : "AVIS À MANIFESTATION D'INTÉRÊT";
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, signataire == null ? "PROJET D'" + titre : titre));
         if (reference != null) {
             el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "N° " + reference));
         }
-        para(el, autorite + " invite les consultants qualifiés à manifester leur intérêt pour la mission suivante : "
-                + Objects.toString(a.getObjet(), "—") + ".");
-        para(el, "Une liste restreinte de " + a.getNombreRetenus() + " candidats sera établie à l'issue de l'évaluation des expressions "
-                + "d'intérêt par la commission d'appel d'offres (art. 42-II de la loi n° 2016-055) ; les candidats retenus seront invités à "
-                + "remettre une proposition technique et financière.");
-        sous(el, "Critères de sélection");
+        if (candidatures) {
+            para(el, autorite + " invite les entreprises qualifiées à faire acte de candidature pour l'appel d'offres restreint suivant : "
+                    + Objects.toString(a.getObjet(), "—") + ".");
+            para(el, "La commission d'appel d'offres examinera les candidatures (capacités techniques, financières et professionnelles) et "
+                    + "arrêtera une liste restreinte d'au moins trois candidats (art. 38-II de la loi n° 2016-055) ; les candidats retenus seront "
+                    + "invités à remettre une offre. Aucune offre ni aucun prix ne sont demandés à ce stade.");
+        } else {
+            para(el, autorite + " invite les consultants qualifiés à manifester leur intérêt pour la mission suivante : "
+                    + Objects.toString(a.getObjet(), "—") + ".");
+            para(el, "Une liste restreinte de " + a.getNombreRetenus() + " candidats sera établie à l'issue de l'évaluation des expressions "
+                    + "d'intérêt par la commission d'appel d'offres (art. 42-II de la loi n° 2016-055) ; les candidats retenus seront invités à "
+                    + "remettre une proposition technique et financière.");
+        }
+        sous(el, candidatures ? "Critères de qualification" : "Critères de sélection");
         List<List<List<String>>> lignes = new ArrayList<>();
         lignes.add(List.of(List.of("Critère"), List.of("Points")));
         for (AmiDto.Critere c : lireCriteres(a)) {
@@ -474,12 +497,13 @@ public class AmiService {
         }
         List<String> pieces = lirePieces(a);
         if (!pieces.isEmpty()) {
-            sous(el, "Pièces à joindre à l'expression d'intérêt");
+            sous(el, candidatures ? "Pièces à joindre à la candidature" : "Pièces à joindre à l'expression d'intérêt");
             pieces.forEach(p -> para(el, "– " + p));
         }
         sous(el, "Dépôt");
         RemiseElectronique.Parametres re = parametres.remiseElectronique();
-        para(el, "Les expressions d'intérêt sont déposées en ligne" + (re == null || re.plateformeUrl() == null ? "" : ", sur " + re.plateformeUrl())
+        para(el, (candidatures ? "Les candidatures sont déposées en ligne" : "Les expressions d'intérêt sont déposées en ligne")
+                + (re == null || re.plateformeUrl() == null ? "" : ", sur " + re.plateformeUrl())
                 + ", au plus tard le " + (a.getDateLimite() == null ? "……" : a.getDateLimite().format(HORODATAGE)) + ". Elles ne sont lues "
                 + "qu'après cette date ; un candidat peut remplacer ou retirer la sienne jusque-là.");
         if (signataire != null) {
@@ -487,7 +511,8 @@ public class AmiService {
             para(el, "La Personne responsable des marchés publics, " + signataire + " — signé électroniquement sur la plateforme le "
                     + a.getPublieLe().format(HORODATAGE) + ".");
         }
-        return new DocumentLibre("AVIS_AMI", null, el, "Procédure " + a.getIdDmc() + " — avis à manifestation d'intérêt (modèle provisoire)");
+        return new DocumentLibre("AVIS_AMI", null, el, "Procédure " + a.getIdDmc() + " — " + (candidatures ? "avis d'appel à candidatures"
+                : "avis à manifestation d'intérêt") + " (modèle provisoire)");
     }
 
     // ------------------------------------------------------------------ outils
@@ -497,7 +522,8 @@ public class AmiService {
         String autorite = dmc == null ? null : valeursPpm.lire(dmc.getIdDetail()).valeurs().get("ENTITE");
         return new AmiDto(a.getIdDmc(), a.getEtat(), a.getObjet(), autorite, reference(a.getIdDmc()), a.getDateLimite(), lireCriteres(a),
                 lirePieces(a), a.getNoteMinimale(), a.getNombreRetenus(), a.getMotifDispense(), lirePublications(a), !Ami.DISPENSE.equals(a.getEtat()),
-                a.getPublieLe(), a.getPubliePar(), lisible(a), expressions.countByIdDmcAndEtat(a.getIdDmc(), AmiExpression.DEPOSEE));
+                a.getPublieLe(), a.getPubliePar(), lisible(a), expressions.countByIdDmcAndEtat(a.getIdDmc(), AmiExpression.DEPOSEE),
+                a.getNature());
     }
 
     private AmiDto.AmiPublic publicDto(Ami a) {
@@ -506,7 +532,8 @@ public class AmiService {
         return new AmiDto.AmiPublic(a.getIdDmc(), reference(a.getIdDmc()), a.getObjet(), autorite, a.getDateLimite(), lireCriteres(a),
                 lirePieces(a), a.getNombreRetenus(), lirePublications(a), a.getPublieLe(), a.getDateLimite().isAfter(maintenant()),
                 a.getListeDefinitiveLe() == null ? List.of() : listes.findByIdDmcOrderByRangAsc(a.getIdDmc()).stream()
-                        .map(r -> new AmiDto.Retenu(r.getRang(), r.getRaisonSociale(), r.getNif())).toList());
+                        .map(r -> new AmiDto.Retenu(r.getRang(), r.getRaisonSociale(), r.getNif())).toList(),
+                a.getNature());
     }
 
     private AmiDto.Expression expressionDto(AmiExpression x) {
@@ -618,9 +645,16 @@ public class AmiService {
     }
 
     private static void exigerCategorie(FicheMarcheDto f) {
-        if (ModelesDao.sigleLettre(f.getCategorie()) == null) {
-            throw new BusinessRuleException("L'appel à manifestation d'intérêt est propre aux prestations intellectuelles.", "CATEGORIE_SANS_AMI");
+        // ⚠️ V161 (2026-11-03, « appel-offres-restreint », §B4) — ou l'appel à candidatures d'un appel d'offres restreint.
+        if (ModelesDao.sigleLettre(f.getCategorie()) == null && !f.isModeRestreint()) {
+            throw new BusinessRuleException("L'appel à manifestation d'intérêt est propre aux prestations intellectuelles, et l'appel à "
+                    + "candidatures à l'appel d'offres restreint.", "CATEGORIE_SANS_AMI");
         }
+    }
+
+    /** ⚠️ V161 (§B4) — la nature de l'appel que porte la fiche : AMI (prestations intellectuelles) ou appel à candidatures (restreint). */
+    private static String nature(FicheMarcheDto f) {
+        return ModelesDao.sigleLettre(f.getCategorie()) != null ? Ami.NATURE_AMI : Ami.APPEL_CANDIDATURES;
     }
 
     /** La PRMP ou son UGPM, au périmètre de la fiche, et une fiche de prestations intellectuelles. */

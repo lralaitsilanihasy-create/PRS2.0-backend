@@ -86,6 +86,9 @@ public class AmiPreselectionService {
      * expressions</strong> produit avec lui, joint d'office sous ce code. Les signatures du rapport le valident : aucun geste de plus.
      */
     public static final String CODE_PIECE_PV = "PV_AMI";
+    /** ⚠️ V161 (« appel-offres-restreint », §B4) — au DAOR, le rapport signé de l'appel à candidatures tient lieu de ce PV (V95). */
+    public static final String CODE_PIECE_LISTE_RESTREINTE = "PV_LISTE_RESTREINTE";
+    static final String PREFIXE_PV_LISTE = "pv-liste-restreinte-appel-candidatures_";
     private static final DateTimeFormatter HORODATAGE = DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm");
     /** ⚠️ R1 (manuel révisé, lot 1, §B1-B2) — quorum de l'arrêt de la liste et section « Séance de validation ». */
     private final QuorumCao quorumCao;
@@ -292,6 +295,13 @@ public class AmiPreselectionService {
             }
         }
         List<Ligne> retenues = ordonnees.subList(0, Math.min(n, ordonnees.size()));
+        // ⚠️ V161 (2026-11-03, « appel-offres-restreint », §B4 ; loi, art. 38-II) — la liste restreinte d'un appel d'offres restreint compte
+        // au moins trois candidats : en dessous, la PRMP relance l'appel à candidatures ou constitue la liste autrement (B3).
+        if (a.appelCandidatures() && retenues.size() < ListeRestreinteFiche.MINIMUM) {
+            throw new BusinessRuleException("Seules " + retenues.size() + " candidature(s) sont qualifiées : la liste restreinte d'un appel "
+                    + "d'offres restreint compte au moins " + ListeRestreinteFiche.MINIMUM + " candidats (art. 38-II). Relancez l'appel à "
+                    + "candidatures.", "MOINS_DE_TROIS_CANDIDATS", null, Map.of("qualifiees", retenues.size()));
+        }
         String motifNombre = r == null ? null : nettoyer(r.motifNombre());
         if (retenues.size() < n && motifNombre == null) {
             throw new BadRequestException("Seules " + retenues.size() + " expression(s) sont qualifiées pour " + n + " places : motivez le nombre "
@@ -427,21 +437,28 @@ public class AmiPreselectionService {
     /** Q4 — joint d'office le rapport de présélection signé au dossier de la demande de propositions (code {@code RAPPORT_PRESELECTION}). */
     public void joindre(Integer idDossier, Long idDmc) {
         Ami a = amis.findById(idDmc).filter(x -> x.getListeDefinitiveLe() != null && x.getRapportPdf() != null).orElse(null);
-        TypePieceJointe type = typesPiece.findFirstByCode(CODE_PIECE).orElse(null);
+        // ⚠️ V161 (2026-11-03, « appel-offres-restreint », §B4) — l'appel à candidatures : le rapport signé tient lieu de PV de validation
+        // de la liste restreinte par la CAO, joint d'office au DAOR sous PV_LISTE_RESTREINTE ; pas de relevé d'ouverture.
+        boolean candidatures = a != null && a.appelCandidatures();
+        TypePieceJointe type = typesPiece.findFirstByCode(candidatures ? CODE_PIECE_LISTE_RESTREINTE : CODE_PIECE).orElse(null);
         if (a == null || type == null) {
             return;
         }
         PieceJointeDossier p = new PieceJointeDossier();
         p.setIdDossier(idDossier);
         p.setIdTypePiece(type.getIdTypePiece());
-        p.setNomFichier("rapport-preselection-ami_" + idDmc + ".pdf");
+        p.setNomFichier((candidatures ? PREFIXE_PV_LISTE : "rapport-preselection-ami_") + idDmc + ".pdf");
         p.setContenu(a.getRapportPdf());
         p.setFormat("PDF");
         p.setTaille((long) a.getRapportPdf().length);
         p.setDateUpload(LocalDateTime.now(horloge));
         p.setApresLettreRenvoi(false);
         pieces.save(p);
-        tracer(idDmc, "AMI_RAPPORT_JOINT", "Rapport de présélection joint au dossier " + idDossier);
+        tracer(idDmc, "AMI_RAPPORT_JOINT", (candidatures ? "PV de validation de la liste restreinte" : "Rapport de présélection")
+                + " joint au dossier " + idDossier);
+        if (candidatures) {
+            return;
+        }
         // ⚠️ 2026-10-15 (§B1) — le relevé d'ouverture des expressions, joint sous la pièce PV_AMI.
         typesPiece.findFirstByCode(CODE_PIECE_PV).ifPresent(t -> {
             byte[] releve = generateur.generer(releve(a)).stream().filter(x -> "pdf".equals(x.extension())).findFirst()
@@ -466,6 +483,10 @@ public class AmiPreselectionService {
             typesPiece.findFirstByCode(code).ifPresent(t -> pieces.findByIdDossier(idDossier).stream()
                     .filter(p -> t.getIdTypePiece().equals(p.getIdTypePiece())).forEach(pieces::delete));
         }
+        // ⚠️ V161 (§B4) — le PV de la liste restreinte joint d'office (pas celui que la PRMP aurait déposé).
+        typesPiece.findFirstByCode(CODE_PIECE_LISTE_RESTREINTE).ifPresent(t -> pieces.findByIdDossier(idDossier).stream()
+                .filter(p -> t.getIdTypePiece().equals(p.getIdTypePiece()) && p.getNomFichier() != null
+                        && p.getNomFichier().startsWith(PREFIXE_PV_LISTE)).forEach(pieces::delete));
     }
 
     // ------------------------------------------------------------------ outils : classement, rapport, finalisation
@@ -602,9 +623,13 @@ public class AmiPreselectionService {
         List<AmiDto.Critere> criteres = ami.lireCriteres(a);
         Classement cl = classer(a);
         List<DocumentLibre.Element> el = new ArrayList<>();
-        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "RAPPORT DE PRÉSÉLECTION"));
-        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "Appel à manifestation d'intérêt — " + Objects.toString(a.getObjet(), "—")));
-        sous(el, "1. L'appel à manifestation d'intérêt");
+        // ⚠️ V161 (« appel-offres-restreint », §B4) — l'appel à candidatures : le PV de validation de la liste restreinte par la CAO.
+        boolean candidatures = a.appelCandidatures();
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, candidatures ? "PROCÈS-VERBAL DE VALIDATION DE LA LISTE RESTREINTE"
+                : "RAPPORT DE PRÉSÉLECTION"));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, (candidatures ? "Appel à candidatures — appel d'offres restreint — "
+                : "Appel à manifestation d'intérêt — ") + Objects.toString(a.getObjet(), "—")));
+        sous(el, candidatures ? "1. L'appel à candidatures" : "1. L'appel à manifestation d'intérêt");
         para(el, "Publié le " + (a.getPublieLe() == null ? "—" : a.getPublieLe().format(HORODATAGE)) + " ; date limite de dépôt : "
                 + a.getDateLimite().format(HORODATAGE) + (a.getNombreRelances() > 0 ? " (après " + a.getNombreRelances() + " relance(s))" : "")
                 + ". Nombre de candidats à retenir : " + a.getNombreRetenus() + (a.getNoteMinimale() == null ? "" : " ; note minimale : "

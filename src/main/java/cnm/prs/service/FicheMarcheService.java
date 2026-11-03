@@ -875,11 +875,49 @@ public class FicheMarcheService {
         this.listeRestreinte = listeRestreinte;
     }
 
-    /** ⚠️ V156 (2026-11-02, « appel-offres-restreint », §B3) — la liste restreinte de la version courante ; {@code null} sans liste. */
+    /**
+     * ⚠️ V156 (2026-11-02, « appel-offres-restreint », §B3) — la liste restreinte de la version courante ; ⚠️ V161 (§B4) à défaut, celle
+     * qu'a arrêtée l'appel à candidatures ; {@code null} sans liste.
+     */
     @Transactional(readOnly = true)
     public cnm.prs.dto.ListeRestreinteDto listeRestreinte(Long idDmc) {
         contexte(idDmc);
-        return listeRestreinte.lire(idFicheCourante(idDmc)).orElse(null);
+        return listeRestreinte.lire(idFicheCourante(idDmc))
+                .or(() -> appelCandidatures(idDmc).flatMap(this::listeDeLAppel)).orElse(null);
+    }
+
+    // ------------------------------------------------------------------ ⚠️ V161 — l'appel à candidatures (§B4)
+
+    private cnm.prs.repository.AmiRepository amiRepository;
+    private cnm.prs.repository.AmiListeRepository amiListeRepository;
+    private cnm.prs.repository.EntrepriseRepository entrepriseRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAppelCandidatures(cnm.prs.repository.AmiRepository amis, cnm.prs.repository.AmiListeRepository listes,
+            cnm.prs.repository.EntrepriseRepository entreprises) {
+        this.amiRepository = amis;
+        this.amiListeRepository = listes;
+        this.entrepriseRepository = entreprises;
+    }
+
+    /** L'appel à candidatures de la procédure (nature {@code APPEL_CANDIDATURES}), vide sans lui. */
+    private Optional<cnm.prs.entity.Ami> appelCandidatures(Long idDmc) {
+        return amiRepository == null ? Optional.empty() : amiRepository.findById(idDmc).filter(cnm.prs.entity.Ami::appelCandidatures);
+    }
+
+    /** La liste définitive de l'appel à candidatures, sous la forme de la liste saisie (source {@code APPEL_CANDIDATURES}) ; vide avant. */
+    private Optional<cnm.prs.dto.ListeRestreinteDto> listeDeLAppel(cnm.prs.entity.Ami a) {
+        if (a.getListeDefinitiveLe() == null || amiListeRepository == null) {
+            return Optional.empty();
+        }
+        List<cnm.prs.dto.ListeRestreinteDto.Candidat> cs = amiListeRepository.findByIdDmcOrderByRangAsc(a.getIdDmc()).stream()
+                .map(l -> {
+                    cnm.prs.entity.Entreprise e = entrepriseRepository.findByIdCandidat(l.getIdCandidat()).orElse(null);
+                    return new cnm.prs.dto.ListeRestreinteDto.Candidat(l.getRang(), l.getRaisonSociale(),
+                            e == null || e.getAdresse() == null ? "—" : e.getAdresse(), null, l.getIdCandidat(), l.getNif());
+                }).toList();
+        return Optional.of(new cnm.prs.dto.ListeRestreinteDto(ListeRestreinteFiche.APPEL_CANDIDATURES,
+                ListeRestreinteFiche.SOURCES.get(ListeRestreinteFiche.APPEL_CANDIDATURES), cs, a.getListeDefinitiveLe()));
     }
 
     /**
@@ -892,6 +930,12 @@ public class FicheMarcheService {
         if (!modeRestreint(ctx, valeursPpm.lire(ctx.idDetail()).valeurs())) {
             throw new BusinessRuleException("La liste restreinte saisie vaut pour une ligne du plan en mode d'appel d'offres restreint.",
                     "LISTE_HORS_RESTREINT");
+        }
+        // ⚠️ V161 (§B4) — un appel à candidatures publié constitue la liste : elle ne se saisit pas en plus.
+        if (appelCandidatures(idDmc).filter(a -> !cnm.prs.entity.Ami.BROUILLON.equals(a.getEtat())
+                && !cnm.prs.entity.Ami.DISPENSE.equals(a.getEtat())).isPresent()) {
+            throw new BusinessRuleException("Un appel à candidatures est publié : la liste restreinte sera celle qu'il arrêtera.",
+                    "LISTE_PAR_APPEL_CANDIDATURES");
         }
         cnm.prs.dto.ListeRestreinteDto valide = listeRestreinte.valider(recue);
         FicheMarche fiche = brouillonOuNouvelle(ctx);
@@ -2013,11 +2057,19 @@ public class FicheMarcheService {
         // ⚠️ V156 (§B3) — et sa liste restreinte, trois candidats au moins (loi, art. 38-II) : la lettre d'invitation la reprend.
         Optional<cnm.prs.dto.ListeRestreinteDto> liste = !restreint || listeRestreinte == null ? Optional.empty()
                 : listeRestreinte.lire(fiche.getIdFiche());
+        // ⚠️ V161 (§B4) — à défaut, la liste qu'arrête l'appel à candidatures en ligne (source APPEL_CANDIDATURES) ; publié, il satisfait
+        // le contrôle avant même que sa liste soit arrêtée.
+        Optional<cnm.prs.entity.Ami> appel = !restreint || liste.isPresent() || idDmc == null ? Optional.empty() : appelCandidatures(idDmc);
+        if (liste.isEmpty() && appel.isPresent()) {
+            liste = listeDeLAppel(appel.get());
+        }
         if (restreint) {
-            (liste.isPresent() ? bilan.ok() : bilan.bloquants()).add(new BilanControlesDto.Controle(LISTE_RESTREINTE,
+            boolean enCours = liste.isEmpty() && appel.filter(a -> cnm.prs.entity.Ami.PUBLIE.equals(a.getEtat())).isPresent();
+            (liste.isPresent() || enCours ? bilan.ok() : bilan.bloquants()).add(new BilanControlesDto.Controle(LISTE_RESTREINTE,
                     List.of("source", "candidats"), null, liste.isPresent() ? "La liste restreinte compte " + liste.get().candidats().size()
-                            + " candidats (" + liste.get().libelleSource() + ")." : "L'appel d'offres restreint exige sa liste restreinte : "
-                            + "sa source et au moins " + ListeRestreinteFiche.MINIMUM + " candidats."));
+                            + " candidats (" + liste.get().libelleSource() + ")." : enCours ? "La liste restreinte sera celle qu'arrêtera "
+                            + "l'appel à candidatures publié." : "L'appel d'offres restreint exige sa liste restreinte : sa source et au moins "
+                            + ListeRestreinteFiche.MINIMUM + " candidats, ou un appel à candidatures publié."));
         }
         // ⚠️ V116 (2026-10-14, Q11, §B2) — chaque article a son prix unitaire estimé, et le total de chaque lot égale le montant du lot
         // au plan (bloquants).

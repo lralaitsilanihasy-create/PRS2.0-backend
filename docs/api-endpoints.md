@@ -8361,6 +8361,35 @@ Migrations **V158** (pièces) et **V159** (type de document). Aucune route nouve
   pièce **`LETTRES_ACCUSE`** (MAOR, MAORI, MAOR-CC, MPI) est alors **fournie** par ce dépôt unique (`…/publication-avis/contenu`), comme
   `PUBLICATION_AVIS`.
 
+### L'appel à candidatures en ligne de l'appel d'offres restreint — V161 ⚠️ 2026-11-03
+
+Même demande, §B4 (arbitrage Q2 du pilote ; décret n° 2019-1310, art. 11-1 et 13 ; loi n° 2016-055, art. 38-II). Migration **V161**
+(`t_ami.NATURE`). **Aucune route nouvelle** : l'appel à candidatures emprunte celles de l'AMI en ligne (`/api/fiches-marche/{idDmc}/ami`,
+`…/preselection`, `…/rapport`, `/api/amis-en-ligne`, `/api/candidat/amis/{idDmc}/expression`). Aucune dépendance ajoutée.
+
+- **La nature** : `AmiDto` et `AmiPublic` servent en fin d'objet **`nature`** — `AMI` (prestations intellectuelles, inchangé) ou
+  **`APPEL_CANDIDATURES`**, fixée à la création selon la catégorie de la fiche. L'appel à candidatures vaut pour une fiche de
+  fournitures ou de travaux dont la ligne est en **mode restreint** (sinon 409 `CATEGORIE_SANS_AMI`, comme avant).
+- **L'avis** (projet puis signé) : « Avis d'appel à candidatures » — objet, critères **de qualification**, pièces à joindre à la
+  candidature, dépôt en ligne et date limite ; liste restreinte d'**au moins trois** candidats, invités ensuite à remettre une offre ;
+  ni offre ni prix à ce stade. Modèle provisoire, comme celui de l'AMI.
+- **Dispense** : le motif du recours `PETIT_NOMBRE` (V155) dispense de l'appel à candidatures (art. 13) — la publication répond 409
+  **`APPEL_CANDIDATURES_DISPENSE`** ; la liste se saisit alors (V156).
+- **Le dépôt d'une candidature** : celui d'une expression d'intérêt (lettre et pièces attendues), par un compte candidat.
+- **La présélection** : celle de l'AMI (déclarations, notation, écartement, arrêt par le président, rapport signé) ; l'arrêt exige
+  **au moins trois** candidatures retenues : 409 **`MOINS_DE_TROIS_CANDIDATS`** (`details.qualifiees`) — relancer l'appel ou constituer
+  la liste autrement.
+- **Le rapport signé** s'intitule « Procès-verbal de validation de la liste restreinte » et tient lieu de la pièce
+  **`PV_LISTE_RESTREINTE`** : joint d'office au dossier DAOR à sa création (pas de relevé d'ouverture). Comme pour la demande de
+  propositions, le dossier ne se crée qu'une fois la liste définitive (409 `LISTE_NON_ARRETEE`).
+- **La liste arrêtée alimente la liste restreinte de la fiche** (V156) : `GET …/liste-restreinte` et `FicheMarcheDto.listeRestreinte`
+  la servent, à défaut de liste saisie, avec la source **`APPEL_CANDIDATURES`** et le compte de chaque candidat (`idCandidat`) ; la
+  lettre `LETTRE-AOR` la reprend (invités rattachés à leur compte, notifiés « à remettre une offre »).
+- **Au bilan** de la fiche : un appel à candidatures **publié** satisfait `LISTE_RESTREINTE` (« la liste restreinte sera celle
+  qu'arrêtera l'appel à candidatures publié ») ; la saisie d'une liste est alors refusée (409 **`LISTE_PAR_APPEL_CANDIDATURES`**).
+- **Non livré** : la base réutilisable d'un appel à candidatures de début d'année (art. 11-1, hors du lot) ; le délai propre de l'appel
+  (Q6) n'est pas contrôlé, la date limite reste au choix de la PRMP.
+
 ### L'ouverture anticipée des plis de l'appel d'offres restreint — V160 ⚠️ 2026-11-03
 
 Même demande, §B7 (arbitrage Q4 du pilote ; loi n° 2016-055, art. 38-VI ; décret n° 2019-1310, art. 14 ; guide de la CAO, § 4.5.1).

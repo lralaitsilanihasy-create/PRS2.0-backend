@@ -1638,6 +1638,13 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > la nouvelle date d'ouverture, notifiée aux invités et à la Commission : la séance s'ouvre à cette date, et son PV mentionne
 > l'anticipation et les consentements.
 >
+> ⚠️ **2026-11-03 — l'appel à candidatures en ligne (même demande, §B4 ; arbitrage Q2 du pilote : liste saisie ET appel à
+> candidatures ; décret, art. 11-1 et 13 ; V161).** La liste restreinte peut aussi naître d'un **appel public à candidatures**, sur le
+> chemin de l'AMI : avis d'appel à candidatures publié, dépôt des candidatures par les comptes candidats (capacités, pièces, sans offre
+> ni prix), examen par la CAO, arrêt d'une liste d'**au moins trois** candidats, procès-verbal signé par la commission — qui tient lieu
+> du PV de validation de la liste au DAOR. La liste arrêtée devient celle de la fiche et des lettres d'invitation. Le **petit nombre de
+> prestataires** dispense de l'appel à candidatures (la liste se saisit) ; un appel publié interdit la saisie d'une autre liste.
+>
 > ⚠️ **2026-11-03 — une seule offre reçue (même demande, §B8 ; arbitrage Q1 du pilote : circulaire de régulation 2024).** Une offre
 > unique **ne rend pas d'office** l'appel d'offres (restreint ou non) infructueux : elle suit l'évaluation normale, et elle est proposée à
 > l'attribution si elle est conforme, qualifiée et acceptable. Vérifié dans le serveur le 03/11 : la séance ne constate la **carence**
