@@ -56,6 +56,8 @@ public class PiecesFournies {
     /** ⚠️ 2026-10-30 (« pieces-ddm-donnees », §B1, §B2) — les publications fournies au dossier de marché. */
     public static final String PUBLICATION_AGPM = PublicationAgpmService.CODE_PIECE;
     public static final String PUBLICATION_AVIS = "PUBLICATION_AVIS";
+    /** ⚠️ 2026-11-02 (« appel-offres-restreint », §B5) — les lettres d'invitation avec accusé (V95), au MAOR, MAORI et MPI. */
+    public static final String LETTRES_ACCUSE = "LETTRES_ACCUSE";
 
     private final FicheMarcheService fiches;
     private final CalendrierAnnuelService calendrier;
@@ -179,6 +181,13 @@ public class PiecesFournies {
         PublicationAvisService avis = publicationsAvis.getIfAvailable();
         if (avis != null && avis.enVigueur(procedure.idDmc()).isPresent()) {
             out.put(PUBLICATION_AVIS, new Fourniture(racine + "/publication-avis/contenu", null, null));
+            // ⚠️ 2026-11-02 (« appel-offres-restreint », §B5 ; manuel, § III.6) — au marché sur appel d'offres restreint (et des
+            // prestations intellectuelles), la copie des lettres d'invitation avec accusé tient lieu de la publication de l'avis : la même
+            // preuve, déposée une fois sur la procédure.
+            if (avis.enVigueur(procedure.idDmc()).map(p -> cnm.prs.entity.PublicationAvis.LETTRES_INVITATION.equals(p.getNature()))
+                    .orElse(false)) {
+                out.put(LETTRES_ACCUSE, new Fourniture(racine + "/publication-avis/contenu", null, null));
+            }
         }
         return out;
     }

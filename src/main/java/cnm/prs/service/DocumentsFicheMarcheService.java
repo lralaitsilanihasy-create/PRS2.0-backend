@@ -86,7 +86,15 @@ public class DocumentsFicheMarcheService {
      */
     public static final String TYPE_AVIS_PROJET = "AVIS_PROJET";
     public static final String TYPE_LETTRE_PROJET = "LETTRE_PROJET";
-    public static final Set<String> TYPES_PROJET = Set.of(TYPE_AVIS_PROJET, TYPE_LETTRE_PROJET);
+    /**
+     * ⚠️ 2026-11-02 (demande front « appel-offres-restreint », §B5 ; manuel, § III.4) — le <strong>projet de décision autorisant le
+     * recours à l'appel d'offres restreint</strong>, produit à la validation d'une version en mode restreint et joint d'office au dossier
+     * DAOR sous la pièce {@code DECISION_AO_RESTR} ; comme les projets de publication, hors du DAO.
+     */
+    public static final String TYPE_DECISION_AOR_PROJET = "DECISION_AOR_PROJET";
+    public static final Set<String> TYPES_PROJET = Set.of(TYPE_AVIS_PROJET, TYPE_LETTRE_PROJET, TYPE_DECISION_AOR_PROJET);
+    /** Le type de pièce qui reçoit le projet de décision (V95), exigé au DAOR et, signé, au MAOR. */
+    public static final String CODE_PIECE_DECISION_AOR = "DECISION_AO_RESTR";
     static final String FILIGRANE_PROJET = "PROJET";
 
     /**
@@ -642,11 +650,94 @@ public class DocumentsFicheMarcheService {
         if (validee == null || etat == null || !StatutFicheMarche.VALIDEE.name().equals(validee.getStatut())) {
             return;
         }
-        boolean present = documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
-                .anyMatch(d -> TYPES_PROJET.contains(d.getType()));
+        List<DocumentFicheMarche> docs = documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche());
+        boolean present = docs.stream().anyMatch(d -> TYPE_AVIS_PROJET.equals(d.getType()) || TYPE_LETTRE_PROJET.equals(d.getType()));
         if (!present) {
             enregistrer(validee.getIdFiche(), projetOuRien(etat, validee.getDateValidation()), LocalDateTime.now(HorlogeRecette.HORLOGE));
         }
+        // ⚠️ 2026-11-02 (§B5) — le projet de décision d'une version restreinte validée avant lui.
+        if (etat.isModeRestreint() && docs.stream().noneMatch(d -> TYPE_DECISION_AOR_PROJET.equals(d.getType()))) {
+            enregistrer(validee.getIdFiche(), decisionAorOuRien(etat, validee.getDateValidation()), LocalDateTime.now(HorlogeRecette.HORLOGE));
+        }
+    }
+
+    // ------------------------------------------------------------------ ⚠️ 2026-11-02 (§B5) — la décision autorisant le restreint
+
+    /** Le projet de décision, ou rien (journal applicatif) : son échec ne bloque pas la validation, comme le projet de publication. */
+    public List<Produit> decisionAorOuRien(FicheMarcheDto etat, LocalDateTime validation) {
+        if (!etat.isModeRestreint()) {
+            return List.of();
+        }
+        try {
+            List<Produit> produits = new ArrayList<>();
+            for (GenerateurDocumentsFiche.Fichier fi : generateur.generer(decisionAor(etat, validation,
+                    etat.getIdDetail() == null ? Map.of() : valeursPpm.lire(etat.getIdDetail()).valeurs()))) {
+                if ("pdf".equals(fi.extension())) {
+                    produits.add(new Produit(TYPE_DECISION_AOR_PROJET, "pdf", nomFichier("DECISION_AOR", etat.getRefeDossier(), etat.getIdDetail(),
+                            null, etat.getVersion(), "pdf"), fi.contenu(), null));
+                }
+            }
+            return produits;
+        } catch (RuntimeException e) {
+            log.warn("[FICHE_MARCHE] projet de décision AOR de la version {} du DMC {} non produit : {}", etat.getVersion(), etat.getIdDmc(),
+                    e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * ⚠️ 2026-11-02 (§B5) — le projet de décision autorisant le recours à l'appel d'offres restreint (loi n° 2016-055, art. 38 ; décret
+     * n° 2019-1310, art. 10 à 15) : la ligne du plan, l'objet, le motif et sa justification (V155), la liste restreinte (V156) ; numéro,
+     * lieu, date et signature en pointillés ; « PROJET » en filigrane. ⚠️ <strong>Modèle provisoire</strong>, à relire par le pilote (Q7).
+     */
+    static DocumentLibre decisionAor(FicheMarcheDto etat, LocalDateTime validation, Map<String, String> ppm) {
+        String pointilles = "……………………";
+        List<DocumentLibre.Element> els = new ArrayList<>();
+        String entite = ppm.get("ENTITE");
+        if (entite != null && !entite.isBlank()) {
+            els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, entite.trim()));
+        }
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "La Personne responsable des marchés publics"));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "DÉCISION N° " + pointilles));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "autorisant le recours à l'appel d'offres restreint"));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "Vu la loi n° 2016-055 du 25 janvier 2017 portant Code des marchés "
+                + "publics, notamment ses articles 34 et 38 ;"));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "Vu le décret n° 2019-1310 relatif aux modalités de mise en œuvre des "
+                + "procédures de passation, notamment ses articles 10 à 15 ;"));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "Vu le plan de passation des marchés de l'autorité contractante, ligne n° "
+                + (etat.getIdDetail() == null ? pointilles : etat.getIdDetail()) + " ;"));
+        cnm.prs.dto.MotifRestreintDto motif = etat.getMotifRestreint();
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "Considérant " + (motif == null ? pointilles
+                : "le motif du recours : " + motif.libelle().toLowerCase(java.util.Locale.ROOT) + " — " + motif.justification()) + " ;"));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "DÉCIDE :"));
+        String numero = etat.getValeurs() == null ? null : etat.getValeurs().get(CHAMP_NUMERO_DAO);
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "Article premier. — Il est recouru à la procédure d'appel d'offres "
+                + "restreint pour « " + (etat.getDesignationMarche() == null ? pointilles : etat.getDesignationMarche()) + " »"
+                + (numero == null || numero.isBlank() ? "" : " (appel d'offres n° " + numero.trim() + ")") + "."));
+        cnm.prs.dto.ListeRestreinteDto liste = etat.getListeRestreinte();
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "Article 2. — Sont invités à remettre une offre les candidats de la "
+                + "liste restreinte" + (liste == null ? " : " + pointilles : " (" + liste.libelleSource().toLowerCase(java.util.Locale.ROOT)
+                        + ") :")));
+        if (liste != null) {
+            for (cnm.prs.dto.ListeRestreinteDto.Candidat c : liste.candidats()) {
+                els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, c.rang() + ". " + c.nom()
+                        + (c.adresse() == null ? "" : ", " + String.join(", ", c.adresse().lines().map(String::trim).filter(l -> !l.isEmpty()).toList()))
+                        + (c.nif() == null ? "" : " (NIF " + c.nif() + ")")));
+            }
+        }
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "Article 3. — La présente décision sera communiquée à la Commission des "
+                + "marchés compétente et notifiée aux candidats invités avec la lettre d'invitation."));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "Fait à " + pointilles + ", le " + pointilles));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "La Personne responsable des marchés publics"));
+        String prmp = ppm.get("PRMP");
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, prmp == null || prmp.isBlank() ? pointilles : prmp.trim()));
+        String pied = "Projet produit par l'application le " + validation.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm"))
+                + " à la validation de la version " + etat.getVersion() + " de la fiche — modèle provisoire, à relire par le pilote.";
+        return new DocumentLibre(TYPE_DECISION_AOR_PROJET, null, els, pied).avecFiligrane(FILIGRANE_PROJET);
     }
 
     /**
@@ -692,7 +783,9 @@ public class DocumentsFicheMarcheService {
         }
         return documentRepository.findByIdFicheInAndTypeInOrderByIdDocumentDesc(numeros.keySet(), TYPES_PROJET).stream()
                 .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
-                        TYPE_AVIS_PROJET.equals(d.getType()) ? "Projet d'avis spécifique d'appel d'offres" : "Projet de lettre d'invitation",
+                        TYPE_AVIS_PROJET.equals(d.getType()) ? "Projet d'avis spécifique d'appel d'offres"
+                                : TYPE_DECISION_AOR_PROJET.equals(d.getType()) ? "Projet de décision autorisant l'appel d'offres restreint"
+                                : "Projet de lettre d'invitation",
                         d.getExtension(), d.getNomFichier(), d.getTailleOctets(), d.getDateGeneration(), numeros.get(d.getIdFiche()), d.getLot(), null))
                 .toList();
     }
@@ -818,7 +911,8 @@ public class DocumentsFicheMarcheService {
             }
         }
         for (DocumentFicheMarche d : projets) {
-            String code = TYPE_AVIS_PROJET.equals(d.getType()) ? CODE_PIECE_AVIS : CODE_PIECE_LETTRE;
+            String code = TYPE_AVIS_PROJET.equals(d.getType()) ? CODE_PIECE_AVIS
+                    : TYPE_DECISION_AOR_PROJET.equals(d.getType()) ? CODE_PIECE_DECISION_AOR : CODE_PIECE_LETTRE;
             TypePieceJointe type = typePieceRepository.findFirstByCode(code).orElse(null);
             if (type == null) {
                 log.warn("[FICHE_MARCHE] aucun type de pièce de code {} : projet {} non joint au dossier {}", code, d.getNomFichier(), idDossier);

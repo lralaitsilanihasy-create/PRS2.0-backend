@@ -8341,6 +8341,26 @@ Même demande, §B3 (décret n° 2019-1310, art. 11-2 et 13 ; loi n° 2016-055, 
   C »).
 - Le **PV de validation de la liste par la CAO** reste la pièce `PV_LISTE_RESTREINTE`, jointe par la PRMP.
 
+### La décision autorisant le recours à l'appel d'offres restreint — V158, V159 ⚠️ 2026-11-02
+
+Même demande, §B5 (manuel, § III.4 : projet de décision au DAOR ; § III.6 : décision signée et lettres avec accusé au marché).
+Migrations **V158** (pièces) et **V159** (type de document). Aucune route nouvelle ; aucune dépendance ajoutée.
+
+- **Le projet** : à la validation d'une version en mode restreint, l'application produit le **projet de décision** (PDF, type de
+  document `DECISION_AOR_PROJET`, « PROJET » en filigrane) : ligne du plan, objet, numéro du DAO, motif et justification (V155),
+  candidats de la liste restreinte (V156) ; numéro, lieu, date et signature en pointillés. Il est **joint d'office** au dossier né de la
+  fiche sous la pièce **`DECISION_AO_RESTR`** (« Décision autorisant l'appel d'offres restreint »), désormais **exigée** des dossiers
+  `DAOR`, `DAORI` et `DAOR-CC` ; comme les autres pièces produites par la fiche, il ne se remplace pas à la main (409
+  `PIECE_PRODUITE_PAR_FICHE`). Il est listé avec les projets de publication (`listerProjets`, « Projet de décision autorisant l'appel
+  d'offres restreint »), hors du DAO, du DAO complet et du retrait. Son échec de rendu ne bloque pas la validation (journal applicatif).
+  ⚠️ **Modèle provisoire**, à relire par le pilote (Q7).
+- **La version signée** se dépose par la PRMP au **dossier de marché** (`MAOR`, `MAORI`, `MAOR-CC`), où `DECISION_AO_RESTR` est exigée
+  depuis V95 / V152.
+- **Les lettres avec accusé** : `POST /api/fiches-marche/{idDmc}/publication-avis` traite l'appel d'offres restreint comme les
+  prestations intellectuelles — nature `LETTRES_INVITATION`, sans journal, date d'envoi dans `dateParution`. Au dossier de marché, la
+  pièce **`LETTRES_ACCUSE`** (MAOR, MAORI, MAOR-CC, MPI) est alors **fournie** par ce dépôt unique (`…/publication-avis/contenu`), comme
+  `PUBLICATION_AVIS`.
+
 ### L'évaluation des prestations intellectuelles, lot 3, tranche PI-b : deux enveloppes, séance technique — V86 ⚠️ 2026-10-08
 
 Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B2, §B3 ; arbitrage du pilote Q1 : deux enveloppes pour toutes les

@@ -1325,6 +1325,8 @@ public class FicheMarcheService {
         // ⚠️ R3b (manuel révisé, lot 1, §B3) — le projet d'avis spécifique (ou de lettre d'invitation) de la version, joint d'office au
         // dossier ; son échec ne bloque pas la validation.
         produits.addAll(documents.projetOuRien(etat, maintenant));
+        // ⚠️ 2026-11-02 (« appel-offres-restreint », §B5) — en mode restreint, le projet de décision autorisant le recours, joint d'office.
+        produits.addAll(documents.decisionAorOuRien(etat, maintenant));
         // ⚠️ V117 (2026-10-14, Q11, §B3) — le bordereau des prix estimatifs (fournitures) ou le devis quantitatif et estimatif
         // (travaux), par lot, joints d'office au dossier ; un échec laisse la fiche en brouillon, comme les documents du DAO.
         if (besoinApplicable(ctx)) {

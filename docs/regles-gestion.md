@@ -1625,6 +1625,12 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > autres délais hors la loi (arbitrage Q6 du pilote) ; leur passage en délai bloquant est une question posée au pilote. Au bilan, le
 > départ reste la date de publication prévue (à défaut le lancement du plan).
 >
+> ⚠️ **2026-11-02 — la décision autorisant le recours (même demande, §B5 ; manuel, § III.4 et III.6 ; V158, V159).** À la validation
+> de la fiche, l'application produit le **projet de décision** autorisant l'appel d'offres restreint (motif, justification, liste
+> restreinte) et le joint d'office au dossier DAOR, où cette pièce est désormais exigée. La **décision signée** se joint au dossier de
+> marché. La copie des **lettres d'invitation avec accusé**, déposée une fois sur la procédure, tient lieu de publication de l'avis et
+> est fournie au marché. Le texte du modèle est provisoire, à relire par le pilote.
+>
 > ⚠️ **2026-10-30 — le contrat-cadre par appel d'offres restreint (décision du pilote « suivre les textes en vigueur » ; décret
 > n° 2019-1064, art. 7 ; V152).** Un appel d'offres **restreint** en contrat-cadre produit un « Dossier d'appel d'offres restreint —
 > contrat-cadre » (`DAOR-CC`), puis à l'attribution un « Marché sur appel d'offres restreint — contrat-cadre » (`MAOR-CC`). Leurs pièces

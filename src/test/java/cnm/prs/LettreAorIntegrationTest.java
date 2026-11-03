@@ -228,6 +228,28 @@ class LettreAorIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(journal, "$[?(@.typeAction=='LETTRES_INVITATION_IMPRIMEES')].detail"))
                 .singleElement().asString().startsWith("3 lettre(s) d'invitation imprimée(s)");
 
+        // ⚠️ 2026-11-02 (§B5) — le projet de décision autorisant le recours, joint d'office au DAOR sous DECISION_AO_RESTR.
+        int idTypeDecision = typePieceJointeRepository.findFirstByCode("DECISION_AO_RESTR").orElseThrow().getIdTypePiece();
+        String pieces = mvc.perform(get("/api/piece-jointe-dossiers").param("dossier", String.valueOf(idDossier)).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        List<Integer> decisions = JsonPath.read(pieces, "$[?(@.idTypePiece==" + idTypeDecision + ")].idPiece");
+        assertThat(decisions).hasSize(1);
+        byte[] pdf = mvc.perform(get("/api/piece-jointe-dossiers/" + decisions.get(0) + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        String decision;
+        try (org.apache.pdfbox.pdmodel.PDDocument doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            decision = new org.apache.pdfbox.text.PDFTextStripper().getText(doc).replaceAll("\\s+", " ");
+        }
+        assertThat(decision).contains("DÉCISION N°", "autorisant le recours à l'appel d'offres restreint", "urgence avérée",
+                "Rupture du stock de mobilier", "Fourniture de mobilier de bureau", "1. Société A", "3. Groupement C", "registre de l'armp",
+                "modèle provisoire");
+        // ⚠️ 2026-11-02 (§B5) — la preuve des lettres d'un AOR : les lettres avec accusé, sans journal.
+        org.springframework.mock.web.MockMultipartFile scan = new org.springframework.mock.web.MockMultipartFile("fichier", "lettres.pdf",
+                "application/pdf", "%PDF-1.4 lettres".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/api/fiches-marche/" + idDmc + "/publication-avis")
+                .file(scan).param("dateParution", "2026-10-05").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nature").value("LETTRES_INVITATION"));
+
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/lettres-invitation").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"lieu\":\"Antananarivo\"}")).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.erreurs[?(@.champ=='dateEnvoi')]").isNotEmpty())

@@ -83,7 +83,9 @@ public class PublicationAvisService {
         fiches.controlerLecture(idDmc);
         FicheMarcheService.EtatVersion etat = fiches.etatValide(idDmc).orElseThrow(() -> new BusinessRuleException(
                 "La fiche de la procédure n'a pas de version validée : l'avis n'est pas encore publié.", "FICHE_NON_VALIDEE"));
-        boolean lettres = ModelesDao.sigleLettre(etat.categorie()) != null;
+        // ⚠️ 2026-11-02 (« appel-offres-restreint », §B5) — l'appel d'offres restreint est lancé par ses lettres, comme la PI : sa preuve
+        // est la copie des lettres avec accusé de réception, sans journal.
+        boolean lettres = ModelesDao.sigleLettre(etat.categorie(), etat.etat().isModeRestreint()) != null;
         if (documents.listerAvis(ficheRepository.versions(idDmc)).isEmpty()) {
             throw new BusinessRuleException(lettres ? "Les lettres d'invitation ne sont pas encore produites : leur preuve d'envoi se dépose "
                     + "après." : "L'avis spécifique n'est pas encore imprimé : sa publication se dépose après.", "AVIS_NON_PUBLIE");
