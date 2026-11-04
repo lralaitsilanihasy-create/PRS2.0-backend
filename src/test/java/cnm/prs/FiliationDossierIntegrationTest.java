@@ -116,6 +116,37 @@ class FiliationDossierIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ 2026-11-04 (« avancement-plans », B1) — l'avancement des lignes d'un plan dans la liste : marché, procédure sans "
+            + "dossier et gré à gré (à lancer), sans étape ; ligne retirée non comptée ; nul hors plan")
+    void avancementDesLignes() throws Exception {
+        cnm.prs.entity.ModePassation gag = new cnm.prs.entity.ModePassation(96, "Gré à gré", null, null, null, null);
+        modePassationRepository.save(gag);
+        Marche sansEtape = marche(9502, 9500, 9500);
+        marcheRepository.save(sansEtape);
+        Marche greAGre = marche(9503, 9500, 9500);
+        greAGre.setIdMode(96);
+        marcheRepository.save(greAGre);
+        Marche avecFiche = marche(9504, 9500, 9500);
+        marcheRepository.save(avecFiche);
+        DossierMec fiche = new DossierMec();
+        fiche.setIdDetail(9504);
+        fiche.setIdTypeDmc(typeDmcRepository.findByCode("DAO").orElseThrow().getIdTypeDmc());
+        fiche.setDateCreation(LocalDateTime.now());
+        dmcRepository.save(fiche);
+        Marche retiree = marche(9505, 9500, 9500);
+        retiree.setSupprimee(true);
+        marcheRepository.save(retiree);
+
+        String liste = mvc.perform(get("/api/dossiers").param("type", "DDP").header("Authorization", tokenPresident))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(liste, "$[?(@.idDossier==9500)].avancementLignes.lignes")).containsExactly(4);
+        assertThat(JsonPath.<List<Integer>>read(liste, "$[?(@.idDossier==9500)].avancementLignes.marche")).containsExactly(1);
+        assertThat(JsonPath.<List<Integer>>read(liste, "$[?(@.idDossier==9500)].avancementLignes.lancer")).containsExactly(2);
+        assertThat(JsonPath.<List<Integer>>read(liste, "$[?(@.idDossier==9500)].avancementLignes.aucune")).containsExactly(1);
+        mvc.perform(get("/api/dossiers/9510").header("Authorization", tokenPresident)).andExpect(jsonPath("$.avancementLignes").doesNotExist());
+    }
+
+    @Test
     @DisplayName("⚠️ 2026-11-03 (« objet-dossier-liste », B1) — objetMarche et lot : la ligne de la fiche (mise en concurrence), de la "
             + "procédure (marché, avec son lot), du marché (acte de gestion) ; nul pour un plan ; servis aussi sur la liste")
     void objetDuMarche() throws Exception {

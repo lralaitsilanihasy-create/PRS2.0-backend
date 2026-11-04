@@ -199,6 +199,12 @@ public class DossierDto {
     private Integer lot;
 
     /**
+     * ⚠️ 2026-11-04 (demande front « avancement-plans », B1) — sur un plan (famille DDP) : l'avancement de ses lignes non retirées,
+     * calculé en lot pour toute la liste ; nul pour les autres familles.
+     */
+    private AvancementLignesDto avancementLignes;
+
+    /**
      * ⚠️ Fiche marché (2026-09-23, §B1) — l'état de la fiche liée, de quoi l'afficher sans second appel.
      * Servi sur la <strong>lecture unitaire</strong> ({@code GET /api/dossiers/{id}} et les réponses des gestes
      * sur un dossier) ; absent si {@link #idDmc} est nul, et sur les listes (qui portent {@code idDmc} seul :

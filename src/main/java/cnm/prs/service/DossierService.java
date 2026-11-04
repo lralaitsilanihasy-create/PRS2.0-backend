@@ -636,6 +636,7 @@ public class DossierService {
         }
         enrichirCibles(dtos);
         enrichirObjet(dtos);   // ⚠️ 2026-11-03 (« objet-dossier-liste », B1)
+        enrichirAvancement(dtos);   // ⚠️ 2026-11-04 (« avancement-plans », B1)
         masquerActeursInternesPourPrmp(dtos);
         // ⚠️ 2026-10-30 (demande front « performance », §B2) — l'avis à imprimer lit la fiche et le plan de chaque dossier : les lectures
         // répétées pour un même DMC passent par la mémoire de lecture de l'appel.
@@ -738,6 +739,92 @@ public class DossierService {
             Integer l = ligne.get(d.getIdDossier());
             d.setObjetMarche(l == null ? null : designation.get(l));
             d.setLot(lot.get(d.getIdDossier()));
+        }
+    }
+
+    // ------------------------------------------------------------------ ⚠️ 2026-11-04 (« avancement-plans », B1)
+
+    private cnm.prs.repository.ModePassationRepository modeRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setModeRepository(cnm.prs.repository.ModePassationRepository modes) {
+        this.modeRepository = modes;
+    }
+
+    private static final Set<String> STATUTS_LANCEE = Set.of(StatutDossier.CLOTURE.name(), StatutDossier.DECISION_TRANSMISE_SIGMP.name());
+    private static final Set<String> STATUTS_HORS_CIRCUIT = Set.of(StatutDossier.RETIRE.name(), StatutDossier.REMPLACE.name());
+
+    /**
+     * L'avancement des lignes de chaque plan de la liste, <strong>en lot</strong> : les lignes non retirées des plans ; leurs copies dans
+     * les autres versions (même ligne d'origine) ; les procédures de ces lignes ; leurs dossiers de mise en concurrence (nés de la fiche,
+     * ou rattachés hors fiche, V163) et de marché (attributions, ou rattachés hors fiche) ; les modes — une requête par nature pour toute
+     * la liste. Les dossiers comptent quel que soit le périmètre du lecteur (le serveur voit tout).
+     */
+    private void enrichirAvancement(List<DossierDto> dtos) {
+        List<Integer> plans = dtos.stream().filter(d -> "DDP".equals(d.getIdTypeDossier())).map(DossierDto::getIdDossier).toList();
+        if (plans.isEmpty() || dmcRepository == null) {
+            return;
+        }
+        List<Marche> lignes = marcheRepository.findByIdDossierIn(plans).stream().filter(m -> !Boolean.TRUE.equals(m.getSupprimee())).toList();
+        // Les copies de chaque ligne (même ligne d'origine) → leur ligne d'origine.
+        Set<Integer> origines = new HashSet<>();
+        lignes.forEach(m -> origines.add(m.getIdLigneOrigine()));
+        Map<Integer, Integer> origineDe = new HashMap<>();
+        lignes.forEach(m -> origineDe.put(m.getIdDetail(), m.getIdLigneOrigine()));
+        if (!origines.isEmpty()) {
+            marcheRepository.findByIdLigneOrigineIn(origines).forEach(m -> origineDe.putIfAbsent(m.getIdDetail(), m.getIdLigneOrigine()));
+            marcheRepository.findAllById(origines).forEach(m -> origineDe.putIfAbsent(m.getIdDetail(), m.getIdLigneOrigine()));
+        }
+        // Par ligne d'origine : procédures, dossiers de mise en concurrence (statuts), dossiers de marché.
+        Map<Long, Integer> origineDuDmc = new HashMap<>();
+        dmcRepository.findByIdDetailIn(origineDe.keySet()).forEach(p -> origineDuDmc.put(p.getIdDmc(), origineDe.get(p.getIdDetail())));
+        Map<Integer, List<String>> statutsMec = new HashMap<>();
+        Set<Integer> avecMarche = new HashSet<>();
+        Set<Integer> avecProcedure = new HashSet<>(origineDuDmc.values());
+        if (!origineDuDmc.isEmpty()) {
+            repository.findByIdDmcIn(origineDuDmc.keySet()).forEach(d -> statutsMec.computeIfAbsent(origineDuDmc.get(d.getIdDmc()),
+                    k -> new ArrayList<>()).add(d.getStatut()));
+            attributionRepository.findByIdDmcInOrderByIdDmcAscLotAsc(origineDuDmc.keySet()).stream().filter(a -> a.getIdDossier() != null)
+                    .forEach(a -> avecMarche.add(origineDuDmc.get(a.getIdDmc())));
+        }
+        for (Dossier d : repository.findByIdDetailOrigineIn(origineDe.keySet())) {   // V163 : hors fiche
+            Integer o = origineDe.get(d.getIdDetailOrigine());
+            if ("DMC".equals(d.getIdTypeDossier())) {
+                statutsMec.computeIfAbsent(o, k -> new ArrayList<>()).add(d.getStatut());
+            } else if ("DDM".equals(d.getIdTypeDossier())) {
+                avecMarche.add(o);
+            }
+        }
+        Map<Integer, String> modes = new HashMap<>();
+        if (modeRepository != null) {
+            modeRepository.findAllById(lignes.stream().map(Marche::getIdMode).filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet()))
+                    .forEach(m -> modes.put(m.getIdMode(), m.getLibelle()));
+        }
+        Map<Integer, int[]> parPlan = new HashMap<>();   // lignes, marche, commission, lancee, preparation, lancer, aucune
+        for (Marche m : lignes) {
+            int[] c = parPlan.computeIfAbsent(m.getIdDossier(), k -> new int[7]);
+            c[0]++;
+            Integer o = m.getIdLigneOrigine();
+            List<String> statuts = statutsMec.getOrDefault(o, List.of()).stream().filter(s -> !STATUTS_HORS_CIRCUIT.contains(s)).toList();
+            if (avecMarche.contains(o)) {
+                c[1]++;
+            } else if (statuts.stream().anyMatch(STATUTS_LANCEE::contains)) {
+                c[3]++;
+            } else if (statuts.stream().anyMatch(s -> !StatutDossier.BROUILLON.name().equals(s))) {
+                c[2]++;
+            } else if (!statuts.isEmpty()) {
+                c[4]++;
+            } else if (avecProcedure.contains(o) || SousTypesDossier.normaliser(modes.get(m.getIdMode())).replace('-', ' ').contains("gre a gre")) {
+                c[5]++;
+            } else {
+                c[6]++;
+            }
+        }
+        for (DossierDto d : dtos) {
+            if ("DDP".equals(d.getIdTypeDossier())) {
+                int[] c = parPlan.getOrDefault(d.getIdDossier(), new int[7]);
+                d.setAvancementLignes(new cnm.prs.dto.AvancementLignesDto(c[0], c[1], c[2], c[3], c[4], c[5], c[6]));
+            }
         }
     }
 
