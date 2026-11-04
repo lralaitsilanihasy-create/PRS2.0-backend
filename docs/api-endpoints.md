@@ -3224,6 +3224,16 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > ambiguës** (jamais un remplacement global aveugle) ; tout « ¿ » **résiduel** est signalé par l'anomalie
 > `ENCODAGE_SUSPECT` (ci-dessous), jamais deviné en silence.
 >
+> ⚠️ **2026-11-04 (demande front « lecture-ppm-jirama », plans de la JIRAMA).**
+> - **B1, compte** : 3 à **6 chiffres**, borné (ni précédé ni suivi d'un chiffre), résolu **tel qu'il est écrit**. « 602212 » n'est plus
+>   tronqué à « 6022 » (ses deux derniers chiffres partaient dans l'objet ou le montant) ; le référentiel ne portant que des racines à
+>   4 chiffres, un compte à 5 ou 6 chiffres est `REFERENTIEL_INCONNU` — jamais tronqué en silence (sur le 161-PPM du MTP, « 23175 »,
+>   autrefois lu « 2317 », l'est désormais aussi).
+> - **B3, montant** : un montant ne commence **jamais au milieu d'une suite de chiffres**. « d'audit 2024 116 000 000.00 » n'est plus lu
+>   24 116 000 000 : « 2024 » reste dans l'objet, le montant vaut 116 000 000.
+> - **B2, encodage** : un « ¿ » (ou U+FFFD) **entouré d'espaces et suivi de « Lot »** (avec ou sans « N° ») devient le tiret « – » qui
+>   sépare deux lots ; les autres « ¿ » restent signalés.
+>
 > ⚠️ **Anomalies de transcription structurées (règle ajoutée 2026-07-22) — clé de la revue front.** Chaque
 > `marches[i]` porte **`anomalies[]`** (vide si RAS) et le résultat porte **`nbAVerifier`** (nombre de marchés
 > avec ≥1 anomalie). Cela **remplace avantageusement** le balayage de `avertissements[]` à plat (conservé pour

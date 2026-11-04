@@ -25,8 +25,14 @@ class NettoyageEncodagePpmTest {
         assertThat(SaisiePpmImportService.nettoyerEncodage("le c¿ur de ville")).isEqualTo("le cœur de ville");
         assertThat(SaisiePpmImportService.nettoyerEncodage("main d¿¿uvre, jusqu¿à la réception"))
                 .isEqualTo("main d'œuvre, jusqu'à la réception");
+        // ⚠️ 2026-11-04 (demande front « lecture-ppm-jirama », B2) — « ¿ » entouré d'espaces devant « Lot » : un séparateur de lots (ni
+        // œ ni élision possibles), traduit en tiret ; « fa¿ade » reste ambigu.
         assertThat(SaisiePpmImportService.nettoyerEncodage("campus d'Antsiranana ¿ Lot n°02 ; fa¿ade"))
-                .as("ambigus : signalés, jamais devinés").isEqualTo("campus d'Antsiranana ¿ Lot n°02 ; fa¿ade");
+                .as("séparateur de lots traduit ; le reste signalé, jamais deviné").isEqualTo("campus d'Antsiranana – Lot n°02 ; fa¿ade");
+        assertThat(SaisiePpmImportService.nettoyerEncodage("Lot 1 : Pièces groupe DEUTZ 400KW ¿ Lot 2 : Pièces ; Lot 6 : Gaz � LOT N° 7"))
+                .isEqualTo("Lot 1 : Pièces groupe DEUTZ 400KW – Lot 2 : Pièces ; Lot 6 : Gaz – LOT N° 7");
+        assertThat(SaisiePpmImportService.nettoyerEncodage("Anosibe An¿ala ¿ Lotissement")).as("collé à un mot, ou devant un autre mot : signalé")
+                .isEqualTo("Anosibe An¿ala ¿ Lotissement");
         assertThat(SaisiePpmImportService.nettoyerEncodage(null)).isNull();
     }
 }

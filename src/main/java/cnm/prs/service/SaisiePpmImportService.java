@@ -155,17 +155,25 @@ public class SaisiePpmImportService {
      * par {@code (?![\p{L}\p{N}])} et non {@code \b} — ² et ³ ne sont pas des caractères de mot, un {@code \b}
      * après eux ne matche jamais devant une espace.
      */
+    // ⚠️ 2026-11-04 (demande front « lecture-ppm-jirama », B1, B3) — un montant ne commence jamais au milieu d'une suite de chiffres
+    // ((?<!\d)) : ni dans une année de l'objet (« d'audit 2024 116 000 000.00 » lu 24 116 000 000), ni dans un compte à six chiffres
+    // (« 604001 116 000 000.00 » lu 1 116 000 000).
     private static final String MONTANT =
-            "(?:\\d{1,3}(?:[\\s\\u00a0]\\d{3})*|\\d+)[.,]\\d{2}(?!\\d)"
+            "(?<!\\d)(?:\\d{1,3}(?:[\\s\\u00a0]\\d{3})*|\\d+)[.,]\\d{2}(?!\\d)"
                     + "(?![\\s\\u00a0]*(?i:km|ml|m[²³23]?|ha|metres?|x|×)(?![\\p{L}\\p{N}]))";
     private static final Pattern MONEY = Pattern.compile(MONTANT);
     private static final Pattern DATE = Pattern.compile("\\d{2}/\\d{2}/\\d{4}");
-    /** Jeton typé du bloc structurel : montant | code SOA | date | compte (3-4 chiffres nus) | mot. */
+    /**
+     * Jeton typé du bloc structurel : montant | code SOA | date | compte | mot. ⚠️ 2026-11-04 (« lecture-ppm-jirama », B1) — le compte
+     * a 3 à 6 chiffres, <strong>borné</strong> (ni précédé ni suivi d'un chiffre) : « 602212 » n'est plus tronqué à « 6022 », ses deux
+     * derniers chiffres ne partent plus dans l'objet ou le montant ; il se résout tel qu'il est écrit (inconnu du référentiel plutôt
+     * que tronqué en silence).
+     */
     private static final Pattern TOKEN = Pattern.compile(
             "(?<money>" + MONTANT + ")"
                     + "|(?<soa>\\d{2}-\\d{2}-\\d-[A-Za-z0-9]{1,3}-\\d{5})"
                     + "|(?<date>\\d{2}/\\d{2}/\\d{4})"
-                    + "|(?<compte>\\d{3,4})"
+                    + "|(?<compte>(?<!\\d)\\d{3,6}(?!\\d))"
                     + "|(?<word>[\\p{L}][\\p{L}'’.()/\\-]*)");
 
     private static final Map<String, Integer> MOIS = Map.ofEntries(
@@ -258,7 +266,10 @@ public class SaisiePpmImportService {
                 // Apostrophe d'élision (mots toujours élidés devant voyelle/h).
                 .replaceAll("(?i)(jusqu|aujourd|lorsqu|puisqu|quelqu)\\u00bf", "$1'")
                 // ⚠️ 2026-10-02 — élision d'un mot d'une lettre ou de « qu », devant une lettre.
-                .replaceAll("(?iu)(?<![\\p{L}])([dlnsjmtc]|qu)\\u00bf(?=\\p{L})", "$1'");
+                .replaceAll("(?iu)(?<![\\p{L}])([dlnsjmtc]|qu)\\u00bf(?=\\p{L})", "$1'")
+                // ⚠️ 2026-11-04 (« lecture-ppm-jirama », B2) — séparateur entre deux lots : « ¿ » (ou U+FFFD) entouré d'espaces et suivi
+                // de « Lot » devient un tiret « – » (« Lot 1 : … ¿ Lot 2 : … »).
+                .replaceAll("(?<=\\s)[\\u00bf\\ufffd](?=\\s+(?i:lot)\\b)", "–");
     }
 
     /** Vrai si un champ porte encore un caractère de remplacement (¿ / U+FFFD) après nettoyage. */
