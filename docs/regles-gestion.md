@@ -3257,6 +3257,12 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     du vide. La copie transporte désormais `justifModeDerogatoire` et `justifDelaiAmenage` de la ligne,
     ainsi que le `justificationFiche` du PPM parent. Le contenu se reprend en entier, ou il ne se reprend
     pas : les montants et les justifications répondent des mêmes lignes.
+  - ⚠️ **2026-11-04 (décision du pilote ; demande front « pieces-plan », V164) — un plan ne propose plus de pièce à joindre.** Les six
+    pièces de la famille du plan, toutes facultatives, sont produites par l'application ou calculées : fiche de présentation, projet de
+    plan, AGPM, journal de publication de l'AGPM (déposé une fois sur le plan validé), PV du prédécesseur et PPM antérieur. Elles ne sont
+    plus proposées à la PRMP. Les pièces déjà jointes restent lisibles ; la garde des versions constitue toujours les deux pièces
+    d'historique. Plus aucun plan ne portant de « projet de plan » joint, le PPM antérieur n'est plus jamais exigé (comme déjà pour les
+    dossiers du pilote).
   - ⚠️ **Pièces d'historique d'une version : on n'exige que ce que l'application détient**
     (signalement front du 2026-09-10). Une version porte, en plus des pièces d'un dossier neuf, le **PV du
     prédécesseur** (type 22) et le **PPM antérieur daté et signé** (type 23). Ces pièces sont **constituées

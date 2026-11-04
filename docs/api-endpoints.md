@@ -9200,7 +9200,7 @@ sous-type). Aucune dépendance ajoutée.
 | Méthode | URL | Réponse | Accès |
 |---|---|---|---|
 | GET | /api/type-piece-jointes?sousType={code} | la liste du sous-type : `[{ idTypePiece, libellePiece, code, obligatoire, ordre, categorie, forme, idTypeDossier }]` ; à défaut de liste propre, les pièces de sa famille | comme le référentiel |
-| GET | /api/dossiers/{id}/pieces-exigees | les pièces exigées **de ce dossier** : la liste de son sous-type, obligation **résolue** par la catégorie et la forme de sa fiche | comme la lecture du dossier |
+| GET | /api/dossiers/{id}/pieces-exigees | les pièces exigées **de ce dossier** : la liste de son sous-type, obligation **résolue** par la catégorie et la forme de sa fiche (⚠️ 2026-11-04, « pieces-plan », V164 : un **plan** — famille DDP — ne propose plus aucune pièce ; les six types qu'il portait, que l'application produit, sont détachés de la famille) | comme la lecture du dossier |
 
 ⚠️ **2026-10-17 (demande front « pieces-dmc-par-les-donnees »)** — les pièces que l'application fournit par ses données.
 - **Sur `GET /api/dossiers/{id}/pieces-exigees`**, pour un dossier né d'une fiche **validée**, quel que soit le mode de remise et le

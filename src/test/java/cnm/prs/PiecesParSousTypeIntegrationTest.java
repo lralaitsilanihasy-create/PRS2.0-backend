@@ -134,4 +134,20 @@ class PiecesParSousTypeIntegrationTest extends CnmIntegrationTestSupport {
                 .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Integer>>read(horsLigneApres, "$[?(@.obligatoire==true)].idTypePiece")).containsExactly(toujours, papier, sigmp);
     }
+
+    @Test
+    @DisplayName("⚠️ V164 (« pieces-plan », B1) — la liste d'un plan ne propose plus les six pièces que l'application produit (1, 2, 5, 21, "
+            + "22, 23) : détachées de la famille DDP, gardées au référentiel (les pièces jointes restent lisibles)")
+    void listeDuPlanSansPiecesProduites() throws Exception {
+        // La base de test n'a pas les types 1 à 23 de la recette (ses identifiants y désignent d'autres pièces) : la migration, gardée par
+        // la famille DDP, ne la touche pas. On vérifie ici que la liste d'un plan ne propose aucune pièce de ces libellés.
+        List<String> produites = List.of("Fiche de présentation", "Projet de Plan de passation des marchés", "Journal de publication de l",
+                "Avis Général de Passation de Marché", "PV du dossier précédent", "PPM antérieur daté et signé");
+        for (String sousType : List.of("PPM", "PPM-AGPM")) {
+            String liste = mvc.perform(get("/api/type-piece-jointes").param("sousType", sousType).header("Authorization", tokenPrmp))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertThat(JsonPath.<List<String>>read(liste, "$[*].libellePiece"))
+                    .noneMatch(l -> produites.stream().anyMatch(p -> l != null && l.startsWith(p)));
+        }
+    }
 }
