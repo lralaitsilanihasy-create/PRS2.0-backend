@@ -135,6 +135,33 @@ class PiecesParSousTypeIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<Integer>>read(horsLigneApres, "$[?(@.obligatoire==true)].idTypePiece")).containsExactly(toujours, papier, sigmp);
     }
 
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Test
+    @DisplayName("⚠️ V165 (« document-complementaire-plan », B1) — un plan (PPM, PPM-AGPM) propose « Tout autre document », facultatif, "
+            + "par sa liste de sous-type et par dossier ; rien d'autre ne revient ; la migration est idempotente")
+    void documentComplementaireDuPlan() throws Exception {
+        Runnable v165 = () -> org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(
+                org.springframework.jdbc.datasource.DataSourceUtils.getConnection(jdbc.getDataSource()),
+                new org.springframework.core.io.ClassPathResource("db/migration/V165__document_complementaire_plan.sql"));
+        v165.run();
+        v165.run();   // idempotente
+        for (String sousType : List.of("PPM", "PPM-AGPM")) {
+            String liste = mvc.perform(get("/api/type-piece-jointes").param("sousType", sousType).header("Authorization", tokenPrmp))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertThat(JsonPath.<List<String>>read(liste, "$[*].code")).containsExactly("AUTRE_DOCUMENT");
+            assertThat(JsonPath.<List<Boolean>>read(liste, "$[*].obligatoire")).containsExactly(false);
+        }
+        cnm.prs.entity.Dossier plan = dossierLoc(9850, "BROUILLON", "ANT", "PRMP001");
+        plan.setIdTypeDossier("DDP");
+        plan.setIdSousType("PPM");
+        dossierRepository.save(plan);
+        String exigees = mvc.perform(get("/api/dossiers/9850/pieces-exigees").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(exigees, "$[*].code")).containsExactly("AUTRE_DOCUMENT");
+        assertThat(JsonPath.<List<Boolean>>read(exigees, "$[*].obligatoire")).containsExactly(false);
+    }
+
     @Test
     @DisplayName("⚠️ V164 (« pieces-plan », B1) — la liste d'un plan ne propose plus les six pièces que l'application produit (1, 2, 5, 21, "
             + "22, 23) : détachées de la famille DDP, gardées au référentiel (les pièces jointes restent lisibles)")

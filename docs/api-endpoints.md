@@ -9201,7 +9201,7 @@ sous-type). Aucune dépendance ajoutée.
 | Méthode | URL | Réponse | Accès |
 |---|---|---|---|
 | GET | /api/type-piece-jointes?sousType={code} | la liste du sous-type : `[{ idTypePiece, libellePiece, code, obligatoire, ordre, categorie, forme, idTypeDossier }]` ; à défaut de liste propre, les pièces de sa famille | comme le référentiel |
-| GET | /api/dossiers/{id}/pieces-exigees | les pièces exigées **de ce dossier** : la liste de son sous-type, obligation **résolue** par la catégorie et la forme de sa fiche (⚠️ 2026-11-04, « pieces-plan », V164 : un **plan** — famille DDP — ne propose plus aucune pièce ; les six types qu'il portait, que l'application produit, sont détachés de la famille) | comme la lecture du dossier |
+| GET | /api/dossiers/{id}/pieces-exigees | les pièces exigées **de ce dossier** : la liste de son sous-type, obligation **résolue** par la catégorie et la forme de sa fiche (⚠️ 2026-11-04, « pieces-plan », V164 : un **plan** — famille DDP — ne propose plus aucune pièce ; les six types qu'il portait, que l'application produit, sont détachés de la famille ; ⚠️ 2026-11-04, « document-complementaire-plan », V165 : sauf **« Tout autre document »** (`AUTRE_DOCUMENT`), facultatif, plusieurs fichiers admis, par la liste propre des sous-types `PPM` et `PPM-AGPM`) | comme la lecture du dossier |
 
 ⚠️ **2026-10-17 (demande front « pieces-dmc-par-les-donnees »)** — les pièces que l'application fournit par ses données.
 - **Sur `GET /api/dossiers/{id}/pieces-exigees`**, pour un dossier né d'une fiche **validée**, quel que soit le mode de remise et le
@@ -12106,6 +12106,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | DELETE | /api/points-ctrls/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 
 `{id}` = idPointCtrl (number).
+> - Le champ ne sert qu'au rangement à l'écran : ordre, portée, obligation, périmètre, examens en cours et PV signés inchangés.
 
 > ⚠️ **2026-10-18 — la grille du contrat-cadre et les codes cités (demande front « grille-contrat-cadre » ; V133).**
 > - **`?sousType=DAOO-CC`** : le sous-type impose la forme contrat-cadre ; la grille ne contient plus les points de forme `AUTRE`

@@ -3262,7 +3262,8 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     plan, AGPM, journal de publication de l'AGPM (déposé une fois sur le plan validé), PV du prédécesseur et PPM antérieur. Elles ne sont
     plus proposées à la PRMP. Les pièces déjà jointes restent lisibles ; la garde des versions constitue toujours les deux pièces
     d'historique. Plus aucun plan ne portant de « projet de plan » joint, le PPM antérieur n'est plus jamais exigé (comme déjà pour les
-    dossiers du pilote).
+    dossiers du pilote). ⚠️ 2026-11-04 (décision du pilote ; V165) : la PRMP peut toujours joindre à un plan **« Tout autre document »**,
+    facultatif, en un ou plusieurs fichiers.
   - ⚠️ **Pièces d'historique d'une version : on n'exige que ce que l'application détient**
     (signalement front du 2026-09-10). Une version porte, en plus des pièces d'un dossier neuf, le **PV du
     prédécesseur** (type 22) et le **PPM antérieur daté et signé** (type 23). Ces pièces sont **constituées
