@@ -81,6 +81,13 @@ public class PointsCtrl {
     @Column(name = "SOUS_TYPES_EXCLUS", length = 200)
     private String sousTypesExclus;
 
+    /**
+     * ⚠️ V166 (2026-11-05, demande front « points-par-element ») — les éléments du dossier que le point contrôle, séparés par des
+     * virgules, le principal d'abord ({@link cnm.prs.service.ElementsDossier}) ; nul : aucun.
+     */
+    @Column(name = "ELEMENTS", length = 200)
+    private String elements;
+
     /** ⚠️ V162 — le point est-il écarté de l'un de ces sous-types (la chaîne d'héritage du sous-type demandé) ? */
     public boolean exclu(java.util.Collection<String> sousTypes) {
         if (sousTypesExclus == null || sousTypesExclus.isBlank()) {

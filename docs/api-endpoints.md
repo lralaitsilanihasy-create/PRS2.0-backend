@@ -12106,6 +12106,30 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | DELETE | /api/points-ctrls/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 
 `{id}` = idPointCtrl (number).
+
+> ⚠️ **2026-11-05 (demande front « points-par-element », B1, B2 ; V166) — `PointsCtrlDto.elements`** : tableau de chaînes, les
+> éléments du dossier que le point contrôle, **le principal d'abord** — `PRESENTATION`, `PV_CNM`, `DAO`, `SEANCE`, `EVALUATION`,
+> `ATTRIBUTION`, `BORDEREAU`, `PIECES` (les onglets de l'examen d'un dossier de marché) ; `[]` : aucun (le point reste dans « Tous les
+> points »). Servi par toutes les lectures de points (`GET /api/points-ctrls`, ses filtres, `/{id}`) et par la grille d'examen
+> (`GET /api/dossiers/{id}/grille`). Stocké en texte à virgules (`tr_points_ctrl.ELEMENTS`).
+> - **Écriture** (`POST`, `PUT`) : casse ignorée, doublons retirés, ordre reçu gardé ; code inconnu → **400** nominatif sur
+>   `elements` (`erreurs[0].champ = "elements"`). Au `PUT`, un champ **absent conserve** les éléments (même précaution que la portée),
+>   `[]` les vide.
+> - **Rattachement initial** (B2, validé par le pilote) : les 21 points de la grille du dossier de marché (communs DDM et points MAOO),
+>   repérés **par libellé** — rapprochés en recette des identifiants 33-41, 101-109, 169-171 —, posés par V166 sur un point qui n'en a
+>   pas encore (un réglage de l'Administrateur n'est jamais écrasé) et par les semeurs sur une base neuve. Aucun point sur `PV_CNM`.
+> - ⚠️ **B3 (principe du pilote, 05/11 ; V167)** : seuls les éléments **nouveaux** du dossier de marché portent des points — le PV de la
+>   CNM, les informations du DAO et le bordereau, examinés au dossier de mise en concurrence, n'en portent aucun : **`DAO` et
+>   `BORDEREAU` sortent du rattachement**, comme `PV_CNM`. V167 réécrit les neuf points qui les portaient, par libellé, seulement s'ils
+>   portent encore la valeur de V166 ; elle rattache aussi les points de **même libellé** des autres sous-types DDM (MAOR…), encore sans
+>   élément (aucun en recette au 05/11 : la grille MAOR a ses propres libellés). Les codes restent **admis** à l'écriture (l'écran
+>   n'affiche rien sous eux). Les points des autres grilles et libellés restent sans élément.
+> - ⚠️ **B4 (pilote, 05/11 ; V168) — grille d'un dossier né d'une fiche DAOO** : codes ajoutés **`PLAN`, `AVIS`, `CANEVAS`** (onglets
+>   de cet examen) ; la ligne du plan est une référence déjà examinée, aucun point sur `PLAN`. Les 33 libellés de la grille DAOO
+>   (famille `DMC`, sous-types `DAOO` et `DAOO-CC`, variantes contrat-cadre comprises) sont rattachés : 9 en propre
+>   (`ElementsDossier.RATTACHEMENT_DAOO`), les 24 autres sur `DAO`. Le rattachement se fait **par famille** : « Délai de remise des
+>   offres » vaut `AVIS`, `DAO` au DAO et `SEANCE` au dossier de marché. Seul un point sans élément est rattaché ; les semeurs suivent.
+>   Les autres grilles nées d'une fiche (DC, AMI, AOR…) restent sans élément.
 > - Le champ ne sert qu'au rangement à l'écran : ordre, portée, obligation, périmètre, examens en cours et PV signés inchangés.
 
 > ⚠️ **2026-10-18 — la grille du contrat-cadre et les codes cités (demande front « grille-contrat-cadre » ; V133).**

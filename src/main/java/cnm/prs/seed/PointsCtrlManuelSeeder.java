@@ -225,6 +225,8 @@ public class PointsCtrlManuelSeeder implements CommandLineRunner {
             point.setCategorie(g.categorie());
             point.setForme(g.forme());
             point.setSousTypesExclus(g.exclus());   // ⚠️ V162
+            // ⚠️ V166-V168 (« points-par-element », B2-B4) — rattachement par famille : DDM (tous sous-types), DAOO.
+            point.setElements(cnm.prs.service.ElementsDossier.rattachement(g.famille(), g.sousType(), g.libelle()));
             pointsCtrlRepository.save(point);
             existants.add(point);
             crees++;

@@ -128,6 +128,11 @@ public class PointsCtrlService {
         if (dto.getPortee() != null && !dto.getPortee().isBlank()) {
             existing.setPortee(PorteePointCtrl.depuisCodeOuDefaut(dto.getPortee()));
         }
+        // ⚠️ 2026-11-05 (« points-par-element », B1) — les éléments : absents, conservés (même précaution que la portée) ; [] les vide ;
+        // code inconnu → 400 elements.
+        if (dto.getElements() != null) {
+            existing.setElements(ElementsDossier.ecrire(dto.getElements()));
+        }
         return PointsCtrlMapper.toDto(repository.save(existing));
     }
 

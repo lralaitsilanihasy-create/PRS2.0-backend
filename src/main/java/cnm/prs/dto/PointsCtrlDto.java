@@ -51,4 +51,11 @@ public class PointsCtrlDto {
 
     /** ⚠️ M3 — {@code CONTRAT_CADRE} ou {@code AUTRE} ; nul : toutes formes. */
     private String forme;
+
+    /**
+     * ⚠️ 2026-11-05 (demande front « points-par-element », B1) — les éléments du dossier que le point contrôle, le principal d'abord :
+     * {@code PRESENTATION}, {@code PV_CNM}, {@code DAO}, {@code SEANCE}, {@code EVALUATION}, {@code ATTRIBUTION}, {@code BORDEREAU},
+     * {@code PIECES} ; vide : aucun. En écriture : absent (nul) conserve, {@code []} vide ; code inconnu → 400 {@code elements}.
+     */
+    private java.util.List<String> elements;
 }

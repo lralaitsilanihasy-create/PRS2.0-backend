@@ -93,6 +93,7 @@ public class PointsCtrlDossierMarcheSeeder implements CommandLineRunner {
             point.setIdTypeDossier(FAMILLE_DDM);
             point.setIdSousType(null);
             point.setPortee(PorteePointCtrl.DOSSIER);
+            point.setElements(cnm.prs.service.ElementsDossier.RATTACHEMENT_DDM.get(g[0]));   // ⚠️ V166 (« points-par-element »)
             pointsCtrlRepository.save(point);
             crees++;
         }
